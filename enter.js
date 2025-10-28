@@ -2,8 +2,8 @@ const line = document.getElementById("bouncingLine");
 
 let x = Math.random() * (window.innerWidth - 100);
 let y = Math.random() * (window.innerHeight - 3);
-let dx = (Math.random() - 0.5) * 10;
-let dy = (Math.random() - 0.5) * 10;
+let dx = (Math.random() - 0.5) * 5;
+let dy = (Math.random() - 0.5) * 5;
 
 function animate() {
   x += dx;
