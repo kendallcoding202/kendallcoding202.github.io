@@ -1,0 +1,203 @@
+#homebutton {
+    position: absolute;
+    bottom: 330px;
+    right: 815px;
+    background-color: black;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    border-radius: 12px;
+    cursor: pointer;
+}
+
+#table {
+    display: table;
+
+    border: 4px solid blueviolet;
+    border-collapse: collapse;
+    width: 50%;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+th,
+tr,
+td {
+    background-color: white;
+}
+
+th,
+td {
+    border: 1px solid black;
+    padding: 8px;
+    text-align: center;
+}
+
+th {
+    text-decoration-line: underline;
+}
+
+h1 {
+    text-shadow: 2px 2px grey;
+}
+
+nav li {
+    display: inline;
+    margin-right: 20px;
+    background-color: white;
+    color: purple;
+}
+
+nav li:hover {
+    color: yellow;
+    font-weight: bold;
+}
+
+a:hover {
+    color: red;
+    font-weight: bold;
+}
+
+ul li {
+    position: relative;
+    animation-name: myAnimation;
+    animation-duration: 3s;
+    animation-fill-mode: forwards;
+}
+
+ul li {
+    animation-timing-function: ease-in-out;
+}
+
+@keyframes myAnimation {
+    from {
+        left: 0px;
+    }
+    50% {
+        left: 20px;
+    }
+    to {
+        left: 10px;
+    }
+}
+
+#home {
+    background-image: url("../About Me/images/gcu.png");
+    background-repeat: no-repeat;
+    background-position: center top;
+    color: white;
+}
+
+#warning {
+    position: absolute;
+    bottom: 0px;
+    right: 690px;
+}
+
+/* Need help, can't get image to show.
+#contact {
+    background-image: url("../About Me/images/family.png");
+    background-repeat: no-repeat;
+    position: absolute;
+    background-position: center bottom;
+    background-size: 300px 200px;
+
+
+
+}*/
+
+#warning {
+    transition: transform 2s;
+}
+#warning:hover {
+    transform: rotate(360deg);
+}
+
+body {
+    background-color: rgba(138, 43, 226, 0.25);
+    font-family: fantasy;
+}
+
+h1 {
+    color: white;
+    border-radius: 25px;
+}
+
+hr {
+    border: 1px solid purple;
+}
+
+#dump {
+    display: flex;
+    justify-content: space-evenly;
+    flex-wrap: wrap;
+}
+
+#photo {
+    width: 300px;
+    height: 200px;
+    margin: 10px;
+    border: 1px solid black;
+    box-shadow: 5px 5px grey;
+}
+
+/* font for my hobbies page */
+
+.bitcount-grid-single {
+    font-family: "Bitcount Grid Single", system-ui;
+    font-optical-sizing: auto;
+    font-weight: normal;
+    font-style: normal;
+    font-variation-settings:
+        "slnt" 0,
+        "CRSV" 0.5,
+        "ELSH" 0,
+        "ELXP" 0;
+}
+
+#phone1 {
+    width: 250px;
+    height: 200px;
+}
+
+#phone2 {
+    display: none;
+    width: 200px;
+    height: 200px;
+}
+
+#p1 {
+    position: absolute;
+    bottom: 0px;
+    left: 39%;
+    text-align: center;
+}
+
+#enterbutton {
+    background-color: red;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 10px 20px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+#enterbutton:hover {
+    background-color: blueviolet;
+}
+
+#bouncingLine {
+    position: fixed;
+    width: 100px;
+    height: 3px;
+    background-color: transparent;
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+    font-family: "Bitcount Grid Single", system-ui;
+}

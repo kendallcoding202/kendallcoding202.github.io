@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="stylesheet" href="../CSS/mysite.css" />
+
+        <title>Contact Me</title>
+    </head>
+    <header>
+        <!--Header to explain what the page is and keeping formatting the same as other pages-->
+
+        <h1 align="center" style="background-color: blueviolet">Contact Me</h1>
+    </header>
+    <main align="center">
+        <body style="background-color: rgba(138, 43, 226, 0.25)">
+            <h2 align="center">Feel free to reach out to me!</h2>
+            <p align="center">
+                I am always open to discussing new projects, creative ideas, or
+                opportunities to be part of your visions. You can contact me
+                through the following methods:
+            </p>
+            <!--Table with information to contact me. Borders to make it look clean and separated-->
+            <table id="table">
+                <tr>
+                    <th style="text-decoration-line: underline">
+                        Contact Method
+                    </th>
+                    <th style="text-decoration-line: underline">Information</th>
+                </tr>
+                <tr>
+                    <td>Email:</td>
+                    <td>
+                        <!--Creates a link to send an email to kendall12236@gmail.com with a subject of "Hello" -->
+                        <a href="mailto:kendall12236@gmail.com?subject=Hello"
+                            >kendall12236@gmail.com</a
+                        >
+                    </td>
+                </tr>
+                <tr>
+                    <td>Phone:</td>
+                    <td>435-201-2646</td>
+                </tr>
+                <tr>
+                    <td>Title:</td>
+                    <td>Software Development Student</td>
+                </tr>
+            </table>
+            <br />
+            <div id="phones">
+                <p>Click On the Phone!</p>
+                <img
+                    id="phone1"
+                    src="../Contact Me/contactimg/phone.png"
+                    onclick="toggleImage()"
+                    alt="Phone Icon"
+                />
+                <img
+                    id="phone2"
+                    src="../Contact Me/contactimg/phoneRinging.png"
+                    onclick="toggleImage()"
+                    alt="Phone Ring Icon"
+                />
+            </div>
+            <script src="../Contact Me/java.js"></script>
+        </body>
+    </main>
+    <!--Footer with links to other pages-->
+    <footer>
+        <hr />
+        <p align="center">
+            Kendall Sorenson <a href="../Home/index.html"> Home</a> |
+            <a href="../About Me/">About Me</a> |
+            <a href="../Photo/photo.html">Photograph's</a> |
+            <a href="../Hobbies/">Hobbies</a>
+        </p>
+        <!--<div style="text-align: center; color: white" id="contact">My Family</div> -->
+    </footer>
+</html>
