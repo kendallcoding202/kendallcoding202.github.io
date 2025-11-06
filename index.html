@@ -22,21 +22,74 @@
             crossorigin="anonymous"
         ></script>
     </head>
-    <body id="enter" style="text-align: center; background-color: black">
-        <div id="scary">
-            <h1 id="h1">Enter if you dare</h1>
+    <body style="background-color: black">
+        <nav class="navbar navbar-expand-lg navbar-light bg-warning">
+            <a class="navbar-brand" href="#">Get to know me!</a>
             <button
-                id="enterbutton"
-                onclick="window.location.href='Home/index.html'"
+                class="navbar-toggler"
+                type="button"
+                data-toggle="collapse"
+                data-target="#navbarNav"
+                aria-controls="navbarNav"
+                aria-expanded="false"
+                aria-label="Toggle navigation"
             >
-                Enter
+                <span class="navbar-toggler-icon"></span>
             </button>
-            <div id="bouncingLine">Welcome to my website!</div>
-        </div>
-        <div id="p1">
-            <p style="font-size: large; color: white; text-align: center">
-                Click the <strong>enter</strong> button to gain access to my
-                website.
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item active">
+                        <a
+                            class="nav-link"
+                            href="../kendallcoding202.github.io/Home/index.html"
+                            >Home <span class="sr-only">(current)</span></a
+                        >
+                    </li>
+                    <li class="nav-item">
+                        <a
+                            class="nav-link"
+                            href="../kendallcoding202.github.io/About Me/index.html"
+                            >About Me</a
+                        >
+                    </li>
+                    <li class="nav-item">
+                        <a
+                            class="nav-link"
+                            href="../kendallcoding202.github.io/Hobbies/index.html"
+                            >Hobbies</a
+                        >
+                    </li>
+                    <li class="nav-item">
+                        <a
+                            class="nav-link"
+                            href="../kendallcoding202.github.io/Photo/photo.html"
+                            >Photos</a
+                        >
+                    </li>
+                    <li class="nav-item">
+                        <a
+                            class="nav-link"
+                            href="../kendallcoding202.github.io/Contact Me/index.html"
+                            >Contact Me</a
+                        >
+                    </li>
+                </ul>
+            </div>
+        </nav>
+
+        <div id="bouncingLine">Welcome to my website!</div>
+
+        <div
+            style="background-color: black; text-align: center"
+            class="jumbotron"
+        >
+            <h1 class="display-4">Hello there!</h1>
+            <p style="color: white" class="lead">
+                This is my first website! I hope you enjoy it!
+            </p>
+            <hr class="my-4" />
+            <p style="color: white">
+                Use the navigation bar to explore my website.
             </p>
         </div>
         <script src="enter.js"></script>
