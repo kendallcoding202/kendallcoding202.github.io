@@ -4,3 +4,5 @@ function displayDate() {
   const day = today.getDate();
   document.getElementById("homebutton").innerHTML = `${month}/${day}`;
 }
+
+document.body.style.backgroundColor = "#8a2be2"
