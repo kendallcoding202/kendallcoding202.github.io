@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="stylesheet" href="../CSS/mysite.css" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Bitcount+Grid+Single:wght@100..900&display=swap"
+            rel="stylesheet"
+        />
+        <title>Cozy Game Project</title>
+        <script
+            src="https://code.jquery.com/jquery-3.7.1.js"
+            integrity="sha256-eKhayi8LEQwp4NKxN+CfCh+3qOVUtJn3QNZ0TciWLP4="
+            crossorigin="anonymous"
+        ></script>
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/bootstrap@4.4.1/dist/css/bootstrap.min.css"
+            integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh"
+            crossorigin="anonymous"
+        />
+        <script
+            src="https://cdn.jsdelivr.net/npm/bootstrap@4.4.1/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-6khuMg9gaYr5AxOqhkVIODVIvm9ynTT5J4V1cfthmT+emCG6yVmEZsRHdxlotUnm"
+            crossorigin="anonymous"
+        ></script>
+    </head>
+
+    <header>
+        <!--Header keeps the same blueviolet banner styling as the other pages-->
+        <h1 align="center" style="background-color: blueviolet">
+            My Cozy Game Project
+        </h1>
+        <hr />
+    </header>
+
+    <body style="background-color: rgba(138, 43, 226, 0.25)">
+        <main class="container" style="max-width: 900px">
+            <!--Intro: what this project is and why it lives here-->
+            <p style="text-indent: 20px">
+                One of my hobbies is playing video games, so I decided to try
+                <b>building</b> one. This page is my month-one roadmap for a
+                cozy, Animal-Crossing-style game prototype made in the
+                <b>Godot</b> engine. The goal is simple: after about four weeks
+                of leftover-time work, have a little character walking around an
+                island, gathering items, fishing, with a real-time day/night
+                cycle &mdash; then decide, with real information, whether this
+                becomes a long-term project.
+            </p>
+
+            <!--Quick facts callout-->
+            <div
+                style="
+                    border: 2px solid blueviolet;
+                    border-radius: 12px;
+                    background-color: rgba(255, 255, 255, 0.6);
+                    padding: 12px 20px;
+                    margin: 20px 0;
+                "
+            >
+                <b>The goal:</b> a playable prototype with placeholder art in
+                ~4 weeks (15&ndash;20 total hours).<br />
+                <b>Engine:</b> Godot 4.7 stable, standard GDScript build,
+                Mobile renderer.
+            </div>
+            <hr />
+
+            <!--Week 0 -->
+            <h2 style="color: blueviolet">Week 0 &mdash; Setup (~2 hrs)</h2>
+            <ul style="font-style: italic">
+                <li>Download Godot 4.7 stable (macOS universal build).</li>
+                <li>
+                    New 2D project, Mobile renderer, project name
+                    <code>cozy-proto</code>.
+                </li>
+                <li>
+                    Set a phone resolution (e.g. 1170&times;2532), stretch mode
+                    <code>canvas_items</code>, aspect <code>keep</code> &mdash;
+                    doing this on day one avoids a painful retrofit.
+                </li>
+                <li>Install export templates that match 4.7 exactly.</li>
+                <li>
+                    Set up Git immediately and ignore the
+                    <code>.godot/</code> folder &mdash; scene files are text and
+                    diff well.
+                </li>
+            </ul>
+            <p style="text-indent: 20px">
+                <b>Not yet:</b> iOS export, IAP plugins, App Store anything.
+                That is month 3+ territory.
+            </p>
+            <hr />
+
+            <!--Week 1 -->
+            <h2 style="color: blueviolet">
+                Week 1 &mdash; Learn the engine (4&ndash;5 hrs)
+            </h2>
+            <p style="text-indent: 20px">
+                The mental model: everything is a <b>Node</b>, and nodes compose
+                into <b>Scenes</b> (a scene is like a reusable component with its
+                own script). <b>Signals</b> are events &mdash; a fishing bobber
+                emits <code>fish_bit</code>, the UI listens. GDScript is
+                Python-flavored and reads fluently in about an hour.
+            </p>
+            <ul style="font-style: italic">
+                <li>
+                    Complete the official "Your first 2D game" tutorial (the
+                    dodge-the-creeps game). ~2 hrs. Teaches nodes, signals,
+                    scenes, input, and collision.
+                </li>
+                <li>
+                    Skim the docs on TileMapLayer, AnimatedSprite2D, Area2D, and
+                    Autoloads (singletons for the game clock and save data).
+                </li>
+            </ul>
+            <p style="text-indent: 20px">
+                <b>Skip:</b> 3D, shaders, multiplayer, C#, and any tutorial
+                series longer than 30 minutes per topic. One tutorial, then
+                build.
+            </p>
+            <hr />
+
+            <!--Week 2 -->
+            <h2 style="color: blueviolet">
+                Week 2 &mdash; The island and the walk (4&ndash;5 hrs)
+            </h2>
+            <p style="text-indent: 20px">
+                Grab placeholder art first: <b>Sprout Lands</b> by Cup Nooble
+                (itch.io) is the de-facto standard cozy asset pack. Don't
+                commission or make art &mdash; asset pack, move on.
+            </p>
+            <ul style="font-style: italic">
+                <li>One small island map using TileMapLayer.</li>
+                <li>
+                    Player scene: CharacterBody2D + AnimatedSprite2D +
+                    CollisionShape2D, ~20 lines of movement code.
+                </li>
+                <li>Camera2D following the player with smoothing on.</li>
+                <li>Keyboard input for now; virtual joystick can wait.</li>
+            </ul>
+            <p style="text-indent: 20px">
+                <b>Done when:</b> you can walk a little character around an
+                island and it feels pleasant.
+            </p>
+            <hr />
+
+            <!--Week 3 -->
+            <h2 style="color: blueviolet">
+                Week 3 &mdash; Gathering and the game clock (4&ndash;5 hrs)
+            </h2>
+            <ul style="font-style: italic">
+                <li>
+                    <b>Pickups:</b> an Item scene (Area2D + Sprite2D); on
+                    <code>body_entered</code> add to inventory and free the node.
+                </li>
+                <li>
+                    <b>Inventory:</b> a <code>GameState.gd</code> Autoload
+                    holding item counts, shown in a simple panel. Ugly is fine.
+                </li>
+                <li>
+                    <b>The clock (the soul of the genre):</b> a
+                    <code>GameClock.gd</code> Autoload advancing an in-game hour
+                    every real minute, with a CanvasModulate tinting the screen
+                    by time of day. The moment day fades to night is when it
+                    starts feeling like a <i>game</i>.
+                </li>
+                <li>
+                    <b>Respawning:</b> items come back the next in-game day, so
+                    there's a reason to return.
+                </li>
+            </ul>
+            <hr />
+
+            <!--Week 4 -->
+            <h2 style="color: blueviolet">
+                Week 4 &mdash; Fishing minigame + verdict (4&ndash;5 hrs)
+            </h2>
+            <ul style="font-style: italic">
+                <li>Water tiles near shore become fishable Area2D zones.</li>
+                <li>
+                    Cast &rarr; bobber &rarr; random 2&ndash;6s wait &rarr;
+                    bobber shakes &rarr; short reaction window &rarr; catch or
+                    miss. Catches use a weighted rarity table.
+                </li>
+                <li>A tiny "You caught a bass!" popup with the sprite.</li>
+                <li>
+                    <b>Save/load:</b> serialize GameState to a local JSON file
+                    with FileAccess on quit, load on start.
+                </li>
+            </ul>
+            <p style="text-indent: 20px">
+                <b>Then the verdict.</b> Was building this fun, or did it feel
+                like a second job? Did I open the project just to tinker,
+                unprompted? Did the rest of life suffer this month? Three good
+                answers &rarr; commit to the long roadmap. Any bad answer &rarr;
+                shelve it guilt-free &mdash; I learned a game engine for the
+                price of one month's leftover hours.
+            </p>
+            <hr />
+
+            <!--Long roadmap-->
+            <h2 style="color: blueviolet">
+                If it's a go: the shape of v1 (months 2&ndash;18)
+            </h2>
+            <ul style="font-style: italic">
+                <li>
+                    <b>Months 2&ndash;4:</b> villager system, daily dialogue,
+                    friendship points, a museum/catalog UI, bigger island.
+                </li>
+                <li>
+                    <b>Months 5&ndash;7:</b> grid-snap furniture placement, a
+                    shop and currency loop.
+                </li>
+                <li>
+                    <b>Months 8&ndash;10:</b> seasons, more villagers, sound and
+                    music.
+                </li>
+                <li>
+                    <b>Months 11&ndash;14:</b> real art pass &mdash; commission a
+                    pixel artist once it's proven fun. Polish and onboarding.
+                </li>
+                <li>
+                    <b>Months 15&ndash;18:</b> iOS export pipeline, StoreKit 2
+                    for cosmetic IAP, TestFlight beta, App Store launch.
+                </li>
+            </ul>
+
+            <!--Standing rules callout-->
+            <div
+                style="
+                    border: 2px dashed blueviolet;
+                    border-radius: 12px;
+                    background-color: rgba(255, 255, 255, 0.6);
+                    padding: 12px 20px;
+                    margin: 20px 0;
+                "
+            >
+                <b>Standing rules</b>
+                <ul>
+                    <li>This project gets <i>leftover</i> hours only.</li>
+                    <li>No new systems until the current one is fun.</li>
+                    <li>
+                        Every month, the game must be playable start to finish.
+                    </li>
+                </ul>
+            </div>
+            <hr />
+
+            <!--Quick reference table, styled like the site's other tables-->
+            <h2 style="color: blueviolet">Quick reference</h2>
+            <table id="table" style="width: 80%">
+                <tr>
+                    <th>Thing</th>
+                    <th>Choice</th>
+                </tr>
+                <tr>
+                    <td>Engine</td>
+                    <td>Godot 4.7 stable, GDScript build</td>
+                </tr>
+                <tr>
+                    <td>Renderer</td>
+                    <td>Mobile</td>
+                </tr>
+                <tr>
+                    <td>Art (prototype)</td>
+                    <td>Sprout Lands (Cup Nooble, itch.io)</td>
+                </tr>
+                <tr>
+                    <td>Save data</td>
+                    <td>Local JSON now; Supabase cloud saves later</td>
+                </tr>
+                <tr>
+                    <td>IAP (later)</td>
+                    <td>Godot StoreKit 2 plugin</td>
+                </tr>
+                <tr>
+                    <td>Version control</td>
+                    <td>Git from day one, ignore <code>.godot/</code></td>
+                </tr>
+                <tr>
+                    <td>First tutorial</td>
+                    <td>Official "Your first 2D game"</td>
+                </tr>
+            </table>
+            <br />
+        </main>
+    </body>
+
+    <!--Footer with links to the rest of the site, matching the other pages-->
+    <footer>
+        <hr />
+        <p align="center">
+            Kendall Sorenson | <a href="../Home/index.html">Home</a> |
+            <a href="../About Me/index.html">About Me</a> |
+            <a href="../Hobbies/index.html">Hobbies</a> |
+            <a href="../Photo/photo.html">Photograph's</a> |
+            <a href="../Contact Me/index.html">Contact Me</a>
+        </p>
+    </footer>
+</html>
