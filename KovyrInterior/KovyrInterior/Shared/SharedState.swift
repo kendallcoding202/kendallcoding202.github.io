@@ -7,7 +7,7 @@ import Foundation
 /// BOTH the app and widget targets (Signing & Capabilities). Change the value
 /// here and in both `.entitlements` files if you use a different group id.
 enum SharedState {
-    static let appGroup = "group.com.example.NetScan"
+    static let appGroup = "group.com.kovyr.interior"
 
     private static var defaults: UserDefaults? { UserDefaults(suiteName: appGroup) }
 

@@ -16,7 +16,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Monitoring")
                 } footer: {
-                    Text("When enabled, NetScan periodically re-scans your network in the background and notifies you when a new device appears. iOS controls how often this runs and requires system Background App Refresh to be on. It does not run on the Simulator.")
+                    Text("When enabled, Kovyr Interior periodically re-scans your network in the background and notifies you when a new device appears. iOS controls how often this runs and requires system Background App Refresh to be on. It does not run on the Simulator.")
                 }
 
                 Section("Notifications") {
@@ -33,7 +33,7 @@ struct SettingsView: View {
                 } header: {
                     Text("About")
                 } footer: {
-                    Text("NetScan discovers devices within the limits of iOS: no MAC/manufacturer data, TCP + Bonjour discovery, and best-effort traceroute. Device types are inferred from open ports and services.")
+                    Text("Kovyr Interior is the on-site internal-network companion to Kovyr. It discovers devices within the limits of iOS: no MAC/manufacturer data, TCP + Bonjour discovery, and best-effort traceroute. Device types are inferred from open ports and services.")
                 }
             }
             .navigationTitle("Settings")

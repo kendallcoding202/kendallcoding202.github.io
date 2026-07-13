@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct NetScanApp: App {
+struct KovyrInteriorApp: App {
     @StateObject private var scanner = NetworkScanner()
     @Environment(\.scenePhase) private var scenePhase
 
@@ -14,7 +14,7 @@ struct NetScanApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(scanner)
-                .tint(.blue)
+                .tint(.kovyr)
                 .task { NotificationManager.shared.requestAuthorization() }
         }
         .onChange(of: scenePhase) { _, phase in

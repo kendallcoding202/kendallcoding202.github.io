@@ -6,7 +6,7 @@ import Foundation
 /// IMPORTANT: the App Group identifier below must match the app's and be enabled
 /// on both targets' Signing & Capabilities.
 enum SharedState {
-    static let appGroup = "group.com.example.NetScan"
+    static let appGroup = "group.com.kovyr.interior"
 
     private static var defaults: UserDefaults? { UserDefaults(suiteName: appGroup) }
 

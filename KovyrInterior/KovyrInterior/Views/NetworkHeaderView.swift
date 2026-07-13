@@ -40,7 +40,7 @@ struct NetworkHeaderView: View {
         .padding(18)
         .background(
             LinearGradient(
-                colors: [Color.blue, Color.indigo],
+                colors: [Color.kovyr, Color.kovyrAccent],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )

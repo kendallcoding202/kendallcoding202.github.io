@@ -42,7 +42,7 @@ struct DeviceListView: View {
                     }
                 }
             }
-            .navigationTitle("NetScan")
+            .navigationTitle("Kovyr Interior")
             .navigationDestination(for: String.self) { id in
                 if let device = scanner.devices.first(where: { $0.id == id }) {
                     DeviceDetailView(device: device)

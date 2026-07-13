@@ -1,9 +1,14 @@
 import WidgetKit
 import SwiftUI
 
+/// Kovyr navy, inlined here because the widget is a separate module from the app.
+private extension Color {
+    static let kovyr = Color(red: 30 / 255, green: 58 / 255, blue: 95 / 255)
+}
+
 /// Timeline entry holding the latest scan summary read from the shared App
 /// Group container.
-struct NetScanEntry: TimelineEntry {
+struct KovyrEntry: TimelineEntry {
     let date: Date
     let deviceCount: Int
     let newCount: Int
@@ -11,24 +16,24 @@ struct NetScanEntry: TimelineEntry {
 }
 
 struct Provider: TimelineProvider {
-    func placeholder(in context: Context) -> NetScanEntry {
-        NetScanEntry(date: Date(), deviceCount: 8, newCount: 1, lastScan: Date())
+    func placeholder(in context: Context) -> KovyrEntry {
+        KovyrEntry(date: Date(), deviceCount: 8, newCount: 1, lastScan: Date())
     }
 
-    func getSnapshot(in context: Context, completion: @escaping (NetScanEntry) -> Void) {
+    func getSnapshot(in context: Context, completion: @escaping (KovyrEntry) -> Void) {
         completion(currentEntry())
     }
 
-    func getTimeline(in context: Context, completion: @escaping (Timeline<NetScanEntry>) -> Void) {
+    func getTimeline(in context: Context, completion: @escaping (Timeline<KovyrEntry>) -> Void) {
         let entry = currentEntry()
         // Refresh roughly hourly; the app also nudges the widget after each scan.
         let next = Date(timeIntervalSinceNow: 60 * 60)
         completion(Timeline(entries: [entry], policy: .after(next)))
     }
 
-    private func currentEntry() -> NetScanEntry {
+    private func currentEntry() -> KovyrEntry {
         let summary = SharedState.load()
-        return NetScanEntry(
+        return KovyrEntry(
             date: Date(),
             deviceCount: summary.deviceCount,
             newCount: summary.newCount,
@@ -37,8 +42,8 @@ struct Provider: TimelineProvider {
     }
 }
 
-struct NetScanWidgetEntryView: View {
-    var entry: NetScanEntry
+struct KovyrWidgetEntryView: View {
+    var entry: KovyrEntry
     @Environment(\.widgetFamily) private var family
 
     var body: some View {
@@ -52,9 +57,9 @@ struct NetScanWidgetEntryView: View {
 
     private var smallBody: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label("NetScan", systemImage: "wifi")
+            Label("Kovyr", systemImage: "wifi")
                 .font(.caption2.weight(.semibold))
-                .foregroundStyle(.blue)
+                .foregroundStyle(.kovyr)
             Spacer()
             Text("\(entry.deviceCount)")
                 .font(.system(size: 44, weight: .bold, design: .rounded))
@@ -76,7 +81,7 @@ struct NetScanWidgetEntryView: View {
     private var mediumBody: some View {
         HStack(spacing: 18) {
             VStack(alignment: .leading, spacing: 4) {
-                Label("NetScan", systemImage: "wifi").font(.caption.weight(.semibold)).foregroundStyle(.blue)
+                Label("Kovyr Interior", systemImage: "wifi").font(.caption.weight(.semibold)).foregroundStyle(.kovyr)
                 Text("\(entry.deviceCount)")
                     .font(.system(size: 52, weight: .bold, design: .rounded))
                 Text("devices on your network").font(.caption).foregroundStyle(.secondary)
@@ -106,23 +111,23 @@ struct NetScanWidgetEntryView: View {
     }
 }
 
-struct NetScanWidget: Widget {
-    let kind = "NetScanWidget"
+struct KovyrInteriorWidget: Widget {
+    let kind = "KovyrInteriorWidget"
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: Provider()) { entry in
-            NetScanWidgetEntryView(entry: entry)
+            KovyrWidgetEntryView(entry: entry)
                 .containerBackground(.fill.tertiary, for: .widget)
         }
-        .configurationDisplayName("Network Devices")
+        .configurationDisplayName("Kovyr Interior")
         .description("Devices found on your Wi-Fi network.")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
 
 @main
-struct NetScanWidgetBundle: WidgetBundle {
+struct KovyrInteriorWidgetBundle: WidgetBundle {
     var body: some Widget {
-        NetScanWidget()
+        KovyrInteriorWidget()
     }
 }

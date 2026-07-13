@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The "History" tab: every device NetScan has ever seen (with first/last seen)
+/// The "History" tab: every device Kovyr Interior has ever seen (with first/last seen)
 /// and a log of past scans.
 struct HistoryView: View {
     @ObservedObject var store: DeviceStore

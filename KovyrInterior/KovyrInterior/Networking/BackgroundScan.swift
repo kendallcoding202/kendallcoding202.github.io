@@ -10,7 +10,7 @@ import WidgetKit
 /// best-effort periodic check — not a guarantee of continuous monitoring. It
 /// does not run on the Simulator.
 enum BackgroundScan {
-    static let taskIdentifier = "com.example.NetScan.backgroundRefresh"
+    static let taskIdentifier = "com.kovyr.interior.backgroundRefresh"
     static let enabledKey = "backgroundScanEnabled"
 
     static var isEnabled: Bool {

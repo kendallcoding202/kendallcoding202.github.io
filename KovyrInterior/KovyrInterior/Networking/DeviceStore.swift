@@ -1,6 +1,6 @@
 import Foundation
 
-/// A device NetScan has seen before, persisted across launches.
+/// A device Kovyr Interior has seen before, persisted across launches.
 struct KnownDevice: Codable, Identifiable {
     var id: String            // identityKey
     var displayName: String

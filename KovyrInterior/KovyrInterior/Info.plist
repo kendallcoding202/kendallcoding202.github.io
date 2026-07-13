@@ -8,10 +8,10 @@
 	</array>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>com.example.NetScan.backgroundRefresh</string>
+		<string>com.kovyr.interior.backgroundRefresh</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>NetScan discovers devices on your local network by probing the addresses on your Wi-Fi and reading Bonjour service advertisements.</string>
+	<string>Kovyr Interior discovers devices on your local network by probing the addresses on your Wi-Fi and reading Bonjour service advertisements.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_http._tcp</string>
