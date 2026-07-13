@@ -2,7 +2,7 @@ import Foundation
 
 /// Friendly categorisation of Bonjour service types so the UI can show a
 /// meaningful label and icon instead of a raw `_raop._tcp` string.
-enum ServiceCategory {
+enum ServiceCategory: Equatable {
     case airplay
     case chromecast
     case printer

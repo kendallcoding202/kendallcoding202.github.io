@@ -23,6 +23,34 @@ real device and be submittable to the App Store.
 5. On first scan, iOS shows a **Local Network** permission prompt — tap **Allow**.
    (Without this, discovery finds nothing.)
 
+### Required one-time setup for the widget (App Group)
+
+The home-screen widget shares data with the app through an **App Group**. This
+needs signing configuration that only your Apple account can create:
+
+1. Change the bundle IDs to your own on **both** targets. If your app is
+   `com.yourname.NetScan`, the widget **must** be
+   `com.yourname.NetScan.NetScanWidget` (the widget ID must be prefixed by the
+   app ID).
+2. Select the **NetScan** target → **Signing & Capabilities** → **+ Capability**
+   → **App Groups**, and add a group like `group.com.yourname.NetScan`.
+3. Do the same for the **NetScanWidgetExtension** target, using the *same* group.
+4. Update the group id in three places to match: `NetScan/Shared/SharedState.swift`,
+   `NetScanWidget/SharedState.swift`, and both `.entitlements` files. (They ship
+   set to `group.com.example.NetScan`.)
+
+If you skip this, the app still builds and runs — the widget just shows zeros.
+(App Groups may require a paid Apple Developer membership; a free account can
+still run the app itself. If widget signing fails, remove the
+**NetScanWidgetExtension** target and the app is unaffected.)
+
+### Background scanning
+
+Turn on **Settings → Automatic background scans** in the app. iOS decides when
+background refresh actually runs, and the system-wide **Settings → General →
+Background App Refresh** must be enabled. Background tasks do **not** run on the
+Simulator — test on a real device.
+
 ## What it does
 
 ### Overview tab
@@ -31,8 +59,11 @@ real device and be submittable to the App Store.
   - a concurrent **TCP sweep** of every host in the subnet,
   - **Bonjour / mDNS** service discovery (AirPlay, Chromecast, printers, SMB…),
   - **reverse DNS** for friendly hostnames.
-- Per-device detail screen with services, **first-seen** date, and an
-  on-demand **port scan**.
+- Per-device detail screen with **inferred device type**, services,
+  **first-seen** date, and an on-demand **port scan**.
+- **Device-type guessing**: each device is classified (Router, Phone, Computer,
+  Printer, TV/Streamer, Camera, Network Storage, Smart Home, Media Server…) from
+  its open ports and Bonjour services, with a matching icon.
 - **New-device detection**: devices not seen before are flagged with a *New*
   badge and trigger a **local notification** ("New device joined"). The first
   scan seeds the baseline silently.
@@ -41,6 +72,14 @@ real device and be submittable to the App Store.
 - A log of recent scans (time, device count, how many were new).
 - Every device NetScan has ever seen, with first-seen / last-seen times.
 - Persisted across launches; clearable from the toolbar.
+
+### Settings tab
+- Toggle **automatic background scans** (periodic re-scan + new-device alerts).
+- Shortcut to system notification settings; app/version info.
+
+### Home-screen widget
+- Small and medium widgets showing the **device count**, **new-device count**,
+  and **last scan time**, updated after each scan via a shared App Group.
 
 ### Tools tab
 | Tool | Notes |
@@ -74,12 +113,19 @@ network app, including Fing:
 ```
 NetScan/
 ├─ NetScan.xcodeproj/
-└─ NetScan/
-   ├─ NetScanApp.swift        # @main app + tab shell
-   ├─ Info.plist              # Local Network + Bonjour declarations
-   ├─ Models/                 # Device, service & port catalogs
-   ├─ Networking/             # Scanner, probes, ping, speed test, tools
-   └─ Views/                  # Overview + Tools UI
+├─ NetScan/                   # App target
+│  ├─ NetScanApp.swift        # @main app + tab shell
+│  ├─ Info.plist              # Local Network, Bonjour, background tasks
+│  ├─ NetScan.entitlements    # App Group
+│  ├─ Models/                 # Device, device-type, service & port catalogs
+│  ├─ Networking/             # Scanner, probes, ping, speed test, store, tools
+│  ├─ Shared/                 # SharedState (App Group bridge)
+│  └─ Views/                  # Overview / Tools / History / Settings UI
+└─ NetScanWidget/             # Widget extension target
+   ├─ NetScanWidget.swift     # WidgetBundle + timeline + views
+   ├─ SharedState.swift       # copy of the App Group bridge
+   ├─ Info.plist              # NSExtension (widgetkit)
+   └─ NetScanWidget.entitlements
 ```
 
 ## A note on new-device detection & background scanning
@@ -95,7 +141,7 @@ device with no stable name may occasionally re-appear as "new".
 
 ## Roadmap ideas
 
-- Background App Refresh scans (limited by iOS, but possible for periodic checks).
-- Request the multicast entitlement to add full UPnP discovery.
-- Device-type guessing from open-port fingerprints.
-- Widget / Live Activity showing device count.
+- Request the multicast entitlement to add full UPnP/SSDP discovery.
+- Live Activity for an in-progress scan.
+- Per-device notes / naming and "trusted" marking.
+- Export scan results (CSV / share sheet).

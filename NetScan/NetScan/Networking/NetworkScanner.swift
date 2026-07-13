@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import UIKit
+import WidgetKit
 
 /// Drives a full local-network scan and publishes discovered devices to the UI.
 ///
@@ -96,7 +97,9 @@ final class NetworkScanner: ObservableObject {
         bonjour?.stop()
 
         if !Task.isCancelled {
-            reconcileAndNotify()
+            let newCount = reconcileAndNotify()
+            SharedState.save(deviceCount: devices.count, newCount: newCount, date: Date())
+            WidgetCenter.shared.reloadAllTimelines()
             statusText = "\(devices.count) device\(devices.count == 1 ? "" : "s") found"
             progress = 1
         }
@@ -104,19 +107,21 @@ final class NetworkScanner: ObservableObject {
     }
 
     /// Compares the finished scan with the persistent store, flags new devices
-    /// and posts a "new device joined" notification.
-    private func reconcileAndNotify() {
+    /// and posts a "new device joined" notification. Returns the new-device count.
+    @discardableResult
+    private func reconcileAndNotify() -> Int {
         let newKeys = store.reconcile(devices)
-        guard !newKeys.isEmpty else { return }
+        guard !newKeys.isEmpty else { return 0 }
         for index in devices.indices where newKeys.contains(devices[index].identityKey) {
             devices[index].isNew = true
         }
         let newDevices = devices.filter { newKeys.contains($0.identityKey) }
         NotificationManager.shared.notifyNewDevices(newDevices)
+        return newDevices.count
     }
 
     /// Probes a single host off the main actor. Returns a device only if alive.
-    private nonisolated static func probeHost(
+    nonisolated static func probeHost(
         ip: String,
         gateway: String,
         selfIP: String,

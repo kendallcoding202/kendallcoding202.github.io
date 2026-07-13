@@ -3,9 +3,11 @@ import SwiftUI
 @main
 struct NetScanApp: App {
     @StateObject private var scanner = NetworkScanner()
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         NotificationManager.shared.configure()
+        BackgroundScan.register()
     }
 
     var body: some Scene {
@@ -14,6 +16,9 @@ struct NetScanApp: App {
                 .environmentObject(scanner)
                 .tint(.blue)
                 .task { NotificationManager.shared.requestAuthorization() }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background { BackgroundScan.schedule() }
         }
     }
 }
@@ -31,6 +36,9 @@ struct RootView: View {
 
             HistoryView(store: scanner.store)
                 .tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
+
+            SettingsView()
+                .tabItem { Label("Settings", systemImage: "gearshape.fill") }
         }
     }
 }

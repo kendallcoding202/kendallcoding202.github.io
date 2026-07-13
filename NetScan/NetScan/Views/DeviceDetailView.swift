@@ -25,6 +25,7 @@ struct DeviceDetailView: View {
             }
 
             Section("Details") {
+                detailRow("Type", device.deviceType.label)
                 detailRow("IP Address", device.ipAddress)
                 if let hostname = device.hostname { detailRow("Hostname", hostname) }
                 if let bonjour = device.bonjourName { detailRow("Bonjour Name", bonjour) }

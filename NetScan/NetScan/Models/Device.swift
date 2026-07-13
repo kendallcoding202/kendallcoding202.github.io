@@ -55,15 +55,11 @@ struct DiscoveredDevice: Identifiable, Equatable {
         return ipAddress
     }
 
-    /// SF Symbol chosen from the strongest available signal about the device kind.
-    var iconName: String {
-        if isRouter { return "wifi.router" }
-        if isSelf { return "iphone" }
-        for service in services {
-            if let symbol = service.category.symbol { return symbol }
-        }
-        return "desktopcomputer"
-    }
+    /// Best guess of the device kind from its ports and advertised services.
+    var deviceType: DeviceType { DeviceType.classify(self) }
+
+    /// SF Symbol for the device, driven by the inferred device type.
+    var iconName: String { deviceType.symbol }
 
     /// Numeric form of the address for correct ordering (1.1.1.9 before 1.1.1.10).
     var sortKey: UInt32 { IPMath.toUInt32(ipAddress) ?? 0 }
