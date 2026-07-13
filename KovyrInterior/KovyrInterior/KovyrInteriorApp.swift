@@ -14,7 +14,7 @@ struct KovyrInteriorApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(scanner)
-                .tint(.kovyr)
+                .tint(Color.kovyr)
                 .task { NotificationManager.shared.requestAuthorization() }
         }
         .onChange(of: scenePhase) { _, phase in

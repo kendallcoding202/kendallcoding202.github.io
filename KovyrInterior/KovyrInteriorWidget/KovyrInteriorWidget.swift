@@ -59,7 +59,7 @@ struct KovyrWidgetEntryView: View {
         VStack(alignment: .leading, spacing: 6) {
             Label("Kovyr", systemImage: "wifi")
                 .font(.caption2.weight(.semibold))
-                .foregroundStyle(.kovyr)
+                .foregroundStyle(Color.kovyr)
             Spacer()
             Text("\(entry.deviceCount)")
                 .font(.system(size: 44, weight: .bold, design: .rounded))
@@ -81,7 +81,7 @@ struct KovyrWidgetEntryView: View {
     private var mediumBody: some View {
         HStack(spacing: 18) {
             VStack(alignment: .leading, spacing: 4) {
-                Label("Kovyr Interior", systemImage: "wifi").font(.caption.weight(.semibold)).foregroundStyle(.kovyr)
+                Label("Kovyr Interior", systemImage: "wifi").font(.caption.weight(.semibold)).foregroundStyle(Color.kovyr)
                 Text("\(entry.deviceCount)")
                     .font(.system(size: 52, weight: .bold, design: .rounded))
                 Text("devices on your network").font(.caption).foregroundStyle(.secondary)
