@@ -16,6 +16,9 @@ final class NetworkScanner: ObservableObject {
     @Published private(set) var statusText = "Ready to scan"
     @Published private(set) var localNetwork: LocalNetwork?
 
+    /// Persistent record of previously seen devices and scan history.
+    let store = DeviceStore()
+
     private var scanTask: Task<Void, Never>?
     private var bonjour: BonjourBrowser?
     private let probeTimeout: TimeInterval = 1.2
@@ -93,10 +96,23 @@ final class NetworkScanner: ObservableObject {
         bonjour?.stop()
 
         if !Task.isCancelled {
+            reconcileAndNotify()
             statusText = "\(devices.count) device\(devices.count == 1 ? "" : "s") found"
             progress = 1
         }
         isScanning = false
+    }
+
+    /// Compares the finished scan with the persistent store, flags new devices
+    /// and posts a "new device joined" notification.
+    private func reconcileAndNotify() {
+        let newKeys = store.reconcile(devices)
+        guard !newKeys.isEmpty else { return }
+        for index in devices.indices where newKeys.contains(devices[index].identityKey) {
+            devices[index].isNew = true
+        }
+        let newDevices = devices.filter { newKeys.contains($0.identityKey) }
+        NotificationManager.shared.notifyNewDevices(newDevices)
     }
 
     /// Probes a single host off the main actor. Returns a device only if alive.

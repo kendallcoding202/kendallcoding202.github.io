@@ -31,7 +31,16 @@ real device and be submittable to the App Store.
   - a concurrent **TCP sweep** of every host in the subnet,
   - **Bonjour / mDNS** service discovery (AirPlay, Chromecast, printers, SMB…),
   - **reverse DNS** for friendly hostnames.
-- Per-device detail screen with services and an on-demand **port scan**.
+- Per-device detail screen with services, **first-seen** date, and an
+  on-demand **port scan**.
+- **New-device detection**: devices not seen before are flagged with a *New*
+  badge and trigger a **local notification** ("New device joined"). The first
+  scan seeds the baseline silently.
+
+### History tab
+- A log of recent scans (time, device count, how many were new).
+- Every device NetScan has ever seen, with first-seen / last-seen times.
+- Persisted across launches; clearable from the toolbar.
 
 ### Tools tab
 | Tool | Notes |
@@ -73,9 +82,20 @@ NetScan/
    └─ Views/                  # Overview + Tools UI
 ```
 
+## A note on new-device detection & background scanning
+
+New-device alerts fire when a **scan runs** (foreground). iOS does not allow an
+app to keep scanning the network continuously in the background, so NetScan can't
+watch the network 24/7 like a router-based service would. Open the app and scan
+(or pull-to-refresh) to check for new arrivals.
+
+Device identity across scans is best-effort: NetScan keys on a device's Bonjour
+or DNS name when available, falling back to IP. Because DHCP can reassign IPs, a
+device with no stable name may occasionally re-appear as "new".
+
 ## Roadmap ideas
 
-- Persist scan history and flag *new* devices joining the network.
-- Push/local notification when an unknown device appears.
+- Background App Refresh scans (limited by iOS, but possible for periodic checks).
 - Request the multicast entitlement to add full UPnP discovery.
 - Device-type guessing from open-port fingerprints.
+- Widget / Live Activity showing device count.

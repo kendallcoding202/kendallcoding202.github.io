@@ -4,6 +4,7 @@ import SwiftUI
 /// on-demand detailed port scan.
 struct DeviceDetailView: View {
     let device: DiscoveredDevice
+    @EnvironmentObject private var scanner: NetworkScanner
     @StateObject private var portScanner = PortScanner()
 
     var body: some View {
@@ -28,6 +29,9 @@ struct DeviceDetailView: View {
                 if let hostname = device.hostname { detailRow("Hostname", hostname) }
                 if let bonjour = device.bonjourName { detailRow("Bonjour Name", bonjour) }
                 detailRow("Role", roleText)
+                if let firstSeen = scanner.store.firstSeen(for: device) {
+                    detailRow("First Seen", firstSeen.formatted(.relative(presentation: .named)))
+                }
             }
 
             if !device.services.isEmpty {

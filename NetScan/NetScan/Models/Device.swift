@@ -13,6 +13,8 @@ struct DiscoveredDevice: Identifiable, Equatable {
     var isRouter: Bool
     var isSelf: Bool
     var firstSeen: Date
+    /// Set during reconciliation when this device was not in the known store.
+    var isNew: Bool
 
     init(
         ipAddress: String,
@@ -22,7 +24,8 @@ struct DiscoveredDevice: Identifiable, Equatable {
         openPorts: [PortInfo] = [],
         isRouter: Bool = false,
         isSelf: Bool = false,
-        firstSeen: Date = Date()
+        firstSeen: Date = Date(),
+        isNew: Bool = false
     ) {
         self.ipAddress = ipAddress
         self.hostname = hostname
@@ -32,6 +35,15 @@ struct DiscoveredDevice: Identifiable, Equatable {
         self.isRouter = isRouter
         self.isSelf = isSelf
         self.firstSeen = firstSeen
+        self.isNew = isNew
+    }
+
+    /// A best-effort stable identity across scans. IPs churn with DHCP, so we
+    /// prefer a Bonjour or DNS name when one is available and fall back to IP.
+    var identityKey: String {
+        if let bonjourName, !bonjourName.isEmpty { return "name:" + bonjourName.lowercased() }
+        if let hostname, !hostname.isEmpty { return "host:" + hostname.lowercased() }
+        return "ip:" + ipAddress
     }
 
     /// Best available human-friendly name for the device.

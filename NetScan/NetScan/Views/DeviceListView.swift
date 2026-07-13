@@ -85,6 +85,7 @@ struct DeviceRowView: View {
                     Text(device.displayName)
                         .font(.body.weight(.medium))
                         .lineLimit(1)
+                    if device.isNew { tag("New", .pink) }
                     if device.isRouter { tag("Router", .orange) }
                     if device.isSelf { tag("You", .green) }
                 }
