@@ -1,0 +1,40 @@
+# ---------------------------------------------------------------------------
+# Paper-trading configuration.
+#
+# Copy this file to `config.yaml` and adjust to taste:
+#     cp config.example.yaml config.yaml
+#
+# No API keys are required. The bot only reads PUBLIC market data from
+# Coinbase and simulates every fill locally. It never places a real order.
+# ---------------------------------------------------------------------------
+
+exchange:
+  # Coinbase public market-data endpoint (candles + ticker, no auth needed).
+  base_url: "https://api.exchange.coinbase.com"
+  timeout: 10          # HTTP timeout in seconds
+
+trading:
+  product_id: "BTC-USD"   # market to trade
+  granularity: 300        # candle size in seconds: 60, 300, 900, 3600, 21600, 86400
+  poll_interval: 60       # seconds the bot sleeps between iterations
+
+portfolio:
+  starting_cash: 10000.0  # simulated USD you start with
+  fee_rate: 0.006         # per-fill fee (0.6%, roughly Coinbase taker)
+  slippage: 0.0005        # simulated slippage against you (0.05%)
+
+strategy:
+  name: "ma_crossover"
+  ma_type: "ema"          # "ema" or "sma"
+  fast_period: 12
+  slow_period: 26
+
+risk:
+  position_pct: 0.25      # fraction of equity deployed per entry
+  stop_loss_pct: 0.03     # hard exit if the position drops 3% from entry
+  take_profit_pct: 0.06   # hard exit if the position rises 6% from entry
+  max_daily_loss_pct: 0.10  # halt trading for the rest of the day after a 10% equity drawdown
+
+state:
+  file: "state.json"      # paper portfolio is persisted here between runs
+  log_file: "bot.log"     # human-readable activity log

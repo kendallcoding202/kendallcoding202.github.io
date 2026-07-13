@@ -1,0 +1,13 @@
+# Local runtime config (may hold your tuned parameters)
+config.yaml
+
+# Paper-trading state and logs
+state.json
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
