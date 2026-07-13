@@ -32,13 +32,13 @@ struct SettingsView: View {
                         HStack(spacing: 12) {
                             Image(systemName: "shield.lefthalf.filled")
                                 .font(.title3)
-                                .foregroundStyle(.white)
+                                .foregroundStyle(Color.kovyrDeep)
                                 .frame(width: 40, height: 40)
-                                .background(Color.kovyr.gradient, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                                .background(Color.kovyrGold.gradient, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Learn about Kovyr")
                                     .font(.body.weight(.semibold))
-                                    .foregroundStyle(.primary)
+                                    .foregroundStyle(.white)
                                 Text("See what's hiding in plain sight.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -51,7 +51,7 @@ struct SettingsView: View {
                         .padding(.vertical, 2)
                     }
                 } header: {
-                    Text("Kovyr")
+                    Text("Kovyr").foregroundStyle(Color.kovyrGold)
                 } footer: {
                     Text("Kovyr is a security-posture service for small businesses. Kovyr Interior is its on-site, internal-network companion.")
                 }
@@ -65,6 +65,7 @@ struct SettingsView: View {
                     Text("Kovyr Interior is the on-site internal-network companion to Kovyr. It discovers devices within the limits of iOS: no MAC/manufacturer data, TCP + Bonjour discovery, and best-effort traceroute. Device types are inferred from open ports and services.")
                 }
             }
+            .kovyrScreen()
             .navigationTitle("Settings")
         }
     }

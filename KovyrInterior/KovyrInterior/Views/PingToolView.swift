@@ -65,6 +65,7 @@ struct PingToolView: View {
                 }
             }
         }
+        .kovyrScreen()
         .navigationTitle("Ping")
         .navigationBarTitleDisplayMode(.inline)
         .onDisappear { ping.stop() }

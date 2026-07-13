@@ -25,12 +25,14 @@ struct SpeedTestView: View {
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(speedTest.isRunning ? Color.red : Color.blue, in: RoundedRectangle(cornerRadius: 14))
-                    .foregroundStyle(.white)
+                    .background(speedTest.isRunning ? Color.red : Color.kovyrGold, in: RoundedRectangle(cornerRadius: 14))
+                    .foregroundStyle(speedTest.isRunning ? .white : Color.kovyrDeep)
             }
             Spacer()
         }
         .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(KovyrBackground())
         .navigationTitle("Speed Test")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -57,6 +59,6 @@ struct SpeedTestView: View {
         }
         .frame(maxWidth: .infinity)
         .padding()
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
     }
 }

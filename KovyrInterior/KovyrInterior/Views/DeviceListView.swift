@@ -42,13 +42,18 @@ struct DeviceListView: View {
                     }
                 }
             }
+            .kovyrScreen()
             .navigationTitle("Kovyr Interior")
+            .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: String.self) { id in
                 if let device = scanner.devices.first(where: { $0.id == id }) {
                     DeviceDetailView(device: device)
                 }
             }
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    KovyrWordmark()
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     if scanner.isScanning {
                         Button("Stop", role: .destructive) { scanner.stopScan() }
@@ -73,11 +78,11 @@ struct DeviceRowView: View {
         HStack(spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.blue.opacity(0.15))
+                    .fill(Color.white.opacity(0.1))
                     .frame(width: 42, height: 42)
                 Image(systemName: device.iconName)
                     .font(.system(size: 20))
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Color.kovyrGold)
             }
 
             VStack(alignment: .leading, spacing: 3) {

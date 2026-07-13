@@ -40,6 +40,7 @@ struct RouterCheckView: View {
                 }
             }
         }
+        .kovyrScreen()
         .navigationTitle("Router Security")
         .navigationBarTitleDisplayMode(.inline)
     }

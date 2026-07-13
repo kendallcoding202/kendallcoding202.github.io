@@ -1,9 +1,11 @@
 import WidgetKit
 import SwiftUI
 
-/// Kovyr navy, inlined here because the widget is a separate module from the app.
+/// Kovyr palette, inlined because the widget is a separate module from the app.
 private extension Color {
-    static let kovyr = Color(red: 30 / 255, green: 58 / 255, blue: 95 / 255)
+    static let kovyrDeep = Color(red: 9 / 255, green: 18 / 255, blue: 33 / 255)
+    static let kovyrTop = Color(red: 36 / 255, green: 70 / 255, blue: 110 / 255)
+    static let kovyrGold = Color(red: 214 / 255, green: 178 / 255, blue: 94 / 255)
 }
 
 /// Timeline entry holding the latest scan summary read from the shared App
@@ -55,25 +57,33 @@ struct KovyrWidgetEntryView: View {
         }
     }
 
+    private var wordmark: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "wifi").foregroundStyle(Color.kovyrGold)
+            Text("Kovyr").foregroundStyle(Color.kovyrGold)
+            Text("Interior").foregroundStyle(.white)
+        }
+        .font(.caption2.weight(.bold))
+    }
+
     private var smallBody: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label("Kovyr", systemImage: "wifi")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(Color.kovyr)
+            wordmark
             Spacer()
             Text("\(entry.deviceCount)")
                 .font(.system(size: 44, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
                 .contentTransition(.numericText())
             Text("devices")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.7))
             if entry.newCount > 0 {
                 Text("+\(entry.newCount) new")
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(Color.kovyrGold)
             }
             Spacer()
-            lastScanText.font(.caption2).foregroundStyle(.secondary)
+            lastScanText.font(.caption2).foregroundStyle(.white.opacity(0.6))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -81,10 +91,11 @@ struct KovyrWidgetEntryView: View {
     private var mediumBody: some View {
         HStack(spacing: 18) {
             VStack(alignment: .leading, spacing: 4) {
-                Label("Kovyr Interior", systemImage: "wifi").font(.caption.weight(.semibold)).foregroundStyle(Color.kovyr)
+                wordmark
                 Text("\(entry.deviceCount)")
                     .font(.system(size: 52, weight: .bold, design: .rounded))
-                Text("devices on your network").font(.caption).foregroundStyle(.secondary)
+                    .foregroundStyle(.white)
+                Text("devices on your network").font(.caption).foregroundStyle(.white.opacity(0.7))
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 10) {
@@ -92,12 +103,12 @@ struct KovyrWidgetEntryView: View {
                     Text("+\(entry.newCount) new")
                         .font(.subheadline.weight(.bold))
                         .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(Color.green.opacity(0.2), in: Capsule())
-                        .foregroundStyle(.green)
+                        .background(Color.kovyrGold.opacity(0.2), in: Capsule())
+                        .foregroundStyle(Color.kovyrGold)
                 } else {
-                    Image(systemName: "checkmark.shield.fill").font(.title2).foregroundStyle(.green)
+                    Image(systemName: "checkmark.shield.fill").font(.title2).foregroundStyle(Color.kovyrGold)
                 }
-                lastScanText.font(.caption2).foregroundStyle(.secondary)
+                lastScanText.font(.caption2).foregroundStyle(.white.opacity(0.6))
             }
         }
     }
@@ -117,7 +128,13 @@ struct KovyrInteriorWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: Provider()) { entry in
             KovyrWidgetEntryView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
+                .containerBackground(for: .widget) {
+                    LinearGradient(
+                        colors: [.kovyrTop, .kovyrDeep],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                }
         }
         .configurationDisplayName("Kovyr Interior")
         .description("Devices found on your Wi-Fi network.")

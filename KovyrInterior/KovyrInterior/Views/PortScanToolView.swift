@@ -44,6 +44,7 @@ struct PortScanToolView: View {
                 Section { Text(portScanner.statusText).foregroundStyle(.secondary) }
             }
         }
+        .kovyrScreen()
         .navigationTitle("Find Open Ports")
         .navigationBarTitleDisplayMode(.inline)
     }

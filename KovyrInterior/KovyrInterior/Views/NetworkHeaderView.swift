@@ -18,7 +18,7 @@ struct NetworkHeaderView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text("\(scanner.deviceCount)")
                         .font(.title.bold())
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.kovyrGold)
                     Text("devices")
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.8))
@@ -46,6 +46,10 @@ struct NetworkHeaderView: View {
             )
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(Color.kovyrGold.opacity(0.35), lineWidth: 1)
+        )
         .padding(.horizontal)
         .padding(.top, 8)
     }

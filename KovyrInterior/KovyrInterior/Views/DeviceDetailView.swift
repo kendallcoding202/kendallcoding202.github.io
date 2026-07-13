@@ -13,9 +13,9 @@ struct DeviceDetailView: View {
                 HStack(spacing: 16) {
                     Image(systemName: device.iconName)
                         .font(.system(size: 34))
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(Color.kovyrGold)
                         .frame(width: 60, height: 60)
-                        .background(Color.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     VStack(alignment: .leading, spacing: 4) {
                         Text(device.displayName).font(.title3.bold())
                         Text(device.ipAddress).font(.subheadline.monospaced()).foregroundStyle(.secondary)
@@ -79,6 +79,7 @@ struct DeviceDetailView: View {
                 Text("Open Ports")
             }
         }
+        .kovyrScreen()
         .navigationTitle(device.displayName)
         .navigationBarTitleDisplayMode(.inline)
     }

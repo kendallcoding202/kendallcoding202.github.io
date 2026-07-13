@@ -46,6 +46,7 @@ struct ToolsView: View {
                     ) { TraceRouteToolView() }
                 }
             }
+            .kovyrScreen()
             .navigationTitle("Tools")
         }
     }

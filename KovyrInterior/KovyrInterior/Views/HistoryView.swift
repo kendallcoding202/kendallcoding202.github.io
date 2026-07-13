@@ -60,6 +60,7 @@ struct HistoryView: View {
                     Text("^[\(store.knownDevices.count) known device](inflect: true)")
                 }
             }
+            .kovyrScreen()
             .navigationTitle("History")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

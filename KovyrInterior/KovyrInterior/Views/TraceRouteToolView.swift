@@ -58,6 +58,7 @@ struct TraceRouteToolView: View {
                 }
             }
         }
+        .kovyrScreen()
         .navigationTitle("Trace Route")
         .navigationBarTitleDisplayMode(.inline)
         .onDisappear { trace.stop() }

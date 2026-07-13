@@ -44,6 +44,7 @@ struct CameraFinderView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
+        .kovyrScreen()
         .navigationTitle("Find Hidden Camera")
         .navigationBarTitleDisplayMode(.inline)
     }
