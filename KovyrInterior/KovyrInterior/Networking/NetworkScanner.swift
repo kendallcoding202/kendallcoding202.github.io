@@ -128,7 +128,7 @@ final class NetworkScanner: ObservableObject {
         timeout: TimeInterval
     ) async -> DiscoveredDevice? {
         guard ip != selfIP else { return nil } // self already seeded
-        let result = await HostProbe.discover(ip: ip, ports: PortCatalog.discoveryPorts, timeout: timeout)
+        let result = await HostProbe.discover(host: ip, ports: PortCatalog.discoveryPorts, timeout: timeout)
         guard result.alive else { return nil }
 
         let hostname = ReverseDNS.hostname(for: ip)
