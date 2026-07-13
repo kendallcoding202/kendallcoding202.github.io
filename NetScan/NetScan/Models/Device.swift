@@ -1,0 +1,75 @@
+import Foundation
+
+/// A single device discovered on the local network.
+struct DiscoveredDevice: Identifiable, Equatable {
+    /// The IPv4 address doubles as a stable identity for the scan session.
+    var id: String { ipAddress }
+
+    var ipAddress: String
+    var hostname: String?
+    var bonjourName: String?
+    var services: [BonjourService]
+    var openPorts: [PortInfo]
+    var isRouter: Bool
+    var isSelf: Bool
+    var firstSeen: Date
+
+    init(
+        ipAddress: String,
+        hostname: String? = nil,
+        bonjourName: String? = nil,
+        services: [BonjourService] = [],
+        openPorts: [PortInfo] = [],
+        isRouter: Bool = false,
+        isSelf: Bool = false,
+        firstSeen: Date = Date()
+    ) {
+        self.ipAddress = ipAddress
+        self.hostname = hostname
+        self.bonjourName = bonjourName
+        self.services = services
+        self.openPorts = openPorts
+        self.isRouter = isRouter
+        self.isSelf = isSelf
+        self.firstSeen = firstSeen
+    }
+
+    /// Best available human-friendly name for the device.
+    var displayName: String {
+        if let bonjourName, !bonjourName.isEmpty { return bonjourName }
+        if let hostname, !hostname.isEmpty { return hostname }
+        if isRouter { return "Router" }
+        if isSelf { return "This Device" }
+        return ipAddress
+    }
+
+    /// SF Symbol chosen from the strongest available signal about the device kind.
+    var iconName: String {
+        if isRouter { return "wifi.router" }
+        if isSelf { return "iphone" }
+        for service in services {
+            if let symbol = service.category.symbol { return symbol }
+        }
+        return "desktopcomputer"
+    }
+
+    /// Numeric form of the address for correct ordering (1.1.1.9 before 1.1.1.10).
+    var sortKey: UInt32 { IPMath.toUInt32(ipAddress) ?? 0 }
+}
+
+/// A Bonjour/mDNS service advertised by a device.
+struct BonjourService: Equatable, Hashable, Identifiable {
+    var id: String { type + name }
+    var name: String
+    /// The raw Bonjour service type, e.g. `_airplay._tcp`.
+    var type: String
+
+    var category: ServiceCategory { ServiceCategory(rawType: type) }
+}
+
+/// A TCP port found open on a device, with a best-guess service label.
+struct PortInfo: Identifiable, Equatable, Hashable {
+    let port: Int
+    var serviceName: String
+    var id: Int { port }
+}
