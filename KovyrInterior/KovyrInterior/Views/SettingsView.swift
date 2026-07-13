@@ -28,6 +28,35 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Link(destination: URL(string: "https://kovyr.com")!) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "shield.lefthalf.filled")
+                                .font(.title3)
+                                .foregroundStyle(.white)
+                                .frame(width: 40, height: 40)
+                                .background(Color.kovyr.gradient, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Learn about Kovyr")
+                                    .font(.body.weight(.semibold))
+                                    .foregroundStyle(.primary)
+                                Text("See what's hiding in plain sight.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                } header: {
+                    Text("Kovyr")
+                } footer: {
+                    Text("Kovyr is a security-posture service for small businesses. Kovyr Interior is its on-site, internal-network companion.")
+                }
+
+                Section {
                     LabeledContent("Version", value: appVersion)
                     LabeledContent("Discovery", value: "TCP + Bonjour")
                 } header: {
