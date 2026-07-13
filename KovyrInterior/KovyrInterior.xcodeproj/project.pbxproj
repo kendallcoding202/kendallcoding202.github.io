@@ -39,9 +39,26 @@
 		AA0000000000000000000010 /* KovyrInteriorWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = KovyrInteriorWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		AA0000000000000000000020 /* Exceptions for "KovyrInterior" folder in "KovyrInterior" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = AA0000000000000000000005 /* KovyrInterior */;
+		};
+		AA0000000000000000000021 /* Exceptions for "KovyrInteriorWidget" folder in "KovyrInteriorWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = AA0000000000000000000012 /* KovyrInteriorWidgetExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		AA0000000000000000000004 /* KovyrInterior */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = KovyrInterior; sourceTree = "<group>"; };
-		AA0000000000000000000011 /* KovyrInteriorWidget */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = KovyrInteriorWidget; sourceTree = "<group>"; };
+		AA0000000000000000000004 /* KovyrInterior */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (AA0000000000000000000020 /* Exceptions for "KovyrInterior" folder in "KovyrInterior" target */, ); explicitFileTypes = {}; explicitFolders = (); path = KovyrInterior; sourceTree = "<group>"; };
+		AA0000000000000000000011 /* KovyrInteriorWidget */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (AA0000000000000000000021 /* Exceptions for "KovyrInteriorWidget" folder in "KovyrInteriorWidgetExtension" target */, ); explicitFileTypes = {}; explicitFolders = (); path = KovyrInteriorWidget; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
