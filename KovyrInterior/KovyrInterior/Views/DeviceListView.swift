@@ -4,9 +4,10 @@ import SwiftUI
 /// of discovered devices.
 struct DeviceListView: View {
     @EnvironmentObject private var scanner: NetworkScanner
+    @State private var path: [String] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 Section {
                     NetworkHeaderView()
@@ -68,6 +69,21 @@ struct DeviceListView: View {
             }
             .refreshable { scanner.startScan() }
         }
+        // Deep-link from a "new device" notification tap. The target may not be in
+        // the list yet (a background scan found it), so also retry whenever the
+        // device list updates and when the view first appears.
+        .onAppear { openPendingDeviceIfPossible() }
+        .onChange(of: scanner.pendingOpenIP) { _, _ in openPendingDeviceIfPossible() }
+        .onChange(of: scanner.devices) { _, _ in openPendingDeviceIfPossible() }
+    }
+
+    /// Pushes the device the user asked to open (via a notification tap) once it
+    /// is present in the list, then clears the pending request.
+    private func openPendingDeviceIfPossible() {
+        guard let ip = scanner.pendingOpenIP,
+              scanner.devices.contains(where: { $0.ipAddress == ip }) else { return }
+        if path.last != ip { path = [ip] }
+        scanner.pendingOpenIP = nil
     }
 }
 

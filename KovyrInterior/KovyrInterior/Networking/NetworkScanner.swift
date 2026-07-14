@@ -17,6 +17,11 @@ final class NetworkScanner: ObservableObject {
     @Published private(set) var statusText = "Ready to scan"
     @Published private(set) var localNetwork: LocalNetwork?
 
+    /// IP address of a device the user asked to open — e.g. by tapping a
+    /// "new device" notification. The Overview tab observes this, navigates to the
+    /// device, and clears it. Nil when there is nothing pending.
+    @Published var pendingOpenIP: String?
+
     /// Persistent record of previously seen devices and scan history.
     let store = DeviceStore()
 
@@ -30,6 +35,16 @@ final class NetworkScanner: ObservableObject {
     func startScan() {
         guard !isScanning else { return }
         scanTask = Task { await runScan() }
+    }
+
+    /// Ask the Overview tab to open a specific device (by IP). If that device is
+    /// not currently in memory — the usual case when a background scan found it —
+    /// kick off a scan so it appears and can be navigated to.
+    func requestOpenDevice(ip: String) {
+        pendingOpenIP = ip
+        if !devices.contains(where: { $0.ipAddress == ip }) {
+            startScan()
+        }
     }
 
     func stopScan() {

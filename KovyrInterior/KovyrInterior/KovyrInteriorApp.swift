@@ -21,7 +21,11 @@ struct KovyrInteriorApp: App {
                 .task { NotificationManager.shared.requestAuthorization() }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background { BackgroundScan.schedule() }
+            switch phase {
+            case .background: BackgroundScan.schedule()
+            case .active: NotificationManager.shared.clearBadge()
+            default: break
+            }
         }
     }
 
@@ -48,20 +52,37 @@ struct KovyrInteriorApp: App {
 
 struct RootView: View {
     @EnvironmentObject private var scanner: NetworkScanner
+    @State private var selectedTab = Tab.overview
+
+    private enum Tab: Hashable { case overview, tools, history, settings }
 
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             DeviceListView()
                 .tabItem { Label("Overview", systemImage: "house.fill") }
+                .tag(Tab.overview)
 
             ToolsView()
                 .tabItem { Label("Tools", systemImage: "wrench.and.screwdriver.fill") }
+                .tag(Tab.tools)
 
             HistoryView(store: scanner.store)
                 .tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
+                .tag(Tab.history)
 
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape.fill") }
+                .tag(Tab.settings)
+        }
+        // Route notification taps into the scanner, and jump to Overview so the
+        // deep-linked device is visible.
+        .task {
+            NotificationManager.shared.onOpenDevice = { ip in
+                scanner.requestOpenDevice(ip: ip)
+            }
+        }
+        .onChange(of: scanner.pendingOpenIP) { _, ip in
+            if ip != nil { selectedTab = .overview }
         }
     }
 }
