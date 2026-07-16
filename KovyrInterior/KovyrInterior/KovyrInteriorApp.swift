@@ -4,6 +4,7 @@ import UIKit
 @main
 struct KovyrInteriorApp: App {
     @StateObject private var scanner = NetworkScanner()
+    @StateObject private var auth = AuthManager()
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -16,6 +17,7 @@ struct KovyrInteriorApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(scanner)
+                .environmentObject(auth)
                 .tint(Color.kovyrGold)
                 .preferredColorScheme(.dark)
                 .task { NotificationManager.shared.requestAuthorization() }

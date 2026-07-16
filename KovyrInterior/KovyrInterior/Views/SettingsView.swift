@@ -3,9 +3,11 @@ import UIKit
 
 /// The "Settings" tab: background auto-scan toggle and app information.
 struct SettingsView: View {
+    @EnvironmentObject private var auth: AuthManager
     @AppStorage(BackgroundScan.enabledKey) private var backgroundEnabled = false
     @State private var isTestingConnection = false
     @State private var connectionStatus: String?
+    @State private var showLogin = false
 
     var body: some View {
         NavigationStack {
@@ -59,6 +61,25 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    if auth.isSignedIn {
+                        LabeledContent {
+                            Text(auth.email ?? "—").foregroundStyle(.secondary)
+                        } label: {
+                            Label("Signed in", systemImage: "person.crop.circle.fill.badge.checkmark")
+                        }
+                        Button(role: .destructive) {
+                            Task { await auth.signOut() }
+                        } label: {
+                            Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right")
+                        }
+                    } else {
+                        Button {
+                            showLogin = true
+                        } label: {
+                            Label("Sign in to Kovyr", systemImage: "person.crop.circle.badge.plus")
+                        }
+                    }
+
                     Button {
                         Task { await runConnectionTest() }
                     } label: {
@@ -79,7 +100,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Kovyr Account")
                 } footer: {
-                    Text("Confirms Interior can reach the shared Kovyr backend. Sign-in comes next.")
+                    Text("Sign in with your Kovyr email to link this device to your account — the same login you use on the Kovyr website.")
                 }
 
                 Section {
@@ -93,6 +114,9 @@ struct SettingsView: View {
             }
             .kovyrScreen()
             .navigationTitle("Settings")
+            .sheet(isPresented: $showLogin) {
+                LoginView()
+            }
         }
     }
 
