@@ -30,8 +30,15 @@ final class AuthManager: ObservableObject {
     var email: String? { user?.email }
 
     /// Ask Supabase to email a one-time 6-digit code to `email`.
+    ///
+    /// `shouldCreateUser: false` restricts sign-in to accounts that already exist
+    /// (i.e. real Kovyr customers from the website) — an unknown email is rejected
+    /// rather than silently creating a new, subscription-less auth user.
     func sendCode(to email: String) async throws {
-        try await SupabaseManager.shared.client.auth.signInWithOTP(email: email)
+        try await SupabaseManager.shared.client.auth.signInWithOTP(
+            email: email,
+            shouldCreateUser: false
+        )
     }
 
     /// Verify the 6-digit code. On success `authStateChanges` updates `user`.
