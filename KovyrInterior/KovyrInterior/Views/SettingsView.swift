@@ -4,6 +4,8 @@ import UIKit
 /// The "Settings" tab: background auto-scan toggle and app information.
 struct SettingsView: View {
     @AppStorage(BackgroundScan.enabledKey) private var backgroundEnabled = false
+    @State private var isTestingConnection = false
+    @State private var connectionStatus: String?
 
     var body: some View {
         NavigationStack {
@@ -57,6 +59,30 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Button {
+                        Task { await runConnectionTest() }
+                    } label: {
+                        HStack {
+                            Label("Test Kovyr connection", systemImage: "antenna.radiowaves.left.and.right")
+                            Spacer()
+                            if isTestingConnection { ProgressView() }
+                        }
+                    }
+                    .disabled(isTestingConnection)
+
+                    if let connectionStatus {
+                        Text(connectionStatus)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                } header: {
+                    Text("Kovyr Account")
+                } footer: {
+                    Text("Confirms Interior can reach the shared Kovyr backend. Sign-in comes next.")
+                }
+
+                Section {
                     LabeledContent("Version", value: appVersion)
                     LabeledContent("Discovery", value: "TCP + Bonjour")
                 } header: {
@@ -68,6 +94,13 @@ struct SettingsView: View {
             .kovyrScreen()
             .navigationTitle("Settings")
         }
+    }
+
+    private func runConnectionTest() async {
+        isTestingConnection = true
+        connectionStatus = "Testing…"
+        connectionStatus = await SupabaseManager.shared.testConnection()
+        isTestingConnection = false
     }
 
     private var appVersion: String {
