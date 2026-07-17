@@ -159,6 +159,74 @@ button {
     box-shadow: 0 2px 0 #4a2c08;
 }
 
+.menu-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 22px;
+}
+#run-stats {
+    margin-top: 14px;
+    font-size: 13px;
+}
+.settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 4px;
+    border-bottom: 1px solid #ffffff14;
+    text-align: left;
+}
+.settings-row:last-child {
+    border-bottom: none;
+}
+.seg {
+    display: flex;
+    gap: 6px;
+}
+.seg button {
+    background: var(--panel-light);
+    color: var(--muted);
+    border: 1px solid #ffffff20;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 13px;
+}
+.seg button.on {
+    background: var(--accent);
+    color: #201400;
+    font-weight: bold;
+    border-color: var(--accent);
+}
+.toggle {
+    background: var(--panel-light);
+    color: var(--muted);
+    border: 1px solid #ffffff20;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 13px;
+    min-width: 56px;
+}
+.toggle.on {
+    background: #3f7a4a;
+    color: #eafff0;
+    border-color: #3f7a4a;
+}
+.howto-body {
+    text-align: left;
+    line-height: 1.55;
+    font-size: 14px;
+}
+.howto-body h4 {
+    color: var(--gold);
+    margin: 14px 0 4px;
+}
+.howto-body .kw {
+    color: var(--block);
+    font-weight: bold;
+}
+
 .char-picker {
     display: flex;
     gap: 20px;

@@ -468,6 +468,8 @@
         };
         const r = COGS[ch.cog];
         if (r.onPickup) r.onPickup();
+        STATS.runs = (STATS.runs || 0) + 1;
+        saveStats();
         generateMap();
         showMap();
         $("#topbar").classList.remove("hidden");
@@ -589,6 +591,7 @@
         hideAllScreens();
         $("#map-screen").classList.remove("hidden");
         renderMap();
+        saveRun();
     }
 
     function renderMap() {
@@ -911,7 +914,7 @@
         G.selectedCard = null;
         tickStatusEndOfTurn(G.player);
         renderCombat();
-        setTimeout(enemyTurn, 350);
+        setTimeout(enemyTurn, T(350));
     }
     function tickStatusEndOfTurn(who) {
         ["jammed", "exposed"].forEach((k) => { if (who.status[k]) { who.status[k]--; if (who.status[k] <= 0) delete who.status[k]; } });
@@ -930,7 +933,7 @@
             const e = alive[i++];
             if (e.hp > 0) doEnemyMove(e);
             renderCombat();
-            setTimeout(step, 520);
+            setTimeout(step, T(520));
         };
         step();
     }
@@ -977,7 +980,7 @@
     function cleanupDeadEnemies() { G.enemies.forEach((e) => { if (e.hp < 0) e.hp = 0; }); }
     function onEnemyDeath(e) { floatText(e, "💥", "dmg"); }
     function checkPlayerDeath() {
-        if (G.player.hp <= 0 && G.inCombat) { G.inCombat = false; setTimeout(gameOver, 500); }
+        if (G.player.hp <= 0 && G.inCombat) { G.inCombat = false; setTimeout(gameOver, T(500)); }
     }
 
     /* ---------- rewards ---------- */
@@ -985,7 +988,7 @@
         if (!G.inCombat) return;
         G.inCombat = false;
         G.cogs.forEach((rk) => { if (COGS[rk].onCombatEnd) COGS[rk].onCombatEnd(); });
-        setTimeout(() => combatRewards(G.combatKind), 400);
+        setTimeout(() => combatRewards(G.combatKind), T(400));
     }
     function combatRewards(kind) {
         const goldGain = kind === "boss" ? 100 + rnd(20) : (kind === "elite" || kind === "guardian") ? 30 + rnd(15) : 10 + rnd(11);
@@ -1299,6 +1302,7 @@
         setTimeout(() => f.remove(), 900);
     }
     function shakeSprite(who) {
+        if (!SETTINGS.shake) return;
         who._hit = true;
         setTimeout(() => { who._hit = false; if (G && G.inCombat) renderCombat(); }, 300);
         const sel = who.isPlayer ? "#cmb-player" : `.combatant[data-enemy="${G.enemies.indexOf(who)}"]`;
@@ -1365,10 +1369,19 @@
        WIN / LOSE
        ============================================================ */
     function gameOver() {
+        STATS.bestFloor = Math.max(STATS.bestFloor || 0, G.floor);
+        saveStats();
+        clearSave();
         openOverlay(`<h2>💀 Systems Offline</h2><p class="muted">You were dismantled on floor ${G.floor}. The Aurum Core sleeps on.</p><button class="big-btn" id="go-restart">Reboot</button>`);
         $("#go-restart").onclick = () => { closeOverlay(); resetToTitle(); };
     }
     function winRun() {
+        STATS.wins = (STATS.wins || 0) + 1;
+        STATS.winsBy = STATS.winsBy || {};
+        STATS.winsBy[G.char] = (STATS.winsBy[G.char] || 0) + 1;
+        STATS.bestFloor = Math.max(STATS.bestFloor || 0, G.floor);
+        saveStats();
+        clearSave();
         openOverlay(`
             <h2>🏆 The Machine Is Yours!</h2>
             <p class="muted">You reached the heart of the dead god and shattered the Aurum Core. Cogfall is complete, ${G.player.name}!</p>
@@ -1382,6 +1395,7 @@
         $("#topbar").classList.add("hidden");
         hideAllScreens();
         $("#title-screen").classList.remove("hidden");
+        refreshMenu();
     }
 
     /* ============================================================
@@ -1399,21 +1413,178 @@
             wrap.appendChild(c);
         });
     }
+    /* ============================================================
+       SETTINGS, STATS & SAVE / CONTINUE  (localStorage)
+       ============================================================ */
+    const LS = (() => { try { return window.localStorage; } catch (e) { return null; } })();
+    const SAVE_KEY = "cogfall_save_v1";
+    const SET_KEY = "cogfall_settings_v1";
+    const STAT_KEY = "cogfall_stats_v1";
+
+    const SETTINGS = { speed: "normal", shake: true, confirmEndTurn: false };
+    const SPEEDS = { slow: 1.5, normal: 1, fast: 0.5 };
+    function loadSettings() { try { Object.assign(SETTINGS, JSON.parse(LS.getItem(SET_KEY)) || {}); } catch (e) {} }
+    function saveSettings() { try { LS.setItem(SET_KEY, JSON.stringify(SETTINGS)); } catch (e) {} }
+    // scale a timing delay by the chosen animation speed
+    function T(ms) { return Math.round(ms * (SPEEDS[SETTINGS.speed] || 1)); }
+
+    let STATS = { runs: 0, wins: 0, bestFloor: 0, winsBy: {} };
+    function loadStats() { try { Object.assign(STATS, JSON.parse(LS.getItem(STAT_KEY)) || {}); } catch (e) {} }
+    function saveStats() { try { LS.setItem(STAT_KEY, JSON.stringify(STATS)); } catch (e) {} }
+
+    function hasSave() { try { return !!LS.getItem(SAVE_KEY); } catch (e) { return false; } }
+    function readSave() { try { return JSON.parse(LS.getItem(SAVE_KEY)); } catch (e) { return null; } }
+    function clearSave() { try { LS.removeItem(SAVE_KEY); } catch (e) {} }
+
+    // Auto-save at a clean checkpoint (whenever we're on the map between rooms).
+    function saveRun() {
+        if (!G || !LS) return;
+        try {
+            const map = {
+                current: G.currentNode ? [G.currentNode.col, G.currentNode.idx] : null,
+                columns: G.map.columns.map((col) => ({
+                    kind: col.kind, sector: col.sector,
+                    nodes: col.nodes.map((n) => ({
+                        type: n.type, col: n.col, idx: n.idx, count: n.count,
+                        visited: n.visited, reachable: n.reachable,
+                        next: n.next.map((x) => [x.col, x.idx]),
+                    })),
+                })),
+            };
+            LS.setItem(SAVE_KEY, JSON.stringify({
+                v: 1, char: G.char, gold: G.gold, floor: G.floor,
+                hp: G.player.hp, maxHp: G.player.maxHp,
+                deck: G.deck.map((c) => ({ key: c.key, upgraded: c.upgraded })),
+                cogs: G.cogs.slice(), map,
+            }));
+        } catch (e) {}
+    }
+
+    function loadRun() {
+        const data = readSave();
+        if (!data) return;
+        const ch = CHARACTERS[data.char];
+        if (!ch) { clearSave(); refreshMenu(); return; }
+        G = {
+            char: data.char,
+            player: { name: ch.name, sprite: ch.sprite, hp: data.hp, maxHp: data.maxHp, block: 0, status: {}, isPlayer: true },
+            platingRetain: ch.platingRetain || 0,
+            usesHeat: !!ch.usesHeat, maxHeat: ch.maxHeat || 10, overheatDmg: ch.overheatDmg || 6,
+            heat: 0, contraptions: [],
+            deck: (data.deck || []).filter((c) => CARDS[c.key]).map((c) => makeCard(c.key, c.upgraded)),
+            cogs: (data.cogs || []).filter((k) => COGS[k]),
+            gold: data.gold, floor: data.floor, map: null,
+            hand: [], drawPile: [], discard: [], exhaust: [],
+            enemies: [], energy: 0, maxEnergy: 3, turn: 0,
+            selectedCard: null, inCombat: false, currentNode: null,
+        };
+        const columns = data.map.columns.map((col) => ({
+            kind: col.kind, sector: col.sector,
+            nodes: col.nodes.map((n) => ({ type: n.type, col: n.col, idx: n.idx, count: n.count, visited: n.visited, reachable: n.reachable, next: [], x: 0, y: 0 })),
+        }));
+        const at = (c, i) => columns[c] && columns[c].nodes[i];
+        data.map.columns.forEach((col, ci) => col.nodes.forEach((n, ni) => {
+            columns[ci].nodes[ni].next = (n.next || []).map(([c, i]) => at(c, i)).filter(Boolean);
+        }));
+        G.map = { columns };
+        if (data.map.current) G.currentNode = at(data.map.current[0], data.map.current[1]);
+        $("#topbar").classList.remove("hidden");
+        updateTopbar();
+        showMap();
+    }
+
+    /* ---------- menu / settings / how-to UI ---------- */
+    function refreshMenu() {
+        const cont = $("#btn-continue"), info = $("#continue-info");
+        const d = hasSave() ? readSave() : null;
+        if (d && CHARACTERS[d.char]) {
+            cont.classList.remove("hidden"); info.classList.remove("hidden");
+            info.innerHTML = `Resume: ${CHARACTERS[d.char].emoji} ${CHARACTERS[d.char].name} · Floor ${d.floor} · ${d.hp}/${d.maxHp} HP`;
+        } else {
+            cont.classList.add("hidden"); info.classList.add("hidden");
+        }
+        const s = $("#run-stats");
+        if (s) s.innerHTML = STATS.runs ? `Runs played: <b>${STATS.runs}</b> · Wins: <b class="gold">${STATS.wins}</b> · Best floor reached: <b>${STATS.bestFloor}</b>` : "";
+    }
+
+    function showSettings() {
+        openOverlay(`
+            <h2>⚙️ Settings</h2>
+            <div style="max-width:440px;margin:6px auto 0">
+                <div class="settings-row"><span>Animation speed</span>
+                    <div class="seg" id="set-speed"><button data-v="slow">Slow</button><button data-v="normal">Normal</button><button data-v="fast">Fast</button></div></div>
+                <div class="settings-row"><span>Screen shake</span><button class="toggle" id="set-shake"></button></div>
+                <div class="settings-row"><span>Confirm End Turn with cards left</span><button class="toggle" id="set-confirm"></button></div>
+            </div>
+            <button class="big-btn" id="set-close">Done</button>
+        `);
+        const paint = () => {
+            $("#set-speed").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.v === SETTINGS.speed));
+            const sh = $("#set-shake"); sh.textContent = SETTINGS.shake ? "On" : "Off"; sh.classList.toggle("on", SETTINGS.shake);
+            const cf = $("#set-confirm"); cf.textContent = SETTINGS.confirmEndTurn ? "On" : "Off"; cf.classList.toggle("on", SETTINGS.confirmEndTurn);
+        };
+        $("#set-speed").querySelectorAll("button").forEach((b) => (b.onclick = () => { SETTINGS.speed = b.dataset.v; saveSettings(); paint(); }));
+        $("#set-shake").onclick = () => { SETTINGS.shake = !SETTINGS.shake; saveSettings(); paint(); };
+        $("#set-confirm").onclick = () => { SETTINGS.confirmEndTurn = !SETTINGS.confirmEndTurn; saveSettings(); paint(); };
+        $("#set-close").onclick = () => closeOverlay();
+        paint();
+    }
+
+    function showHowTo() {
+        openOverlay(`
+            <h2>📖 How to Play</h2>
+            <div class="howto-body" style="max-width:560px;margin:0 auto">
+                <p>Fight your way up through the machine, one room at a time. Each fight is a duel of cards.</p>
+                <h4>Your turn</h4>
+                <p>You have <span class="kw">Steam</span> (energy) each turn. Click a card to play it; <b>attacks</b> ask you to click an enemy to target. When you're done, <b>End Turn</b> (press <b>E</b>).</p>
+                <h4>Defending</h4>
+                <p><span class="kw">Plating</span> is your block — it absorbs damage, then resets each turn (unless your machine keeps it). Watch each enemy's <b>intent</b> icon to see what it's about to do.</p>
+                <h4>Keywords</h4>
+                <p><span class="kw">Power</span> +damage dealt · <span class="kw">Exposed</span> takes 50% more · <span class="kw">Jammed</span> deals 25% less · <span class="kw">Precision</span> +Plating · <span class="kw">Rust</span> damage over time · <span class="kw">Recoil</span> hits attackers back.</p>
+                <h4>The three machines</h4>
+                <p><b>🛡️ Bulwark</b> — keeps half its Plating each turn; stack it, then unleash Recoil Slam.<br>
+                <b>🔥 Overclocker</b> — builds Heat for huge hits, but overheats if it maxes out.<br>
+                <b>🔧 Artificer</b> — deploys Contraptions that attack and defend on their own each turn.</p>
+                <h4>The climb</h4>
+                <p>Between fights, choose your route: heal at <b>Repair Bays</b>, grab <b>Cogs</b> (relics), shop the <b>Black Market</b>, and beat the <b>Sector Guardians</b> to reach the <b>Aurum Core</b>. Your run auto-saves at every room — you can close the tab and pick up where you left off.</p>
+            </div>
+            <button class="big-btn" id="howto-close">Got it</button>
+        `);
+        $("#howto-close").onclick = () => closeOverlay();
+    }
+
+    function attemptEndTurn() {
+        if (!G || !G.inCombat) return;
+        if (SETTINGS.confirmEndTurn && G.hand.some(canPlay)) {
+            openOverlay(`<h2>End your turn?</h2><p class="muted">You still have cards you can play.</p><button class="big-btn" id="et-yes">End Turn</button> <button class="pile-btn" id="et-no" style="margin-left:10px">Keep Playing</button>`);
+            $("#et-yes").onclick = () => { closeOverlay(); endTurn(); };
+            $("#et-no").onclick = () => closeOverlay();
+        } else endTurn();
+    }
+
     function wire() {
+        loadSettings();
+        loadStats();
         buildCharPicker();
+        refreshMenu();
+        $("#btn-continue").onclick = () => loadRun();
         $("#btn-start").onclick = () => newGame(selectedChar);
-        $("#btn-end-turn").onclick = endTurn;
+        $("#btn-howto").onclick = showHowTo;
+        $("#btn-settings").onclick = showSettings;
+        $("#btn-settings-run").onclick = showSettings;
+        $("#btn-end-turn").onclick = attemptEndTurn;
         $("#btn-deck").onclick = showDeck;
         $("#btn-abandon").onclick = () => {
             openOverlay(`<h2>Abandon this run?</h2><p class="muted">Your progress will be lost.</p><button class="big-btn" id="ab-yes">Abandon</button> <button class="pile-btn" id="ab-no" style="margin-left:10px">Keep Playing</button>`);
-            $("#ab-yes").onclick = () => { closeOverlay(); resetToTitle(); };
+            $("#ab-yes").onclick = () => { closeOverlay(); clearSave(); resetToTitle(); };
             $("#ab-no").onclick = () => closeOverlay();
         };
         $("#btn-draw-pile").onclick = () => showPile("Draw Pile", G.drawPile, true);
         $("#btn-discard-pile").onclick = () => showPile("Discard Pile", G.discard, false);
         document.addEventListener("keydown", (e) => {
             if (!G || !G.inCombat) return;
-            if (e.key === "e" || e.key === "E") endTurn();
+            if ($("#overlay") && !$("#overlay").classList.contains("hidden")) return;
+            if (e.key === "e" || e.key === "E") attemptEndTurn();
             if (e.key === "Escape") { G.selectedCard = null; renderCombat(); }
         });
     }

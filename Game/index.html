@@ -4,6 +4,10 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Cogfall — a clockwork deckbuilding roguelike</title>
+        <link
+            rel="icon"
+            href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%99%EF%B8%8F%3C/text%3E%3C/svg%3E"
+        />
         <link rel="stylesheet" href="game.css" />
     </head>
     <body>
@@ -24,6 +28,7 @@
             <span class="stat relic-row" id="ui-relics" title="Relics"></span>
             <span class="spacer"></span>
             <button class="link-btn" id="btn-deck">🃏 Deck (<span id="ui-decksize">0</span>)</button>
+            <button class="link-btn" id="btn-settings-run">⚙️</button>
             <button class="link-btn" id="btn-abandon">Abandon Run</button>
         </div>
 
@@ -44,9 +49,18 @@
                 <b>Plating</b> (your block) absorbs damage. Each machine plays
                 differently — read your fighter's signature below.
             </p>
-            <h3 class="gold">Choose your machine</h3>
+            <button class="big-btn hidden" id="btn-continue">▶ Continue Run</button>
+            <div id="continue-info" class="muted hidden"></div>
+
+            <h3 class="gold" id="pick-heading">Choose your machine</h3>
             <div class="char-picker" id="char-picker"></div>
             <button class="big-btn" id="btn-start">Begin the Descent ⚙️</button>
+
+            <div class="menu-actions">
+                <button class="pile-btn" id="btn-howto">📖 How to Play</button>
+                <button class="pile-btn" id="btn-settings">⚙️ Settings</button>
+            </div>
+            <div id="run-stats" class="muted"></div>
         </div>
 
         <!-- Map screen -->
