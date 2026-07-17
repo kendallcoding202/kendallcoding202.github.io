@@ -31,7 +31,7 @@ function runGame(seed: number, systemKey: string, smart: boolean) {
 /* ---------- correctness assertions ---------- */
 function assertions() {
     let s = createInitialState(1);
-    check("initial hand is 5", s.hand.length === 5);
+    check("initial hand is 6", s.hand.length === 6);
     check("initial detection 0", s.detection === 0);
     check("4 layers on home server", s.layers.length === 4);
     check("defenses start hidden", s.layers.every((l) => l.defenses.every((d) => !d.typeRevealed)));
@@ -119,7 +119,26 @@ function assertions() {
     en.hand = [];
     const ae = applyAction(en, { type: "endTurn" });
     check("end turn creeps detection", ae.detection === en.baselineCreep);
-    check("end turn redraws", ae.hand.length === 5);
+    check("end turn redraws", ae.hand.length === 6);
+
+    // typed (specialist) exploit: strong on its type, weak on others
+    let te = createInitialState(20, "smallBusiness");
+    te.current = 1; // internal: [ids, auth]
+    te.layers[1].defenses.forEach((d) => { d.typeRevealed = true; d.strengthRevealed = true; });
+    const idsIdx = te.layers[1].defenses.findIndex((d) => d.type === "ids");
+    const authIdx = te.layers[1].defenses.findIndex((d) => d.type === "auth");
+    const beforeIds = te.layers[1].defenses[idsIdx].strength;
+    const beforeAuth = te.layers[1].defenses[authIdx].strength;
+    const onMatch = applyAction({ ...te, hand: ["idsEvasion"] }, { type: "playCard", card: "idsEvasion", target: idsIdx });
+    const onMiss = applyAction({ ...te, hand: ["idsEvasion"] }, { type: "playCard", card: "idsEvasion", target: authIdx });
+    check("specialist exploit is strong on its type", beforeIds - onMatch.layers[1].defenses[idsIdx].strength >= 7);
+    check("specialist exploit is weak off-type", beforeAuth - onMiss.layers[1].defenses[authIdx].strength <= 3);
+
+    // draw card actually draws
+    let dr = createInitialState(21);
+    dr.hand = ["automate"];
+    const drew = applyAction(dr, { type: "playCard", card: "automate" });
+    check("draw card adds cards to hand", drew.hand.length === 2); // -automate +2
 }
 
 /* ---------- balance per system, naive vs telegraph-smart ---------- */

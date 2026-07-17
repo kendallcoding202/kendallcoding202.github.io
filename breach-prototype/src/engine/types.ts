@@ -14,18 +14,21 @@ export type EffectKind =
     | "revealTypeOnly"
     | "revealAll"
     | "revealAndWeaken"
+    | "revealDraw"
     | "knownExploit"
+    | "typedExploit"
     | "zeroDay"
     | "privEsc"
-    | "sqlInjection"
     | "bruteForce"
     | "logWipe"
+    | "wipeDraw"
     | "proxyChain"
     | "spoof"
     | "goDark"
     | "backdoor"
     | "rootkit"
     | "patchScanner"
+    | "draw"
     | "payload"
     | "killSwitch";
 
@@ -37,7 +40,8 @@ export interface CardDef {
     noise: number; // base detection added when played
     effect: EffectKind;
     power?: number; // breach magnitude
-    amount?: number; // secondary magnitude (detection removed, charges, ...)
+    amount?: number; // secondary magnitude (detection removed, charges, cards drawn, ...)
+    matchType?: DefenseType; // for typedExploit: the defense type it specialises against
     needsTarget: boolean; // acts on the current layer's defense
     exhausts?: boolean; // leaves the deck for the rest of the breach
     text: string;

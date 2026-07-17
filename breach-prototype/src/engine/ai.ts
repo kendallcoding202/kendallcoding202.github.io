@@ -6,7 +6,8 @@
    ============================================================ */
 
 import type { Action, GameState } from "./types.ts";
-import { currentLayer, projectedNoise, targetableDefenses } from "./engine.ts";
+import { CARDS } from "./cards.ts";
+import { currentLayer, projectedNoise, targetableDefenses, predictDamage } from "./engine.ts";
 
 const play = (card: string): Action => ({ type: "playCard", card });
 const playT = (card: string, target: number): Action => ({ type: "playCard", card, target });
@@ -42,7 +43,6 @@ function chooseReckless(s: GameState): Action {
 }
 
 function chooseClever(s: GameState): Action {
-    const smart = true;
     const has = (id: string) => s.hand.includes(id);
     const layer = currentLayer(s);
     const opts = targetableDefenses(s);
@@ -55,9 +55,9 @@ function chooseClever(s: GameState): Action {
     // 1. Win the instant we can.
     if (s.objectiveExposed && has("payload")) return play("payload");
 
-    // 2. (smart) Counter the telegraph — spoof a patch/purge that would undo
-    //    progress, or an obscure that would wipe recon we've invested in.
-    if (smart && has("spoof") && intent && safe("spoof")) {
+    // 2. Counter the telegraph — spoof a patch/purge that would undo progress,
+    //    or an obscure that would wipe recon we've invested in.
+    if (has("spoof") && intent && safe("spoof")) {
         const layerDamaged = !!layer && layer.defenses.some((d) => d.strength > 0 && d.strength < d.maxStrength);
         const reconInvested = !!layer && layer.defenses.some((d) => d.typeRevealed || d.strengthRevealed);
         if ((intent.kind === "patch" || intent.kind === "purge") && layerDamaged) return play("spoof");
@@ -67,6 +67,7 @@ function chooseClever(s: GameState): Action {
     // 3. Cool down when hot.
     if (detFrac >= 0.85 && has("killSwitch")) return play("killSwitch");
     if (detFrac >= 0.55) {
+        if (has("coverTracks")) return play("coverTracks");
         if (has("logWipe")) return play("logWipe");
         if (has("goDark")) return play("goDark");
     }
@@ -78,40 +79,53 @@ function chooseClever(s: GameState): Action {
     const strongest = byWeak[byWeak.length - 1];
     const firstUnknown = opts.find((i) => !defs[i].typeRevealed);
 
-    // 4. Recon unknown defenses (cheap, quiet) before committing exploits.
-    if (firstUnknown != null && detFrac < 0.7) {
+    // 4. Draw for options while it's quiet and the hand is thin.
+    if (detFrac < 0.5 && s.hand.length <= 4) {
+        if (has("automate")) return play("automate");
+        if (firstUnknown != null && has("packetSniffer")) return playT("packetSniffer", firstUnknown);
+    }
+
+    // 5. Recon unknown defenses (cheap, quiet) before committing exploits.
+    if (firstUnknown != null && detFrac < 0.75) {
         if (has("passiveRecon")) return play("passiveRecon");
+        if (has("packetSniffer")) return playT("packetSniffer", firstUnknown);
         if (has("portScan")) return playT("portScan", firstUnknown);
         if (has("enumerate")) return play("enumerate");
         if (has("socialEngineer")) return playT("socialEngineer", firstUnknown);
     }
 
-    // 5. Matched exploits on matching, revealed defenses.
-    const dbIdx = opts.find((i) => defs[i].typeRevealed && defs[i].type === "database");
-    if (dbIdx != null && has("sqlInjection") && safe("sqlInjection")) return playT("sqlInjection", dbIdx);
-    const privIdx = opts.find((i) => defs[i].typeRevealed && defs[i].type === "privilege");
-    if (privIdx != null && has("privEsc") && safe("privEsc")) return playT("privEsc", privIdx);
+    // 6. Best efficient exploit on a REVEALED defense (matched specialists win here).
+    const revealedOpts = opts.filter((i) => defs[i].typeRevealed);
+    if (revealedOpts.length) {
+        const target = revealedOpts.slice().sort((a, b) => defs[a].strength - defs[b].strength)[0];
+        let best: { id: string; dmg: number } | null = null;
+        for (const id of s.hand) {
+            const c = CARDS[id];
+            if (!c || !c.needsTarget) continue;
+            if (id === "zeroDay" || id === "bruteForce") continue; // reserved
+            if (!(c.kind === "exploit" || c.effect === "backdoor")) continue;
+            if (!safe(id)) continue;
+            const dmg = predictDamage(s, id, target);
+            if (dmg <= 0) continue;
+            if (!best || dmg > best.dmg) best = { id, dmg };
+        }
+        if (best) return playT(best.id, target);
+    }
 
-    // 6. Quiet chip.
-    if (has("backdoor") && safe("backdoor")) return playT("backdoor", weakest);
-
-    // 7. Big gun on a strong defense while still quiet — hide it.
+    // 7. Big gun on a strong defense while still quiet — hide it if we can.
     if (has("zeroDay") && detFrac < 0.5 && (defs[strongest].strength >= 6 || !defs[strongest].strengthRevealed)) {
         if (has("rootkit")) return play("rootkit");
         return playT("zeroDay", strongest);
     }
 
-    // 8. Known exploit on a revealed target (weakest revealed).
-    const revealedWeak = opts.filter((i) => defs[i].typeRevealed).sort((a, b) => defs[a].strength - defs[b].strength)[0];
-    if (revealedWeak != null && has("knownExploit") && safe("knownExploit")) return playT("knownExploit", revealedWeak);
-
-    // 9. Prep stealth before getting loud.
+    // 8. Prep stealth before getting loud.
     if (has("proxyChain") && (has("bruteForce") || has("knownExploit"))) return play("proxyChain");
     if (has("rootkit") && has("bruteForce")) return play("rootkit");
 
-    // 10. Desperation.
+    // 9. Desperation.
     if (has("bruteForce") && safe("bruteForce")) return playT("bruteForce", weakest);
     if (has("knownExploit") && safe("knownExploit")) return playT("knownExploit", weakest);
+    if (has("scriptKiddie") && safe("scriptKiddie")) return playT("scriptKiddie", weakest);
 
     return end();
 }

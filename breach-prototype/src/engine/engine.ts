@@ -37,7 +37,7 @@ export function createInitialState(seed: number, systemKey: string = DEFAULT_SYS
         deck: [],
         hand: [],
         discard: [],
-        handSize: 5,
+        handSize: 6,
         turn: 1,
         proxyCharges: 0,
         rootkitReady: false,
@@ -249,6 +249,20 @@ function applyEffect(s: GameState, card: CardDef, target: number): number {
         case "revealAndWeaken":
             if (d) { d.typeRevealed = true; d.strengthRevealed = true; damageDefense(s, target, card.power || 2); }
             return 0;
+        case "revealDraw":
+            if (d) { d.typeRevealed = true; d.strengthRevealed = true; }
+            draw(s, 1);
+            log(s, `Packet Sniffer — revealed ${d ? d.type : "a defense"}, drew a card.`);
+            return 0;
+        case "draw":
+            draw(s, card.amount || 1);
+            log(s, `Drew ${card.amount || 1} card${(card.amount || 1) > 1 ? "s" : ""}.`);
+            return 0;
+        case "wipeDraw":
+            reduceDetection(s, card.amount || 4);
+            draw(s, 1);
+            log(s, `Cover Tracks — detection −${card.amount || 4}, drew a card.`);
+            return 0;
         case "patchScanner": {
             defs.forEach((x) => { x.typeRevealed = true; x.strengthRevealed = true; });
             const next = s.layers[s.current + 1];
@@ -261,14 +275,15 @@ function applyEffect(s: GameState, card: CardDef, target: number): number {
             const known = d.typeRevealed;
             const power = known ? card.power || 4 : Math.ceil((card.power || 4) / 2);
             damageDefense(s, target, power);
-            log(s, known ? `Known Exploit hits ${d.type} for ${power}.` : `Known Exploit fumbles a blind defense (${power}).`);
+            log(s, known ? `${card.name} hits ${d.type} for ${power}.` : `${card.name} fumbles a blind defense (${power}).`);
             return known ? 0 : 6;
         }
-        case "sqlInjection": {
+        case "typedExploit": {
             if (!d) return 0;
-            const match = d.type === "database";
-            const power = match ? Math.round((card.power || 5) * 1.5) : Math.round((card.power || 5) * 0.4);
+            const match = d.type === card.matchType;
+            const power = match ? Math.round((card.power || 5) * 1.6) : Math.round((card.power || 5) * 0.4);
             damageDefense(s, target, power);
+            log(s, match ? `${card.name} tears through ${d.type} for ${power}.` : `${card.name} is the wrong tool for ${d.type} (${power}).`);
             return match ? 0 : 3;
         }
         case "privEsc": {
@@ -347,11 +362,12 @@ export function previewOnTarget(s: GameState, cardId: string, idx: number): stri
     if (!d || d.strength <= 0) return null;
     switch (card.effect) {
         case "revealOne": return "reveal";
+        case "revealDraw": return "reveal +draw";
         case "revealAndWeaken": return `reveal, −${card.power || 2}`;
         case "knownExploit": return d.typeRevealed ? `−${card.power || 4}` : `−${Math.ceil((card.power || 4) / 2)} · blind, loud`;
-        case "sqlInjection":
+        case "typedExploit":
             if (!d.typeRevealed) return "reveal it first";
-            return d.type === "database" ? `−${Math.round((card.power || 5) * 1.5)}` : `−${Math.round((card.power || 5) * 0.4)} · weak, loud`;
+            return d.type === card.matchType ? `−${Math.round((card.power || 5) * 1.6)}` : `−${Math.round((card.power || 5) * 0.4)} · weak, loud`;
         case "privEsc":
             if (!d.typeRevealed) return "reveal it first";
             return d.type === "privilege" ? `−${card.power || 6}` : "misfires · loud";
@@ -359,6 +375,26 @@ export function previewOnTarget(s: GameState, cardId: string, idx: number): stri
         case "bruteForce": return `−${card.power || 6} · loud`;
         case "backdoor": return `−${card.power || 4} · quiet`;
         default: return null;
+    }
+}
+
+/** Numeric damage prediction for the AI (0 for non-exploits). Uses the
+    defense's true type; callers gate on `typeRevealed` to play fair. */
+export function predictDamage(s: GameState, cardId: string, idx: number): number {
+    const card = CARDS[cardId];
+    const layer = currentLayer(s);
+    if (!card || !layer) return 0;
+    const d = layer.defenses[idx];
+    if (!d || d.strength <= 0) return 0;
+    switch (card.effect) {
+        case "knownExploit": return d.typeRevealed ? card.power || 4 : Math.ceil((card.power || 4) / 2);
+        case "typedExploit": return d.type === card.matchType ? Math.round((card.power || 5) * 1.6) : Math.round((card.power || 5) * 0.4);
+        case "privEsc": return d.type === "privilege" ? card.power || 6 : 0;
+        case "zeroDay": return 999;
+        case "bruteForce": return card.power || 6;
+        case "backdoor": return card.power || 4;
+        case "revealAndWeaken": return card.power || 2;
+        default: return 0;
     }
 }
 

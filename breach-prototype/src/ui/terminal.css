@@ -79,13 +79,26 @@ hr { border: none; border-top: 1px solid var(--line); margin: 7px 0; }
 .meter-marks { position: relative; height: 12px; font-size: 9px; color: var(--dim); }
 .meter-marks span { position: absolute; transform: translateX(-50%); letter-spacing: 1px; white-space: nowrap; }
 
-/* system telegraph panel */
+/* system telegraph panel — deliberately stands out from the green */
 .sys {
     display: flex; justify-content: space-between; align-items: center; gap: 12px;
-    border: 1px solid var(--line); background: var(--panel);
-    padding: 5px 12px; margin-top: 8px; font-size: 13px; flex-wrap: wrap;
+    border: 1px solid var(--amber); background: #1a1204;
+    padding: 6px 12px; margin-top: 8px; font-size: 13px; flex-wrap: wrap;
 }
-.sys .intent { color: var(--fg); }
+.sys .sys-alert { color: var(--dim); }
+.sys .intent { display: inline-flex; align-items: baseline; gap: 8px; }
+.sys .intent-label { color: var(--amber); font-weight: bold; letter-spacing: 1px; }
+.sys .intent-text { color: #ffd76a; font-weight: bold; font-size: 15px; }
+/* colour the whole panel + move text by severity */
+.sys.kind-obscure { border-color: var(--cyan); background: #041615; }
+.sys.kind-obscure .intent-label { color: var(--cyan); }
+.sys.kind-obscure .intent-text { color: var(--cyan); }
+.sys.kind-purge { border-color: var(--red); background: #1a0606; animation: sysflash 1s steps(2) infinite; }
+.sys.kind-purge .intent-label, .sys.kind-purge .intent-text { color: var(--red); }
+.sys.kind-idle { border-color: var(--line); background: var(--panel); }
+.sys.kind-idle .intent-label { color: var(--dim); }
+.sys.kind-idle .intent-text { color: var(--dim); font-weight: normal; font-size: 13px; }
+@keyframes sysflash { 50% { border-color: #ff4141; box-shadow: 0 0 14px #ff414166; } }
 .stage { font-weight: bold; letter-spacing: 2px; padding: 1px 8px; border: 1px solid currentColor; }
 .stage.IDLE { color: var(--fg); }
 .stage.SUSPICIOUS { color: var(--amber); }

@@ -25,15 +25,35 @@ export const CARDS: Record<string, CardDef> = {
         id: "socialEngineer", name: "Social Engineer", kind: "recon", noise: 1, effect: "revealAndWeaken", power: 2, needsTarget: true,
         text: "Reveal one defense and reduce its Strength by 2. Low noise.",
     },
+    packetSniffer: {
+        id: "packetSniffer", name: "Packet Sniffer", kind: "recon", noise: 1, effect: "revealDraw", needsTarget: true,
+        text: "Reveal one defense AND draw a card. Low noise.",
+    },
 
     /* ---------- Exploits — knock strength off a defense ---------- */
     knownExploit: {
         id: "knownExploit", name: "Known Exploit", kind: "exploit", noise: 3, power: 4, effect: "knownExploit", needsTarget: true,
         text: "Reduce a REVEALED defense's Strength by 4. Against a hidden one: only 2 — and much louder.",
     },
+    scriptKiddie: {
+        id: "scriptKiddie", name: "Script Kiddie", kind: "exploit", noise: 1, power: 2, effect: "knownExploit", needsTarget: true,
+        text: "Cheap & quiet: reduce a REVEALED defense's Strength by 2. Hidden one: just 1, and louder.",
+    },
     sqlInjection: {
-        id: "sqlInjection", name: "SQL Injection", kind: "exploit", noise: 4, power: 5, effect: "sqlInjection", needsTarget: true,
+        id: "sqlInjection", name: "SQL Injection", kind: "exploit", noise: 4, power: 5, effect: "typedExploit", matchType: "database", needsTarget: true,
         text: "Reduce a DATABASE defense's Strength by 8. Against any other type: only 2, and louder.",
+    },
+    firewallBypass: {
+        id: "firewallBypass", name: "Firewall Bypass", kind: "exploit", noise: 4, power: 5, effect: "typedExploit", matchType: "firewall", needsTarget: true,
+        text: "Reduce a FIREWALL defense's Strength by 8. Against any other type: only 2, and louder.",
+    },
+    idsEvasion: {
+        id: "idsEvasion", name: "IDS Evasion", kind: "exploit", noise: 4, power: 5, effect: "typedExploit", matchType: "ids", needsTarget: true,
+        text: "Reduce an IDS defense's Strength by 8. Against any other type: only 2, and louder.",
+    },
+    rainbowTable: {
+        id: "rainbowTable", name: "Rainbow Table", kind: "exploit", noise: 4, power: 5, effect: "typedExploit", matchType: "auth", needsTarget: true,
+        text: "Reduce an AUTH defense's Strength by 8. Against any other type: only 2, and louder.",
     },
     privEsc: {
         id: "privEsc", name: "Privilege Escalation", kind: "exploit", noise: 4, power: 6, effect: "privEsc", needsTarget: true,
@@ -56,6 +76,10 @@ export const CARDS: Record<string, CardDef> = {
     goDark: {
         id: "goDark", name: "Go Dark", kind: "stealth", noise: 0, amount: 6, effect: "goDark", needsTarget: false,
         text: "Lower detection by 6. Best played just before you end a quiet turn.",
+    },
+    coverTracks: {
+        id: "coverTracks", name: "Cover Tracks", kind: "stealth", noise: 0, amount: 4, effect: "wipeDraw", needsTarget: false,
+        text: "Lower detection by 4 AND draw a card. Makes no noise.",
     },
     killSwitch: {
         id: "killSwitch", name: "Kill Switch", kind: "stealth", noise: 0, amount: 40, effect: "killSwitch", needsTarget: false, exhausts: true,
@@ -83,17 +107,29 @@ export const CARDS: Record<string, CardDef> = {
         id: "patchScanner", name: "Deep Scan", kind: "utility", noise: 1, effect: "patchScanner", needsTarget: false,
         text: "Fully reveal this layer, plus the types of the next layer's defenses.",
     },
+    automate: {
+        id: "automate", name: "Automate", kind: "utility", noise: 1, amount: 2, effect: "draw", needsTarget: false,
+        text: "Draw 2 cards. More options, more plays this turn.",
+    },
     payload: {
         id: "payload", name: "Payload", kind: "utility", noise: 5, effect: "payload", needsTarget: false,
         text: "Steal the data and WIN — but only works once the objective layer is fully breached.",
     },
 };
 
-/** Prototype starting deck — a representative spread of every mechanic. */
+/** Prototype starting deck — a bigger, more varied spread (~26 cards).
+    Includes a specialist exploit for every defense type (firewall / ids /
+    auth / database / privilege), cheap chips, and draw/economy cards so a
+    turn has real choices. */
 export const STARTER_DECK: string[] = [
-    "portScan", "portScan", "enumerate", "passiveRecon",
-    "knownExploit", "knownExploit", "knownExploit",
-    "sqlInjection", "privEsc",
-    "logWipe", "logWipe", "proxyChain", "goDark", "rootkit",
-    "zeroDay", "bruteForce", "patchScanner", "payload",
+    // recon (5)
+    "portScan", "portScan", "passiveRecon", "enumerate", "packetSniffer",
+    // exploits (11) — reliable generalists + one specialist per type + heavies
+    "knownExploit", "knownExploit", "knownExploit", "scriptKiddie",
+    "firewallBypass", "idsEvasion", "rainbowTable", "sqlInjection", "privEsc",
+    "zeroDay", "bruteForce",
+    // stealth (6)
+    "logWipe", "logWipe", "goDark", "coverTracks", "proxyChain", "spoof",
+    // utility (4)
+    "rootkit", "automate", "patchScanner", "payload",
 ];
