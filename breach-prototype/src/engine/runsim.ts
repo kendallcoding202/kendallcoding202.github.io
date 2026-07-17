@@ -3,7 +3,7 @@
 
 import type { BreachResult, MapNode, RunState } from "./types.ts";
 import { CAMPAIGNS, CAMPAIGN_ORDER } from "./campaigns.ts";
-import { createRun, currentOptions, isTerminal, resolveBreach, resolveEvent, resolveSafehouse, addCard, getCampaign } from "./run.ts";
+import { createRun, currentOptions, isTerminal, resolveBreach, resolveEvent, resolveSafehouse, addCard, getCampaign, huntPressure, HUNT_ACTION_LINES } from "./run.ts";
 import { createInitialState, applyAction } from "./engine.ts";
 import { SYSTEMS } from "./systems.ts";
 import { MODIFIERS, getModifier } from "./modifiers.ts";
@@ -123,7 +123,8 @@ for (const id of CAMPAIGN_ORDER) {
         if (run.transmission) seen.add(run.transmission);
     }
     check(`${id}: watcher delivered escalating lines`, seen.size >= 3);
-    check(`${id}: every watcher line came from its script`, [...seen].every((l) => c.antagonist!.lines.includes(l)));
+    const allowed = [...c.antagonist!.lines, ...Object.values(HUNT_ACTION_LINES)];
+    check(`${id}: every watcher line came from its script or hunt lines`, [...seen].every((l) => allowed.includes(l)));
     check(`${id}: story feed carries the transmissions`, run.story.filter((l) => l.startsWith("⌁")).length >= 3);
 }
 
@@ -220,6 +221,38 @@ for (const id of CAMPAIGN_ORDER) {
     }
     check("stats counted the breaches", run.stats.breaches >= 3);
     check("stats recorded quietest/loudest detection", run.stats.quietestPct != null && run.stats.loudestPct != null && run.stats.quietestPct <= run.stats.loudestPct);
+}
+
+/* 10. The watcher BITES: high Heat makes breaches harder, crossing a tier
+       fires a transmission, and lying low relaxes the pressure. */
+{
+    check("hunt: calm at low heat", huntPressure(10, 100).tier === 0);
+    check("hunt: warm at ~45%", huntPressure(45, 100).tier === 1);
+    check("hunt: hot at ~70%", huntPressure(70, 100).tier === 2);
+    check("hunt: critical at ~90%", huntPressure(90, 100).tier === 3);
+
+    const base = createInitialState(1, "smallBusiness");
+    const hunted = createInitialState(1, "smallBusiness", undefined, null, huntPressure(90, 100)); // critical
+    check("hunt raises starting detection", hunted.detection > base.detection);
+    check("hunt speeds the trace", hunted.baselineCreep > base.baselineCreep);
+    check("hunt reinforces defenses", hunted.layers[0].defenses[0].strength > base.layers[0].defenses[0].strength);
+    check("hunt surfaces a breach badge", hunted.huntLabel != null);
+    check("no hunt badge when calm", createInitialState(1, "smallBusiness", undefined, null, huntPressure(10, 100)).huntLabel === null);
+
+    // crossing into a HUNTED tier fires an antagonist transmission
+    let run = createRun("ghost", 5);
+    run.heat = Math.round(run.heatMax * 0.5); // warm
+    const evNode = getCampaign("ghost").map.find((n) => n.type === "event")!;
+    const after = resolveEvent(run, evNode, { label: "x", outcome: "considered the offer" });
+    check("crossing into HUNTED escalates the watcher", after.huntTier >= 1);
+    check("the escalation is transmitted", !!after.transmission && after.story.some((l) => l.startsWith("⌁")));
+
+    // lying low relaxes the watcher
+    let hot = createRun("ghost", 6);
+    hot.heat = Math.round(hot.heatMax * 0.7); hot.huntTier = 2; // hot
+    const safe = getCampaign("ghost").map.find((n) => n.type === "safehouse")!;
+    const cooled = resolveSafehouse(hot, safe);
+    check("lying low lowers the watcher tier", cooled.huntTier < 2);
 }
 
 console.log(`=== RUN-ENGINE ASSERTIONS: ${passed} passed, ${failures.length} failed ===`);

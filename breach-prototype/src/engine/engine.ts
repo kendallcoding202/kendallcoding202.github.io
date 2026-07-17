@@ -9,7 +9,7 @@
    next move so the player can outplay it.
    ============================================================ */
 
-import type { Action, AlertStage, CardDef, Defense, GameState, Layer, SystemDef, SystemIntent, SystemModifier } from "./types.ts";
+import type { Action, AlertStage, CardDef, Defense, GameState, HuntPressure, Layer, SystemDef, SystemIntent, SystemModifier } from "./types.ts";
 import { CARDS, STARTER_DECK } from "./cards.ts";
 import { SYSTEMS, DEFAULT_SYSTEM } from "./systems.ts";
 import { shuffle } from "./rng.ts";
@@ -18,16 +18,18 @@ const PROXY_REDUCTION = 3;
 
 /* ---------- construction ---------- */
 
-export function createInitialState(seed: number, systemKey: string = DEFAULT_SYSTEM, deck?: string[], modifier?: SystemModifier | null): GameState {
+export function createInitialState(seed: number, systemKey: string = DEFAULT_SYSTEM, deck?: string[], modifier?: SystemModifier | null, hunt?: HuntPressure | null): GameState {
     const sys: SystemDef = SYSTEMS[systemKey] || SYSTEMS[DEFAULT_SYSTEM];
     const m = modifier || null;
-    const sDelta = m?.strengthDelta || 0;
+    const h = hunt && hunt.tier > 0 ? hunt : null; // the watcher's grip, if Heat is high
+    const sDelta = (m?.strengthDelta || 0) + (h?.strengthDelta || 0);
     const detectionMax = Math.max(60, sys.detectionMax + (m?.detectionMaxDelta || 0));
+    const startFrac = Math.min(0.5, (m?.detectionStartFrac || 0) + (h?.detectionStartFrac || 0));
     const state: GameState = {
         system: sys.name,
-        detection: m?.detectionStartFrac ? Math.round(m.detectionStartFrac * detectionMax) : 0,
+        detection: startFrac > 0 ? Math.round(startFrac * detectionMax) : 0,
         detectionMax,
-        baselineCreep: Math.max(1, sys.baselineCreep + (m?.creepDelta || 0)),
+        baselineCreep: Math.max(1, sys.baselineCreep + (m?.creepDelta || 0) + (h?.creepDelta || 0)),
         layers: sys.layers.map((l): Layer => ({
             name: l.name,
             breached: false,
@@ -55,6 +57,8 @@ export function createInitialState(seed: number, systemKey: string = DEFAULT_SYS
         modifierLabel: m && m.key !== "clean" ? m.label : null,
         modifierBlurb: m && m.key !== "clean" ? m.blurb : null,
         modifierTone: m && m.key !== "clean" ? m.tone : null,
+        huntLabel: h ? h.label : null,
+        huntBlurb: h ? h.blurb : null,
         rng: seed >>> 0,
         outcome: "playing",
         lossReason: null,

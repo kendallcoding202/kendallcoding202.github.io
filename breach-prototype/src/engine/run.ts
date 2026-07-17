@@ -6,7 +6,7 @@
    hacking; results flow back here.
    ============================================================ */
 
-import type { BreachResult, Campaign, EventChoice, EventDef, MapNode, RunEvent, RunState } from "./types.ts";
+import type { BreachResult, Campaign, EventChoice, EventDef, HuntPressure, MapNode, RunEvent, RunState } from "./types.ts";
 import { CAMPAIGNS } from "./campaigns.ts";
 import { STARTER_DECK } from "./cards.ts";
 import { rollModifier } from "./modifiers.ts";
@@ -17,6 +17,41 @@ const LOSE_HEAT = 25; // Heat spike for getting detected on a job
 
 export function getCampaign(id: string): Campaign {
     return CAMPAIGNS[id] || CAMPAIGNS[Object.keys(CAMPAIGNS)[0]];
+}
+
+/* ---- the watcher's bite: run Heat makes breaches harder ---- */
+/** How hard the watcher is pressing, from the current trace (Heat). This
+    is applied to every breach you START while at that heat, so pushing loud
+    makes each job tougher — and lying low (safehouses) buys it back. */
+export function huntPressure(heat: number, heatMax: number): HuntPressure {
+    const f = heat / Math.max(1, heatMax);
+    if (f >= 0.85) return { tier: 3, label: "HUNTED · critical", blurb: "The watcher is on top of you — targets start alert, reinforced, and patching fast.", detectionStartFrac: 0.22, creepDelta: 2, strengthDelta: 1 };
+    if (f >= 0.65) return { tier: 2, label: "HUNTED · hot", blurb: "Live intel is reaching your targets — systems start alert and patch faster.", detectionStartFrac: 0.16, creepDelta: 1 };
+    if (f >= 0.40) return { tier: 1, label: "HUNTED · warm", blurb: "The watcher warned your targets — you start each breach a little exposed.", detectionStartFrac: 0.10 };
+    return { tier: 0, label: "", blurb: "" };
+}
+
+export const HUNT_ACTION_LINES: Record<number, string> = {
+    1: "the trace is warm now. i've made some calls ahead — expect a warmer welcome.",
+    2: "i'm feeding them everything as you move. they'll be alert before you even arrive.",
+    3: "i'm right behind you now. every door from here is watched, reinforced, and waiting.",
+};
+
+/** After Heat changes, escalate (or relax) the watcher and, on a rise,
+    fire an incoming transmission announcing what it's doing to you. */
+function applyHeatWatcher(run: RunState) {
+    const tier = huntPressure(run.heat, run.heatMax).tier;
+    if (tier > run.huntTier) {
+        run.huntTier = tier;
+        const ant = getCampaign(run.campaignId).antagonist;
+        if (ant && HUNT_ACTION_LINES[tier]) {
+            run.transmission = HUNT_ACTION_LINES[tier];
+            run.story.push(`⌁ ${ant.name}: ${HUNT_ACTION_LINES[tier]}`);
+        }
+    } else if (tier < run.huntTier) {
+        run.huntTier = tier;
+        run.story.push("› You go quiet. The trace cools — the watcher loses ground, for now.");
+    }
 }
 
 export function getNode(campaign: Campaign, id: string | null): MapNode | null {
@@ -49,6 +84,7 @@ export function createRun(campaignId: string, seed = 1): RunState {
         path: [],
         mods,
         events,
+        huntTier: 0,
         stats: { breaches: 0, quietestPct: null, loudestPct: null },
         story: [c.intro],
         outcome: "running",
@@ -145,6 +181,7 @@ export function resolveBreach(prev: RunState, node: MapNode, result: BreachResul
         if (!finale) moveTo(run, node); // a blown normal job still moves you down the map
         // finale failure: you stay put and may retry (Heat permitting)
     }
+    applyHeatWatcher(run);
     checkHeat(run);
     return run;
 }
@@ -160,6 +197,7 @@ export function resolveEvent(prev: RunState, node: MapNode, choice: EventChoice)
     run.story.push(`› ${choice.outcome}`);
     checkHeat(run);
     if (run.outcome === "running") moveTo(run, node);
+    applyHeatWatcher(run);
     return run;
 }
 
@@ -169,6 +207,7 @@ export function resolveSafehouse(prev: RunState, node: MapNode): RunState {
     run.heat = Math.max(0, run.heat - (node.heatRelief || 20));
     run.story.push(`› ${node.title} — you go dark for a while. The trace cools by ${node.heatRelief || 20}.`);
     moveTo(run, node);
+    applyHeatWatcher(run);
     return run;
 }
 

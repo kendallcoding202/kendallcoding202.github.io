@@ -78,6 +78,18 @@ export interface SystemDef {
     layers: { name: string; defenses: { type: DefenseType; strength: number }[] }[];
 }
 
+/** The watcher's grip on you, derived from run Heat. The higher the trace,
+    the more your targets are warned — so breaches start harder. Telegraphed
+    and stacks on top of the rolled SystemModifier. */
+export interface HuntPressure {
+    tier: number; // 0 calm · 1 warm · 2 hot · 3 critical
+    label: string;
+    blurb: string;
+    detectionStartFrac?: number; // start the breach already this detected
+    creepDelta?: number; // faster trace per turn
+    strengthDelta?: number; // defenses reinforced
+}
+
 /** A per-run twist rolled onto a breach so the same job plays differently
     every run — the core of replayability, and a balance lever. */
 export interface SystemModifier {
@@ -142,6 +154,8 @@ export interface GameState {
     modifierLabel: string | null; // this run's twist on this system, if any
     modifierBlurb: string | null;
     modifierTone: "harder" | "easier" | "neutral" | null;
+    huntLabel: string | null; // the watcher's pressure on this breach, if Heat is high
+    huntBlurb: string | null;
     rng: number; // deterministic RNG state
     outcome: Outcome;
     lossReason: string | null;
@@ -254,6 +268,7 @@ export interface RunState {
     path: string[]; // ids of nodes resolved so far, in order
     mods: Record<string, string>; // breach node id -> SystemModifier key (rolled at run start)
     events: Record<string, RunEvent>; // event node id -> the event dealt this run
+    huntTier: number; // highest watcher-pressure tier reached (to detect crossings)
     stats: RunStats;
     story: string[]; // narrative feed
     outcome: RunOutcome;

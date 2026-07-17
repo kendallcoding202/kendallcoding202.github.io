@@ -13,8 +13,8 @@ import { SYSTEMS } from "../engine/systems.ts";
 import { CAMPAIGNS, CAMPAIGN_ORDER, REWARD_POOL } from "../engine/campaigns.ts";
 import { getModifier } from "../engine/modifiers.ts";
 import { createInitialState, applyAction, canPlay, projectedNoise, needsTarget, targetableDefenses, previewOnTarget } from "../engine/engine.ts";
-import { createRun, currentOptions, atFinale, isTerminal, resolveBreach, resolveEvent, resolveSafehouse, addCard, removeCard, getCampaign, getNode, clearTransmission } from "../engine/run.ts";
-import type { SystemModifier } from "../engine/types.ts";
+import { createRun, currentOptions, atFinale, isTerminal, resolveBreach, resolveEvent, resolveSafehouse, addCard, removeCard, getCampaign, getNode, clearTransmission, huntPressure } from "../engine/run.ts";
+import type { HuntPressure, SystemModifier } from "../engine/types.ts";
 
 const newSeed = () => Math.floor(Math.random() * 0xffffffff) >>> 0;
 const meterColor = (f: number) => (f < 0.3 ? "#4af626" : f < 0.6 ? "#ffb000" : f < 0.85 ? "#ff7a1a" : "#ff4141");
@@ -106,8 +106,8 @@ function Transmission({ name, text, onClose }: { name: string; text: string; onC
 /* ============================================================
    BREACH SCREEN (one job)
    ============================================================ */
-function Breach({ systemKey, systemTitle, deck, modifier, onComplete }: { systemKey: string; systemTitle: string; deck: string[]; modifier?: SystemModifier | null; onComplete: (r: BreachResult) => void }) {
-    const [state, setState] = useState<GameState>(() => createInitialState(newSeed(), systemKey, deck, modifier));
+function Breach({ systemKey, systemTitle, deck, modifier, hunt, onComplete }: { systemKey: string; systemTitle: string; deck: string[]; modifier?: SystemModifier | null; hunt?: HuntPressure | null; onComplete: (r: BreachResult) => void }) {
+    const [state, setState] = useState<GameState>(() => createInitialState(newSeed(), systemKey, deck, modifier, hunt));
     const [armed, setArmed] = useState<string | null>(null);
     const [showIntro, setShowIntro] = useState(() => { try { return localStorage.getItem("breach_seen_intro") !== "1"; } catch { return true; } });
     const closeIntro = () => { setShowIntro(false); try { localStorage.setItem("breach_seen_intro", "1"); } catch { /* ignore */ } };
@@ -150,6 +150,12 @@ function Breach({ systemKey, systemTitle, deck, modifier, onComplete }: { system
                 <div className={"modbar " + state.modifierTone}>
                     <span className="modtag">{state.modifierTone === "easier" ? "▽" : state.modifierTone === "harder" ? "⚠" : "◈"} {state.modifierLabel}</span>
                     <span className="modblurb">{state.modifierBlurb}</span>
+                </div>
+            )}
+            {state.huntLabel && (
+                <div className="modbar hunt">
+                    <span className="modtag">⌁ {state.huntLabel}</span>
+                    <span className="modblurb">{state.huntBlurb}</span>
                 </div>
             )}
             <hr />
@@ -402,6 +408,8 @@ function RunView({ run, campaign, onLaunchBreach, onRun, onOpenDeck }: {
     const [removing, setRemoving] = useState<{ choice: EventChoice; node: MapNode } | null>(null);
     const finale = atFinale(run);
     const heatFrac = run.heat / run.heatMax;
+    const hp = huntPressure(run.heat, run.heatMax);
+    const watcherName = campaign.antagonist ? campaign.antagonist.name : "The watcher";
 
     const pickChoice = (node: MapNode, choice: EventChoice) => {
         if (choice.removeCard) { setRemoving({ choice, node }); return; }
@@ -429,7 +437,11 @@ function RunView({ run, campaign, onLaunchBreach, onRun, onOpenDeck }: {
 
             <div className="meter-label"><span className="red">TRACE ON YOU (HEAT)</span><span style={{ color: meterColor(heatFrac) }}>{run.heat} / {run.heatMax}</span></div>
             <div className="meter"><div className="fill" style={{ width: `${heatFrac * 100}%`, background: meterColor(heatFrac) }} /></div>
-            <div className="muted" style={{ fontSize: 11, marginTop: 3 }}>Loud jobs and blown breaches raise the trace. Max it out and the run is over — so play quiet, and lie low when you can.</div>
+            {hp.tier > 0 ? (
+                <div className={"watcher-status tier" + hp.tier}>⌁ <b>{watcherName}</b> is closing in — <b>{hp.label}</b>: {hp.blurb} <span className="muted">Lie low to shake it.</span></div>
+            ) : (
+                <div className="muted" style={{ fontSize: 11, marginTop: 3 }}>Loud jobs and blown breaches raise the trace. Let it climb and the watcher starts making your breaches harder — so play quiet, and lie low when you can.</div>
+            )}
 
             <hr />
             <h3 className="amber" style={{ margin: "6px 0 6px" }}>▶ {finale ? "THE FINAL JOB" : "THE MAP — pick where you go next"}</h3>
@@ -541,7 +553,7 @@ export function App() {
     if (mode === "campaign" || !run || !campaign) return <CampaignSelect onPick={startCampaign} />;
 
     if (mode === "breach" && activeNode) {
-        return <Breach systemKey={activeNode.systemKey || "homeServer"} systemTitle={activeNode.title} deck={run.deck} modifier={getModifier(run.mods[activeNode.id])} onComplete={onBreachComplete} />;
+        return <Breach systemKey={activeNode.systemKey || "homeServer"} systemTitle={activeNode.title} deck={run.deck} modifier={getModifier(run.mods[activeNode.id])} hunt={huntPressure(run.heat, run.heatMax)} onComplete={onBreachComplete} />;
     }
 
     if (mode === "ending") return <Ending run={run} campaign={campaign} onRestart={() => { setMode("campaign"); setRun(null); }} />;
