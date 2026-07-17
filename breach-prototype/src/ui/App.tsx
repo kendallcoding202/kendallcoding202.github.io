@@ -284,6 +284,8 @@ const COLW = 190, ROWH = 98, PADX = 16, PADY = 16, NODEW = 152, NODEH = 70;
 
 function RunMap({ run, campaign, onPick }: { run: RunState; campaign: Campaign; onPick: (n: MapNode) => void }) {
     const [hover, setHover] = useState<string | null>(null);
+    const [selected, setSelected] = useState<string | null>(null);
+    useEffect(() => { setSelected(null); setHover(null); }, [run.nodeId]);
     const options = currentOptions(run);
     const optionIds = new Set(options.map((n) => n.id));
     const pathSet = new Set(run.path);
@@ -306,56 +308,62 @@ function RunMap({ run, campaign, onPick }: { run: RunState; campaign: Campaign; 
         edges.push({ from: n, to, cls });
     }
 
-    const detail = hover ? getNode(campaign, hover) : (options.length === 1 ? options[0] : null);
+    const detail = getNode(campaign, hover) || getNode(campaign, selected) || (options.length === 1 ? options[0] : null);
+    const detailOpen = !!detail && optionIds.has(detail.id);
 
     return (
         <>
-            <div className="mapwrap" style={{ width, height }}>
-                <svg className="edges" width={width} height={height}>
-                    {!run.nodeId && options.map((o) => (
-                        <line key={"s" + o.id} className="edge open" x1={PADX} y1={cy(o)} x2={cx(o) - NODEW / 2} y2={cy(o)} />
-                    ))}
-                    {edges.map((e, i) => (
-                        <line key={i} className={"edge " + e.cls} x1={cx(e.from) + NODEW / 2 - 6} y1={cy(e.from)} x2={cx(e.to) - NODEW / 2 + 6} y2={cy(e.to)} />
-                    ))}
-                </svg>
-                {!run.nodeId && <div className="mapstart" style={{ top: PADY + 0.6 * ROWH + NODEH / 2 - 8 }}>START ▸</div>}
-                {nodes.map((n) => {
-                    const isCurrent = n.id === run.nodeId;
-                    const isDone = pathSet.has(n.id) && !isCurrent;
-                    const isOpen = optionIds.has(n.id);
-                    const cls = isCurrent ? "cur" : isDone ? "done" : isOpen ? "open" : "locked";
-                    const diff = n.type === "breach" && n.systemKey ? SYSTEMS[n.systemKey].difficulty : 0;
-                    return (
-                        <div
-                            key={n.id}
-                            className={"mnode " + n.type + " " + cls + (isTerminal(n) ? " finale" : "")}
-                            style={{ left: PADX + n.col * COLW, top: PADY + n.row * ROWH, width: NODEW, height: NODEH }}
-                            onClick={() => isOpen && onPick(n)}
-                            onMouseEnter={() => setHover(n.id)}
-                            onMouseLeave={() => setHover((h) => (h === n.id ? null : h))}
-                        >
-                            <span className="micon">{nodeIcon(n)}</span>
-                            <span className="mlabel">{n.title}</span>
-                            {diff > 0 && <span className="mdiff">{"◆".repeat(diff)}</span>}
-                        </div>
-                    );
-                })}
+            <div className="mapscroll">
+                <div className="mapwrap" style={{ width, height }}>
+                    <svg className="edges" width={width} height={height}>
+                        {!run.nodeId && options.map((o) => (
+                            <line key={"s" + o.id} className="edge open" x1={PADX} y1={cy(o)} x2={cx(o) - NODEW / 2} y2={cy(o)} />
+                        ))}
+                        {edges.map((e, i) => (
+                            <line key={i} className={"edge " + e.cls} x1={cx(e.from) + NODEW / 2 - 6} y1={cy(e.from)} x2={cx(e.to) - NODEW / 2 + 6} y2={cy(e.to)} />
+                        ))}
+                    </svg>
+                    {!run.nodeId && <div className="mapstart" style={{ top: PADY + 0.6 * ROWH + NODEH / 2 - 8 }}>START ▸</div>}
+                    {nodes.map((n) => {
+                        const isCurrent = n.id === run.nodeId;
+                        const isDone = pathSet.has(n.id) && !isCurrent;
+                        const isOpen = optionIds.has(n.id);
+                        const cls = isCurrent ? "cur" : isDone ? "done" : isOpen ? "open" : "locked";
+                        const diff = n.type === "breach" && n.systemKey ? SYSTEMS[n.systemKey].difficulty : 0;
+                        return (
+                            <div
+                                key={n.id}
+                                className={"mnode " + n.type + " " + cls + (isTerminal(n) ? " finale" : "") + (selected === n.id ? " sel" : "")}
+                                style={{ left: PADX + n.col * COLW, top: PADY + n.row * ROWH, width: NODEW, height: NODEH }}
+                                onClick={() => setSelected(n.id)}
+                                onMouseEnter={() => setHover(n.id)}
+                                onMouseLeave={() => setHover((h) => (h === n.id ? null : h))}
+                            >
+                                <span className="micon">{nodeIcon(n)}</span>
+                                <span className="mlabel">{n.title}</span>
+                                {diff > 0 && <span className="mdiff">{"◆".repeat(diff)}</span>}
+                            </div>
+                        );
+                    })}
+                </div>
             </div>
             <div className={"mapdetail" + (detail ? "" : " empty")}>
                 {detail ? (
                     <>
-                        <span className="md-tag">{nodeIcon(detail)} {detail.type === "breach" ? (isTerminal(detail) ? "FINAL BREACH" : "BREACH") : detail.type === "safehouse" ? "SAFEHOUSE" : "EVENT"}</span>
+                        <div className="md-head">
+                            <span className="md-tag">{nodeIcon(detail)} {detail.type === "breach" ? (isTerminal(detail) ? "FINAL BREACH" : "BREACH") : detail.type === "safehouse" ? "SAFEHOUSE" : "EVENT"}</span>
+                            {detailOpen && <button className="term md-go" onClick={() => onPick(detail)}>▶ Take this route</button>}
+                        </div>
                         <b className="md-title">{detail.title}</b>
                         <span className="md-blurb">{detail.blurb}</span>
                         <span className="md-foot muted">
                             {detail.type === "breach" && detail.systemKey ? `target: ${SYSTEMS[detail.systemKey].name} · difficulty ${SYSTEMS[detail.systemKey].difficulty}/5 · reward ${detail.reward || 20}cr` : null}
                             {detail.type === "safehouse" ? `lie low · −${detail.heatRelief || 20} heat · no pay` : null}
                             {detail.type === "event" ? "a choice — no breach" : null}
-                            {optionIds.has(detail.id) ? "  ·  ▶ click the node to take this route" : (pathSet.has(detail.id) ? "  ·  ✓ visited" : "  ·  not on your current route")}
+                            {!detailOpen && (pathSet.has(detail.id) ? "  ·  ✓ visited" : "  ·  not on your current route")}
                         </span>
                     </>
-                ) : <span className="muted">Hover a node to scout it · the lit nodes are the routes open to you now.</span>}
+                ) : <span className="muted">Tap a node to scout it · the lit nodes are the routes open to you now.</span>}
             </div>
         </>
     );

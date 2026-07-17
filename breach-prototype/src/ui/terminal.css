@@ -12,9 +12,11 @@
     --line: #14361f;
 }
 
-* { box-sizing: border-box; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+button, .card, .mnode, .syscard, .dchip, .deck-link, .event-choice { touch-action: manipulation; }
 
-html, body, #root { height: 100%; margin: 0; }
+html, body, #root { min-height: 100%; margin: 0; }
+html { overflow-x: hidden; }
 
 body {
     background: var(--bg);
@@ -246,6 +248,7 @@ button.term.ghost:hover { background: var(--dim); color: #000; }
 .story-line.rogue { border-left-color: var(--red); color: #ff9a9a; }
 
 /* ---- the run MAP (Slay-the-Spire style node graph) ---- */
+.mapscroll { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
 .mapwrap { position: relative; margin: 4px auto 0; }
 .edges { position: absolute; inset: 0; pointer-events: none; }
 .edge { stroke: var(--line); stroke-width: 2; }
@@ -279,6 +282,7 @@ button.term.ghost:hover { background: var(--dim); color: #000; }
 .mnode.open { cursor: pointer; opacity: 1; border-color: var(--amber); box-shadow: 0 0 10px #ffb00044; animation: nodepulse 1.3s ease-in-out infinite; }
 .mnode.open:hover { transform: translateY(-3px) scale(1.03); box-shadow: 0 6px 16px #000a, 0 0 14px #ffb000aa; z-index: 5; }
 .mnode.open .mlabel { color: var(--fg); }
+.mnode.sel { outline: 2px solid var(--cyan); outline-offset: 2px; z-index: 6; }
 @keyframes nodepulse { 0%,100% { box-shadow: 0 0 6px #ffb00033; } 50% { box-shadow: 0 0 14px #ffb00099; } }
 
 .mapdetail {
@@ -286,6 +290,8 @@ button.term.ghost:hover { background: var(--dim); color: #000; }
     display: flex; flex-direction: column; gap: 2px; min-height: 62px;
 }
 .mapdetail.empty { align-items: center; justify-content: center; }
+.mapdetail .md-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.mapdetail .md-go { padding: 5px 12px; font-size: 12px; white-space: nowrap; }
 .mapdetail .md-tag { font-size: 10px; letter-spacing: 1px; color: var(--amber); font-weight: bold; }
 .mapdetail .md-title { color: var(--fg); font-size: 14px; }
 .mapdetail .md-blurb { font-size: 12px; color: #9fd18f; line-height: 1.35; }
@@ -304,6 +310,88 @@ button.term.ghost:hover { background: var(--dim); color: #000; }
 .tbox .term { margin-top: 16px; }
 .tbox .term:not(.ghost) { border-color: var(--red); color: var(--red); }
 .tbox .term:not(.ghost):hover { background: var(--red); color: #000; }
+
+/* ============================================================
+   MOBILE / TOUCH — BREACH plays in LANDSCAPE
+   ============================================================ */
+
+/* the "please rotate" gate — shown only on a phone held upright */
+#rotate-hint { display: none; }
+@media (orientation: portrait) and (max-width: 600px) {
+    #rotate-hint {
+        display: flex; position: fixed; inset: 0; z-index: 999;
+        align-items: center; justify-content: center; text-align: center;
+        background: var(--bg); color: var(--fg); padding: 24px;
+        font-family: "SFMono-Regular", "JetBrains Mono", "Consolas", "Menlo", monospace;
+    }
+    .rh-icon { font-size: 64px; animation: rhspin 2.4s ease-in-out infinite; color: var(--amber); }
+    .rh-title { margin-top: 18px; letter-spacing: 3px; font-weight: bold; font-size: 18px; }
+    .rh-sub { margin-top: 10px; color: var(--dim); line-height: 1.6; font-size: 13px; }
+    body > #root { filter: blur(2px); }
+}
+@keyframes rhspin { 0%,60% { transform: rotate(0); } 80%,100% { transform: rotate(-90deg); } }
+
+/* shared small-screen sizing (both orientations) */
+@media (max-width: 700px), (max-height: 540px) {
+    body { font-size: 13px; }
+    .title { letter-spacing: 1.5px; font-size: 15px; }
+    .systems { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 12px; }
+    .syscard .sysflavor { min-height: 0; }
+    .mapdetail .md-go { padding: 8px 12px; }
+    button.term { padding: 9px 16px; }
+
+    /* overlays fit the screen and scroll if tall */
+    .overlay { padding: 12px; }
+    .overlay .box { max-width: 100% !important; width: 100%; max-height: 90vh; overflow-y: auto; padding: 18px 16px; }
+    .overlay.intro .box, .tbox { max-width: 100% !important; }
+    .grid-cards { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); max-height: 60vh; }
+}
+
+/* LANDSCAPE PHONE — short & wide: compress vertically, keep it one screen,
+   let the hand and map pan sideways instead of stacking downward */
+@media (orientation: landscape) and (max-height: 540px) {
+    .wrap { padding: 6px 12px calc(8px + env(safe-area-inset-bottom)); max-width: 100%; }
+    hr { margin: 4px 0; }
+    .title { font-size: 14px; }
+    .title .sub { font-size: 12px; }
+    .meter { height: 13px; }
+    .meter-marks { height: 10px; }
+    .meter-marks span { font-size: 8px; }
+    .meter-label { margin-bottom: 2px; }
+
+    .sys { padding: 4px 10px; margin-top: 5px; font-size: 12px; }
+    .sys .intent-text { font-size: 13px; }
+
+    .layers { margin: 4px 0; }
+    .layer { padding: 3px 10px; margin: 3px 0; }
+    .last-action { margin: 4px 0 2px; padding: 3px 10px; }
+    .budget { padding: 4px 10px; margin-top: 5px; }
+    .hand-legend, .armed-hint { margin-top: 5px; font-size: 11px; }
+
+    /* hand: a single row you swipe through, so it never eats vertical space */
+    .hand { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 5px; padding-bottom: 4px; }
+    .hand .card { flex: 0 0 auto; width: 132px; min-height: 88px; }
+
+    .controls { margin-top: 6px; }
+    .turn-note { margin-top: 4px; font-size: 10px; }
+    .log { margin-top: 5px; min-height: 0; }
+
+    /* run screen: trim the prose so the map gets the room */
+    .run-stats { margin: 4px 0 6px; }
+    .story { margin: 4px 0 2px; }
+    .story-line { padding: 3px 10px; }
+    h3.amber { margin: 4px 0 !important; }
+    .mapdetail { min-height: 0; margin: 6px 0 2px; }
+
+    /* the map becomes a pannable window — full-size, readable nodes you swipe */
+    .mapscroll { overflow: auto; max-height: 50vh; border: 1px dashed var(--line); }
+    .story { display: none; } /* the scouted-node detail + take-route is what matters here */
+}
+
+/* PORTRAIT tablets (rotate-gate doesn't fire) — give a comfortable stack */
+@media (orientation: portrait) and (min-width: 601px) and (max-width: 900px) {
+    .hand .card { width: calc(33% - 6px); }
+}
 
 /* event overlay choices */
 .event-choices { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
