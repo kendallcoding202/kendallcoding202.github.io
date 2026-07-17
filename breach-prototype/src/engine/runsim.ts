@@ -255,6 +255,40 @@ for (const id of CAMPAIGN_ORDER) {
     check("lying low lowers the watcher tier", cooled.huntTier < 2);
 }
 
+/* 11. New flexible attacks (no defense-type requirement). */
+{
+    // Polymorph works on a HIDDEN defense at full power (no reveal needed)
+    let p = createInitialState(1, "smallBusiness", ["polymorph"]);
+    p.layers[0].defenses[0].strength = 30; p.layers[0].defenses[0].maxStrength = 30;
+    const s0 = p.layers[0].defenses[0].strength;
+    p = applyAction(p, { type: "playCard", card: "polymorph", target: 0 });
+    check("Polymorph hits a hidden defense at full power", s0 - p.layers[0].defenses[0].strength === 5);
+
+    // Precision Strike auto-hits the weakest standing defense with no target
+    let pr = createInitialState(2, "smallBusiness", ["precisionStrike"]);
+    pr.current = 1; // internal network has two defenses
+    pr.layers[1].defenses[0].strength = 12; pr.layers[1].defenses[0].maxStrength = 12;
+    pr.layers[1].defenses[1].strength = 4; pr.layers[1].defenses[1].maxStrength = 12; // weakest
+    pr = applyAction(pr, { type: "playCard", card: "precisionStrike" });
+    check("Precision Strike hits the weakest defense automatically", pr.layers[1].defenses[1].strength === 0 && pr.layers[1].defenses[0].strength === 12);
+
+    // Overload scales with current detection
+    let o = createInitialState(3, "smallBusiness", ["overload", "overload"]);
+    o.layers[0].defenses[0].strength = 40; o.layers[0].defenses[0].maxStrength = 40;
+    o.detection = 30; // +3 to the base 3 => 6
+    const os = o.layers[0].defenses[0].strength;
+    o = applyAction(o, { type: "playCard", card: "overload", target: 0 });
+    check("Overload scales with detection", os - o.layers[0].defenses[0].strength === 6);
+
+    // Momentum scales with breached layers
+    let m = createInitialState(4, "homeServer", ["zeroDay", "momentum"]);
+    m.layers[1].defenses[0].strength = 30; m.layers[1].defenses[0].maxStrength = 30;
+    m = applyAction(m, { type: "playCard", card: "zeroDay", target: 0 }); // breach layer 0 -> current 1, 1 breached
+    const ms = m.layers[1].defenses[0].strength;
+    m = applyAction(m, { type: "playCard", card: "momentum", target: 0 }); // 3 + 2*1 = 5
+    check("Momentum scales with breached layers", ms - m.layers[1].defenses[0].strength === 5);
+}
+
 console.log(`=== RUN-ENGINE ASSERTIONS: ${passed} passed, ${failures.length} failed ===`);
 if (failures.length) { failures.forEach((f) => console.log("   ❌ " + f)); process.exit(1); }
 else console.log("   ✅ maps are well-formed & completable; heat/events/deck/antagonist/new-cards all behave");

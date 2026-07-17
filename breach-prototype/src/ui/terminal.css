@@ -10,6 +10,17 @@
     --cyan: #35e0d8;
     --panel: #0a1410;
     --line: #14361f;
+    /* card families — each kind gets its own neon so the hand reads at a glance */
+    --recon: #38d3cf;
+    --exploit: #ff9d3c;
+    --stealth: #b98cff;
+    --utility: #7bdc4e;
+    /* defense archetypes — colour-coded so matching a tool to a target is visual */
+    --t-firewall: #ff8a4a;
+    --t-ids: #46d6e6;
+    --t-auth: #ffd24a;
+    --t-privilege: #c08cff;
+    --t-database: #64e88a;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -149,7 +160,12 @@ hr { border: none; border-top: 1px solid var(--line); margin: 7px 0; }
 }
 .dchip.down { color: var(--dim); border-color: var(--dim); }
 .dchip.targetable { border-color: var(--amber); color: var(--amber); cursor: crosshair; box-shadow: 0 0 8px #ffb00055; animation: pulse 1.1s infinite; }
-.dchip.targetable b { color: var(--amber); }
+.dchip .dtype { font-weight: bold; }
+.dchip .dtype.t-firewall { color: var(--t-firewall); }
+.dchip .dtype.t-ids { color: var(--t-ids); }
+.dchip .dtype.t-auth { color: var(--t-auth); }
+.dchip .dtype.t-privilege { color: var(--t-privilege); }
+.dchip .dtype.t-database { color: var(--t-database); }
 .dchip .ds { color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
 .dchip .snum { color: var(--muted); font-size: 11px; }
 .dbar { display: inline-block; width: 70px; height: 9px; border: 1px solid var(--line); vertical-align: middle; background: #000; }
@@ -193,10 +209,18 @@ hr { border: none; border-top: 1px solid var(--line); margin: 7px 0; }
 .card.disabled { opacity: 0.4; cursor: not-allowed; }
 .card.danger { border-color: var(--red); }
 .card .chead { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
-.card .cname { font-weight: bold; color: var(--fg); line-height: 1.15; }
-.card .kind { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; }
+.card .cname { font-weight: bold; color: var(--k, var(--fg)); line-height: 1.15; }
+.card .kind { font-size: 10px; color: var(--k, var(--dim)); opacity: 0.85; text-transform: uppercase; letter-spacing: 1px; }
 .card .noise { font-size: 12px; white-space: nowrap; flex-shrink: 0; }
-.card .ctext { font-size: 11px; color: #9fd18f; margin-top: 4px; line-height: 1.25; }
+.card .ctext { font-size: 11px; color: #a7c1b1; margin-top: 4px; line-height: 1.25; }
+
+/* card families — a coloured spine per kind, independent of hover/armed states */
+.card.kind-recon { --k: var(--recon); }
+.card.kind-exploit { --k: var(--exploit); }
+.card.kind-stealth { --k: var(--stealth); }
+.card.kind-utility { --k: var(--utility); }
+.card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--k, var(--line)); opacity: 0.9; }
+.card:hover:not(.disabled) { border-color: var(--k, var(--fg)); }
 
 .controls { margin-top: 9px; display: flex; gap: 10px; align-items: center; }
 button.term {

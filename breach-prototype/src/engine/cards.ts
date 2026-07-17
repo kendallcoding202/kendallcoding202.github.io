@@ -75,6 +75,22 @@ export const CARDS: Record<string, CardDef> = {
         id: "empBurst", name: "EMP Burst", kind: "exploit", noise: 9, power: 3, effect: "exploitAll", needsTarget: false,
         text: "Reduce EVERY standing defense on this layer by 3. Loud — but it clears multi-defense chokepoints.",
     },
+    polymorph: {
+        id: "polymorph", name: "Polymorph", kind: "exploit", noise: 5, power: 5, effect: "adaptiveExploit", needsTarget: true,
+        text: "Reduce ANY defense by 5 — revealed or not, whatever its type. No specialist needed, a bit louder.",
+    },
+    precisionStrike: {
+        id: "precisionStrike", name: "Precision Strike", kind: "exploit", noise: 3, power: 7, effect: "precisionStrike", needsTarget: false,
+        text: "Automatically hit the WEAKEST standing defense on this layer for 7. Recon first to line it up.",
+    },
+    overload: {
+        id: "overload", name: "Overload", kind: "exploit", noise: 4, power: 3, effect: "overload", needsTarget: true,
+        text: "Reduce a defense by 3, +1 for every 10 detection you've drawn. Devastating when you're already loud.",
+    },
+    momentum: {
+        id: "momentum", name: "Momentum", kind: "exploit", noise: 3, power: 3, amount: 2, effect: "momentum", needsTarget: true,
+        text: "Reduce a defense by 3, +2 for every layer you've already breached. Snowballs as you go deeper.",
+    },
     cascade: {
         id: "cascade", name: "Cascade", kind: "exploit", noise: 2, power: 3, effect: "chainExploit", needsTarget: true,
         text: "Reduce a defense by 3, +2 for every other exploit you've already played this turn. Rewards big combo turns.",
@@ -135,6 +151,14 @@ export const CARDS: Record<string, CardDef> = {
         id: "overclock", name: "Overclock", kind: "utility", noise: 2, power: 3, effect: "overclock", needsTarget: false,
         text: "Your NEXT exploit this turn hits +3 harder, and you draw a card. Set up a big hit.",
     },
+    dataSiphon: {
+        id: "dataSiphon", name: "Data Siphon", kind: "utility", noise: 1, effect: "siphon", needsTarget: false,
+        text: "Draw 1 card, plus 1 more for every layer you've breached. Pays off the deeper you get.",
+    },
+    misdirect: {
+        id: "misdirect", name: "Misdirect", kind: "stealth", noise: 1, amount: 4, effect: "misdirect", needsTarget: false,
+        text: "Feed the system a false trail: lower detection by 4 AND cancel its next move. Quiet control.",
+    },
     trojan: {
         id: "trojan", name: "Trojan", kind: "utility", noise: 1, power: 3, amount: 3, effect: "trojan", needsTarget: true, exhausts: true,
         text: "Quietly reduce a defense by 3 AND lower detection by 3 — infiltrate without a trace. One use per run.",
@@ -148,12 +172,15 @@ export const CARDS: Record<string, CardDef> = {
 export const STARTER_DECK: string[] = [
     // recon (5)
     "portScan", "portScan", "passiveRecon", "enumerate", "packetSniffer",
-    // exploits (12) — reliable generalists + one specialist per type + a combo card + heavies
-    "knownExploit", "knownExploit", "knownExploit", "scriptKiddie",
-    "firewallBypass", "idsEvasion", "rainbowTable", "sqlInjection", "privEsc",
-    "cascade", "zeroDay", "bruteForce",
+    // exploits — mostly FLEXIBLE attacks you can always play well: generalists and
+    // condition-based scalers, plus a couple of specialists for big matched hits.
+    // (The other type-specialists live in the reward pool for when you want them.)
+    "knownExploit", "knownExploit", "scriptKiddie",
+    "polymorph", "precisionStrike", "momentum", "cascade",
+    "firewallBypass", "idsEvasion", "privEsc",
+    "zeroDay", "bruteForce",
     // stealth (6)
-    "logWipe", "logWipe", "goDark", "coverTracks", "proxyChain", "spoof",
-    // utility (4)
-    "rootkit", "automate", "patchScanner", "overclock",
+    "logWipe", "goDark", "coverTracks", "proxyChain", "spoof", "misdirect",
+    // utility (5)
+    "rootkit", "automate", "patchScanner", "overclock", "dataSiphon",
 ];

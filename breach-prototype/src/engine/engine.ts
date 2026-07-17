@@ -344,6 +344,40 @@ function applyEffect(s: GameState, card: CardDef, target: number): number {
             log(s, match ? `${card.name} tears through ${d.type} for ${power}.` : `${card.name} is the wrong tool for ${d.type} (${power}).`);
             return match ? 0 : 3;
         }
+        case "adaptiveExploit": {
+            // works on ANY defense, revealed or not, no type penalty — the flexible generalist
+            if (!d) return 0;
+            const power = (card.power || 5) + takeExploitBonus(s);
+            damageDefense(s, target, power);
+            log(s, `${card.name} reshapes to fit ${d.typeRevealed ? d.type : "the target"} — ${power} off.`);
+            return 0;
+        }
+        case "precisionStrike": {
+            // auto-hits the weakest standing defense on the layer (no target needed)
+            const idx = layer ? focusDefenseIndex(layer) : -1;
+            if (idx < 0) return 0;
+            const power = (card.power || 7) + takeExploitBonus(s);
+            damageDefense(s, idx, power);
+            log(s, `${card.name} finds the soft spot — ${power} off the weakest defense.`);
+            return 0;
+        }
+        case "overload": {
+            // scales with how loud you already are — big when detected, weak when quiet
+            if (!d) return 0;
+            const power = (card.power || 3) + Math.floor(s.detection / 10) + takeExploitBonus(s);
+            damageDefense(s, target, power);
+            log(s, `${card.name} rides your noise — ${power} off (louder = stronger).`);
+            return 0;
+        }
+        case "momentum": {
+            // stronger the deeper you've already broken in
+            if (!d) return 0;
+            const breached = s.layers.filter((l) => l.breached).length;
+            const power = (card.power || 3) + (card.amount || 2) * breached + takeExploitBonus(s);
+            damageDefense(s, target, power);
+            log(s, `${card.name} builds on ${breached} breached layer${breached === 1 ? "" : "s"} — ${power} off.`);
+            return 0;
+        }
         case "exploitAll": {
             const bonus = takeExploitBonus(s);
             const base = (card.power || 3) + bonus;
@@ -413,6 +447,17 @@ function applyEffect(s: GameState, card: CardDef, target: number): number {
             draw(s, 1);
             log(s, `Overclock — your next exploit hits +${card.power || 3} harder. Drew a card.`);
             return 0;
+        case "siphon": {
+            const n = 1 + s.layers.filter((l) => l.breached).length;
+            draw(s, n);
+            log(s, `Data Siphon — drew ${n} (1 + breached layers).`);
+            return 0;
+        }
+        case "misdirect":
+            s.spoofTurns += 1;
+            reduceDetection(s, card.amount || 4);
+            log(s, `Misdirect — the system chases a ghost; detection −${card.amount || 4}, its next move cancelled.`);
+            return 0;
         case "rootkit":
             s.rootkitReady = true;
             return 0;
@@ -462,6 +507,9 @@ export function previewOnTarget(s: GameState, cardId: string, idx: number): stri
             if (!d.typeRevealed) return "reveal it first";
             return d.type === card.matchType ? `−${Math.round((card.power || 5) * 1.6) + bonus}${plus}` : `−${Math.round((card.power || 5) * 0.4) + bonus} · weak, loud`;
         case "chainExploit": return `−${(card.power || 3) + 2 * s.exploitsThisTurn + bonus} · scales w/ combo`;
+        case "adaptiveExploit": return `−${(card.power || 5) + bonus}${plus} · any type`;
+        case "overload": return `−${(card.power || 3) + Math.floor(s.detection / 10) + bonus} · scales w/ detection`;
+        case "momentum": return `−${(card.power || 3) + (card.amount || 2) * (layer ? s.layers.filter((l) => l.breached).length : 0) + bonus} · deeper = bigger`;
         case "logicBomb": return `plant ${card.power || 3}/turn ×${card.amount || 3}`;
         case "trojan": return `−${(card.power || 3) + bonus}, −det${plus}`;
         case "privEsc":
@@ -486,6 +534,10 @@ export function predictDamage(s: GameState, cardId: string, idx: number): number
     switch (card.effect) {
         case "knownExploit": return (d.typeRevealed ? card.power || 4 : Math.ceil((card.power || 4) / 2)) + bonus;
         case "typedExploit": return (d.type === card.matchType ? Math.round((card.power || 5) * 1.6) : Math.round((card.power || 5) * 0.4)) + bonus;
+        case "adaptiveExploit": return (card.power || 5) + bonus;
+        case "overload": return (card.power || 3) + Math.floor(s.detection / 10) + bonus;
+        case "momentum": return (card.power || 3) + (card.amount || 2) * s.layers.filter((l) => l.breached).length + bonus;
+        case "precisionStrike": return (card.power || 7) + bonus;
         case "exploitAll": return (card.power || 3) + bonus;
         case "chainExploit": return (card.power || 3) + 2 * s.exploitsThisTurn + bonus;
         case "logicBomb": return (card.power || 3) * (card.amount || 3);

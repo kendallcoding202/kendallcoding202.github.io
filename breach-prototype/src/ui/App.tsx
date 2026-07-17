@@ -48,7 +48,7 @@ function DefenseChip({ d, targetable, preview, onClick }: { d: Defense; targetab
     const down = d.strength <= 0;
     return (
         <span className={"dchip" + (targetable ? " targetable" : "") + (down ? " down" : "")} onClick={targetable ? onClick : undefined}>
-            {down ? "✓ down" : d.typeRevealed ? <b className="cyan">{d.type}</b> : <span className="muted">???</span>}
+            {down ? "✓ down" : d.typeRevealed ? <b className={"dtype t-" + d.type}>{d.type}</b> : <span className="muted">???</span>}
             {!down && (
                 <span className="ds">
                     {d.strengthRevealed ? (
@@ -65,7 +65,7 @@ function CardMini({ id, onClick, dim }: { id: string; onClick?: () => void; dim?
     const def = CARDS[id];
     if (!def) return null;
     return (
-        <div className={"card mini" + (onClick ? " playable" : "") + (dim ? " disabled" : "")} onClick={onClick} title={def.text}>
+        <div className={"card mini kind-" + def.kind + (onClick ? " playable" : "") + (dim ? " disabled" : "")} onClick={onClick} title={def.text}>
             <div className="chead">
                 <span className="cname">{def.name}{def.needsTarget ? <span className="muted"> ◎</span> : null}</span>
                 <span className="noise" style={{ color: def.noise === 0 ? "#35e0d8" : "#ffb000" }}>{def.noise === 0 ? "SILENT" : "◈" + def.noise}</span>
@@ -225,7 +225,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, onComplete }: { 
                     const needsT = needsTarget(id);
                     const blocked = needsT && targetOpts.length === 0;
                     return (
-                        <div key={i} className={"card" + (playable && !blocked ? "" : " disabled") + (danger ? " danger" : "") + (armed === id ? " armed" : "")} onClick={() => !blocked && onCardClick(id)} title={def.text}>
+                        <div key={i} className={"card kind-" + def.kind + (playable && !blocked ? "" : " disabled") + (danger ? " danger" : "") + (armed === id ? " armed" : "")} onClick={() => !blocked && onCardClick(id)} title={def.text}>
                             <div className="chead">
                                 <span className="cname">{def.name}{needsT ? <span className="muted"> ◎</span> : null}</span>
                                 <span className="noise" style={{ color: danger ? "#ff4141" : noise === 0 ? "#35e0d8" : "#ffb000" }}>{noise === 0 ? "SILENT" : "◈" + noise}</span>
