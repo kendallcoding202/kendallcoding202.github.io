@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Spire of Trials — a Slay the Spire style game</title>
+        <link rel="stylesheet" href="game.css" />
+    </head>
+    <body>
+        <!-- Top bar (shown during a run) -->
+        <div id="topbar" class="hidden">
+            <span class="title">🗡️ Spire of Trials</span>
+            <span class="stat" title="Health">
+                <span class="icon">❤️</span>
+                <span class="hp-text"><span id="ui-hp">80</span>/<span id="ui-maxhp">80</span></span>
+            </span>
+            <span class="stat" title="Gold">
+                <span class="icon">🪙</span>
+                <span class="gold-text" id="ui-gold">99</span>
+            </span>
+            <span class="stat" title="Floor">
+                <span class="floor-text">Floor <span id="ui-floor">0</span></span>
+            </span>
+            <span class="stat relic-row" id="ui-relics" title="Relics"></span>
+            <span class="spacer"></span>
+            <button class="link-btn" id="btn-deck">🃏 Deck (<span id="ui-decksize">0</span>)</button>
+            <button class="link-btn" id="btn-abandon">Abandon Run</button>
+        </div>
+
+        <!-- Title screen -->
+        <div id="title-screen" class="screen">
+            <h1>Spire of Trials</h1>
+            <p>
+                A deckbuilding roguelike in the spirit of <em>Slay the Spire</em>.
+                Climb the spire floor by floor. Fight monsters with a deck of
+                cards, grow stronger with new cards and relics, and defeat the
+                boss that waits at the top. Every run is different — choose your
+                path wisely.
+            </p>
+            <p class="muted">
+                Play a card by clicking it (attacks ask you to pick a target).
+                Spend your energy each turn, then <b>End Turn</b>. Block resets
+                every turn, so use it when you need it.
+            </p>
+            <h3 class="gold">Choose your fighter</h3>
+            <div class="char-picker" id="char-picker"></div>
+            <button class="big-btn" id="btn-start">Begin the Climb ⚔️</button>
+        </div>
+
+        <!-- Map screen -->
+        <div id="map-screen" class="screen hidden">
+            <h2 class="center">Choose your path</h2>
+            <p class="center muted" id="map-legend">
+                ⚔️ Monster &nbsp; 💀 Elite &nbsp; 🔥 Rest &nbsp; 💰 Treasure &nbsp;
+                🏪 Shop &nbsp; ❓ Unknown &nbsp; 👑 Boss
+            </p>
+            <div id="map-scroll">
+                <div id="map-inner"></div>
+            </div>
+        </div>
+
+        <!-- Combat screen -->
+        <div id="combat-screen" class="screen hidden">
+            <div class="battlefield">
+                <div id="player-side"></div>
+                <div id="enemy-side" style="display: flex; gap: 34px; align-items: flex-end;"></div>
+            </div>
+            <div class="log" id="combat-log"></div>
+            <div class="combat-hud">
+                <div class="hud-row">
+                    <div class="energy-orb"><span id="ui-energy">3</span>/<span id="ui-maxenergy">3</span></div>
+                    <button class="pile-btn" id="btn-draw-pile">Draw: <span id="ui-drawcount">0</span></button>
+                    <button class="pile-btn" id="btn-discard-pile">Discard: <span id="ui-discardcount">0</span></button>
+                    <span class="muted" id="target-hint"></span>
+                    <button class="end-turn-btn" id="btn-end-turn">End Turn</button>
+                </div>
+                <div class="hand" id="hand"></div>
+            </div>
+        </div>
+
+        <!-- Overlay container -->
+        <div id="overlay" class="overlay hidden"></div>
+        <div id="tooltip" class="tooltip hidden"></div>
+
+        <p class="center muted" style="padding: 12px; font-size: 12px">
+            <a href="../Hobbies/index.html" style="color: var(--muted)">← Back to Hobbies</a>
+            &nbsp;|&nbsp;
+            <a href="../Home/index.html" style="color: var(--muted)">Home</a>
+        </p>
+
+        <script src="game.js"></script>
+    </body>
+</html>
