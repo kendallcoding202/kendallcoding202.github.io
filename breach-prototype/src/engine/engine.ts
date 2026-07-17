@@ -27,6 +27,7 @@ export function createInitialState(seed: number, systemKey: string = DEFAULT_SYS
     const startFrac = Math.min(0.5, (m?.detectionStartFrac || 0) + (h?.detectionStartFrac || 0));
     const state: GameState = {
         system: sys.name,
+        behavior: sys.behavior || null,
         detection: startFrac > 0 ? Math.round(startFrac * detectionMax) : 0,
         detectionMax,
         baselineCreep: Math.max(1, sys.baselineCreep + (m?.creepDelta || 0) + (h?.creepDelta || 0)),
@@ -46,6 +47,8 @@ export function createInitialState(seed: number, systemKey: string = DEFAULT_SYS
         handSize: 6,
         turn: 1,
         turnNoise: 0,
+        cardsThisTurn: 0,
+        silentThisTurn: 0,
         proxyCharges: 0,
         rootkitReady: false,
         spoofTurns: 0,
@@ -267,7 +270,27 @@ function afterBreachCheck(s: GameState) {
         } else {
             log(s, `${layer.name} breached — moving inward.`);
             s.current += 1;
+            applyBehaviorOnBreach(s);
         }
+    }
+}
+
+/** A system's intrinsic quirk fires as you move inward. */
+function applyBehaviorOnBreach(s: GameState) {
+    if (s.behavior === "segmented") {
+        // helpful: the next layer's defense TYPES are exposed as you cross in
+        const next = s.layers[s.current];
+        if (next && !next.breached && next.defenses.some((d) => !d.typeRevealed)) {
+            next.defenses.forEach((d) => (d.typeRevealed = true));
+            log(s, "Segmented network — crossing the boundary exposed the next layer's defense types.");
+        }
+    } else if (s.behavior === "adaptive") {
+        // it learns: the layer you're now facing reinforces (+1 each) — punishing,
+        // but only the next fight, so it doesn't compound out of control
+        const l = s.layers[s.current];
+        let hardened = 0;
+        if (l && !l.breached) l.defenses.forEach((d) => { if (d.strength > 0) { d.strength += 1; d.maxStrength += 1; hardened++; } });
+        if (hardened) log(s, `Adaptive ICE — it learns. This layer's ${hardened} defense${hardened === 1 ? "" : "s"} hardened (+1).`);
     }
 }
 
@@ -376,6 +399,53 @@ function applyEffect(s: GameState, card: CardDef, target: number): number {
             const power = (card.power || 3) + (card.amount || 2) * breached + takeExploitBonus(s);
             damageDefense(s, target, power);
             log(s, `${card.name} builds on ${breached} breached layer${breached === 1 ? "" : "s"} — ${power} off.`);
+            return 0;
+        }
+        /* ---- GHOST archetype: reward staying silent / unseen ---- */
+        case "silentScale": {
+            if (!d) return 0;
+            const power = (card.power || 2) + 2 * s.silentThisTurn + takeExploitBonus(s);
+            damageDefense(s, target, power);
+            log(s, `${card.name} strikes from the dark — ${power} off (built on ${s.silentThisTurn} silent play${s.silentThisTurn === 1 ? "" : "s"}).`);
+            return 0;
+        }
+        case "lowDetStrike": {
+            if (!d) return 0;
+            const unseen = s.detection < s.detectionMax * 0.25;
+            const power = (unseen ? card.power || 8 : card.amount || 3) + takeExploitBonus(s);
+            damageDefense(s, target, power);
+            log(s, unseen ? `${card.name} lands clean while you're unseen — ${power} off.` : `${card.name} glances off — you're too exposed (${power}).`);
+            return 0;
+        }
+        /* ---- OVERLOAD archetype: turn your own noise into power ---- */
+        case "meltdown": {
+            const per = Math.max(1, Math.floor(s.detection / (card.amount || 12))) + takeExploitBonus(s);
+            for (let i = defs.length - 1; i >= 0; i--) if (defs[i].strength > 0) reduceDefenseAt(s, s.current, i, per);
+            log(s, `${card.name} — the grid melts down, ${per} off every defense (rides your ${s.detection} detection).`);
+            return 0;
+        }
+        /* ---- WORM archetype: plant & detonate ---- */
+        case "contagion": {
+            let n = 0;
+            defs.forEach((x, i) => { if (x.strength > 0) { s.bombs.push({ layer: s.current, def: i, amt: card.power || 2, turns: card.amount || 3 }); n++; } });
+            log(s, `${card.name} spreads — ${n} defense${n === 1 ? "" : "s"} now decaying ${card.power || 2}/turn.`);
+            return 0;
+        }
+        case "detonate": {
+            if (s.bombs.length === 0) { log(s, "Detonate — nothing planted to blow."); return 0; }
+            let total = 0;
+            const count = s.bombs.length;
+            for (const b of s.bombs) { const dmg = b.amt * b.turns; reduceDefenseAt(s, b.layer, b.def, dmg); total += dmg; }
+            s.bombs = [];
+            log(s, `Detonate — ${count} bomb${count === 1 ? "" : "s"} blown at once for ${total} total.`);
+            return 0;
+        }
+        /* ---- CHAIN archetype: reward playing many cards a turn ---- */
+        case "chainReaction": {
+            if (!d) return 0;
+            const power = (card.power || 2) + s.cardsThisTurn + takeExploitBonus(s);
+            damageDefense(s, target, power);
+            log(s, `${card.name} chains off ${s.cardsThisTurn} card${s.cardsThisTurn === 1 ? "" : "s"} this turn — ${power} off.`);
             return 0;
         }
         case "exploitAll": {
@@ -507,6 +577,9 @@ export function previewOnTarget(s: GameState, cardId: string, idx: number): stri
             if (!d.typeRevealed) return "reveal it first";
             return d.type === card.matchType ? `−${Math.round((card.power || 5) * 1.6) + bonus}${plus}` : `−${Math.round((card.power || 5) * 0.4) + bonus} · weak, loud`;
         case "chainExploit": return `−${(card.power || 3) + 2 * s.exploitsThisTurn + bonus} · scales w/ combo`;
+        case "silentScale": return `−${(card.power || 2) + 2 * s.silentThisTurn + bonus} · scales w/ silent plays`;
+        case "lowDetStrike": return s.detection < s.detectionMax * 0.25 ? `−${(card.power || 8) + bonus} · UNSEEN` : `−${(card.amount || 3) + bonus} · too loud`;
+        case "chainReaction": return `−${(card.power || 2) + s.cardsThisTurn + bonus} · scales w/ cards played`;
         case "adaptiveExploit": return `−${(card.power || 5) + bonus}${plus} · any type`;
         case "overload": return `−${(card.power || 3) + Math.floor(s.detection / 10) + bonus} · scales w/ detection`;
         case "momentum": return `−${(card.power || 3) + (card.amount || 2) * (layer ? s.layers.filter((l) => l.breached).length : 0) + bonus} · deeper = bigger`;
@@ -538,6 +611,9 @@ export function predictDamage(s: GameState, cardId: string, idx: number): number
         case "overload": return (card.power || 3) + Math.floor(s.detection / 10) + bonus;
         case "momentum": return (card.power || 3) + (card.amount || 2) * s.layers.filter((l) => l.breached).length + bonus;
         case "precisionStrike": return (card.power || 7) + bonus;
+        case "silentScale": return (card.power || 2) + 2 * s.silentThisTurn + bonus;
+        case "lowDetStrike": return (s.detection < s.detectionMax * 0.25 ? card.power || 8 : card.amount || 3) + bonus;
+        case "chainReaction": return (card.power || 2) + s.cardsThisTurn + bonus;
         case "exploitAll": return (card.power || 3) + bonus;
         case "chainExploit": return (card.power || 3) + 2 * s.exploitsThisTurn + bonus;
         case "logicBomb": return (card.power || 3) * (card.amount || 3);
@@ -597,6 +673,8 @@ export function applyAction(prev: GameState, action: Action): GameState {
         }
         addDetection(s, noise);
         s.turnNoise += noise;
+        s.cardsThisTurn += 1;
+        if (noise === 0) s.silentThisTurn += 1;
         if (card.kind === "exploit") s.exploitsThisTurn += 1;
 
         if (card.exhausts) log(s, `${card.name} spent (one-time).`);
@@ -616,6 +694,8 @@ export function applyAction(prev: GameState, action: Action): GameState {
         s.turnNoise = 0; // reset the per-turn noise budget
         s.exploitBonus = 0; // Overclock lasts only for the turn it was played
         s.exploitsThisTurn = 0;
+        s.cardsThisTurn = 0;
+        s.silentThisTurn = 0;
         if (s.outcome === "playing") {
             draw(s, s.handSize);
             s.turn += 1;

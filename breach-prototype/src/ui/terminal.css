@@ -238,6 +238,13 @@ hr { border: none; border-top: 1px solid var(--line); margin: 7px 0; }
 .card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--k, var(--line)); opacity: 0.9; }
 .card:hover:not(.disabled) { border-color: var(--k, var(--fg)); }
 
+/* build-archetype tags — so synergy families are visible when deckbuilding */
+.card .synergy { font-weight: bold; letter-spacing: 0.5px; }
+.card .synergy.s-ghost { color: #8fd6ff; }
+.card .synergy.s-overload { color: #ff6a5a; }
+.card .synergy.s-worm { color: #b0e04a; }
+.card .synergy.s-chain { color: #ffcf5a; }
+
 .controls { margin-top: 9px; display: flex; gap: 10px; align-items: center; }
 button.term {
     background: #000; color: var(--fg); border: 1px solid var(--fg);

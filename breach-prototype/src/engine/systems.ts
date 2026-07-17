@@ -42,10 +42,11 @@ export const SYSTEMS: Record<string, SystemDef> = {
     corpNetwork: {
         key: "corpNetwork",
         name: "Corporate Network",
-        flavor: "Five layers, a DMZ, and multi-defense chokepoints. A trace that climbs fast. Bring recon.",
+        flavor: "Five layers, a DMZ, and multi-defense chokepoints. Segmented — each layer you breach exposes the next one's defense types.",
         difficulty: 3,
-        detectionMax: 135,
+        detectionMax: 126,
         baselineCreep: 4,
+        behavior: "segmented",
         layers: [
             { name: "Perimeter", defenses: [{ type: "firewall", strength: 9 }] },
             { name: "DMZ", defenses: [{ type: "firewall", strength: 7 }, { type: "ids", strength: 7 }] },
@@ -58,10 +59,11 @@ export const SYSTEMS: Record<string, SystemDef> = {
     blackSite: {
         key: "blackSite",
         name: "Black Site",
-        flavor: "Hardened everything. Two defenses on every layer and an aggressive trace. For ghosts only.",
+        flavor: "Hardened everything, and adaptive — every layer you breach makes the rest tougher. It learns. For ghosts only.",
         difficulty: 5,
-        detectionMax: 170,
+        detectionMax: 185,
         baselineCreep: 4,
+        behavior: "adaptive",
         layers: [
             { name: "Perimeter", defenses: [{ type: "firewall", strength: 10 }, { type: "ids", strength: 8 }] },
             { name: "Internal Network", defenses: [{ type: "ids", strength: 10 }, { type: "auth", strength: 8 }] },

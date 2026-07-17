@@ -22,6 +22,12 @@ export type EffectKind =
     | "precisionStrike"
     | "overload"
     | "momentum"
+    | "silentScale"
+    | "lowDetStrike"
+    | "meltdown"
+    | "contagion"
+    | "detonate"
+    | "chainReaction"
     | "exploitAll"
     | "chainExploit"
     | "logicBomb"
@@ -57,8 +63,13 @@ export interface CardDef {
     matchType?: DefenseType; // for typedExploit: the defense type it specialises against
     needsTarget: boolean; // acts on the current layer's defense
     exhausts?: boolean; // leaves the deck for the rest of the breach
+    tag?: SynergyTag; // build-archetype this card belongs to / rewards
     text: string;
 }
+
+/** Deck archetypes. Cards carry a tag so a build can commit to a strategy,
+    and the payoff keystones scale with how hard you've leaned into it. */
+export type SynergyTag = "ghost" | "overload" | "worm" | "chain";
 
 export interface Defense {
     type: DefenseType;
@@ -81,8 +92,15 @@ export interface SystemDef {
     difficulty: number; // 1..5, for the select screen
     detectionMax: number;
     baselineCreep: number; // detection gained at end of each turn (time pressure)
+    behavior?: SystemBehavior; // an intrinsic quirk that makes this target play distinctly
     layers: { name: string; defenses: { type: DefenseType; strength: number }[] }[];
 }
+
+/** Intrinsic system behaviors — what makes a Black Site feel different from a
+    Home Server beyond bigger numbers.
+    - segmented: breaching a layer reveals the NEXT layer's defense types (helpful)
+    - adaptive: when a layer breaches, the remaining layers harden (+1 each) */
+export type SystemBehavior = "segmented" | "adaptive";
 
 /** The watcher's grip on you, derived from run Heat. The higher the trace,
     the more your targets are warned — so breaches start harder. Telegraphed
@@ -132,6 +150,7 @@ export interface SystemIntent {
 
 export interface GameState {
     system: string;
+    behavior: SystemBehavior | null; // this target's intrinsic quirk
     detection: number;
     detectionMax: number;
     baselineCreep: number;
@@ -146,6 +165,8 @@ export interface GameState {
     handSize: number;
     turn: number;
     turnNoise: number; // noise made from cards THIS turn (resets each turn)
+    cardsThisTurn: number; // total cards played this turn (for chain/combo payoffs)
+    silentThisTurn: number; // cards played that made ZERO noise this turn (for ghost payoffs)
 
     // stealth / persistence flags
     proxyCharges: number; // Proxy Chain: reduce noise on the next N cards

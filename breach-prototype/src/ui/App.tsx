@@ -70,7 +70,7 @@ function CardMini({ id, onClick, dim }: { id: string; onClick?: () => void; dim?
                 <span className="cname">{def.name}{def.needsTarget ? <span className="muted"> ◎</span> : null}</span>
                 <span className="noise" style={{ color: def.noise === 0 ? "#35e0d8" : "#ffb000" }}>{def.noise === 0 ? "SILENT" : "◈" + def.noise}</span>
             </div>
-            <div className="kind">{def.kind}</div>
+            <div className="kind">{def.kind}{def.tag ? <span className={"synergy s-" + def.tag}> · {def.tag}</span> : null}</div>
             <div className="ctext">{def.text}</div>
         </div>
     );
@@ -202,7 +202,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, onComplete }: { 
             <div className="last-action">▸ {state.log[state.log.length - 1]}</div>
 
             <div className="budget">
-                <span className="budget-turn">◈ NOISE THIS TURN: <b>{state.turnNoise}</b>{state.bombs.length > 0 ? <span className="muted"> · 💣 {state.bombs.length} bomb{state.bombs.length > 1 ? "s" : ""} ticking</span> : null}{state.exploitBonus > 0 ? <span className="cyan"> · next exploit +{state.exploitBonus}</span> : null}</span>
+                <span className="budget-turn">◈ NOISE THIS TURN: <b>{state.turnNoise}</b>{state.cardsThisTurn > 0 ? <span className="muted"> · {state.cardsThisTurn} played{state.silentThisTurn > 0 ? `, ${state.silentThisTurn} silent` : ""}</span> : null}{state.bombs.length > 0 ? <span className="muted"> · 💣 {state.bombs.length}</span> : null}{state.exploitBonus > 0 ? <span className="cyan"> · next exploit +{state.exploitBonus}</span> : null}</span>
                 <span className="budget-room">
                     ROOM LEFT:{" "}
                     {roomToNext != null && nextStage ? (<><b className="amber">{roomToNext}</b> before <span className="amber">{nextStage.name}</span> &nbsp;·&nbsp; </>) : null}
@@ -230,7 +230,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, onComplete }: { 
                                 <span className="cname">{def.name}{needsT ? <span className="muted"> ◎</span> : null}</span>
                                 <span className="noise" style={{ color: danger ? "#ff4141" : noise === 0 ? "#35e0d8" : "#ffb000" }}>{noise === 0 ? "SILENT" : "◈" + noise}</span>
                             </div>
-                            <div className="kind">{def.kind}</div>
+                            <div className="kind">{def.kind}{def.tag ? <span className={"synergy s-" + def.tag}> · {def.tag}</span> : null}</div>
                             <div className="ctext">{def.text}</div>
                         </div>
                     );
