@@ -165,6 +165,36 @@ button {
     justify-content: center;
     margin-top: 22px;
 }
+#asc-picker {
+    margin-top: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+#asc-label {
+    min-width: 130px;
+    font-weight: bold;
+    color: var(--hp);
+}
+.asc-btn {
+    background: var(--panel-light);
+    color: var(--text);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 4px 12px;
+    font-size: 16px;
+}
+.asc-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+#asc-desc {
+    width: 100%;
+    font-size: 12px;
+    margin-top: 4px;
+}
 #run-stats {
     margin-top: 14px;
     font-size: 13px;

@@ -228,6 +228,84 @@
             play: (c, x) => x.enemies.slice().forEach((e) => applyStatus(e, "rust", v(c, "rust", 4))),
         },
 
+        /* ---------- Additional common ---------- */
+        ricochet: {
+            name: "Ricochet", type: "attack", cost: 1, art: "🔻", rarity: "common",
+            desc: (c) => `Deal <b>${dv(4, c)}</b> damage to a random enemy <b>3</b> times.`,
+            upg: { dmg: 5 },
+            play: (c, x) => {
+                for (let i = 0; i < 3; i++) {
+                    const alive = G.enemies.filter((e) => e.hp > 0);
+                    if (!alive.length) break;
+                    dealDamage(pick(alive), v(c, "dmg", 4));
+                }
+            },
+        },
+        boltCutter: {
+            name: "Bolt Cutter", type: "attack", cost: 1, art: "✂️", rarity: "common",
+            desc: (c) => `Deal <b>${dv(7, c)}</b> damage. If the target is Rusted, deal <b>${v(c, "bonus", 5)}</b> more.`,
+            upg: { dmg: 9, bonus: 7 },
+            play: (c, x) => dealDamage(x.target, v(c, "dmg", 7) + (x.target && x.target.status.rust ? v(c, "bonus", 5) : 0)),
+        },
+        tuneUp: {
+            name: "Tune-Up", type: "skill", cost: 0, art: "🔧", rarity: "common",
+            desc: (c) => `Gain <b>${pv(4, c)}</b> Plating.`,
+            upg: { blk: 6 },
+            play: (c) => gainPlating(G.player, v(c, "blk", 4)),
+        },
+
+        /* ---------- Additional uncommon ---------- */
+        steamCannon: {
+            name: "Steam Cannon", type: "attack", cost: 2, art: "💣", rarity: "uncommon",
+            desc: (c) => `Deal <b>${dv(12, c)}</b> damage. Gain <b>3</b> Heat.`,
+            upg: { dmg: 16 },
+            play: (c, x) => { dealDamage(x.target, v(c, "dmg", 12)); addHeat(3); },
+        },
+        reactivePlating: {
+            name: "Reactive Plating", type: "power", cost: 1, art: "🧷", rarity: "uncommon",
+            desc: (c) => `Whenever you take unblocked damage, gain <b>${v(c, "amt", 2)}</b> Plating.`,
+            upg: { amt: 3 },
+            play: (c) => applyStatus(G.player, "reactive", v(c, "amt", 2)),
+        },
+        flakBurst: {
+            name: "Flak Burst", type: "attack", cost: 1, art: "🎆", rarity: "uncommon",
+            desc: (c) => `Deal <b>${dv(6, c)}</b> damage to a target and apply <b>1</b> Exposed to <b>ALL</b> enemies.`,
+            upg: { dmg: 8 },
+            play: (c, x) => { dealDamage(x.target, v(c, "dmg", 6)); x.enemies.slice().forEach((e) => applyStatus(e, "exposed", 1)); },
+        },
+        corrode: {
+            name: "Corrode", type: "skill", cost: 1, art: "🫧", rarity: "uncommon",
+            desc: (c) => `Apply <b>${v(c, "rust", 3)}</b> Rust to <b>ALL</b> enemies.`,
+            upg: { rust: 5 },
+            play: (c, x) => x.enemies.slice().forEach((e) => applyStatus(e, "rust", v(c, "rust", 3))),
+        },
+        nanobots: {
+            name: "Nanobots", type: "skill", cost: 1, art: "🔬", rarity: "uncommon",
+            desc: (c) => `Gain <b>${v(c, "prec", 3)}</b> Precision. Draw <b>1</b> card.`,
+            upg: { prec: 4 },
+            play: (c) => { applyStatus(G.player, "precision", v(c, "prec", 3)); drawCards(1); },
+        },
+
+        /* ---------- Additional rare ---------- */
+        meltdown: {
+            name: "Meltdown", type: "attack", cost: 2, art: "☢️", rarity: "rare",
+            desc: (c) => `Deal <b>${dv(8, c)}</b> damage, plus <b>4</b> for each Contraption you control.`,
+            upg: { dmg: 12 },
+            play: (c, x) => dealDamage(x.target, v(c, "dmg", 8) + 4 * G.contraptions.length),
+        },
+        reactor: {
+            name: "Reactor", type: "power", cost: 2, art: "🔆", rarity: "rare",
+            desc: (c) => `At the start of each turn, gain <b>1</b> Steam.`,
+            upg: { cost: 1 },
+            play: (c) => applyStatus(G.player, "reactor", 1),
+        },
+        juggernaut: {
+            name: "Juggernaut", type: "power", cost: 2, art: "🛞", rarity: "rare",
+            desc: (c) => `Whenever you gain Plating, deal <b>${v(c, "amt", 3)}</b> damage to a random enemy.`,
+            upg: { amt: 5 },
+            play: (c) => applyStatus(G.player, "juggernaut", v(c, "amt", 3)),
+        },
+
         /* ---------- The Bulwark — signature ---------- */
         bulwark: {
             name: "Bulwark", type: "skill", cost: 2, art: "🛡️", rarity: "special",
@@ -273,9 +351,9 @@
 
     // Reward pools by rarity (signature/special cards are NOT randomly offered)
     const POOL = {
-        common: ["sawblade", "ratchetStrike", "twinRivets", "rivetGun", "scrapshot", "haymaker", "corrosiveSpray", "emergencyPatch", "wrenchToss", "kickstart"],
-        uncommon: ["flywheel", "recoilSlam", "rivetStorm", "hydraulicPress", "scrapArmor", "pressureRelease", "overdrive", "autoLoader", "coolantFlush", "deployWarTurret"],
-        rare: ["wreckingBall", "juryRig", "perpetualMotion", "aegisProtocol", "redline", "acidBath"],
+        common: ["sawblade", "ratchetStrike", "twinRivets", "rivetGun", "scrapshot", "haymaker", "corrosiveSpray", "emergencyPatch", "wrenchToss", "kickstart", "ricochet", "boltCutter", "tuneUp"],
+        uncommon: ["flywheel", "recoilSlam", "rivetStorm", "hydraulicPress", "scrapArmor", "pressureRelease", "overdrive", "autoLoader", "coolantFlush", "deployWarTurret", "steamCannon", "reactivePlating", "flakBurst", "corrode", "nanobots"],
+        rare: ["wreckingBall", "juryRig", "perpetualMotion", "aegisProtocol", "redline", "acidBath", "meltdown", "reactor", "juggernaut"],
     };
 
     /* ============================================================
@@ -294,8 +372,14 @@
         pressureGauge: { name: "Pressure Gauge", art: "🌡️", desc: "At the start of each turn, if your Heat is 8+, vent 3 Heat.", onTurnStart: () => { if (G.usesHeat && G.heat >= 8) addHeat(-3); } },
         toolkit: { name: "Toolkit", art: "🧰", desc: "At the start of each combat, deploy a Turret (3 dmg/turn).", onCombatStart: () => deployContraption({ name: "Turret", art: "🔭", kind: "attack", amount: 3 }) },
         reinforcedChassis: { name: "Reinforced Chassis", art: "🦿", desc: "At the start of each combat, gain 3 Precision.", onCombatStart: () => applyStatus(G.player, "precision", 3) },
+        scrapMagnet: { name: "Scrap Magnet", art: "🧲", desc: "Gain 30% more scrap from combats.", scrapMult: 1.3 },
+        rustCoating: { name: "Rust Coating", art: "🦠", desc: "Your attacks apply 1 Rust.", rustOnHit: 1 },
+        counterweight: { name: "Counterweight", art: "⚖️", desc: "The first time you take unblocked damage each combat, gain 8 Plating." },
+        recycler: { name: "Recycler", art: "♻️", desc: "Whenever a card is Exhausted, gain 2 Plating.", onExhaust: () => { if (G.inCombat) gainPlating(G.player, 2); } },
+        coolingFins: { name: "Cooling Fins", art: "❄️", desc: "Your Overheat threshold is 4 higher.", onPickup: () => { if (G.usesHeat) G.maxHeat += 4; } },
+        ablativeArmor: { name: "Ablative Armor", art: "🧱", desc: "Retain 25% of your Plating each turn.", onPickup: () => { G.platingRetain = Math.max(G.platingRetain || 0, 0.25); } },
     };
-    const COG_POOL = ["recoilPlating", "overtunedSpring", "ballast", "preloader", "oilCan", "gyroscope", "steamCore", "sparkPlug", "pressureGauge", "toolkit", "reinforcedChassis"];
+    const COG_POOL = ["recoilPlating", "overtunedSpring", "ballast", "preloader", "oilCan", "gyroscope", "steamCore", "sparkPlug", "pressureGauge", "toolkit", "reinforcedChassis", "scrapMagnet", "rustCoating", "counterweight", "recycler", "coolingFins", "ablativeArmor"];
 
     /* ============================================================
        CHARACTERS
@@ -398,7 +482,101 @@
             ],
             ai: (s, t) => pick([0, 1, 2]),
         },
+        /* ---- Act 2: The Gearworks (mid-tier) ---- */
+        pistonGolem: {
+            name: "Piston Golem", sprite: "🗿", hp: [46, 52],
+            moves: [
+                { name: "Stomp", type: "attack", dmg: 14 },
+                { name: "Guard", type: "attackBlock", dmg: 8, block: 10 },
+                { name: "Wind Up", type: "buff", power: 4, block: 8 },
+            ],
+            ai: (s, t) => (t === 0 ? 0 : pick([1, 2, 0])),
+        },
+        teslaTurret: {
+            name: "Tesla Turret", sprite: "🗼", hp: [36, 42],
+            moves: [
+                { name: "Arc", type: "attackDebuff", dmg: 9, jam: 1 },
+                { name: "Overcharge", type: "buff", power: 3 },
+                { name: "Discharge", type: "attackDebuff", dmg: 12, exp: 1 },
+            ],
+            ai: (s, t) => pick([0, 0, 1, 2]),
+        },
+        scrapHound: {
+            name: "Scrap Hound", sprite: "🐺", hp: [34, 38],
+            moves: [
+                { name: "Lunge", type: "attack", dmg: 12 },
+                { name: "Howl", type: "buff", power: 4 },
+            ],
+            ai: (s, t) => pick([0, 0, 1]),
+        },
+        moltenSlug: {
+            name: "Molten Slug", sprite: "🫠", hp: [40, 46],
+            moves: [
+                { name: "Splash", type: "attackDebuff", dmg: 8, rust: 3 },
+                { name: "Ooze", type: "debuff", rust: 2 },
+                { name: "Bash", type: "attack", dmg: 11 },
+            ],
+            ai: (s, t) => pick([0, 2, 2, 1]),
+        },
+        drillWarden: {
+            name: "Drill Warden", sprite: "🦿", hp: [92, 98], elite: true,
+            moves: [
+                { name: "Drill", type: "attackDebuff", dmg: 9, exp: 2 },
+                { name: "Reinforce", type: "block", block: 16 },
+                { name: "Rampage", type: "attack", dmg: 16 },
+                { name: "Rev", type: "buff", power: 4 },
+            ],
+            ai: (s, t) => (t === 0 ? 3 : pick([0, 2, 1])),
+        },
+        /* ---- Act 3: The Core Sanctum (hard) ---- */
+        coreSentinel: {
+            name: "Core Sentinel", sprite: "🛡️", hp: [52, 58],
+            moves: [
+                { name: "Purge", type: "attack", dmg: 16 },
+                { name: "Bulwark", type: "block", block: 16 },
+                { name: "Smite", type: "attackDebuff", dmg: 10, exp: 2 },
+            ],
+            ai: (s, t) => pick([0, 0, 1, 2]),
+        },
+        plasmaWraith: {
+            name: "Plasma Wraith", sprite: "👻", hp: [44, 48],
+            moves: [
+                { name: "Drain", type: "attack", dmg: 13 },
+                { name: "Phase", type: "block", block: 14 },
+                { name: "Wail", type: "debuff", jam: 2, rust: 2 },
+            ],
+            ai: (s, t) => pick([0, 0, 1, 2]),
+        },
+        sawConstruct: {
+            name: "Saw Construct", sprite: "⚙️", hp: [48, 54],
+            moves: [
+                { name: "Spin", type: "attackDebuff", dmg: 13, jam: 1 },
+                { name: "Sharpen", type: "buff", power: 5 },
+                { name: "Whirl", type: "attack", dmg: 9 },
+            ],
+            ai: (s, t) => pick([0, 2, 1]),
+        },
+        arcWarden: {
+            name: "Arc Warden", sprite: "🤖", hp: [100, 106], elite: true,
+            moves: [
+                { name: "Beam", type: "attack", dmg: 13 },
+                { name: "Chain", type: "attackDebuff", dmg: 8, jam: 2 },
+                { name: "Barrier", type: "block", block: 18 },
+                { name: "Surge", type: "buff", power: 5 },
+            ],
+            ai: (s, t) => (t === 0 ? 3 : pick([0, 1, 2])),
+        },
         // Sector guardians (gate mini-bosses)
+        theAssembler: {
+            name: "The Assembler", sprite: "🏭", hp: [110, 116], guardian: true,
+            moves: [
+                { name: "Assemble", type: "buff", power: 3, block: 10 },
+                { name: "Sweep", type: "attack", dmg: 18 },
+                { name: "Rivet Storm", type: "attackDebuff", dmg: 7, exp: 2 },
+                { name: "Fortify", type: "block", block: 20 },
+            ],
+            ai: (s, t) => (t === 0 ? 0 : pick([1, 1, 2, 3])),
+        },
         grindmaw: {
             name: "Gate Warden Grindmaw", sprite: "🦿", hp: [96, 100], guardian: true,
             moves: [
@@ -432,23 +610,47 @@
         },
     };
 
-    const ENCOUNTERS = {
-        easy: [["cogSentry"], ["sparrowDrone"], ["rustMite", "rustMite"], ["acidSprayer"], ["furnaceImp", "furnaceImp"], ["boltHound"]],
-        hard: [["cogSentry", "sparrowDrone"], ["acidSprayer", "furnaceImp"], ["sparrowDrone", "sparrowDrone"], ["cogSentry", "rustMite", "rustMite"], ["boltHound", "boltHound"]],
-        elite: [["theForeman"], ["wardenUnit", "wardenUnit"]],
-        guardian: [["grindmaw"], ["furnaceColossus"]],
-        boss: [["aurumCore"]],
-    };
+    // Each act has its own bestiary, elites, and gate guardian, so the three
+    // sectors escalate and feel distinct. The final act's gate is the Core boss.
+    const ACTS = [
+        {
+            name: "The Foundry", cols: 4, hardChance: 0.25,
+            easy: [["cogSentry"], ["sparrowDrone"], ["rustMite", "rustMite"], ["acidSprayer"], ["furnaceImp", "furnaceImp"], ["boltHound"]],
+            hard: [["cogSentry", "sparrowDrone"], ["acidSprayer", "furnaceImp"], ["boltHound", "boltHound"], ["cogSentry", "rustMite", "rustMite"]],
+            elites: [["theForeman"], ["wardenUnit", "wardenUnit"]],
+            guardians: [["grindmaw"]],
+        },
+        {
+            name: "The Gearworks", cols: 4, hardChance: 0.5,
+            easy: [["pistonGolem"], ["teslaTurret"], ["scrapHound", "scrapHound"], ["moltenSlug"], ["teslaTurret", "furnaceImp"]],
+            hard: [["pistonGolem", "teslaTurret"], ["scrapHound", "moltenSlug"], ["pistonGolem", "rustMite", "rustMite"], ["teslaTurret", "teslaTurret"]],
+            elites: [["drillWarden"], ["theForeman", "wardenUnit"]],
+            guardians: [["furnaceColossus"], ["theAssembler"]],
+        },
+        {
+            name: "The Core Sanctum", cols: 4, hardChance: 0.6,
+            easy: [["coreSentinel"], ["plasmaWraith"], ["sawConstruct"], ["plasmaWraith", "teslaTurret"]],
+            hard: [["coreSentinel", "plasmaWraith"], ["sawConstruct", "sawConstruct"], ["coreSentinel", "teslaTurret"], ["plasmaWraith", "plasmaWraith"]],
+            elites: [["arcWarden"], ["drillWarden", "teslaTurret"]],
+            guardians: [["aurumCore"]], // final gate = the Core boss
+        },
+    ];
+    function pickEncounter(sector) {
+        const act = ACTS[sector] || ACTS[0];
+        const pool = Math.random() < act.hardChance ? act.hard : act.easy;
+        return pick(pool);
+    }
 
     /* ============================================================
        GLOBAL RUN STATE
        ============================================================ */
     let G = null;
 
-    function newGame(charKey) {
+    function newGame(charKey, ascension) {
         const ch = CHARACTERS[charKey];
         G = {
             char: charKey,
+            ascension: ascension || 0,
             player: {
                 name: ch.name, sprite: ch.sprite,
                 hp: ch.maxHp, maxHp: ch.maxHp,
@@ -495,29 +697,23 @@
     /* ============================================================
        MAP — horizontal sectors with forced guardian gates
        ============================================================ */
-    const SECTORS = [
-        { name: "The Foundry", cols: 4 },
-        { name: "The Gearworks", cols: 4 },
-        { name: "The Core Sanctum", cols: 4 },
-    ];
-
     function generateMap() {
         // Build a list of columns left→right. Each sector is `cols` normal
         // columns followed by a full-height gate (guardian) — except the last
         // sector, which ends in the Core (boss). Gates funnel every path.
         const columns = [];
-        SECTORS.forEach((sec, si) => {
+        ACTS.forEach((sec, si) => {
             for (let c = 0; c < sec.cols; c++) {
                 const count = c === 0 && si === 0 ? 3 : 2 + rnd(3); // 2-4 lanes
                 const nodes = [];
                 for (let i = 0; i < count; i++) {
-                    nodes.push(mkNode(nodeType(si, c, sec.cols), columns.length, i, count));
+                    nodes.push(mkNode(nodeType(si, c, sec.cols), columns.length, i, count, si));
                 }
                 columns.push({ kind: "normal", sector: si, nodes });
             }
             // gate at the end of the sector
-            const isLast = si === SECTORS.length - 1;
-            const gate = mkNode(isLast ? "core" : "guardian", columns.length, 0, 1);
+            const isLast = si === ACTS.length - 1;
+            const gate = mkNode(isLast ? "core" : "guardian", columns.length, 0, 1, si);
             columns.push({ kind: "gate", sector: si, nodes: [gate] });
         });
 
@@ -546,8 +742,8 @@
         columns[0].nodes.forEach((n) => (n.reachable = true));
     }
 
-    function mkNode(type, col, idx, count) {
-        return { type, col, idx, count, x: 0, y: 0, next: [], visited: false, reachable: false };
+    function mkNode(type, col, idx, count, sector) {
+        return { type, col, idx, count, sector: sector || 0, x: 0, y: 0, next: [], visited: false, reachable: false };
     }
 
     function nodeType(sectorIdx, col, secCols) {
@@ -663,21 +859,17 @@
         G.floor++;
         updateTopbar();
 
+        const sector = node.sector || 0;
         switch (node.type) {
-            case "sentinel": startCombat(difficultyEncounter(), "monster"); break;
-            case "warden": startCombat(pick(ENCOUNTERS.elite), "elite"); break;
-            case "guardian": startCombat(pick(ENCOUNTERS.guardian), "guardian"); break;
-            case "core": startCombat(ENCOUNTERS.boss[0], "boss"); break;
+            case "sentinel": startCombat(pickEncounter(sector), "monster"); break;
+            case "warden": startCombat(pick(ACTS[sector].elites), "elite"); break;
+            case "guardian": startCombat(pick(ACTS[sector].guardians), "guardian"); break;
+            case "core": startCombat(["aurumCore"], "boss"); break;
             case "repair": repairBay(); break;
             case "vault": vaultRoom(); break;
             case "market": marketRoom(); break;
             case "anomaly": anomalyEvent(); break;
         }
-    }
-
-    function difficultyEncounter() {
-        const grp = G.floor < 4 ? ENCOUNTERS.easy : Math.random() < 0.5 ? ENCOUNTERS.easy : ENCOUNTERS.hard;
-        return pick(grp);
     }
 
     /* ============================================================
@@ -693,6 +885,7 @@
         G.player.status = {};
         G.heat = 0;
         G.contraptions = [];
+        G._counterUsed = false;
         G.enemies = encounterKeys.map((k) => spawnEnemy(k));
         G.hand = []; G.discard = []; G.exhaust = [];
         G.drawPile = shuffle(G.deck.map((c) => c));
@@ -707,8 +900,11 @@
 
     function spawnEnemy(key) {
         const def = ENEMIES[key];
-        const hp = def.hp[0] + rnd(def.hp[1] - def.hp[0] + 1);
-        return { key, def, name: def.name, sprite: def.sprite, hp, maxHp: hp, block: 0, status: {}, isPlayer: false, turnCount: 0, intent: null };
+        const asc = G.ascension || 0;
+        let hp = def.hp[0] + rnd(def.hp[1] - def.hp[0] + 1);
+        hp = Math.round(hp * (1 + 0.05 * asc)); // Ascension: tougher enemies
+        const dmgBonus = Math.floor(asc / 3);   // Ascension: harder hits
+        return { key, def, name: def.name, sprite: def.sprite, hp, maxHp: hp, block: 0, status: {}, isPlayer: false, turnCount: 0, intent: null, _dmgBonus: dmgBonus };
     }
 
     function startPlayerTurn(first) {
@@ -718,6 +914,7 @@
         // steam
         G.energy = G.maxEnergy;
         G.cogs.forEach((rk) => { if (COGS[rk].energy) G.energy += COGS[rk].energy; });
+        if (G.player.status.reactor) G.energy += G.player.status.reactor; // Reactor power
         // engine powers (Perpetual Motion)
         if (G.player.status.engine) applyStatus(G.player, "power", G.player.status.engine, true);
         // cog turn-start hooks (e.g. Pressure Gauge venting)
@@ -781,7 +978,7 @@
 
     /* ---------- damage & status math ---------- */
     function attackDamage(attacker, base) {
-        let dmg = base + (attacker.status.power || 0);
+        let dmg = base + (attacker.status.power || 0) + (attacker._dmgBonus || 0);
         if (attacker.status.jammed) dmg = Math.floor(dmg * 0.75);
         return Math.max(0, dmg);
     }
@@ -793,6 +990,12 @@
         if (!target || target.hp <= 0) return;
         let dmg = incomingDamage(target, attackDamage(G.player, base));
         applyDamageToCombatant(target, dmg, true);
+        // Rust Coating cog: your attacks apply Rust
+        if (target.hp > 0) {
+            let rust = 0;
+            G.cogs.forEach((rk) => { if (COGS[rk].rustOnHit) rust += COGS[rk].rustOnHit; });
+            if (rust > 0) applyStatus(target, "rust", rust, true);
+        }
     }
     function applyDamageToCombatant(target, dmg, fromPlayer) {
         let remaining = dmg;
@@ -805,6 +1008,7 @@
             floatText(target, "-" + remaining, "dmg");
             shakeSprite(target);
             if (target.isPlayer && fromPlayer === false) {
+                // Recoil / thorns strike attackers back
                 let thorns = 0;
                 G.cogs.forEach((rk) => { if (COGS[rk].thorns) thorns += COGS[rk].thorns; });
                 thorns += G.player.status.recoil || 0;
@@ -812,6 +1016,10 @@
                     applyDamageToCombatant(G._currentAttacker, thorns, true);
                     floatText(G._currentAttacker, "⚡" + thorns, "dmg");
                 }
+                // Counterweight cog: first unblocked hit each combat grants Plating
+                if (hasCog("counterweight") && !G._counterUsed) { G._counterUsed = true; gainPlating(G.player, 8); }
+                // Reactive Plating power
+                if (G.player.status.reactive) gainPlating(G.player, G.player.status.reactive);
             }
         } else {
             floatText(target, "Blocked", "block");
@@ -819,12 +1027,18 @@
         if (target.hp <= 0 && !target.isPlayer) onEnemyDeath(target);
         if (target.isPlayer && target.hp <= 0) checkPlayerDeath();
     }
+    function hasCog(k) { return G && G.cogs && G.cogs.includes(k); }
 
     function gainPlating(who, amount) {
         let a = amount + (who.status.precision || 0);
         a = Math.max(0, a);
         who.block += a;
         floatText(who, "+" + a + "🛡️", "block");
+        // Juggernaut power: gaining Plating deals damage to a random enemy
+        if (who.isPlayer && a > 0 && G.player.status.juggernaut) {
+            const alive = G.enemies.filter((e) => e.hp > 0);
+            if (alive.length) applyDamageToCombatant(pick(alive), G.player.status.juggernaut, true);
+        }
     }
     function healPlayer(n) {
         if (!G || !G.player) return;
@@ -859,7 +1073,7 @@
 
     /* ---------- playing cards ---------- */
     const canPlay = (card) => G.energy >= cardCost(card);
-    function isAllTarget(card) { return ["sawblade", "acidBath"].includes(card.key); }
+    function isAllTarget(card) { return ["sawblade", "acidBath", "corrode", "ricochet"].includes(card.key); }
 
     function onCardClicked(card) {
         if (!canPlay(card)) return;
@@ -895,7 +1109,10 @@
     }
     function exhaustCard(card) {
         const idx = G.hand.indexOf(card);
-        if (idx >= 0) { G.hand.splice(idx, 1); G.exhaust.push(card); }
+        if (idx >= 0) {
+            G.hand.splice(idx, 1); G.exhaust.push(card);
+            G.cogs.forEach((rk) => { if (COGS[rk].onExhaust) COGS[rk].onExhaust(); });
+        }
     }
 
     function endTurn() {
@@ -991,7 +1208,10 @@
         setTimeout(() => combatRewards(G.combatKind), T(400));
     }
     function combatRewards(kind) {
-        const goldGain = kind === "boss" ? 100 + rnd(20) : (kind === "elite" || kind === "guardian") ? 30 + rnd(15) : 10 + rnd(11);
+        let goldGain = kind === "boss" ? 100 + rnd(20) : (kind === "elite" || kind === "guardian") ? 30 + rnd(15) : 10 + rnd(11);
+        let mult = 1;
+        G.cogs.forEach((rk) => { if (COGS[rk].scrapMult) mult *= COGS[rk].scrapMult; });
+        goldGain = Math.round(goldGain * mult);
         G.gold += goldGain;
         updateTopbar();
         const rewards = [
@@ -1169,7 +1389,7 @@
             { title: "⛲ Coolant Reservoir", text: "Clean coolant pools here. Drink to repair 20 HP, or bottle it to reinforce your frame (+4 Max HP).",
               options: [{ label: "Drink (repair 20)", run: () => { healPlayer(20); end(); } }, { label: "Bottle (+4 Max HP)", run: () => { G.player.maxHp += 4; healPlayer(4); end(); } }] },
             { title: "👺 Ambush Protocol", text: "Security drones lock on. No way around this one.",
-              options: [{ label: "Fight!", run: () => { closeOverlay(); startCombat(difficultyEncounter(), "monster"); } }] },
+              options: [{ label: "Fight!", run: () => { closeOverlay(); startCombat(pickEncounter(G.currentNode ? G.currentNode.sector : 0), "monster"); } }] },
             { title: "📜 Schematic Fragment", text: "You decode an old blueprint and gain insight — upgrade a random card in your deck.",
               options: [{ label: "Study", run: () => { const up = G.deck.filter((c) => !c.upgraded && c.def.upg); if (up.length) pick(up).upgraded = true; end(); } }] },
         ];
@@ -1266,6 +1486,9 @@
         if (s.ritual) b.push(`<span class="badge ritual" title="Spin Up: gains Power each turn">🔮 ${s.ritual}</span>`);
         if (s.platingGen) b.push(`<span class="badge metal" title="Auto-Loader: Plating each turn">🔁 ${s.platingGen}</span>`);
         if (s.engine) b.push(`<span class="badge strength" title="Perpetual Motion: Power each turn">♾️ ${s.engine}</span>`);
+        if (s.reactive) b.push(`<span class="badge block" title="Reactive Plating: gain Plating when hit">🧷 ${s.reactive}</span>`);
+        if (s.reactor) b.push(`<span class="badge ritual" title="Reactor: +Steam each turn">🔆 ${s.reactor}</span>`);
+        if (s.juggernaut) b.push(`<span class="badge strength" title="Juggernaut: gaining Plating damages an enemy">🛞 ${s.juggernaut}</span>`);
         return `<div class="badges">${b.join("")}</div>`;
     }
     function renderHand() {
@@ -1380,12 +1603,19 @@
         STATS.winsBy = STATS.winsBy || {};
         STATS.winsBy[G.char] = (STATS.winsBy[G.char] || 0) + 1;
         STATS.bestFloor = Math.max(STATS.bestFloor || 0, G.floor);
+        // Meta-progression: winning at your highest tier unlocks the next Ascension
+        let unlocked = false;
+        if ((G.ascension || 0) >= (STATS.maxAscension || 0) && (STATS.maxAscension || 0) < MAX_ASCENSION) {
+            STATS.maxAscension = (STATS.maxAscension || 0) + 1;
+            unlocked = true;
+        }
         saveStats();
         clearSave();
         openOverlay(`
             <h2>🏆 The Machine Is Yours!</h2>
-            <p class="muted">You reached the heart of the dead god and shattered the Aurum Core. Cogfall is complete, ${G.player.name}!</p>
+            <p class="muted">You reached the heart of the dead god and shattered the Aurum Core at <b>Ascension ${G.ascension || 0}</b>. Cogfall is complete, ${G.player.name}!</p>
             <p>Final deck: <b>${G.deck.length}</b> cards · Cogs: <b>${G.cogs.length}</b> · Scrap: <b class="gold">${G.gold}</b></p>
+            ${unlocked ? `<p class="gold">🔓 Ascension ${STATS.maxAscension} unlocked — a harder climb awaits.</p>` : ""}
             <button class="big-btn" id="win-restart">Play Again</button>
         `);
         $("#win-restart").onclick = () => { closeOverlay(); resetToTitle(); };
@@ -1402,6 +1632,23 @@
        TITLE SCREEN + WIRING
        ============================================================ */
     let selectedChar = "bulwark";
+    let selectedAsc = 0;
+    function ascDesc(n) {
+        if (n <= 0) return "Standard difficulty. Win to unlock harder Ascensions.";
+        return `Enemies have +${Math.round(n * 5)}% HP and deal +${Math.floor(n / 3)} damage. Each win unlocks the next tier.`;
+    }
+    function refreshAscPicker() {
+        const wrap = $("#asc-picker");
+        if (!wrap) return;
+        const maxA = STATS.maxAscension || 0;
+        if (maxA <= 0) { wrap.classList.add("hidden"); selectedAsc = 0; return; }
+        wrap.classList.remove("hidden");
+        selectedAsc = clamp(selectedAsc, 0, maxA);
+        $("#asc-label").textContent = "Ascension " + selectedAsc;
+        $("#asc-desc").textContent = ascDesc(selectedAsc);
+        $("#asc-down").disabled = selectedAsc <= 0;
+        $("#asc-up").disabled = selectedAsc >= maxA;
+    }
     function buildCharPicker() {
         const wrap = $("#char-picker");
         wrap.innerHTML = "";
@@ -1428,7 +1675,8 @@
     // scale a timing delay by the chosen animation speed
     function T(ms) { return Math.round(ms * (SPEEDS[SETTINGS.speed] || 1)); }
 
-    let STATS = { runs: 0, wins: 0, bestFloor: 0, winsBy: {} };
+    const MAX_ASCENSION = 10;
+    let STATS = { runs: 0, wins: 0, bestFloor: 0, winsBy: {}, maxAscension: 0 };
     function loadStats() { try { Object.assign(STATS, JSON.parse(LS.getItem(STAT_KEY)) || {}); } catch (e) {} }
     function saveStats() { try { LS.setItem(STAT_KEY, JSON.stringify(STATS)); } catch (e) {} }
 
@@ -1445,14 +1693,14 @@
                 columns: G.map.columns.map((col) => ({
                     kind: col.kind, sector: col.sector,
                     nodes: col.nodes.map((n) => ({
-                        type: n.type, col: n.col, idx: n.idx, count: n.count,
+                        type: n.type, col: n.col, idx: n.idx, count: n.count, sector: n.sector || 0,
                         visited: n.visited, reachable: n.reachable,
                         next: n.next.map((x) => [x.col, x.idx]),
                     })),
                 })),
             };
             LS.setItem(SAVE_KEY, JSON.stringify({
-                v: 1, char: G.char, gold: G.gold, floor: G.floor,
+                v: 1, char: G.char, ascension: G.ascension || 0, gold: G.gold, floor: G.floor,
                 hp: G.player.hp, maxHp: G.player.maxHp,
                 deck: G.deck.map((c) => ({ key: c.key, upgraded: c.upgraded })),
                 cogs: G.cogs.slice(), map,
@@ -1467,6 +1715,7 @@
         if (!ch) { clearSave(); refreshMenu(); return; }
         G = {
             char: data.char,
+            ascension: data.ascension || 0,
             player: { name: ch.name, sprite: ch.sprite, hp: data.hp, maxHp: data.maxHp, block: 0, status: {}, isPlayer: true },
             platingRetain: ch.platingRetain || 0,
             usesHeat: !!ch.usesHeat, maxHeat: ch.maxHeat || 10, overheatDmg: ch.overheatDmg || 6,
@@ -1480,7 +1729,7 @@
         };
         const columns = data.map.columns.map((col) => ({
             kind: col.kind, sector: col.sector,
-            nodes: col.nodes.map((n) => ({ type: n.type, col: n.col, idx: n.idx, count: n.count, visited: n.visited, reachable: n.reachable, next: [], x: 0, y: 0 })),
+            nodes: col.nodes.map((n) => ({ type: n.type, col: n.col, idx: n.idx, count: n.count, sector: n.sector || col.sector || 0, visited: n.visited, reachable: n.reachable, next: [], x: 0, y: 0 })),
         }));
         const at = (c, i) => columns[c] && columns[c].nodes[i];
         data.map.columns.forEach((col, ci) => col.nodes.forEach((n, ni) => {
@@ -1504,7 +1753,8 @@
             cont.classList.add("hidden"); info.classList.add("hidden");
         }
         const s = $("#run-stats");
-        if (s) s.innerHTML = STATS.runs ? `Runs played: <b>${STATS.runs}</b> · Wins: <b class="gold">${STATS.wins}</b> · Best floor reached: <b>${STATS.bestFloor}</b>` : "";
+        if (s) s.innerHTML = STATS.runs ? `Runs played: <b>${STATS.runs}</b> · Wins: <b class="gold">${STATS.wins}</b> · Best floor reached: <b>${STATS.bestFloor}</b>${STATS.maxAscension ? ` · Highest Ascension: <b class="hp-text">${STATS.maxAscension}</b>` : ""}` : "";
+        refreshAscPicker();
     }
 
     function showSettings() {
@@ -1567,8 +1817,11 @@
         loadStats();
         buildCharPicker();
         refreshMenu();
+        refreshAscPicker();
         $("#btn-continue").onclick = () => loadRun();
-        $("#btn-start").onclick = () => newGame(selectedChar);
+        $("#btn-start").onclick = () => newGame(selectedChar, selectedAsc);
+        $("#asc-down").onclick = () => { selectedAsc = Math.max(0, selectedAsc - 1); refreshAscPicker(); };
+        $("#asc-up").onclick = () => { selectedAsc = Math.min(STATS.maxAscension || 0, selectedAsc + 1); refreshAscPicker(); };
         $("#btn-howto").onclick = showHowTo;
         $("#btn-settings").onclick = showSettings;
         $("#btn-settings-run").onclick = showSettings;
