@@ -1,11 +1,12 @@
 /* ============================================================
    BREACH — the run/campaign engine (pure functions over data)
-   Manages a whole storyline: route choices, run-level Heat, the
-   persistent deck, credits, and win/busted outcomes. The single
-   -breach engine handles the actual hacking; results flow back here.
+   Manages a whole storyline as a branching MAP: you move node to
+   node, your choices commit you to a route, run-level Heat climbs,
+   the deck persists. The single-breach engine handles the actual
+   hacking; results flow back here.
    ============================================================ */
 
-import type { BreachResult, Campaign, EventChoice, RunNode, RunState } from "./types.ts";
+import type { BreachResult, Campaign, EventChoice, MapNode, RunState } from "./types.ts";
 import { CAMPAIGNS } from "./campaigns.ts";
 import { STARTER_DECK } from "./cards.ts";
 
@@ -15,32 +16,59 @@ export function getCampaign(id: string): Campaign {
     return CAMPAIGNS[id] || CAMPAIGNS[Object.keys(CAMPAIGNS)[0]];
 }
 
+export function getNode(campaign: Campaign, id: string | null): MapNode | null {
+    if (!id) return null;
+    return campaign.map.find((n) => n.id === id) || null;
+}
+
 export function createRun(campaignId: string): RunState {
     const c = getCampaign(campaignId);
-    return {
+    const run: RunState = {
         campaignId: c.id,
         heat: 0,
         heatMax: c.heatMax,
         credits: 0,
         deck: STARTER_DECK.slice(),
-        step: 0,
+        nodeId: null,
+        path: [],
         story: [c.intro],
         outcome: "running",
         jobsDone: 0,
+        transmission: null,
     };
+    // the watcher notices you the moment you start (offered the col-0 nodes)
+    if (c.antagonist && c.antagonist.lines[0]) {
+        run.transmission = c.antagonist.lines[0];
+        run.story.push(`⌁ ${c.antagonist.name}: ${c.antagonist.lines[0]}`);
+    }
+    return run;
 }
 
-/** Are we at the finale (past the last branching step)? */
-export function isFinale(run: RunState): boolean {
-    const c = getCampaign(run.campaignId);
-    return run.step >= c.steps.length;
+/** Dismiss the current incoming transmission. */
+export function clearTransmission(prev: RunState): RunState {
+    const run = clone(prev);
+    run.transmission = null;
+    return run;
 }
 
-/** The node options to choose from right now (finale is a single option). */
-export function currentOptions(run: RunState): RunNode[] {
+/** A terminal node (nothing downstream) is a finale. */
+export function isTerminal(node: MapNode): boolean {
+    return node.next.length === 0;
+}
+
+/** Are we sitting on the finale (the only thing left to pick is terminal)? */
+export function atFinale(run: RunState): boolean {
+    const opts = currentOptions(run);
+    return opts.length > 0 && opts.every(isTerminal);
+}
+
+/** The node options you can choose from right now. */
+export function currentOptions(run: RunState): MapNode[] {
     const c = getCampaign(run.campaignId);
-    if (isFinale(run)) return [c.finale];
-    return c.steps[run.step] || [];
+    if (!run.nodeId) return c.entryIds.map((id) => getNode(c, id)!).filter(Boolean);
+    const cur = getNode(c, run.nodeId);
+    if (!cur) return [];
+    return cur.next.map((id) => getNode(c, id)!).filter(Boolean);
 }
 
 function clone(run: RunState): RunState {
@@ -55,15 +83,27 @@ function checkHeat(run: RunState) {
     }
 }
 
-function advance(run: RunState) {
-    // moving off a branching step; finale advancement is handled in resolveBreach
-    if (!isFinale(run)) run.step += 1;
+/** Move onto a node (record it as the current position + on the path).
+    If the campaign has a watcher, broadcast the line for the depth you're
+    now being offered — so the menace escalates as the finale nears. */
+function moveTo(run: RunState, node: MapNode) {
+    const c = getCampaign(run.campaignId);
+    run.nodeId = node.id;
+    run.path.push(node.id);
+    const ant = c.antagonist;
+    if (!ant || node.next.length === 0) return; // no watcher, or you just cleared the finale
+    const nextNode = getNode(c, node.next[0]);
+    const offeredCol = nextNode ? nextNode.col : node.col + 1;
+    if (ant.lines[offeredCol]) {
+        run.transmission = ant.lines[offeredCol];
+        run.story.push(`⌁ ${ant.name}: ${ant.lines[offeredCol]}`);
+    }
 }
 
 /** Apply the result of a breach job. */
-export function resolveBreach(prev: RunState, node: RunNode, result: BreachResult): RunState {
+export function resolveBreach(prev: RunState, node: MapNode, result: BreachResult): RunState {
     const run = clone(prev);
-    const finale = isFinale(run);
+    const finale = isTerminal(node);
     if (result.won) {
         run.jobsDone += 1;
         const loudness = Math.round((result.detection / Math.max(1, result.detectionMax)) * 12);
@@ -71,24 +111,23 @@ export function resolveBreach(prev: RunState, node: RunNode, result: BreachResul
         run.heat += gained;
         run.credits += node.reward || 20;
         run.story.push(`✓ ${node.title} — data secured. +${node.reward || 20}cr. The job raised the trace by ${gained}.`);
+        moveTo(run, node);
         if (finale) {
             run.outcome = "won";
             run.story.push(getCampaign(run.campaignId).winText);
-        } else {
-            advance(run);
         }
     } else {
         run.heat += LOSE_HEAT;
         run.story.push(`✗ ${node.title} — you were detected and had to bail. No payout. The trace jumped +${LOSE_HEAT}.`);
-        if (!finale) advance(run); // a blown normal job still moves the clock forward
-        // finale failure: you stay on the finale and may retry (heat permitting)
+        if (!finale) moveTo(run, node); // a blown normal job still moves you down the map
+        // finale failure: you stay put and may retry (Heat permitting)
     }
     checkHeat(run);
     return run;
 }
 
 /** Apply an event choice. */
-export function resolveEvent(prev: RunState, choice: EventChoice): RunState {
+export function resolveEvent(prev: RunState, node: MapNode, choice: EventChoice): RunState {
     const run = clone(prev);
     if (choice.cost) run.credits = Math.max(0, run.credits - choice.cost);
     if (choice.credits) run.credits += choice.credits;
@@ -97,20 +136,20 @@ export function resolveEvent(prev: RunState, choice: EventChoice): RunState {
     if (choice.addCard) run.deck.push(choice.addCard);
     run.story.push(`› ${choice.outcome}`);
     checkHeat(run);
-    if (run.outcome === "running") advance(run);
+    if (run.outcome === "running") moveTo(run, node);
     return run;
 }
 
 /** Take a safehouse: cool the trace, no pay. */
-export function resolveSafehouse(prev: RunState, node: RunNode): RunState {
+export function resolveSafehouse(prev: RunState, node: MapNode): RunState {
     const run = clone(prev);
     run.heat = Math.max(0, run.heat - (node.heatRelief || 20));
     run.story.push(`› ${node.title} — you go dark for a while. The trace cools by ${node.heatRelief || 20}.`);
-    advance(run);
+    moveTo(run, node);
     return run;
 }
 
-/** Deck edits (from rewards / contacts). These do NOT advance the step. */
+/** Deck edits (from rewards / contacts). These do NOT move you on the map. */
 export function addCard(prev: RunState, cardId: string): RunState {
     const run = clone(prev);
     run.deck.push(cardId);

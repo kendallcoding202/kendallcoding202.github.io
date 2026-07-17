@@ -15,15 +15,22 @@ export type EffectKind =
     | "revealAll"
     | "revealAndWeaken"
     | "revealDraw"
+    | "analyze"
     | "knownExploit"
     | "typedExploit"
+    | "exploitAll"
+    | "chainExploit"
+    | "logicBomb"
     | "zeroDay"
     | "privEsc"
     | "bruteForce"
+    | "trojan"
+    | "overclock"
     | "logWipe"
     | "wipeDraw"
     | "proxyChain"
     | "spoof"
+    | "feint"
     | "goDark"
     | "backdoor"
     | "rootkit"
@@ -71,6 +78,14 @@ export interface SystemDef {
     layers: { name: string; defenses: { type: DefenseType; strength: number }[] }[];
 }
 
+/** A planted logic bomb: chips a specific defense at the end of each turn. */
+export interface LogicBomb {
+    layer: number; // layer index it was planted on
+    def: number; // defense index on that layer
+    amt: number; // strength removed per tick
+    turns: number; // ticks remaining
+}
+
 export type Outcome = "playing" | "won" | "lost";
 
 export type AlertStage = "IDLE" | "SUSPICIOUS" | "ALERTED" | "LOCKDOWN";
@@ -105,6 +120,9 @@ export interface GameState {
     proxyCharges: number; // Proxy Chain: reduce noise on the next N cards
     rootkitReady: boolean; // hide the next noisy action this turn
     spoofTurns: number; // suppress the system's end-of-turn reaction
+    exploitBonus: number; // Overclock: added to your NEXT exploit's damage this turn
+    exploitsThisTurn: number; // exploits played this turn (for combo-scaling cards)
+    bombs: LogicBomb[]; // planted logic bombs that tick each end of turn
 
     alert: AlertStage; // derived from detection; drives the system's behaviour
     systemIntent: SystemIntent | null; // telegraphed next move (always visible)
@@ -154,6 +172,22 @@ export interface RunNode {
     heatCost?: number; // safehouse/event: Heat added when taken
 }
 
+/** A node on the campaign MAP: run content plus its position and the
+    downstream nodes it leads to. Terminal nodes (next === []) are finales. */
+export interface MapNode extends RunNode {
+    col: number; // column / depth (0 = entry)
+    row: number; // vertical position for layout
+    next: string[]; // ids of nodes reachable after resolving this one
+}
+
+/** An antagonist that "watches" the run and transmits as you close in.
+    `lines[col]` is broadcast when you first reach that map column, so the
+    messages escalate with how deep along the path you are. */
+export interface Antagonist {
+    name: string; // handle shown in the terminal
+    lines: string[]; // indexed by column depth (0..)
+}
+
 export interface Campaign {
     id: string;
     name: string;
@@ -164,8 +198,9 @@ export interface Campaign {
     intro: string; // run-start briefing
     winText: string; // ending on success
     bustedText: string; // ending when Heat maxes out
-    steps: RunNode[][]; // each inner array = the branching options at that step
-    finale: RunNode; // the last job
+    map: MapNode[]; // the branching route graph
+    entryIds: string[]; // the col-0 nodes you start by choosing from
+    antagonist?: Antagonist; // optional watcher that taunts you as you advance
 }
 
 export type RunOutcome = "running" | "won" | "busted";
@@ -176,8 +211,10 @@ export interface RunState {
     heatMax: number;
     credits: number;
     deck: string[];
-    step: number; // index into campaign.steps; === steps.length ⇒ finale
+    nodeId: string | null; // the node you're currently AT (null = at the start)
+    path: string[]; // ids of nodes resolved so far, in order
     story: string[]; // narrative feed
     outcome: RunOutcome;
     jobsDone: number;
+    transmission: string | null; // an incoming antagonist message to surface, if any
 }

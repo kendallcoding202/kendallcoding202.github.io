@@ -1,17 +1,18 @@
 /* ============================================================
    BREACH — terminal UI.
-   App is a mode machine: campaign select → run (routes, Heat,
-   deck-building, story) → breach → ending. All game logic lives
-   in engine/ and run.ts; this file only renders and dispatches.
+   App is a mode machine: campaign select → run (a branching MAP,
+   Heat, deck-building, story, and — on some runs — a watcher that
+   taunts you as you close in) → breach → ending. All game logic
+   lives in engine/ and run.ts; this file only renders and dispatches.
    ============================================================ */
 
 import { useEffect, useState } from "react";
-import type { BreachResult, Campaign, Defense, EventChoice, GameState, RunNode, RunState } from "../engine/types.ts";
+import type { BreachResult, Campaign, Defense, EventChoice, GameState, MapNode, RunState } from "../engine/types.ts";
 import { CARDS } from "../engine/cards.ts";
 import { SYSTEMS } from "../engine/systems.ts";
 import { CAMPAIGNS, CAMPAIGN_ORDER, REWARD_POOL } from "../engine/campaigns.ts";
-import { createInitialState, applyAction, canPlay, projectedNoise, currentLayer, needsTarget, targetableDefenses, previewOnTarget } from "../engine/engine.ts";
-import { createRun, currentOptions, isFinale, resolveBreach, resolveEvent, resolveSafehouse, addCard, removeCard, getCampaign } from "../engine/run.ts";
+import { createInitialState, applyAction, canPlay, projectedNoise, needsTarget, targetableDefenses, previewOnTarget } from "../engine/engine.ts";
+import { createRun, currentOptions, atFinale, isTerminal, resolveBreach, resolveEvent, resolveSafehouse, addCard, removeCard, getCampaign, getNode, clearTransmission } from "../engine/run.ts";
 
 const newSeed = () => Math.floor(Math.random() * 0xffffffff) >>> 0;
 const meterColor = (f: number) => (f < 0.3 ? "#4af626" : f < 0.6 ? "#ffb000" : f < 0.85 ? "#ff7a1a" : "#ff4141");
@@ -20,6 +21,7 @@ function pick3(pool: string[]): string[] {
     for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
     return a.slice(0, 3);
 }
+const nodeIcon = (n: MapNode) => (n.type === "breach" ? (isTerminal(n) ? "★" : "◈") : n.type === "safehouse" ? "☂" : "❋");
 
 /* ---------- rules briefing (accessible via ?) ---------- */
 function Intro({ onClose }: { onClose: () => void }) {
@@ -68,6 +70,33 @@ function CardMini({ id, onClick, dim }: { id: string; onClick?: () => void; dim?
             </div>
             <div className="kind">{def.kind}</div>
             <div className="ctext">{def.text}</div>
+        </div>
+    );
+}
+
+/* ---------- the watcher's incoming transmission (typed out) ---------- */
+function Transmission({ name, text, onClose }: { name: string; text: string; onClose: () => void }) {
+    const [shown, setShown] = useState("");
+    const done = shown.length >= text.length;
+    useEffect(() => {
+        setShown("");
+        let i = 0;
+        const id = setInterval(() => { i++; setShown(text.slice(0, i)); if (i >= text.length) clearInterval(id); }, 26);
+        return () => clearInterval(id);
+    }, [text]);
+    return (
+        <div className="overlay transmission" onClick={() => (done ? onClose() : setShown(text))}>
+            <div className="box tbox" onClick={(e) => e.stopPropagation()}>
+                <div className="tbar"><span className="tdot" /> INCOMING TRANSMISSION — SOURCE UNKNOWN</div>
+                <div className="tbody">
+                    <span className="tname">{name} ›</span> <span className="ttext">{shown}</span><span className="tcursor">█</span>
+                </div>
+                {!done ? (
+                    <button className="term ghost tiny" onClick={() => setShown(text)}>skip ▸</button>
+                ) : (
+                    <button className="term" onClick={onClose}>◂ sever the connection</button>
+                )}
+            </div>
         </div>
     );
 }
@@ -159,7 +188,7 @@ function Breach({ systemKey, systemTitle, deck, onComplete }: { systemKey: strin
             <div className="last-action">▸ {state.log[state.log.length - 1]}</div>
 
             <div className="budget">
-                <span className="budget-turn">◈ NOISE THIS TURN: <b>{state.turnNoise}</b></span>
+                <span className="budget-turn">◈ NOISE THIS TURN: <b>{state.turnNoise}</b>{state.bombs.length > 0 ? <span className="muted"> · 💣 {state.bombs.length} bomb{state.bombs.length > 1 ? "s" : ""} ticking</span> : null}{state.exploitBonus > 0 ? <span className="cyan"> · next exploit +{state.exploitBonus}</span> : null}</span>
                 <span className="budget-room">
                     ROOM LEFT:{" "}
                     {roomToNext != null && nextStage ? (<><b className="amber">{roomToNext}</b> before <span className="amber">{nextStage.name}</span> &nbsp;·&nbsp; </>) : null}
@@ -227,17 +256,18 @@ function CampaignSelect({ onPick }: { onPick: (id: string) => void }) {
     return (
         <div className="wrap">
             <div className="title">BREACH</div>
-            <p className="muted">A hacking roguelike. Choose a storyline — a chain of breaches with branching routes, a rising trace, and a deck you build as you go.</p>
+            <p className="muted">A hacking roguelike. Choose a storyline — a branching map of breaches, a rising trace, and a deck you build as you go.</p>
             <hr />
             <div className="systems">
                 {CAMPAIGN_ORDER.map((id) => {
                     const c = CAMPAIGNS[id];
+                    const depth = Math.max(...c.map.map((n) => n.col)) + 1;
                     return (
                         <div className="syscard" key={id} onClick={() => onPick(id)}>
                             <div className="sysname">{c.name}</div>
                             <div className="cyan" style={{ fontSize: 12, margin: "2px 0 6px" }}>{c.tagline}</div>
                             <div className="sysflavor">{c.premise}</div>
-                            <div className="sysmeta muted">Handler: {c.handler} · {c.steps.length + 1} jobs</div>
+                            <div className="sysmeta muted">Handler: {c.handler} · {depth}-stop map{c.antagonist ? " · ⌁ watched" : ""}</div>
                             <button className="term">Begin ▸</button>
                         </div>
                     );
@@ -248,28 +278,110 @@ function CampaignSelect({ onPick }: { onPick: (id: string) => void }) {
 }
 
 /* ============================================================
-   RUN VIEW (between jobs: routes, story, Heat, deck)
+   RUN MAP — the branching route graph, Slay-the-Spire style
+   ============================================================ */
+const COLW = 176, ROWH = 82, PADX = 18, PADY = 14, NODEW = 132, NODEH = 54;
+
+function RunMap({ run, campaign, onPick }: { run: RunState; campaign: Campaign; onPick: (n: MapNode) => void }) {
+    const [hover, setHover] = useState<string | null>(null);
+    const options = currentOptions(run);
+    const optionIds = new Set(options.map((n) => n.id));
+    const pathSet = new Set(run.path);
+    const nodes = campaign.map;
+    const maxCol = Math.max(...nodes.map((n) => n.col));
+    const maxRow = Math.max(...nodes.map((n) => n.row));
+    const width = PADX * 2 + maxCol * COLW + NODEW;
+    const height = PADY * 2 + maxRow * ROWH + NODEH;
+    const cx = (n: MapNode) => PADX + n.col * COLW + NODEW / 2;
+    const cy = (n: MapNode) => PADY + n.row * ROWH + NODEH / 2;
+
+    const traveled = new Set<string>();
+    for (let i = 0; i < run.path.length - 1; i++) traveled.add(`${run.path[i]}>${run.path[i + 1]}`);
+
+    const edges: { from: MapNode; to: MapNode; cls: string }[] = [];
+    for (const n of nodes) for (const mId of n.next) {
+        const to = getNode(campaign, mId);
+        if (!to) continue;
+        const cls = traveled.has(`${n.id}>${to.id}`) ? "traveled" : (n.id === run.nodeId && optionIds.has(to.id)) ? "open" : "dim";
+        edges.push({ from: n, to, cls });
+    }
+
+    const detail = hover ? getNode(campaign, hover) : (options.length === 1 ? options[0] : null);
+
+    return (
+        <>
+            <div className="mapwrap" style={{ width, height }}>
+                <svg className="edges" width={width} height={height}>
+                    {!run.nodeId && options.map((o) => (
+                        <line key={"s" + o.id} className="edge open" x1={PADX} y1={cy(o)} x2={cx(o) - NODEW / 2} y2={cy(o)} />
+                    ))}
+                    {edges.map((e, i) => (
+                        <line key={i} className={"edge " + e.cls} x1={cx(e.from) + NODEW / 2 - 6} y1={cy(e.from)} x2={cx(e.to) - NODEW / 2 + 6} y2={cy(e.to)} />
+                    ))}
+                </svg>
+                {!run.nodeId && <div className="mapstart" style={{ top: PADY + 0.6 * ROWH + NODEH / 2 - 8 }}>START ▸</div>}
+                {nodes.map((n) => {
+                    const isCurrent = n.id === run.nodeId;
+                    const isDone = pathSet.has(n.id) && !isCurrent;
+                    const isOpen = optionIds.has(n.id);
+                    const cls = isCurrent ? "cur" : isDone ? "done" : isOpen ? "open" : "locked";
+                    const diff = n.type === "breach" && n.systemKey ? SYSTEMS[n.systemKey].difficulty : 0;
+                    return (
+                        <div
+                            key={n.id}
+                            className={"mnode " + n.type + " " + cls + (isTerminal(n) ? " finale" : "")}
+                            style={{ left: PADX + n.col * COLW, top: PADY + n.row * ROWH, width: NODEW, height: NODEH }}
+                            onClick={() => isOpen && onPick(n)}
+                            onMouseEnter={() => setHover(n.id)}
+                            onMouseLeave={() => setHover((h) => (h === n.id ? null : h))}
+                        >
+                            <span className="micon">{nodeIcon(n)}</span>
+                            <span className="mlabel">{n.title}</span>
+                            {diff > 0 && <span className="mdiff">{"◆".repeat(diff)}</span>}
+                        </div>
+                    );
+                })}
+            </div>
+            <div className={"mapdetail" + (detail ? "" : " empty")}>
+                {detail ? (
+                    <>
+                        <span className="md-tag">{nodeIcon(detail)} {detail.type === "breach" ? (isTerminal(detail) ? "FINAL BREACH" : "BREACH") : detail.type === "safehouse" ? "SAFEHOUSE" : "EVENT"}</span>
+                        <b className="md-title">{detail.title}</b>
+                        <span className="md-blurb">{detail.blurb}</span>
+                        <span className="md-foot muted">
+                            {detail.type === "breach" && detail.systemKey ? `target: ${SYSTEMS[detail.systemKey].name} · difficulty ${SYSTEMS[detail.systemKey].difficulty}/5 · reward ${detail.reward || 20}cr` : null}
+                            {detail.type === "safehouse" ? `lie low · −${detail.heatRelief || 20} heat · no pay` : null}
+                            {detail.type === "event" ? "a choice — no breach" : null}
+                            {optionIds.has(detail.id) ? "  ·  ▶ click the node to take this route" : (pathSet.has(detail.id) ? "  ·  ✓ visited" : "  ·  not on your current route")}
+                        </span>
+                    </>
+                ) : <span className="muted">Hover a node to scout it · the lit nodes are the routes open to you now.</span>}
+            </div>
+        </>
+    );
+}
+
+/* ============================================================
+   RUN VIEW (the map, Heat, story, deck; overlays for events)
    ============================================================ */
 function RunView({ run, campaign, onLaunchBreach, onRun, onOpenDeck }: {
-    run: RunState; campaign: Campaign; onLaunchBreach: (n: RunNode) => void; onRun: (r: RunState) => void; onOpenDeck: () => void;
+    run: RunState; campaign: Campaign; onLaunchBreach: (n: MapNode) => void; onRun: (r: RunState) => void; onOpenDeck: () => void;
 }) {
-    const [activeEvent, setActiveEvent] = useState<RunNode | null>(null);
-    const [removing, setRemoving] = useState<EventChoice | null>(null);
-    const options = currentOptions(run);
-    const finale = isFinale(run);
+    const [activeEvent, setActiveEvent] = useState<MapNode | null>(null);
+    const [removing, setRemoving] = useState<{ choice: EventChoice; node: MapNode } | null>(null);
+    const finale = atFinale(run);
     const heatFrac = run.heat / run.heatMax;
 
-    const pickChoice = (choice: EventChoice) => {
-        if (choice.removeCard) { setRemoving(choice); return; }
-        onRun(resolveEvent(run, choice)); setActiveEvent(null);
+    const pickChoice = (node: MapNode, choice: EventChoice) => {
+        if (choice.removeCard) { setRemoving({ choice, node }); return; }
+        onRun(resolveEvent(run, node, choice)); setActiveEvent(null);
     };
     const doRemove = (cardId: string) => {
         if (!removing) return;
-        onRun(resolveEvent(removeCard(run, cardId), removing));
+        onRun(resolveEvent(removeCard(run, cardId), removing.node, removing.choice));
         setRemoving(null); setActiveEvent(null);
     };
-
-    const clickNode = (n: RunNode) => {
+    const pickNode = (n: MapNode) => {
         if (n.type === "breach") onLaunchBreach(n);
         else if (n.type === "safehouse") onRun(resolveSafehouse(run, n));
         else setActiveEvent(n);
@@ -277,36 +389,23 @@ function RunView({ run, campaign, onLaunchBreach, onRun, onOpenDeck }: {
 
     return (
         <div className="wrap">
-            <div className="title">{campaign.name} <span className="sub">// {finale ? "the final job" : `job ${run.step + 1} of ${campaign.steps.length + 1}`}</span></div>
+            <div className="title">{campaign.name} <span className="sub">// {finale ? "the final job" : "choose your route"}</span></div>
             <div className="run-stats">
                 <span>💾 <b className="gold">{run.credits}</b>cr</span>
                 <span className="deck-link" onClick={onOpenDeck}>🃏 deck: <b>{run.deck.length}</b> ▸</span>
+                <span className="muted">jobs pulled: {run.jobsDone}</span>
             </div>
 
-            {/* run-level Heat (the trace hunting YOU) */}
             <div className="meter-label"><span className="red">TRACE ON YOU (HEAT)</span><span style={{ color: meterColor(heatFrac) }}>{run.heat} / {run.heatMax}</span></div>
             <div className="meter"><div className="fill" style={{ width: `${heatFrac * 100}%`, background: meterColor(heatFrac) }} /></div>
             <div className="muted" style={{ fontSize: 11, marginTop: 3 }}>Loud jobs and blown breaches raise the trace. Max it out and the run is over — so play quiet, and lie low when you can.</div>
 
             <hr />
-            <div className="story">
-                {run.story.slice(-4).map((line, i) => <p key={i} className="story-line">{line}</p>)}
-            </div>
+            <h3 className="amber" style={{ margin: "6px 0 6px" }}>▶ {finale ? "THE FINAL JOB" : "THE MAP — pick where you go next"}</h3>
+            <RunMap run={run} campaign={campaign} onPick={pickNode} />
 
-            <h3 className="amber" style={{ margin: "10px 0 4px" }}>{finale ? "▶ THE FINAL JOB" : "▶ CHOOSE YOUR NEXT MOVE"}</h3>
-            <div className="routes">
-                {options.map((n) => (
-                    <div key={n.id} className={"route route-" + n.type} onClick={() => clickNode(n)}>
-                        <div className="route-head">
-                            <span className="route-tag">{n.type === "breach" ? "◈ BREACH" : n.type === "safehouse" ? "☂ LIE LOW" : "❋ EVENT"}</span>
-                            {n.type === "breach" && n.systemKey && <span className="route-diff">{"◆".repeat(SYSTEMS[n.systemKey].difficulty)}<span className="off">{"◇".repeat(5 - SYSTEMS[n.systemKey].difficulty)}</span></span>}
-                        </div>
-                        <div className="route-title">{n.title}</div>
-                        <div className="route-blurb">{n.blurb}</div>
-                        {n.type === "breach" && <div className="route-foot muted">reward: {n.reward || 20}cr · target: {SYSTEMS[n.systemKey || "homeServer"].name}</div>}
-                        {n.type === "safehouse" && <div className="route-foot muted">−{n.heatRelief || 20} heat · no pay</div>}
-                    </div>
-                ))}
+            <div className="story">
+                {run.story.slice(-2).map((line, i) => <p key={i} className={"story-line" + (line.startsWith("⌁") ? " rogue" : "")}>{line}</p>)}
             </div>
 
             {/* event overlay */}
@@ -319,12 +418,13 @@ function RunView({ run, campaign, onLaunchBreach, onRun, onOpenDeck }: {
                             {(activeEvent.choices || []).map((ch, i) => {
                                 const cant = ch.requiresCredits != null && run.credits < ch.requiresCredits;
                                 return (
-                                    <button key={i} className={"term event-choice" + (cant ? " disabled" : "")} disabled={cant} onClick={() => pickChoice(ch)}>
+                                    <button key={i} className={"term event-choice" + (cant ? " disabled" : "")} disabled={cant} onClick={() => pickChoice(activeEvent, ch)}>
                                         {ch.label}{cant ? " (not enough credits)" : ""}
                                     </button>
                                 );
                             })}
                         </div>
+                        <button className="term ghost tiny" style={{ marginTop: 12 }} onClick={() => setActiveEvent(null)}>◂ back to the map</button>
                     </div>
                 </div>
             )}
@@ -367,14 +467,14 @@ function Ending({ run, campaign, onRestart }: { run: RunState; campaign: Campaig
 export function App() {
     const [mode, setMode] = useState<"campaign" | "run" | "breach" | "ending">("campaign");
     const [run, setRun] = useState<RunState | null>(null);
-    const [activeNode, setActiveNode] = useState<RunNode | null>(null);
+    const [activeNode, setActiveNode] = useState<MapNode | null>(null);
     const [reward, setReward] = useState<string[] | null>(null);
     const [showDeck, setShowDeck] = useState(false);
 
     const campaign = run ? getCampaign(run.campaignId) : null;
 
     const startCampaign = (id: string) => { setRun(createRun(id)); setActiveNode(null); setReward(null); setMode("run"); };
-    const launchBreach = (n: RunNode) => { setActiveNode(n); setMode("breach"); };
+    const launchBreach = (n: MapNode) => { setActiveNode(n); setMode("breach"); };
 
     const onBreachComplete = (result: BreachResult) => {
         if (!run || !activeNode) return;
@@ -396,7 +496,7 @@ export function App() {
 
     if (mode === "ending") return <Ending run={run} campaign={campaign} onRestart={() => { setMode("campaign"); setRun(null); }} />;
 
-    // run mode
+    // run mode — the map, plus reward / deck / transmission overlays
     return (
         <>
             <RunView run={run} campaign={campaign} onLaunchBreach={launchBreach} onRun={onRun} onOpenDeck={() => setShowDeck(true)} />
@@ -417,6 +517,9 @@ export function App() {
                         <button className="term" style={{ marginTop: 12 }} onClick={() => setShowDeck(false)}>Close</button>
                     </div>
                 </div>
+            )}
+            {campaign.antagonist && run.transmission && (
+                <Transmission name={campaign.antagonist.name} text={run.transmission} onClose={() => setRun(clearTransmission(run))} />
             )}
         </>
     );

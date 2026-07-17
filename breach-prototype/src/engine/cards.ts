@@ -29,6 +29,10 @@ export const CARDS: Record<string, CardDef> = {
         id: "packetSniffer", name: "Packet Sniffer", kind: "recon", noise: 1, effect: "revealDraw", needsTarget: true,
         text: "Reveal one defense AND draw a card. Low noise.",
     },
+    analyze: {
+        id: "analyze", name: "Analyze", kind: "recon", noise: 3, amount: 2, effect: "analyze", needsTarget: false,
+        text: "Fully reveal every defense on this layer AND draw 2 cards. Medium noise.",
+    },
 
     /* ---------- Exploits — knock strength off a defense ---------- */
     knownExploit: {
@@ -67,6 +71,18 @@ export const CARDS: Record<string, CardDef> = {
         id: "bruteForce", name: "Brute Force", kind: "exploit", noise: 16, power: 6, effect: "bruteForce", needsTarget: true,
         text: "Reduce any defense's Strength by 6. Extremely loud — a last resort.",
     },
+    empBurst: {
+        id: "empBurst", name: "EMP Burst", kind: "exploit", noise: 9, power: 3, effect: "exploitAll", needsTarget: false,
+        text: "Reduce EVERY standing defense on this layer by 3. Loud — but it clears multi-defense chokepoints.",
+    },
+    cascade: {
+        id: "cascade", name: "Cascade", kind: "exploit", noise: 2, power: 3, effect: "chainExploit", needsTarget: true,
+        text: "Reduce a defense by 3, +2 for every other exploit you've already played this turn. Rewards big combo turns.",
+    },
+    logicBomb: {
+        id: "logicBomb", name: "Logic Bomb", kind: "exploit", noise: 2, power: 3, amount: 3, effect: "logicBomb", needsTarget: true,
+        text: "Plant on a defense: it loses 3 Strength at the end of each of your next 3 turns. Very quiet — set it and pressure elsewhere.",
+    },
 
     /* ---------- Stealth — control the detection meter ---------- */
     logWipe: {
@@ -93,6 +109,10 @@ export const CARDS: Record<string, CardDef> = {
         id: "spoof", name: "Spoof", kind: "stealth", noise: 1, effect: "spoof", needsTarget: false,
         text: "Cancel the system's next move — the one shown under SYSTEM ALERT.",
     },
+    feint: {
+        id: "feint", name: "Feint", kind: "stealth", noise: 3, amount: 2, effect: "feint", needsTarget: false,
+        text: "Makes some noise now, but cancels the system's next 2 moves. Buy yourself two quiet turns to work.",
+    },
 
     /* ---------- Utility ---------- */
     rootkit: {
@@ -111,6 +131,14 @@ export const CARDS: Record<string, CardDef> = {
         id: "automate", name: "Automate", kind: "utility", noise: 1, amount: 2, effect: "draw", needsTarget: false,
         text: "Draw 2 cards. More options, more plays this turn.",
     },
+    overclock: {
+        id: "overclock", name: "Overclock", kind: "utility", noise: 2, power: 3, effect: "overclock", needsTarget: false,
+        text: "Your NEXT exploit this turn hits +3 harder, and you draw a card. Set up a big hit.",
+    },
+    trojan: {
+        id: "trojan", name: "Trojan", kind: "utility", noise: 1, power: 3, amount: 3, effect: "trojan", needsTarget: true, exhausts: true,
+        text: "Quietly reduce a defense by 3 AND lower detection by 3 — infiltrate without a trace. One use per run.",
+    },
 };
 
 /** Prototype starting deck — a bigger, more varied spread (~26 cards).
@@ -120,12 +148,12 @@ export const CARDS: Record<string, CardDef> = {
 export const STARTER_DECK: string[] = [
     // recon (5)
     "portScan", "portScan", "passiveRecon", "enumerate", "packetSniffer",
-    // exploits (11) — reliable generalists + one specialist per type + heavies
+    // exploits (12) — reliable generalists + one specialist per type + a combo card + heavies
     "knownExploit", "knownExploit", "knownExploit", "scriptKiddie",
     "firewallBypass", "idsEvasion", "rainbowTable", "sqlInjection", "privEsc",
-    "zeroDay", "bruteForce",
+    "cascade", "zeroDay", "bruteForce",
     // stealth (6)
     "logWipe", "logWipe", "goDark", "coverTracks", "proxyChain", "spoof",
-    // utility (3)
-    "rootkit", "automate", "patchScanner",
+    // utility (4)
+    "rootkit", "automate", "patchScanner", "overclock",
 ];

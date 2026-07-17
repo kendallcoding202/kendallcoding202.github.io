@@ -43,6 +43,9 @@ export function createInitialState(seed: number, systemKey: string = DEFAULT_SYS
         proxyCharges: 0,
         rootkitReady: false,
         spoofTurns: 0,
+        exploitBonus: 0,
+        exploitsThisTurn: 0,
+        bombs: [],
         alert: "IDLE",
         systemIntent: null,
         rng: seed >>> 0,
@@ -211,6 +214,34 @@ function damageDefense(s: GameState, idx: number, amount: number) {
     afterBreachCheck(s);
 }
 
+/** Reduce a specific defense on a specific layer (used by logic bombs that
+    may resolve on a layer other than the one currently in focus). */
+function reduceDefenseAt(s: GameState, layerIdx: number, defIdx: number, amount: number) {
+    const layer = s.layers[layerIdx];
+    if (!layer || layer.breached) return;
+    const d = layer.defenses[defIdx];
+    if (!d || d.strength <= 0) return;
+    d.strength = Math.max(0, d.strength - amount);
+    if (layerIdx === s.current) afterBreachCheck(s);
+}
+
+/** Tick every planted logic bomb by one turn; drop the spent ones. */
+function tickBombs(s: GameState) {
+    if (s.bombs.length === 0) return;
+    for (const b of s.bombs) {
+        reduceDefenseAt(s, b.layer, b.def, b.amt);
+        b.turns -= 1;
+    }
+    const before = s.bombs.length;
+    s.bombs = s.bombs.filter((b) => {
+        const layer = s.layers[b.layer];
+        const d = layer && layer.defenses[b.def];
+        return b.turns > 0 && !!d && d.strength > 0 && !layer.breached;
+    });
+    if (s.bombs.length < before) log(s, "A logic bomb burned out.");
+    else if (s.bombs.length > 0) log(s, `Logic bombs tick — ${s.bombs.length} still counting down.`);
+}
+
 function afterBreachCheck(s: GameState) {
     const layer = currentLayer(s);
     if (!layer || layer.breached) return;
@@ -230,6 +261,13 @@ function afterBreachCheck(s: GameState) {
 }
 
 /* ---------- card effects (return EXTRA noise beyond base) ---------- */
+
+/** Consume the one-shot Overclock bonus (added to a single exploit's damage). */
+function takeExploitBonus(s: GameState): number {
+    const b = s.exploitBonus;
+    s.exploitBonus = 0;
+    return b;
+}
 
 function applyEffect(s: GameState, card: CardDef, target: number): number {
     const layer = currentLayer(s);
@@ -257,6 +295,12 @@ function applyEffect(s: GameState, card: CardDef, target: number): number {
             draw(s, 1);
             log(s, `Packet Sniffer — revealed ${d ? d.type : "a defense"}, drew a card.`);
             return 0;
+        case "analyze": {
+            defs.forEach((x) => { x.typeRevealed = true; x.strengthRevealed = true; });
+            draw(s, card.amount || 2);
+            log(s, `Analyze — this layer fully mapped, drew ${card.amount || 2}.`);
+            return 0;
+        }
         case "draw":
             draw(s, card.amount || 1);
             log(s, `Drew ${card.amount || 1} card${(card.amount || 1) > 1 ? "s" : ""}.`);
@@ -276,7 +320,7 @@ function applyEffect(s: GameState, card: CardDef, target: number): number {
         case "knownExploit": {
             if (!d) return 0;
             const known = d.typeRevealed;
-            const power = known ? card.power || 4 : Math.ceil((card.power || 4) / 2);
+            const power = (known ? card.power || 4 : Math.ceil((card.power || 4) / 2)) + takeExploitBonus(s);
             damageDefense(s, target, power);
             log(s, known ? `${card.name} hits ${d.type} for ${power}.` : `${card.name} fumbles a blind defense (${power}).`);
             return known ? 0 : 6;
@@ -284,14 +328,35 @@ function applyEffect(s: GameState, card: CardDef, target: number): number {
         case "typedExploit": {
             if (!d) return 0;
             const match = d.type === card.matchType;
-            const power = match ? Math.round((card.power || 5) * 1.6) : Math.round((card.power || 5) * 0.4);
+            const power = (match ? Math.round((card.power || 5) * 1.6) : Math.round((card.power || 5) * 0.4)) + takeExploitBonus(s);
             damageDefense(s, target, power);
             log(s, match ? `${card.name} tears through ${d.type} for ${power}.` : `${card.name} is the wrong tool for ${d.type} (${power}).`);
             return match ? 0 : 3;
         }
+        case "exploitAll": {
+            const bonus = takeExploitBonus(s);
+            const base = (card.power || 3) + bonus;
+            const standing = defs.filter((x) => x.strength > 0).length;
+            for (let i = defs.length - 1; i >= 0; i--) if (defs[i].strength > 0) reduceDefenseAt(s, s.current, i, base);
+            log(s, `EMP Burst — every defense on ${layer ? layer.name : "the layer"} hit for ${base} (${standing} struck).`);
+            return 0;
+        }
+        case "chainExploit": {
+            if (!d) return 0;
+            const power = (card.power || 3) + 2 * s.exploitsThisTurn + takeExploitBonus(s);
+            damageDefense(s, target, power);
+            log(s, `${card.name} cascades for ${power} (built on ${s.exploitsThisTurn} exploit${s.exploitsThisTurn === 1 ? "" : "s"} this turn).`);
+            return 0;
+        }
+        case "logicBomb":
+            if (d) {
+                s.bombs.push({ layer: s.current, def: target, amt: card.power || 3, turns: card.amount || 3 });
+                log(s, `Logic bomb planted on ${d.typeRevealed ? d.type : "a defense"} — ${card.power || 3}/turn for ${card.amount || 3} turns.`);
+            }
+            return 0;
         case "privEsc": {
             if (!d) return 0;
-            if (d.type === "privilege") { damageDefense(s, target, card.power || 6); return 0; }
+            if (d.type === "privilege") { damageDefense(s, target, (card.power || 6) + takeExploitBonus(s)); return 0; }
             log(s, "Privilege Escalation misfires — wrong defense.");
             return 4;
         }
@@ -299,10 +364,13 @@ function applyEffect(s: GameState, card: CardDef, target: number): number {
             if (d) { damageDefense(s, target, card.power || 99); log(s, "Zero-Day detonates — defense shattered."); }
             return 0;
         case "bruteForce":
-            if (d) { damageDefense(s, target, card.power || 6); log(s, "Brute Force — loud and ugly."); }
+            if (d) { damageDefense(s, target, (card.power || 6) + takeExploitBonus(s)); log(s, "Brute Force — loud and ugly."); }
             return 0;
         case "backdoor":
-            if (d) { damageDefense(s, target, card.power || 4); log(s, "Backdoor installed — quiet access."); }
+            if (d) { damageDefense(s, target, (card.power || 4) + takeExploitBonus(s)); log(s, "Backdoor installed — quiet access."); }
+            return 0;
+        case "trojan":
+            if (d) { damageDefense(s, target, (card.power || 3) + takeExploitBonus(s)); reduceDetection(s, card.amount || 3); log(s, `Trojan — defense −${card.power || 3}, detection −${card.amount || 3}.`); }
             return 0;
 
         case "logWipe":
@@ -324,6 +392,15 @@ function applyEffect(s: GameState, card: CardDef, target: number): number {
             return 0;
         case "spoof":
             s.spoofTurns += 1;
+            return 0;
+        case "feint":
+            s.spoofTurns += card.amount || 2;
+            log(s, `Feint — the system's next ${card.amount || 2} moves are spoofed away.`);
+            return 0;
+        case "overclock":
+            s.exploitBonus += card.power || 3;
+            draw(s, 1);
+            log(s, `Overclock — your next exploit hits +${card.power || 3} harder. Drew a card.`);
             return 0;
         case "rootkit":
             s.rootkitReady = true;
@@ -363,20 +440,25 @@ export function previewOnTarget(s: GameState, cardId: string, idx: number): stri
     if (!card || !card.needsTarget || !layer) return null;
     const d = layer.defenses[idx];
     if (!d || d.strength <= 0) return null;
+    const bonus = s.exploitBonus;
+    const plus = bonus ? ` (+${bonus})` : "";
     switch (card.effect) {
         case "revealOne": return "reveal";
         case "revealDraw": return "reveal +draw";
         case "revealAndWeaken": return `reveal, −${card.power || 2}`;
-        case "knownExploit": return d.typeRevealed ? `−${card.power || 4}` : `−${Math.ceil((card.power || 4) / 2)} · blind, loud`;
+        case "knownExploit": return d.typeRevealed ? `−${(card.power || 4) + bonus}${plus}` : `−${Math.ceil((card.power || 4) / 2) + bonus} · blind, loud`;
         case "typedExploit":
             if (!d.typeRevealed) return "reveal it first";
-            return d.type === card.matchType ? `−${Math.round((card.power || 5) * 1.6)}` : `−${Math.round((card.power || 5) * 0.4)} · weak, loud`;
+            return d.type === card.matchType ? `−${Math.round((card.power || 5) * 1.6) + bonus}${plus}` : `−${Math.round((card.power || 5) * 0.4) + bonus} · weak, loud`;
+        case "chainExploit": return `−${(card.power || 3) + 2 * s.exploitsThisTurn + bonus} · scales w/ combo`;
+        case "logicBomb": return `plant ${card.power || 3}/turn ×${card.amount || 3}`;
+        case "trojan": return `−${(card.power || 3) + bonus}, −det${plus}`;
         case "privEsc":
             if (!d.typeRevealed) return "reveal it first";
-            return d.type === "privilege" ? `−${card.power || 6}` : "misfires · loud";
+            return d.type === "privilege" ? `−${(card.power || 6) + bonus}${plus}` : "misfires · loud";
         case "zeroDay": return "SHATTER";
-        case "bruteForce": return `−${card.power || 6} · loud`;
-        case "backdoor": return `−${card.power || 4} · quiet`;
+        case "bruteForce": return `−${(card.power || 6) + bonus} · loud`;
+        case "backdoor": return `−${(card.power || 4) + bonus} · quiet`;
         default: return null;
     }
 }
@@ -389,13 +471,18 @@ export function predictDamage(s: GameState, cardId: string, idx: number): number
     if (!card || !layer) return 0;
     const d = layer.defenses[idx];
     if (!d || d.strength <= 0) return 0;
+    const bonus = s.exploitBonus;
     switch (card.effect) {
-        case "knownExploit": return d.typeRevealed ? card.power || 4 : Math.ceil((card.power || 4) / 2);
-        case "typedExploit": return d.type === card.matchType ? Math.round((card.power || 5) * 1.6) : Math.round((card.power || 5) * 0.4);
-        case "privEsc": return d.type === "privilege" ? card.power || 6 : 0;
+        case "knownExploit": return (d.typeRevealed ? card.power || 4 : Math.ceil((card.power || 4) / 2)) + bonus;
+        case "typedExploit": return (d.type === card.matchType ? Math.round((card.power || 5) * 1.6) : Math.round((card.power || 5) * 0.4)) + bonus;
+        case "exploitAll": return (card.power || 3) + bonus;
+        case "chainExploit": return (card.power || 3) + 2 * s.exploitsThisTurn + bonus;
+        case "logicBomb": return (card.power || 3) * (card.amount || 3);
+        case "trojan": return (card.power || 3) + bonus;
+        case "privEsc": return d.type === "privilege" ? (card.power || 6) + bonus : 0;
         case "zeroDay": return 999;
-        case "bruteForce": return card.power || 6;
-        case "backdoor": return card.power || 4;
+        case "bruteForce": return (card.power || 6) + bonus;
+        case "backdoor": return (card.power || 4) + bonus;
         case "revealAndWeaken": return card.power || 2;
         default: return 0;
     }
@@ -447,6 +534,7 @@ export function applyAction(prev: GameState, action: Action): GameState {
         }
         addDetection(s, noise);
         s.turnNoise += noise;
+        if (card.kind === "exploit") s.exploitsThisTurn += 1;
 
         if (card.exhausts) log(s, `${card.name} spent (one-time).`);
         else s.discard.push(cardId);
@@ -458,10 +546,13 @@ export function applyAction(prev: GameState, action: Action): GameState {
     if (action.type === "endTurn") {
         s.discard.push(...s.hand);
         s.hand = [];
+        tickBombs(s); // planted logic bombs resolve as the turn closes
         systemReact(s);
         addDetection(s, s.baselineCreep);
         s.rootkitReady = false;
         s.turnNoise = 0; // reset the per-turn noise budget
+        s.exploitBonus = 0; // Overclock lasts only for the turn it was played
+        s.exploitsThisTurn = 0;
         if (s.outcome === "playing") {
             draw(s, s.handSize);
             s.turn += 1;
