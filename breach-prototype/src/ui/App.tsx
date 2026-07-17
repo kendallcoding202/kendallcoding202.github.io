@@ -227,8 +227,10 @@ export function App() {
                             onClick={() => !blocked && onCardClick(id)}
                             title={def.text}
                         >
-                            <div className="noise" style={{ color: danger ? "#ff4141" : noise === 0 ? "#35e0d8" : "#ffb000" }}>{noise === 0 ? "SILENT" : "◈" + noise}</div>
-                            <div className="cname">{def.name}{needsT ? <span className="muted"> ◎</span> : null}</div>
+                            <div className="chead">
+                                <span className="cname">{def.name}{needsT ? <span className="muted"> ◎</span> : null}</span>
+                                <span className="noise" style={{ color: danger ? "#ff4141" : noise === 0 ? "#35e0d8" : "#ffb000" }}>{noise === 0 ? "SILENT" : "◈" + noise}</span>
+                            </div>
                             <div className="kind">{def.kind}</div>
                             <div className="ctext">{def.text}</div>
                         </div>
@@ -248,7 +250,7 @@ export function App() {
             </div>
 
             <div className="log">
-                {state.log.slice(-7).map((line, i) => <span className="ln" key={i}>{line}</span>)}
+                {state.log.slice(-3).map((line, i) => <span className="ln" key={i}>{line}</span>)}
             </div>
 
             {showIntro && <Intro onClose={closeIntro} />}
