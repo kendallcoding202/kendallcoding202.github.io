@@ -289,64 +289,6 @@ for (const id of CAMPAIGN_ORDER) {
     check("Momentum scales with breached layers", ms - m.layers[1].defenses[0].strength === 5);
 }
 
-/* 12. Deck archetypes — keystones that scale with a committed strategy. */
-{
-    // GHOST: Ghost Protocol scales with silent plays this turn
-    let g = createInitialState(1, "smallBusiness", ["logWipe", "goDark", "ghostProtocol"]);
-    g.layers[0].defenses[0].strength = 30; g.layers[0].defenses[0].maxStrength = 30;
-    g = applyAction(g, { type: "playCard", card: "logWipe" });
-    g = applyAction(g, { type: "playCard", card: "goDark" });
-    check("silent plays are counted", g.silentThisTurn === 2);
-    const gs = g.layers[0].defenses[0].strength;
-    g = applyAction(g, { type: "playCard", card: "ghostProtocol", target: 0 }); // 2 + 2*2 = 6
-    check("Ghost Protocol scales with silent plays", gs - g.layers[0].defenses[0].strength === 6);
-
-    // OVERLOAD: Meltdown is an AoE that scales with detection
-    let m = createInitialState(2, "blackSite", ["meltdown"]);
-    m.detection = 48; // 48/12 = 4 each
-    const before = m.layers[0].defenses.map((d) => d.strength);
-    m = applyAction(m, { type: "playCard", card: "meltdown" });
-    check("Meltdown hits every defense, scaled by detection", m.layers[0].defenses.every((d, i) => before[i] - d.strength === 4));
-
-    // WORM: Contagion plants on all, Detonate blows them for full remaining
-    let w = createInitialState(3, "smallBusiness", ["logicBomb", "detonate"]);
-    w.layers[0].defenses[0].strength = 30; w.layers[0].defenses[0].maxStrength = 30;
-    w = applyAction(w, { type: "playCard", card: "logicBomb", target: 0 }); // 3/turn x3 = 9
-    const ws = w.layers[0].defenses[0].strength;
-    w = applyAction(w, { type: "playCard", card: "detonate" });
-    check("Detonate blows all bombs for full remaining, clears them", ws - w.layers[0].defenses[0].strength === 9 && w.bombs.length === 0);
-    let ct = createInitialState(4, "smallBusiness", ["contagion"]);
-    ct.current = 1; // internal network: 2 defenses
-    ct = applyAction(ct, { type: "playCard", card: "contagion" });
-    check("Contagion plants a decay on every defense on the layer", ct.bombs.length === 2);
-
-    // CHAIN: Chain Reaction scales with cards played this turn
-    let ch = createInitialState(5, "smallBusiness", ["scriptKiddie", "scriptKiddie", "chainReaction"]);
-    ch.layers[0].defenses[0].strength = 30; ch.layers[0].defenses[0].maxStrength = 30; ch.layers[0].defenses[0].typeRevealed = true;
-    ch = applyAction(ch, { type: "playCard", card: "scriptKiddie", target: 0 });
-    ch = applyAction(ch, { type: "playCard", card: "scriptKiddie", target: 0 });
-    const chs = ch.layers[0].defenses[0].strength;
-    ch = applyAction(ch, { type: "playCard", card: "chainReaction", target: 0 }); // 2 + 2 = 4
-    check("Chain Reaction scales with cards played this turn", chs - ch.layers[0].defenses[0].strength === 4);
-    check("per-turn counters reset on end turn", (() => { const e = applyAction(ch, { type: "endTurn" }); return e.cardsThisTurn === 0 && e.silentThisTurn === 0; })());
-}
-
-/* 13. System behaviors make targets feel distinct. */
-{
-    // Segmented (Corporate Network): breaching a layer exposes the next layer's types
-    let seg = createInitialState(1, "corpNetwork", ["zeroDay"]);
-    check("segmented starts with next layer hidden", seg.layers[1].defenses.every((d) => !d.typeRevealed));
-    seg = applyAction(seg, { type: "playCard", card: "zeroDay", target: 0 }); // perimeter is single-defense -> breaches
-    check("segmented reveals the next layer's types on breach", seg.layers[1].defenses.every((d) => d.typeRevealed));
-
-    // Adaptive (Black Site): breaching a layer hardens the rest
-    let adp = createInitialState(2, "blackSite", ["zeroDay", "zeroDay"]);
-    const nextMax = adp.layers[1].defenses.map((d) => d.maxStrength);
-    adp = applyAction(adp, { type: "playCard", card: "zeroDay", target: 0 }); // one of two defenses
-    adp = applyAction(adp, { type: "playCard", card: "zeroDay", target: 1 }); // breach the layer
-    check("adaptive hardens the remaining layers on breach", adp.layers[1].defenses.every((d, i) => d.maxStrength === nextMax[i] + 1));
-}
-
 console.log(`=== RUN-ENGINE ASSERTIONS: ${passed} passed, ${failures.length} failed ===`);
 if (failures.length) { failures.forEach((f) => console.log("   ❌ " + f)); process.exit(1); }
 else console.log("   ✅ maps are well-formed & completable; heat/events/deck/antagonist/new-cards all behave");

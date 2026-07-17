@@ -238,13 +238,6 @@ hr { border: none; border-top: 1px solid var(--line); margin: 7px 0; }
 .card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--k, var(--line)); opacity: 0.9; }
 .card:hover:not(.disabled) { border-color: var(--k, var(--fg)); }
 
-/* build-archetype tags — so synergy families are visible when deckbuilding */
-.card .synergy { font-weight: bold; letter-spacing: 0.5px; }
-.card .synergy.s-ghost { color: #8fd6ff; }
-.card .synergy.s-overload { color: #ff6a5a; }
-.card .synergy.s-worm { color: #b0e04a; }
-.card .synergy.s-chain { color: #ffcf5a; }
-
 .controls { margin-top: 9px; display: flex; gap: 10px; align-items: center; }
 button.term {
     background: #000; color: var(--fg); border: 1px solid var(--fg);
@@ -330,12 +323,11 @@ button.term.ghost:hover { background: var(--dim); color: #000; }
 .mnode.done { opacity: 0.75; border-color: var(--dim); background: #071009; }
 .mnode.done .micon { color: var(--dim); }
 .mnode.cur { border-color: var(--fg); box-shadow: 0 0 12px #4af62655; opacity: 1; }
-.mnode.open { cursor: pointer; opacity: 1; border-color: var(--amber); box-shadow: 0 0 8px #ffb00044; animation: nodepulse 2.8s ease-in-out infinite; }
-.mnode.open:hover { border-color: #ffd684; box-shadow: 0 0 14px #ffb00088; z-index: 5; }
+.mnode.open { cursor: pointer; opacity: 1; border-color: var(--amber); box-shadow: 0 0 10px #ffb00044; animation: nodepulse 1.3s ease-in-out infinite; }
+.mnode.open:hover { transform: translateY(-3px) scale(1.03); box-shadow: 0 6px 16px #000a, 0 0 14px #ffb000aa; z-index: 5; }
 .mnode.open .mlabel { color: var(--fg); }
 .mnode.sel { outline: 2px solid var(--cyan); outline-offset: 2px; z-index: 6; }
-/* a gentle glow breathe (no movement) so open nodes read as live without bouncing */
-@keyframes nodepulse { 0%,100% { box-shadow: 0 0 6px #ffb00030; } 50% { box-shadow: 0 0 10px #ffb00060; } }
+@keyframes nodepulse { 0%,100% { box-shadow: 0 0 6px #ffb00033; } 50% { box-shadow: 0 0 14px #ffb00099; } }
 
 /* touch devices apply :hover on tap and it STICKS — that read as glitchy when
    the map advanced. Neutralise hover-transforms where there's no real pointer. */

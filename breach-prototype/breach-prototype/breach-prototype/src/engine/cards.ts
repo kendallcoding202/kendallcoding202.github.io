@@ -68,11 +68,11 @@ export const CARDS: Record<string, CardDef> = {
         text: "Instantly drop any one defense's Strength to 0, whatever its type. Very loud. One use per run.",
     },
     bruteForce: {
-        id: "bruteForce", name: "Brute Force", kind: "exploit", noise: 16, power: 6, effect: "bruteForce", needsTarget: true, tag: "overload",
+        id: "bruteForce", name: "Brute Force", kind: "exploit", noise: 16, power: 6, effect: "bruteForce", needsTarget: true,
         text: "Reduce any defense's Strength by 6. Extremely loud — a last resort.",
     },
     empBurst: {
-        id: "empBurst", name: "EMP Burst", kind: "exploit", noise: 9, power: 3, effect: "exploitAll", needsTarget: false, tag: "overload",
+        id: "empBurst", name: "EMP Burst", kind: "exploit", noise: 9, power: 3, effect: "exploitAll", needsTarget: false,
         text: "Reduce EVERY standing defense on this layer by 3. Loud — but it clears multi-defense chokepoints.",
     },
     polymorph: {
@@ -84,55 +84,33 @@ export const CARDS: Record<string, CardDef> = {
         text: "Automatically hit the WEAKEST standing defense on this layer for 7. Recon first to line it up.",
     },
     overload: {
-        id: "overload", name: "Overload", kind: "exploit", noise: 4, power: 3, effect: "overload", needsTarget: true, tag: "overload",
+        id: "overload", name: "Overload", kind: "exploit", noise: 4, power: 3, effect: "overload", needsTarget: true,
         text: "Reduce a defense by 3, +1 for every 10 detection you've drawn. Devastating when you're already loud.",
     },
     momentum: {
         id: "momentum", name: "Momentum", kind: "exploit", noise: 3, power: 3, amount: 2, effect: "momentum", needsTarget: true,
         text: "Reduce a defense by 3, +2 for every layer you've already breached. Snowballs as you go deeper.",
     },
-
-    /* ---------- Archetype keystones — reward committing to a build ---------- */
-    ghostProtocol: {
-        id: "ghostProtocol", name: "Ghost Protocol", kind: "exploit", noise: 0, power: 2, effect: "silentScale", needsTarget: true, tag: "ghost",
-        text: "SILENT. Reduce a defense by 2, +2 for every silent card you've already played this turn. Built for a quiet, patient hand.",
-    },
-    blindSpot: {
-        id: "blindSpot", name: "Blind Spot", kind: "exploit", noise: 1, power: 8, amount: 3, effect: "lowDetStrike", needsTarget: true, tag: "ghost",
-        text: "If your detection is under 25%, reduce a defense by 8 — otherwise just 3. Devastating while you're still unseen.",
-    },
-    meltdown: {
-        id: "meltdown", name: "Meltdown", kind: "exploit", noise: 10, amount: 12, effect: "meltdown", needsTarget: false, exhausts: true, tag: "overload",
-        text: "Reduce EVERY defense on this layer by 1 for every 12 detection you've drawn. A finisher for a loud, reckless run. One use.",
-    },
-    contagion: {
-        id: "contagion", name: "Contagion", kind: "exploit", noise: 3, power: 2, amount: 3, effect: "contagion", needsTarget: false, tag: "worm",
-        text: "Plant a decay on EVERY standing defense here: each loses 2 Strength at the end of your next 3 turns. Set it and pressure elsewhere.",
-    },
-    chainReaction: {
-        id: "chainReaction", name: "Chain Reaction", kind: "exploit", noise: 2, power: 2, effect: "chainReaction", needsTarget: true, tag: "chain",
-        text: "Reduce a defense by 2, +1 for every card you've already played this turn. Rewards long, draw-fueled turns.",
-    },
     cascade: {
-        id: "cascade", name: "Cascade", kind: "exploit", noise: 2, power: 3, effect: "chainExploit", needsTarget: true, tag: "chain",
+        id: "cascade", name: "Cascade", kind: "exploit", noise: 2, power: 3, effect: "chainExploit", needsTarget: true,
         text: "Reduce a defense by 3, +2 for every other exploit you've already played this turn. Rewards big combo turns.",
     },
     logicBomb: {
-        id: "logicBomb", name: "Logic Bomb", kind: "exploit", noise: 2, power: 3, amount: 3, effect: "logicBomb", needsTarget: true, tag: "worm",
+        id: "logicBomb", name: "Logic Bomb", kind: "exploit", noise: 2, power: 3, amount: 3, effect: "logicBomb", needsTarget: true,
         text: "Plant on a defense: it loses 3 Strength at the end of each of your next 3 turns. Very quiet — set it and pressure elsewhere.",
     },
 
     /* ---------- Stealth — control the detection meter ---------- */
     logWipe: {
-        id: "logWipe", name: "Log Wipe", kind: "stealth", noise: 0, amount: 8, effect: "logWipe", needsTarget: false, tag: "ghost",
+        id: "logWipe", name: "Log Wipe", kind: "stealth", noise: 0, amount: 8, effect: "logWipe", needsTarget: false,
         text: "Lower detection by 8. Makes no noise itself.",
     },
     goDark: {
-        id: "goDark", name: "Go Dark", kind: "stealth", noise: 0, amount: 6, effect: "goDark", needsTarget: false, tag: "ghost",
+        id: "goDark", name: "Go Dark", kind: "stealth", noise: 0, amount: 6, effect: "goDark", needsTarget: false,
         text: "Lower detection by 6. Best played just before you end a quiet turn.",
     },
     coverTracks: {
-        id: "coverTracks", name: "Cover Tracks", kind: "stealth", noise: 0, amount: 4, effect: "wipeDraw", needsTarget: false, tag: "ghost",
+        id: "coverTracks", name: "Cover Tracks", kind: "stealth", noise: 0, amount: 4, effect: "wipeDraw", needsTarget: false,
         text: "Lower detection by 4 AND draw a card. Makes no noise.",
     },
     killSwitch: {
@@ -140,7 +118,7 @@ export const CARDS: Record<string, CardDef> = {
         text: "Emergency: lower detection by 40, but discard the rest of your hand. One use per run.",
     },
     proxyChain: {
-        id: "proxyChain", name: "Proxy Chain", kind: "stealth", noise: 1, amount: 3, effect: "proxyChain", needsTarget: false, tag: "ghost",
+        id: "proxyChain", name: "Proxy Chain", kind: "stealth", noise: 1, amount: 3, effect: "proxyChain", needsTarget: false,
         text: "Your next 3 cards each make 3 less noise. Set this up before a loud play.",
     },
     spoof: {
@@ -166,7 +144,7 @@ export const CARDS: Record<string, CardDef> = {
         text: "Fully reveal this layer, plus the types of the next layer's defenses.",
     },
     automate: {
-        id: "automate", name: "Automate", kind: "utility", noise: 1, amount: 2, effect: "draw", needsTarget: false, tag: "chain",
+        id: "automate", name: "Automate", kind: "utility", noise: 1, amount: 2, effect: "draw", needsTarget: false,
         text: "Draw 2 cards. More options, more plays this turn.",
     },
     overclock: {
@@ -174,15 +152,11 @@ export const CARDS: Record<string, CardDef> = {
         text: "Your NEXT exploit this turn hits +3 harder, and you draw a card. Set up a big hit.",
     },
     dataSiphon: {
-        id: "dataSiphon", name: "Data Siphon", kind: "utility", noise: 1, effect: "siphon", needsTarget: false, tag: "chain",
+        id: "dataSiphon", name: "Data Siphon", kind: "utility", noise: 1, effect: "siphon", needsTarget: false,
         text: "Draw 1 card, plus 1 more for every layer you've breached. Pays off the deeper you get.",
     },
-    detonate: {
-        id: "detonate", name: "Detonate", kind: "utility", noise: 1, effect: "detonate", needsTarget: false, tag: "worm",
-        text: "Blow ALL your planted logic bombs at once, dealing their full remaining damage instantly. The payoff for a patient worm build.",
-    },
     misdirect: {
-        id: "misdirect", name: "Misdirect", kind: "stealth", noise: 1, amount: 4, effect: "misdirect", needsTarget: false, tag: "ghost",
+        id: "misdirect", name: "Misdirect", kind: "stealth", noise: 1, amount: 4, effect: "misdirect", needsTarget: false,
         text: "Feed the system a false trail: lower detection by 4 AND cancel its next move. Quiet control.",
     },
     trojan: {

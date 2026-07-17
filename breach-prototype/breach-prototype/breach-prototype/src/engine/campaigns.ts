@@ -17,7 +17,6 @@ export const REWARD_POOL: string[] = [
     "proxyChain", "spoof", "enumerate", "socialEngineer",
     "empBurst", "overclock", "cascade", "logicBomb", "trojan", "feint", "analyze",
     "polymorph", "precisionStrike", "overload", "momentum", "dataSiphon", "misdirect",
-    "ghostProtocol", "blindSpot", "meltdown", "contagion", "detonate", "chainReaction",
 ];
 
 type Topo = { id: string; col: number; row: number; next: string[] }[];
