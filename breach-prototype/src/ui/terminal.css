@@ -259,12 +259,12 @@ button.term.ghost:hover { background: var(--dim); color: #000; }
 .mnode {
     position: absolute; border: 1px solid var(--line); background: #0a1410;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    padding: 4px 6px; text-align: center; overflow: hidden;
+    padding: 5px 7px; text-align: center; overflow: hidden;
     transition: transform 0.1s, box-shadow 0.1s, border-color 0.1s;
 }
-.mnode .micon { font-size: 15px; line-height: 1; }
-.mnode .mlabel { font-size: 9.5px; line-height: 1.12; margin-top: 2px; color: #9fd18f; max-height: 24px; overflow: hidden; }
-.mnode .mdiff { font-size: 8px; color: var(--red); letter-spacing: 1px; margin-top: 1px; }
+.mnode .micon { font-size: 14px; line-height: 1; }
+.mnode .mlabel { font-size: 10.5px; line-height: 1.2; margin-top: 3px; color: #9fd18f; overflow-wrap: anywhere; }
+.mnode .mdiff { font-size: 8px; color: var(--red); letter-spacing: 1px; margin-top: 2px; }
 .mnode.breach .micon { color: var(--amber); }
 .mnode.safehouse .micon { color: var(--cyan); }
 .mnode.event .micon { color: #c98cff; }

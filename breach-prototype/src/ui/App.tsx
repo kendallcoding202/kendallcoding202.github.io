@@ -280,7 +280,7 @@ function CampaignSelect({ onPick }: { onPick: (id: string) => void }) {
 /* ============================================================
    RUN MAP — the branching route graph, Slay-the-Spire style
    ============================================================ */
-const COLW = 176, ROWH = 82, PADX = 18, PADY = 14, NODEW = 132, NODEH = 54;
+const COLW = 190, ROWH = 98, PADX = 16, PADY = 16, NODEW = 152, NODEH = 70;
 
 function RunMap({ run, campaign, onPick }: { run: RunState; campaign: Campaign; onPick: (n: MapNode) => void }) {
     const [hover, setHover] = useState<string | null>(null);
