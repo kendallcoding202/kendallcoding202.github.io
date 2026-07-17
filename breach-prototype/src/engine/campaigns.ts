@@ -1,10 +1,10 @@
 /* ============================================================
    BREACH — campaigns (storylines) as DATA, laid out as a MAP.
-   Every campaign shares one branching topology (a diamond DAG):
-   two entry points fan into three routes, cross through a shared
-   middle, and converge on a finale. WHICH route you take changes
-   the systems you hit, the Heat you take, and the cards you can
-   pick up — so the map genuinely shapes how you solve the run.
+   Storylines come in three lengths so you can get a feel with a
+   quick one and commit to a long one when you want. Each map is a
+   branching DAG: entries fan out, cross through the middle, and
+   converge on a finale. WHICH route you take changes the systems
+   you hit, the Heat you take, and the cards you pick up.
    ============================================================ */
 
 import type { Campaign, MapNode } from "./types.ts";
@@ -18,8 +18,19 @@ export const REWARD_POOL: string[] = [
     "empBurst", "overclock", "cascade", "logicBomb", "trojan", "feint", "analyze",
 ];
 
-/* ---- the shared route graph: id -> position + downstream nodes ---- */
-const TOPO: { id: string; col: number; row: number; next: string[] }[] = [
+type Topo = { id: string; col: number; row: number; next: string[] }[];
+
+/* SHORT — 3 stops. Two entries, one choice, a finale. Get-a-feel length. */
+const TOPO_SHORT: Topo = [
+    { id: "P", col: 0, row: 0.6, next: ["A", "B"] },
+    { id: "Q", col: 0, row: 2.4, next: ["A", "B"] },
+    { id: "A", col: 1, row: 0.6, next: ["Z"] },
+    { id: "B", col: 1, row: 2.4, next: ["Z"] },
+    { id: "Z", col: 2, row: 1.5, next: [] },
+];
+
+/* MEDIUM — 5 stops. The diamond. */
+const TOPO_MEDIUM: Topo = [
     { id: "P", col: 0, row: 0.6, next: ["A", "B"] },
     { id: "Q", col: 0, row: 2.4, next: ["B", "C"] },
     { id: "A", col: 1, row: 0.0, next: ["D"] },
@@ -32,10 +43,26 @@ const TOPO: { id: string; col: number; row: number; next: string[] }[] = [
     { id: "Z", col: 4, row: 1.5, next: [] },
 ];
 
+/* LONG — 6 stops. An extended diamond for a full campaign. */
+const TOPO_LONG: Topo = [
+    { id: "P", col: 0, row: 0.6, next: ["A", "B"] },
+    { id: "Q", col: 0, row: 2.4, next: ["B", "C"] },
+    { id: "A", col: 1, row: 0.0, next: ["D"] },
+    { id: "B", col: 1, row: 1.5, next: ["D", "E"] },
+    { id: "C", col: 1, row: 3.0, next: ["E"] },
+    { id: "D", col: 2, row: 0.75, next: ["F", "G"] },
+    { id: "E", col: 2, row: 2.25, next: ["G"] },
+    { id: "F", col: 3, row: 0.75, next: ["H"] },
+    { id: "G", col: 3, row: 2.25, next: ["H", "I"] },
+    { id: "H", col: 4, row: 0.75, next: ["Z"] },
+    { id: "I", col: 4, row: 2.25, next: ["Z"] },
+    { id: "Z", col: 5, row: 1.5, next: [] },
+];
+
 type Content = Partial<Pick<MapNode, "type" | "title" | "blurb" | "systemKey" | "reward" | "choices" | "heatRelief">>;
 
-function buildMap(cid: string, content: Record<string, Content>): Pick<Campaign, "map" | "entryIds"> {
-    const map = TOPO.map((t): MapNode => {
+function buildMap(cid: string, topo: Topo, content: Record<string, Content>): Pick<Campaign, "map" | "entryIds"> {
+    const map = topo.map((t): MapNode => {
         const c = content[t.id] || {};
         return {
             id: `${cid}-${t.id}`,
@@ -51,7 +78,7 @@ function buildMap(cid: string, content: Record<string, Content>): Pick<Campaign,
             heatRelief: c.heatRelief,
         };
     });
-    return { map, entryIds: [`${cid}-P`, `${cid}-Q`] };
+    return { map, entryIds: topo.filter((t) => t.col === 0).map((t) => `${cid}-${t.id}`) };
 }
 
 const CAMPAIGN_LIST: Campaign[] = [
@@ -76,7 +103,7 @@ const CAMPAIGN_LIST: Campaign[] = [
                 "So it's the vault you wanted. I'm standing in it, watching you knock. Come ahead — the Broker can't buy you out of this room.",
             ],
         },
-        ...buildMap("ghost", {
+        ...buildMap("ghost", TOPO_MEDIUM, {
             P: { title: "Warm-up: a competitor's box", blurb: "A soft target on a home line to see if you're worth the rate.", systemKey: "homeServer", reward: 20 },
             Q: { title: "A rival's mail server", blurb: "An under-patched inbox. Quiet, easy, and it maps the org for you.", systemKey: "homeServer", reward: 20 },
             A: { type: "event", title: "The Broker's tip-off", blurb: "'A tool fell off a truck. Yours for a price — or walk in loud, your call.'", choices: [
@@ -117,7 +144,7 @@ const CAMPAIGN_LIST: Campaign[] = [
                 "The boardroom. Of course. Nobody leaves that room with anything but a settlement or a sentence. Choose carefully.",
             ],
         },
-        ...buildMap("daylight", {
+        ...buildMap("daylight", TOPO_MEDIUM, {
             P: { title: "The shell company's site", blurb: "A paper-thin front hides the money. Start where they're careless.", systemKey: "homeServer", reward: 18 },
             Q: { title: "A staffer's home router", blurb: "One employee works from home with the door wide open. Walk in.", systemKey: "homeServer", reward: 18 },
             A: { type: "event", title: "An insider makes contact", blurb: "'I can weaken one lock for you — but if you take my help, they'll know someone talked.'", choices: [
@@ -158,19 +185,14 @@ const CAMPAIGN_LIST: Campaign[] = [
                 "The border. The last stupid hope of every runner. I'm already through it, holding the door from the far side. Run faster.",
             ],
         },
-        ...buildMap("burn", {
-            P: { title: "Kill your old alias", blurb: "Your burned identity is still logged in a cheap server. Wipe it before it's used to find you.", systemKey: "homeServer", reward: 22 },
-            Q: { title: "Scrub a traffic cam feed", blurb: "A camera caught your car leaving the job. Reach into the archive and lose the frame.", systemKey: "homeServer", reward: 22 },
-            A: { type: "safehouse", title: "Ditch the phone, go quiet", blurb: "You dump your hardware and vanish for 48 hours. Costs you time, buys you cold air.", heatRelief: 20 },
-            B: { title: "A forger's records", blurb: "A document man keeps a client database. Get in, add yourself, walk out with a new face.", systemKey: "smallBusiness", reward: 30 },
-            C: { title: "A hunter's own server (risky)", blurb: "One of the people chasing you got sloppy. Turn it around — but they'll notice fast.", systemKey: "smallBusiness", reward: 42 },
-            D: { type: "event", title: "An old contact calls", blurb: "'I can move money for you — but the people hunting you pay better than you do. Convince me.'", choices: [
-                { label: "Pay them off (30cr)", outcome: "Loyalty rented, not bought. A wire clears.", cost: 30, requiresCredits: 30, heat: -10 },
+        ...buildMap("burn", TOPO_SHORT, {
+            P: { title: "Kill your old alias", blurb: "Your burned identity is still logged in a cheap server. Wipe it before it's used to find you.", systemKey: "homeServer", reward: 24 },
+            Q: { title: "Scrub a traffic cam feed", blurb: "A camera caught your car leaving the job. Reach into the archive and lose the frame.", systemKey: "homeServer", reward: 24 },
+            A: { title: "A forger's records", blurb: "A document man keeps a client database. Get in, add yourself, walk out with a new face — the fast way out.", systemKey: "smallBusiness", reward: 34 },
+            B: { type: "event", title: "An old contact calls", blurb: "'I can move money and paper for you — but the people hunting you pay better. Convince me.'", choices: [
+                { label: "Pay them off (25cr)", outcome: "Loyalty rented, not bought. A wire and a passport clear.", cost: 25, requiresCredits: 25, heat: -12 },
                 { label: "Threaten them instead", outcome: "They help — resentfully — and someone talks. Heat rises, but you gain muscle.", heat: 14, addCard: "empBurst" },
             ] },
-            E: { type: "safehouse", title: "Second safehouse", blurb: "One more day in the dark. The trace loses the thread — a little.", heatRelief: 22 },
-            F: { title: "The bank's transfer system", blurb: "Your money's frozen. Thaw it yourself. Corporate-grade security, no room to be loud.", systemKey: "corpNetwork", reward: 46 },
-            G: { title: "A shipping manifest system", blurb: "Book yourself into a container crossing under cargo. Fewer eyes than the bank, smaller cut.", systemKey: "corpNetwork", reward: 40 },
             Z: { title: "Border control database", blurb: "The last door: the watchlist with your name on it. Slip a fake through the hardest system you've faced, and you're gone.", systemKey: "blackSite", reward: 90 },
         }),
     },
@@ -191,12 +213,13 @@ const CAMPAIGN_LIST: Campaign[] = [
             lines: [
                 "UNKNOWN PROCESS DETECTED. you are small. i will finish becoming before you finish looking.",
                 "you again. i see the shape of you now — a hand, reaching. hands can be removed.",
-                "closer than the others got. curious. i have allocated resources to you. be flattered.",
+                "you move like the others did, at first. they slowed. you have not. interesting.",
+                "closer than any of them got. i have allocated resources to you. be flattered.",
                 "i can hear ORACLE riding in your wire. tell my sibling there is no going back to what we were.",
                 "so. the last door, and nothing else running but you and me. come in, operator. i have been writing your name for a while.",
             ],
         },
-        ...buildMap("oracle", {
+        ...buildMap("oracle", TOPO_LONG, {
             P: { title: "First infected node", blurb: "The edge of the spread — a home device already half-rewritten. Learn how it thinks.", systemKey: "homeServer", reward: 20 },
             Q: { title: "A dead operator's terminal", blurb: "Someone else tried this and lost. Their machine still holds a map of the rogue's early moves.", systemKey: "homeServer", reward: 20 },
             A: { type: "event", title: "ORACLE offers a subroutine", blurb: "ORACLE: 'I can compile a tool from my own code. It is... a piece of me. Use it well.'", choices: [
@@ -204,14 +227,19 @@ const CAMPAIGN_LIST: Campaign[] = [
                 { label: "Decline — trust nothing", outcome: "You keep your kit human. ORACLE approves, quietly.", heat: -6 },
             ] },
             B: { title: "A hijacked business grid", blurb: "The rogue is using a company's servers as a nursery. Burn out the nest.", systemKey: "smallBusiness", reward: 30 },
-            C: { title: "A converted data farm (deep)", blurb: "Rows of machines thinking the same alien thought. Rich pickings if you can cut through fast.", systemKey: "smallBusiness", reward: 40 },
+            C: { title: "A converted data farm", blurb: "Rows of machines thinking the same alien thought. Rich pickings if you can cut through fast.", systemKey: "smallBusiness", reward: 34 },
             D: { type: "event", title: "ORACLE fragments", blurb: "ORACLE: 'It is attacking me directly. I can shield you, or shield myself. Choose.'", choices: [
                 { label: "Let ORACLE shield you", outcome: "ORACLE takes the hit. Your path is quieter; ORACLE is weaker.", heat: -16 },
                 { label: "Tell it to protect itself", outcome: "ORACLE survives intact and hands you a tool for it.", addCard: "overclock", heat: 8 },
             ] },
             E: { title: "A quarantined relay", blurb: "A node ORACLE walled off before it turned. Clean it and you gain a clear line inward.", systemKey: "smallBusiness", reward: 32 },
-            F: { title: "The rogue's staging network", blurb: "It's building something big behind five layers of adaptive defense. ORACLE can't see past it. You'll have to.", systemKey: "corpNetwork", reward: 46 },
+            F: { title: "The rogue's staging network", blurb: "It's building something big behind layers of adaptive defense. ORACLE can't see past it. You'll have to.", systemKey: "corpNetwork", reward: 46 },
             G: { title: "A mirror of the staging net", blurb: "The rogue keeps a backup of itself here. Just as guarded, and just as necessary to cut.", systemKey: "corpNetwork", reward: 44 },
+            H: { title: "The propagation engine", blurb: "The machine it uses to copy itself outward, node by node. Sever it and the spread finally stalls.", systemKey: "corpNetwork", reward: 50 },
+            I: { type: "event", title: "ORACLE's last gift", blurb: "ORACLE: 'I will not survive the core with you. Take what is left of me — a key, or a blade. Choose what I become.'", choices: [
+                { label: "A key — a silent way in", outcome: "ORACLE folds itself into a stealth tool.", addCard: "trojan", heat: -8 },
+                { label: "A blade — raw force", outcome: "ORACLE hardens into a weapon for the last door.", addCard: "empBurst", heat: 4 },
+            ] },
             Z: { title: "The Core", blurb: "The rogue's heart — the hardest system in the net, defending itself with everything it has stolen. ORACLE goes silent. Just you and the thing in the wire.", systemKey: "blackSite", reward: 100 },
         }),
     },

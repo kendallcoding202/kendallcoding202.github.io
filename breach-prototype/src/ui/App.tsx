@@ -6,7 +6,7 @@
    lives in engine/ and run.ts; this file only renders and dispatches.
    ============================================================ */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { BreachResult, Campaign, Defense, EventChoice, GameState, MapNode, RunState } from "../engine/types.ts";
 import { CARDS } from "../engine/cards.ts";
 import { SYSTEMS } from "../engine/systems.ts";
@@ -270,9 +270,10 @@ function CampaignSelect({ onPick }: { onPick: (id: string) => void }) {
                 {CAMPAIGN_ORDER.map((id) => {
                     const c = CAMPAIGNS[id];
                     const depth = Math.max(...c.map.map((n) => n.col)) + 1;
+                    const length = depth <= 3 ? "SHORT" : depth >= 6 ? "LONG" : "MEDIUM";
                     return (
                         <div className="syscard" key={id} onClick={() => onPick(id)}>
-                            <div className="sysname">{c.name}</div>
+                            <div className="sysname">{c.name} <span className={"lentag " + length.toLowerCase()}>{length}</span></div>
                             <div className="cyan" style={{ fontSize: 12, margin: "2px 0 6px" }}>{c.tagline}</div>
                             <div className="sysflavor">{c.premise}</div>
                             <div className="sysmeta muted">Handler: {c.handler} · {depth}-stop map{c.antagonist ? " · ⌁ watched" : ""}</div>
@@ -293,7 +294,17 @@ const COLW = 190, ROWH = 98, PADX = 16, PADY = 16, NODEW = 152, NODEH = 70;
 function RunMap({ run, campaign, onPick }: { run: RunState; campaign: Campaign; onPick: (n: MapNode) => void }) {
     const [hover, setHover] = useState<string | null>(null);
     const [selected, setSelected] = useState<string | null>(null);
+    const scrollRef = useRef<HTMLDivElement>(null);
     useEffect(() => { setSelected(null); setHover(null); }, [run.nodeId]);
+    // keep the current position in view as the map advances (no page scroll)
+    useEffect(() => {
+        const el = scrollRef.current;
+        if (!el) return;
+        const cur = getNode(campaign, run.nodeId);
+        const col = cur ? cur.col : 0;
+        const x = PADX + col * COLW + NODEW / 2;
+        el.scrollTo({ left: Math.max(0, x - el.clientWidth / 2), behavior: "smooth" });
+    }, [run.nodeId, campaign]);
     const options = currentOptions(run);
     const optionIds = new Set(options.map((n) => n.id));
     const pathSet = new Set(run.path);
@@ -321,7 +332,7 @@ function RunMap({ run, campaign, onPick }: { run: RunState; campaign: Campaign; 
 
     return (
         <>
-            <div className="mapscroll">
+            <div className="mapscroll" ref={scrollRef}>
                 <div className="mapwrap" style={{ width, height }}>
                     <svg className="edges" width={width} height={height}>
                         {!run.nodeId && options.map((o) => (
@@ -351,7 +362,7 @@ function RunMap({ run, campaign, onPick }: { run: RunState; campaign: Campaign; 
                             >
                                 {marked && <span className={"mnodemark " + mod!.tone}>{mod!.tone === "easier" ? "▽" : mod!.tone === "harder" ? "⚠" : "◈"}</span>}
                                 <span className="micon">{nodeIcon(n)}</span>
-                                <span className="mlabel">{n.title}</span>
+                                <span className="mlabel">{n.type === "event" ? (run.events[n.id]?.title || n.title) : n.title}</span>
                                 {diff > 0 && <span className="mdiff">{"◆".repeat(diff)}</span>}
                             </div>
                         );
@@ -365,8 +376,8 @@ function RunMap({ run, campaign, onPick }: { run: RunState; campaign: Campaign; 
                             <span className="md-tag">{nodeIcon(detail)} {detail.type === "breach" ? (isTerminal(detail) ? "FINAL BREACH" : "BREACH") : detail.type === "safehouse" ? "SAFEHOUSE" : "EVENT"}</span>
                             {detailOpen && <button className="term md-go" onClick={() => onPick(detail)}>▶ Take this route</button>}
                         </div>
-                        <b className="md-title">{detail.title}</b>
-                        <span className="md-blurb">{detail.blurb}</span>
+                        <b className="md-title">{detail.type === "event" ? (run.events[detail.id]?.title || detail.title) : detail.title}</b>
+                        <span className="md-blurb">{detail.type === "event" ? (run.events[detail.id]?.blurb || detail.blurb) : detail.blurb}</span>
                         {detail.type === "breach" && (() => { const md = getModifier(run.mods[detail.id]); return md.key !== "clean" ? <span className={"md-mod " + md.tone}>{md.tone === "easier" ? "▽" : md.tone === "harder" ? "⚠" : "◈"} {md.label} — {md.blurb}</span> : null; })()}
                         <span className="md-foot muted">
                             {detail.type === "breach" && detail.systemKey ? `target: ${SYSTEMS[detail.systemKey].name} · difficulty ${SYSTEMS[detail.systemKey].difficulty}/5 · reward ${detail.reward || 20}cr` : null}
@@ -429,13 +440,15 @@ function RunView({ run, campaign, onLaunchBreach, onRun, onOpenDeck }: {
             </div>
 
             {/* event overlay */}
-            {activeEvent && !removing && (
+            {activeEvent && !removing && (() => {
+                const ev = run.events[activeEvent.id] || { title: activeEvent.title, blurb: activeEvent.blurb, choices: activeEvent.choices || [] };
+                return (
                 <div className="overlay">
                     <div className="box" style={{ textAlign: "left", maxWidth: 560 }}>
-                        <h2 className="cyan">{activeEvent.title}</h2>
-                        <p className="brief">{activeEvent.blurb}</p>
+                        <h2 className="cyan">{ev.title}</h2>
+                        <p className="brief">{ev.blurb}</p>
                         <div className="event-choices">
-                            {(activeEvent.choices || []).map((ch, i) => {
+                            {ev.choices.map((ch, i) => {
                                 const cant = ch.requiresCredits != null && run.credits < ch.requiresCredits;
                                 return (
                                     <button key={i} className={"term event-choice" + (cant ? " disabled" : "")} disabled={cant} onClick={() => pickChoice(activeEvent, ch)}>
@@ -447,7 +460,8 @@ function RunView({ run, campaign, onLaunchBreach, onRun, onOpenDeck }: {
                         <button className="term ghost tiny" style={{ marginTop: 12 }} onClick={() => setActiveEvent(null)}>◂ back to the map</button>
                     </div>
                 </div>
-            )}
+                );
+            })()}
 
             {/* remove-a-card chooser */}
             {removing && (

@@ -6,10 +6,12 @@
    hacking; results flow back here.
    ============================================================ */
 
-import type { BreachResult, Campaign, EventChoice, MapNode, RunState } from "./types.ts";
+import type { BreachResult, Campaign, EventChoice, EventDef, MapNode, RunEvent, RunState } from "./types.ts";
 import { CAMPAIGNS } from "./campaigns.ts";
 import { STARTER_DECK } from "./cards.ts";
 import { rollModifier } from "./modifiers.ts";
+import { GENERIC_EVENTS } from "./events.ts";
+import { shuffle } from "./rng.ts";
 
 const LOSE_HEAT = 25; // Heat spike for getting detected on a job
 
@@ -29,6 +31,13 @@ export function createRun(campaignId: string, seed = 1): RunState {
     const rngState = { rng: seed >>> 0 };
     const mods: Record<string, string> = {};
     for (const n of c.map) if (n.type === "breach") mods[n.id] = rollModifier(rngState, n);
+    // Deal each event node a fresh event this run — from the shared deck plus
+    // this campaign's own signature events, so what you meet between jobs varies.
+    const eventNodes = c.map.filter((n) => n.type === "event");
+    const signature: EventDef[] = eventNodes.map((n) => ({ id: n.id, title: n.title, blurb: n.blurb, choices: n.choices || [] }));
+    const pool = shuffle(rngState, [...signature, ...GENERIC_EVENTS]);
+    const events: Record<string, RunEvent> = {};
+    eventNodes.forEach((n, i) => { const e = pool[i % pool.length]; events[n.id] = { title: e.title, blurb: e.blurb, choices: e.choices }; });
     const run: RunState = {
         campaignId: c.id,
         seed: seed >>> 0,
@@ -39,6 +48,7 @@ export function createRun(campaignId: string, seed = 1): RunState {
         nodeId: null,
         path: [],
         mods,
+        events,
         stats: { breaches: 0, quietestPct: null, loudestPct: null },
         story: [c.intro],
         outcome: "running",

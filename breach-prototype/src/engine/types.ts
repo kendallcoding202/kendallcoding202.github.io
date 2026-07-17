@@ -188,6 +188,21 @@ export interface RunNode {
     heatCost?: number; // safehouse/event: Heat added when taken
 }
 
+/** A drawable event (from the shared deck or a campaign's signature set). */
+export interface EventDef {
+    id: string;
+    title: string;
+    blurb: string;
+    choices: EventChoice[];
+}
+
+/** The concrete event dealt to an event node for this run. */
+export interface RunEvent {
+    title: string;
+    blurb: string;
+    choices: EventChoice[];
+}
+
 /** A node on the campaign MAP: run content plus its position and the
     downstream nodes it leads to. Terminal nodes (next === []) are finales. */
 export interface MapNode extends RunNode {
@@ -238,6 +253,7 @@ export interface RunState {
     nodeId: string | null; // the node you're currently AT (null = at the start)
     path: string[]; // ids of nodes resolved so far, in order
     mods: Record<string, string>; // breach node id -> SystemModifier key (rolled at run start)
+    events: Record<string, RunEvent>; // event node id -> the event dealt this run
     stats: RunStats;
     story: string[]; // narrative feed
     outcome: RunOutcome;

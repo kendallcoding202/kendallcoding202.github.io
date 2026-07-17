@@ -44,8 +44,30 @@ for (const id of CAMPAIGN_ORDER) {
         run = takeNode(run, node);
     }
     check(`${id}: reaches a win by playing well`, run.outcome === "won");
-    check(`${id}: finished several jobs`, run.jobsDone >= 3);
-    check(`${id}: recorded a path`, run.path.length >= 4);
+    check(`${id}: finished at least a couple jobs`, run.jobsDone >= 2);
+    check(`${id}: recorded a path`, run.path.length >= 3);
+}
+
+/* 1b. Campaigns come in different lengths (short / medium / long). */
+{
+    const stops = (id: string) => Math.max(...CAMPAIGNS[id].map.map((n) => n.col)) + 1;
+    const lens = CAMPAIGN_ORDER.map(stops);
+    check("there is a short campaign", lens.some((l) => l <= 3));
+    check("there is a longer campaign", lens.some((l) => l >= 6));
+    check("campaign lengths actually vary", new Set(lens).size >= 2);
+}
+
+/* 1c. Every event node is dealt a well-formed event from the deck. */
+for (const id of CAMPAIGN_ORDER) {
+    const run = createRun(id, 4242);
+    const eventNodes = CAMPAIGNS[id].map.filter((n) => n.type === "event");
+    check(`${id}: every event node was dealt an event`, eventNodes.every((n) => !!run.events[n.id] && run.events[n.id].choices.length > 0));
+    // different seeds usually deal different events (when there's more than one to draw)
+    if (eventNodes.length > 0) {
+        const other = createRun(id, 88);
+        const same = eventNodes.every((n) => run.events[n.id].title === other.events[n.id].title);
+        check(`${id}: event nodes vary across seeds`, eventNodes.length === 1 ? true : !same);
+    }
 }
 
 /* 2. Busted path — repeated failures spike Heat past the cap. */
@@ -100,9 +122,9 @@ for (const id of CAMPAIGN_ORDER) {
         run = takeNode(run, node);
         if (run.transmission) seen.add(run.transmission);
     }
-    check(`${id}: watcher delivered several escalating lines`, seen.size >= 4);
+    check(`${id}: watcher delivered escalating lines`, seen.size >= 3);
     check(`${id}: every watcher line came from its script`, [...seen].every((l) => c.antagonist!.lines.includes(l)));
-    check(`${id}: story feed carries the transmissions`, run.story.filter((l) => l.startsWith("⌁")).length >= 4);
+    check(`${id}: story feed carries the transmissions`, run.story.filter((l) => l.startsWith("⌁")).length >= 3);
 }
 
 /* 6. Custom deck flows into a breach. */

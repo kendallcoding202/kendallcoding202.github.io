@@ -115,6 +115,10 @@ hr { border: none; border-top: 1px solid var(--line); margin: 7px 0; }
 }
 .syscard:hover { border-color: var(--fg); box-shadow: 0 6px 16px #000a; transform: translateY(-3px); }
 .syscard .sysname { font-weight: bold; font-size: 16px; color: var(--fg); letter-spacing: 1px; }
+.lentag { font-size: 10px; letter-spacing: 1px; padding: 1px 6px; border: 1px solid currentColor; vertical-align: middle; font-weight: bold; }
+.lentag.short { color: var(--cyan); }
+.lentag.medium { color: var(--amber); }
+.lentag.long { color: #ff7a1a; }
 .syscard .diff { margin: 4px 0; letter-spacing: 2px; }
 .syscard .diff .on { color: var(--red); }
 .syscard .diff .off { color: var(--line); }
@@ -251,7 +255,7 @@ button.term.ghost:hover { background: var(--dim); color: #000; }
 .mapscroll { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
 .mapwrap { position: relative; margin: 4px auto 0; }
 .edges { position: absolute; inset: 0; pointer-events: none; }
-.edge { stroke: var(--line); stroke-width: 2; }
+.edge { stroke: var(--line); stroke-width: 2; transition: stroke 0.25s ease; }
 .edge.dim { stroke: #163a22; stroke-dasharray: 3 4; }
 .edge.traveled { stroke: var(--fg); stroke-width: 2.5; filter: drop-shadow(0 0 3px #4af62688); }
 .edge.open { stroke: var(--amber); stroke-width: 2.5; stroke-dasharray: 5 4; animation: edgeflow 0.7s linear infinite; }
@@ -263,7 +267,7 @@ button.term.ghost:hover { background: var(--dim); color: #000; }
     position: absolute; border: 1px solid var(--line); background: #0a1410;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     padding: 5px 7px; text-align: center; overflow: hidden;
-    transition: transform 0.1s, box-shadow 0.1s, border-color 0.1s;
+    transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
 }
 .mnode .micon { font-size: 14px; line-height: 1; }
 .mnode .mlabel { font-size: 10.5px; line-height: 1.2; margin-top: 3px; color: #9fd18f; overflow-wrap: anywhere; }
@@ -284,6 +288,12 @@ button.term.ghost:hover { background: var(--dim); color: #000; }
 .mnode.open .mlabel { color: var(--fg); }
 .mnode.sel { outline: 2px solid var(--cyan); outline-offset: 2px; z-index: 6; }
 @keyframes nodepulse { 0%,100% { box-shadow: 0 0 6px #ffb00033; } 50% { box-shadow: 0 0 14px #ffb00099; } }
+
+/* touch devices apply :hover on tap and it STICKS — that read as glitchy when
+   the map advanced. Neutralise hover-transforms where there's no real pointer. */
+@media (hover: none) {
+    .mnode.open:hover, .card:hover:not(.disabled), .syscard:hover, .route:hover { transform: none; }
+}
 
 .mapdetail {
     margin: 8px 0 2px; padding: 7px 12px; border: 1px solid var(--line); background: var(--panel);
