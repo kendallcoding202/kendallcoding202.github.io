@@ -29,6 +29,7 @@ function Intro({ onClose }: { onClose: () => void }) {
                     <p><span className="amber">DETECTION</span> is everything. Every card makes <b>NOISE</b> that fills the meter. Fill it and you're <span className="red">locked out</span>. Loud tools are powerful; quiet ones keep you invisible.</p>
                     <p><span className="amber">BREACH INWARD</span> through the layers. Each defense has a <b>Strength</b> number — reduce it to 0 with exploits to take that defense down, and clear every defense on a layer to move inward. Defenses start <b>UNKNOWN</b>; spend quiet <b>recon</b> to reveal their type &amp; Strength, then hit each with its <b>matching exploit</b>.</p>
                     <p className="muted">To use a targeted card (marked ◎): click the card, then click the glowing defense it should hit.</p>
+                    <p className="muted">You draw 5 cards a turn. Ending a turn discards whatever you didn't play and draws 5 fresh — your deck recycles, so nothing is ever lost. You don't have to play your whole hand; holding cards is how you stay quiet.</p>
                     <p><span className="amber">THE SYSTEM REACTS</span> — and it <b>tells you its next move</b> (SYSTEM ALERT panel). Read it and counter: Spoof its patch, or breach a defense before it hardens.</p>
                     <p className="muted">Win: breach the objective layer, then play Payload. Lose: detection maxes out. Enter = end turn · Esc = cancel targeting.</p>
                 </div>
@@ -240,7 +241,10 @@ export function App() {
                 <button className="term" onClick={endTurn}>End Turn ▸</button>
                 <button className="term ghost" onClick={restart}>Retry</button>
                 <button className="term ghost" onClick={() => setShowIntro(true)}>?</button>
-                <span className="muted" style={{ fontSize: 12 }}>ending a turn = the system acts &amp; the trace climbs (+{state.baselineCreep})</span>
+                <span className="piles muted">🂠 draw {state.deck.length} · discard {state.discard.length}</span>
+            </div>
+            <div className="muted turn-note">
+                Ending a turn <b>discards your hand and draws 5 fresh</b> (cards recycle — nothing is lost), then the system takes its telegraphed move and the trace climbs +{state.baselineCreep}.
             </div>
 
             <div className="log">

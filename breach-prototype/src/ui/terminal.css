@@ -143,6 +143,9 @@ hr { border: none; border-top: 1px solid var(--line); margin: 12px 0; }
     color: var(--fg); font-size: 13px; min-height: 20px;
 }
 .hand-legend { font-size: 12px; margin-top: 12px; }
+.piles { font-size: 12px; margin-left: auto; }
+.turn-note { font-size: 12px; margin-top: 8px; line-height: 1.4; }
+.turn-note b { color: var(--fg); }
 .armed-hint { margin-top: 12px; letter-spacing: 1px; }
 .card.armed { border-color: var(--amber); box-shadow: 0 0 12px #ffb00088; transform: translateY(-4px); }
 .tiny { padding: 3px 8px !important; font-size: 11px !important; }
