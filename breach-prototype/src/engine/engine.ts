@@ -9,7 +9,7 @@
    next move so the player can outplay it.
    ============================================================ */
 
-import type { Action, AlertStage, CardDef, Defense, GameState, Layer, SystemDef, SystemIntent } from "./types.ts";
+import type { Action, AlertStage, CardDef, Defense, GameState, Layer, SystemDef, SystemIntent, SystemModifier } from "./types.ts";
 import { CARDS, STARTER_DECK } from "./cards.ts";
 import { SYSTEMS, DEFAULT_SYSTEM } from "./systems.ts";
 import { shuffle } from "./rng.ts";
@@ -18,19 +18,23 @@ const PROXY_REDUCTION = 3;
 
 /* ---------- construction ---------- */
 
-export function createInitialState(seed: number, systemKey: string = DEFAULT_SYSTEM, deck?: string[]): GameState {
+export function createInitialState(seed: number, systemKey: string = DEFAULT_SYSTEM, deck?: string[], modifier?: SystemModifier | null): GameState {
     const sys: SystemDef = SYSTEMS[systemKey] || SYSTEMS[DEFAULT_SYSTEM];
+    const m = modifier || null;
+    const sDelta = m?.strengthDelta || 0;
+    const detectionMax = Math.max(60, sys.detectionMax + (m?.detectionMaxDelta || 0));
     const state: GameState = {
         system: sys.name,
-        detection: 0,
-        detectionMax: sys.detectionMax,
-        baselineCreep: sys.baselineCreep,
+        detection: m?.detectionStartFrac ? Math.round(m.detectionStartFrac * detectionMax) : 0,
+        detectionMax,
+        baselineCreep: Math.max(1, sys.baselineCreep + (m?.creepDelta || 0)),
         layers: sys.layers.map((l): Layer => ({
             name: l.name,
             breached: false,
-            defenses: l.defenses.map((d): Defense => ({
-                type: d.type, strength: d.strength, maxStrength: d.strength, typeRevealed: false, strengthRevealed: false,
-            })),
+            defenses: l.defenses.map((d): Defense => {
+                const strength = Math.max(1, d.strength + sDelta);
+                return { type: d.type, strength, maxStrength: strength, typeRevealed: false, strengthRevealed: false };
+            }),
         })),
         current: 0,
         objectiveExposed: false,
@@ -48,6 +52,9 @@ export function createInitialState(seed: number, systemKey: string = DEFAULT_SYS
         bombs: [],
         alert: "IDLE",
         systemIntent: null,
+        modifierLabel: m && m.key !== "clean" ? m.label : null,
+        modifierBlurb: m && m.key !== "clean" ? m.blurb : null,
+        modifierTone: m && m.key !== "clean" ? m.tone : null,
         rng: seed >>> 0,
         outcome: "playing",
         lossReason: null,

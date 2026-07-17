@@ -11,8 +11,10 @@ import type { BreachResult, Campaign, Defense, EventChoice, GameState, MapNode, 
 import { CARDS } from "../engine/cards.ts";
 import { SYSTEMS } from "../engine/systems.ts";
 import { CAMPAIGNS, CAMPAIGN_ORDER, REWARD_POOL } from "../engine/campaigns.ts";
+import { getModifier } from "../engine/modifiers.ts";
 import { createInitialState, applyAction, canPlay, projectedNoise, needsTarget, targetableDefenses, previewOnTarget } from "../engine/engine.ts";
 import { createRun, currentOptions, atFinale, isTerminal, resolveBreach, resolveEvent, resolveSafehouse, addCard, removeCard, getCampaign, getNode, clearTransmission } from "../engine/run.ts";
+import type { SystemModifier } from "../engine/types.ts";
 
 const newSeed = () => Math.floor(Math.random() * 0xffffffff) >>> 0;
 const meterColor = (f: number) => (f < 0.3 ? "#4af626" : f < 0.6 ? "#ffb000" : f < 0.85 ? "#ff7a1a" : "#ff4141");
@@ -104,8 +106,8 @@ function Transmission({ name, text, onClose }: { name: string; text: string; onC
 /* ============================================================
    BREACH SCREEN (one job)
    ============================================================ */
-function Breach({ systemKey, systemTitle, deck, onComplete }: { systemKey: string; systemTitle: string; deck: string[]; onComplete: (r: BreachResult) => void }) {
-    const [state, setState] = useState<GameState>(() => createInitialState(newSeed(), systemKey, deck));
+function Breach({ systemKey, systemTitle, deck, modifier, onComplete }: { systemKey: string; systemTitle: string; deck: string[]; modifier?: SystemModifier | null; onComplete: (r: BreachResult) => void }) {
+    const [state, setState] = useState<GameState>(() => createInitialState(newSeed(), systemKey, deck, modifier));
     const [armed, setArmed] = useState<string | null>(null);
     const [showIntro, setShowIntro] = useState(() => { try { return localStorage.getItem("breach_seen_intro") !== "1"; } catch { return true; } });
     const closeIntro = () => { setShowIntro(false); try { localStorage.setItem("breach_seen_intro", "1"); } catch { /* ignore */ } };
@@ -144,6 +146,12 @@ function Breach({ systemKey, systemTitle, deck, onComplete }: { systemKey: strin
                 <button className="term ghost tiny" style={{ marginLeft: 14 }} onClick={() => onComplete({ won: false, detection: state.detectionMax, detectionMax: state.detectionMax })}>abort job</button>
             </div>
             <div className="muted">turn {state.turn} · target: {state.system} · clear the objective before you're detected</div>
+            {state.modifierLabel && (
+                <div className={"modbar " + state.modifierTone}>
+                    <span className="modtag">{state.modifierTone === "easier" ? "▽" : state.modifierTone === "harder" ? "⚠" : "◈"} {state.modifierLabel}</span>
+                    <span className="modblurb">{state.modifierBlurb}</span>
+                </div>
+            )}
             <hr />
 
             <div className="meter-label">
@@ -330,15 +338,18 @@ function RunMap({ run, campaign, onPick }: { run: RunState; campaign: Campaign; 
                         const isOpen = optionIds.has(n.id);
                         const cls = isCurrent ? "cur" : isDone ? "done" : isOpen ? "open" : "locked";
                         const diff = n.type === "breach" && n.systemKey ? SYSTEMS[n.systemKey].difficulty : 0;
+                        const mod = n.type === "breach" ? getModifier(run.mods[n.id]) : null;
+                        const marked = mod && mod.key !== "clean";
                         return (
                             <div
                                 key={n.id}
-                                className={"mnode " + n.type + " " + cls + (isTerminal(n) ? " finale" : "") + (selected === n.id ? " sel" : "")}
+                                className={"mnode " + n.type + " " + cls + (isTerminal(n) ? " finale" : "") + (selected === n.id ? " sel" : "") + (marked ? " mod-" + mod!.tone : "")}
                                 style={{ left: PADX + n.col * COLW, top: PADY + n.row * ROWH, width: NODEW, height: NODEH }}
                                 onClick={() => setSelected(n.id)}
                                 onMouseEnter={() => setHover(n.id)}
                                 onMouseLeave={() => setHover((h) => (h === n.id ? null : h))}
                             >
+                                {marked && <span className={"mnodemark " + mod!.tone}>{mod!.tone === "easier" ? "▽" : mod!.tone === "harder" ? "⚠" : "◈"}</span>}
                                 <span className="micon">{nodeIcon(n)}</span>
                                 <span className="mlabel">{n.title}</span>
                                 {diff > 0 && <span className="mdiff">{"◆".repeat(diff)}</span>}
@@ -356,6 +367,7 @@ function RunMap({ run, campaign, onPick }: { run: RunState; campaign: Campaign; 
                         </div>
                         <b className="md-title">{detail.title}</b>
                         <span className="md-blurb">{detail.blurb}</span>
+                        {detail.type === "breach" && (() => { const md = getModifier(run.mods[detail.id]); return md.key !== "clean" ? <span className={"md-mod " + md.tone}>{md.tone === "easier" ? "▽" : md.tone === "harder" ? "⚠" : "◈"} {md.label} — {md.blurb}</span> : null; })()}
                         <span className="md-foot muted">
                             {detail.type === "breach" && detail.systemKey ? `target: ${SYSTEMS[detail.systemKey].name} · difficulty ${SYSTEMS[detail.systemKey].difficulty}/5 · reward ${detail.reward || 20}cr` : null}
                             {detail.type === "safehouse" ? `lie low · −${detail.heatRelief || 20} heat · no pay` : null}
@@ -455,13 +467,29 @@ function RunView({ run, campaign, onLaunchBreach, onRun, onOpenDeck }: {
    ============================================================ */
 function Ending({ run, campaign, onRestart }: { run: RunState; campaign: Campaign; onRestart: () => void }) {
     const won = run.outcome === "won";
+    const s = run.stats;
+    const heatFrac = run.heat / run.heatMax;
+    // a little flavor verdict on how you played
+    const verdict = s.loudestPct == null ? "no jobs pulled"
+        : s.loudestPct <= 40 ? "You were a ghost — barely a ripple."
+        : s.loudestPct <= 70 ? "Loud in places, but you got out."
+        : "You kicked the door in. It worked — this time.";
     return (
         <div className="wrap">
             <div className="overlay">
                 <div className={"box " + (won ? "won" : "lost")} style={{ textAlign: "left", maxWidth: 620 }}>
                     <h2 className={won ? "cyan" : "red"} style={{ textAlign: "center" }}>{won ? "CONTRACT COMPLETE" : "BUSTED"}</h2>
                     <p className="brief">{won ? campaign.winText : campaign.bustedText}</p>
-                    <p className="muted" style={{ fontSize: 12 }}>Campaign: {campaign.name} · jobs pulled: {run.jobsDone} · final heat: {run.heat}/{run.heatMax} · deck: {run.deck.length} cards</p>
+                    <div className="runsummary">
+                        <div className="rs-row"><span>Campaign</span><b>{campaign.name}</b></div>
+                        <div className="rs-row"><span>Jobs pulled</span><b>{run.jobsDone}</b></div>
+                        <div className="rs-row"><span>Route length</span><b>{run.path.length} stops</b></div>
+                        <div className="rs-row"><span>Final trace (Heat)</span><b style={{ color: meterColor(heatFrac) }}>{run.heat} / {run.heatMax}</b></div>
+                        {s.quietestPct != null && <div className="rs-row"><span>Quietest breach</span><b className="cyan">{s.quietestPct}% detection</b></div>}
+                        {s.loudestPct != null && <div className="rs-row"><span>Loudest breach</span><b className="amber">{s.loudestPct}% detection</b></div>}
+                        <div className="rs-row"><span>Deck</span><b>{run.deck.length} cards</b></div>
+                    </div>
+                    <p className="muted" style={{ fontSize: 12, fontStyle: "italic", marginTop: 8 }}>{verdict}</p>
                     <button className="term" style={{ marginTop: 14, display: "block", marginInline: "auto" }} onClick={onRestart}>◂ Choose another storyline</button>
                 </div>
             </div>
@@ -481,7 +509,7 @@ export function App() {
 
     const campaign = run ? getCampaign(run.campaignId) : null;
 
-    const startCampaign = (id: string) => { setRun(createRun(id)); setActiveNode(null); setReward(null); setMode("run"); };
+    const startCampaign = (id: string) => { setRun(createRun(id, newSeed())); setActiveNode(null); setReward(null); setMode("run"); };
     const launchBreach = (n: MapNode) => { setActiveNode(n); setMode("breach"); };
 
     const onBreachComplete = (result: BreachResult) => {
@@ -499,7 +527,7 @@ export function App() {
     if (mode === "campaign" || !run || !campaign) return <CampaignSelect onPick={startCampaign} />;
 
     if (mode === "breach" && activeNode) {
-        return <Breach systemKey={activeNode.systemKey || "homeServer"} systemTitle={activeNode.title} deck={run.deck} onComplete={onBreachComplete} />;
+        return <Breach systemKey={activeNode.systemKey || "homeServer"} systemTitle={activeNode.title} deck={run.deck} modifier={getModifier(run.mods[activeNode.id])} onComplete={onBreachComplete} />;
     }
 
     if (mode === "ending") return <Ending run={run} campaign={campaign} onRestart={() => { setMode("campaign"); setRun(null); }} />;

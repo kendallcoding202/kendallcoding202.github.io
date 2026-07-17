@@ -311,6 +311,43 @@ button.term.ghost:hover { background: var(--dim); color: #000; }
 .tbox .term:not(.ghost) { border-color: var(--red); color: var(--red); }
 .tbox .term:not(.ghost):hover { background: var(--red); color: #000; }
 
+/* ---- per-run system modifiers ---- */
+.modbar {
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    margin-top: 6px; padding: 5px 12px; border: 1px solid var(--line); background: var(--panel);
+}
+.modbar.harder { border-color: var(--red); background: #180707; }
+.modbar.easier { border-color: var(--cyan); background: #05100f; }
+.modbar.neutral { border-color: var(--amber); background: #14100420; }
+.modbar .modtag { font-weight: bold; letter-spacing: 1px; font-size: 12px; white-space: nowrap; }
+.modbar.harder .modtag { color: var(--red); }
+.modbar.easier .modtag { color: var(--cyan); }
+.modbar.neutral .modtag { color: var(--amber); }
+.modbar .modblurb { font-size: 12px; color: #9fd18f; }
+
+/* node corner marker + tinted edge on the map */
+.mnodemark { position: absolute; top: 2px; right: 4px; font-size: 11px; font-weight: bold; }
+.mnodemark.harder { color: var(--red); }
+.mnodemark.easier { color: var(--cyan); }
+.mnodemark.neutral { color: var(--amber); }
+.mnode.mod-harder { border-color: #5a1a1a; }
+.mnode.mod-easier { border-color: #16413e; }
+.mnode.open.mod-harder { border-color: var(--red); box-shadow: 0 0 10px #ff414133; }
+.mnode.open.mod-easier { border-color: var(--cyan); box-shadow: 0 0 10px #35e0d833; }
+
+/* scout-detail modifier line */
+.mapdetail .md-mod { font-size: 12px; font-weight: bold; margin: 1px 0; }
+.mapdetail .md-mod.harder { color: var(--red); }
+.mapdetail .md-mod.easier { color: var(--cyan); }
+.mapdetail .md-mod.neutral { color: var(--amber); }
+
+/* ---- end-of-run summary ---- */
+.runsummary { border: 1px solid var(--line); background: #0a1008; margin: 12px 0 4px; padding: 6px 12px; }
+.rs-row { display: flex; justify-content: space-between; gap: 16px; padding: 3px 0; border-bottom: 1px dashed #123; font-size: 13px; }
+.rs-row:last-child { border-bottom: none; }
+.rs-row span { color: var(--dim); }
+.rs-row b { font-variant-numeric: tabular-nums; }
+
 /* ============================================================
    MOBILE / TOUCH — BREACH plays in LANDSCAPE
    ============================================================ */

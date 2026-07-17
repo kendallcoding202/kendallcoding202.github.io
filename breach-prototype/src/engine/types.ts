@@ -78,6 +78,19 @@ export interface SystemDef {
     layers: { name: string; defenses: { type: DefenseType; strength: number }[] }[];
 }
 
+/** A per-run twist rolled onto a breach so the same job plays differently
+    every run — the core of replayability, and a balance lever. */
+export interface SystemModifier {
+    key: string;
+    label: string; // short badge, e.g. "HARDENED"
+    blurb: string; // one-line explanation
+    tone: "harder" | "easier" | "neutral";
+    strengthDelta?: number; // +/- to every defense's Strength (and max)
+    creepDelta?: number; // +/- baseline detection creep per turn
+    detectionMaxDelta?: number; // +/- detection ceiling (room to work)
+    detectionStartFrac?: number; // start the breach already this far detected
+}
+
 /** A planted logic bomb: chips a specific defense at the end of each turn. */
 export interface LogicBomb {
     layer: number; // layer index it was planted on
@@ -126,6 +139,9 @@ export interface GameState {
 
     alert: AlertStage; // derived from detection; drives the system's behaviour
     systemIntent: SystemIntent | null; // telegraphed next move (always visible)
+    modifierLabel: string | null; // this run's twist on this system, if any
+    modifierBlurb: string | null;
+    modifierTone: "harder" | "easier" | "neutral" | null;
     rng: number; // deterministic RNG state
     outcome: Outcome;
     lossReason: string | null;
@@ -205,14 +221,24 @@ export interface Campaign {
 
 export type RunOutcome = "running" | "won" | "busted";
 
+/** Accumulated run stats for the end-of-run summary. */
+export interface RunStats {
+    breaches: number; // successful breaches
+    quietestPct: number | null; // lowest detection % on a won breach
+    loudestPct: number | null; // highest detection % on a won breach
+}
+
 export interface RunState {
     campaignId: string;
+    seed: number; // deterministic seed for this run's rolled modifiers
     heat: number;
     heatMax: number;
     credits: number;
     deck: string[];
     nodeId: string | null; // the node you're currently AT (null = at the start)
     path: string[]; // ids of nodes resolved so far, in order
+    mods: Record<string, string>; // breach node id -> SystemModifier key (rolled at run start)
+    stats: RunStats;
     story: string[]; // narrative feed
     outcome: RunOutcome;
     jobsDone: number;

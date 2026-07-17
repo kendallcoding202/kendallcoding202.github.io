@@ -6,6 +6,7 @@ import { CAMPAIGNS, CAMPAIGN_ORDER } from "./campaigns.ts";
 import { createRun, currentOptions, isTerminal, resolveBreach, resolveEvent, resolveSafehouse, addCard, getCampaign } from "./run.ts";
 import { createInitialState, applyAction } from "./engine.ts";
 import { SYSTEMS } from "./systems.ts";
+import { MODIFIERS, getModifier } from "./modifiers.ts";
 
 let passed = 0;
 const failures: string[] = [];
@@ -153,6 +154,50 @@ for (const id of CAMPAIGN_ORDER) {
     const midStr = ch.layers[0].defenses[0].strength;
     ch = applyAction(ch, { type: "playCard", card: "cascade", target: 0 }); // 3 + 2*2 = 7
     check("cascade scales with combo count", midStr - ch.layers[0].defenses[0].strength === 7);
+}
+
+/* 8. Per-run modifiers: rolled onto every breach, entries stay clean,
+      different seeds give different runs, and they apply in the breach. */
+{
+    const c = getCampaign("ghost");
+    const runA = createRun("ghost", 12345);
+    const runB = createRun("ghost", 999);
+    // every breach node has a modifier key; entries are clean warm-ups
+    const breachNodes = c.map.filter((n) => n.type === "breach");
+    check("every breach gets a rolled modifier", breachNodes.every((n) => !!runA.mods[n.id]));
+    check("entry breaches stay clean", c.map.filter((n) => n.col === 0 && n.type === "breach").every((n) => runA.mods[n.id] === "clean"));
+    check("all rolled modifier keys are real", breachNodes.every((n) => !!MODIFIERS[runA.mods[n.id]]));
+    // determinism + variety
+    const runA2 = createRun("ghost", 12345);
+    check("same seed -> same modifiers", JSON.stringify(runA.mods) === JSON.stringify(runA2.mods));
+    check("different seeds -> different modifiers (usually)", JSON.stringify(runA.mods) !== JSON.stringify(runB.mods));
+
+    // apply a HARDENED breach: defenses come out stronger than base
+    const base = createInitialState(1, "smallBusiness");
+    const hard = createInitialState(1, "smallBusiness", undefined, MODIFIERS.hardened);
+    check("HARDENED raises every defense's strength", hard.layers[0].defenses[0].strength === base.layers[0].defenses[0].strength + 2);
+    check("HARDENED surfaces its label to the UI", hard.modifierLabel === "HARDENED" && hard.modifierTone === "harder");
+    // SLOPPY weakens; ON ALERT starts you detected; WIDE OPEN adds room
+    const sloppy = createInitialState(1, "smallBusiness", undefined, MODIFIERS.sloppy);
+    check("SLOPPY lowers defense strength", sloppy.layers[0].defenses[0].strength < base.layers[0].defenses[0].strength);
+    const alert = createInitialState(1, "smallBusiness", undefined, MODIFIERS.onAlert);
+    check("ON ALERT starts you partway detected & suspicious", alert.detection > 0 && alert.alert === "SUSPICIOUS");
+    const open = createInitialState(1, "smallBusiness", undefined, MODIFIERS.exposed);
+    check("WIDE OPEN raises the detection ceiling", open.detectionMax > base.detectionMax);
+    check("a clean modifier shows no badge", getModifier("clean").label === "" && createInitialState(1, "homeServer").modifierLabel === null);
+}
+
+/* 9. Run stats accumulate for the end-of-run summary. */
+{
+    let run = createRun("daylight", 7);
+    let guard = 0;
+    while (run.outcome === "running" && guard++ < 20) {
+        const opts = currentOptions(run);
+        const node = opts.find((n) => n.type === "breach") || opts[0];
+        run = node.type === "breach" ? resolveBreach(run, node, winResult(0.35)) : takeNode(run, node);
+    }
+    check("stats counted the breaches", run.stats.breaches >= 3);
+    check("stats recorded quietest/loudest detection", run.stats.quietestPct != null && run.stats.loudestPct != null && run.stats.quietestPct <= run.stats.loudestPct);
 }
 
 console.log(`=== RUN-ENGINE ASSERTIONS: ${passed} passed, ${failures.length} failed ===`);

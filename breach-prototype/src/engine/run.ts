@@ -9,6 +9,7 @@
 import type { BreachResult, Campaign, EventChoice, MapNode, RunState } from "./types.ts";
 import { CAMPAIGNS } from "./campaigns.ts";
 import { STARTER_DECK } from "./cards.ts";
+import { rollModifier } from "./modifiers.ts";
 
 const LOSE_HEAT = 25; // Heat spike for getting detected on a job
 
@@ -21,16 +22,24 @@ export function getNode(campaign: Campaign, id: string | null): MapNode | null {
     return campaign.map.find((n) => n.id === id) || null;
 }
 
-export function createRun(campaignId: string): RunState {
+export function createRun(campaignId: string, seed = 1): RunState {
     const c = getCampaign(campaignId);
+    // Roll a per-run modifier onto every breach so the map plays differently
+    // each run. Deterministic from the seed for testability.
+    const rngState = { rng: seed >>> 0 };
+    const mods: Record<string, string> = {};
+    for (const n of c.map) if (n.type === "breach") mods[n.id] = rollModifier(rngState, n);
     const run: RunState = {
         campaignId: c.id,
+        seed: seed >>> 0,
         heat: 0,
         heatMax: c.heatMax,
         credits: 0,
         deck: STARTER_DECK.slice(),
         nodeId: null,
         path: [],
+        mods,
+        stats: { breaches: 0, quietestPct: null, loudestPct: null },
         story: [c.intro],
         outcome: "running",
         jobsDone: 0,
@@ -106,6 +115,10 @@ export function resolveBreach(prev: RunState, node: MapNode, result: BreachResul
     const finale = isTerminal(node);
     if (result.won) {
         run.jobsDone += 1;
+        const pct = Math.round((result.detection / Math.max(1, result.detectionMax)) * 100);
+        run.stats.breaches += 1;
+        run.stats.quietestPct = run.stats.quietestPct == null ? pct : Math.min(run.stats.quietestPct, pct);
+        run.stats.loudestPct = run.stats.loudestPct == null ? pct : Math.max(run.stats.loudestPct, pct);
         const loudness = Math.round((result.detection / Math.max(1, result.detectionMax)) * 12);
         const gained = 4 + loudness;
         run.heat += gained;

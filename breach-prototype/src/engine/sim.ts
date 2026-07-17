@@ -3,10 +3,11 @@
    Run:  node --experimental-strip-types src/engine/sim.ts
    ============================================================ */
 
-import type { Action, GameState } from "./types.ts";
+import type { Action, GameState, SystemModifier } from "./types.ts";
 import { createInitialState, applyAction, currentLayer } from "./engine.ts";
 import { chooseAction } from "./ai.ts";
 import { SYSTEM_ORDER, SYSTEMS } from "./systems.ts";
+import { MODIFIERS } from "./modifiers.ts";
 
 let passed = 0;
 const failures: string[] = [];
@@ -15,8 +16,8 @@ function check(name: string, cond: boolean) {
     else failures.push(name);
 }
 
-function runGame(seed: number, systemKey: string, smart: boolean) {
-    let s = createInitialState(seed, systemKey);
+function runGame(seed: number, systemKey: string, smart: boolean, modifier?: SystemModifier) {
+    let s = createInitialState(seed, systemKey, undefined, modifier);
     let guard = 0;
     while (s.outcome === "playing" && guard++ < 500) {
         const action: Action = chooseAction(s, smart);
@@ -169,6 +170,22 @@ function balance(n: number) {
     }
 }
 
+/* ---------- modifier sweep: how each per-run twist shifts win rate ---------- */
+function modifierSweep(n: number) {
+    const systems = ["smallBusiness", "corpNetwork", "blackSite"];
+    const modKeys = ["clean", "sloppy", "exposed", "unstable", "hardened", "fastTrace", "onAlert", "fortified"];
+    console.log(`\n=== MODIFIER SWEEP: smart-AI win% (${n} each) ===`);
+    console.log("modifier          " + systems.map((s) => SYSTEMS[s].name.slice(0, 9).padEnd(11)).join(""));
+    for (const mk of modKeys) {
+        const row = systems.map((sys) => {
+            let w = 0;
+            for (let i = 0; i < n; i++) if (runGame(i + 1, sys, true, MODIFIERS[mk]).outcome === "won") w++;
+            return ((100 * w / n).toFixed(0) + "%").padEnd(11);
+        });
+        console.log(MODIFIERS[mk].label ? (mk + " (" + MODIFIERS[mk].tone + ")").padEnd(18) + row.join("") : "clean".padEnd(18) + row.join(""));
+    }
+}
+
 /* ---------- run ---------- */
 assertions();
 console.log(`=== ASSERTIONS: ${passed} passed, ${failures.length} failed ===`);
@@ -176,6 +193,7 @@ if (failures.length) failures.forEach((f) => console.log("   ❌ " + f));
 else console.log("   ✅ all engine rules behave as specified");
 
 balance(1500);
+modifierSweep(1200);
 
 console.log(`\n=== SAMPLE BREACH — Corporate Network (seed 42, smart) ===`);
 {
