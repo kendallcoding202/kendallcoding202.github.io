@@ -336,6 +336,32 @@ export function needsTarget(cardId: string): boolean {
     return !!c && c.needsTarget;
 }
 
+/** Short prediction of what a TARGETED card will do to a specific defense —
+    shown in the UI when a card is armed so the matched-exploit rules are
+    legible before you commit. Returns null for non-targeted cards. */
+export function previewOnTarget(s: GameState, cardId: string, idx: number): string | null {
+    const card = CARDS[cardId];
+    const layer = currentLayer(s);
+    if (!card || !card.needsTarget || !layer) return null;
+    const d = layer.defenses[idx];
+    if (!d || d.strength <= 0) return null;
+    switch (card.effect) {
+        case "revealOne": return "reveal";
+        case "revealAndWeaken": return `reveal, −${card.power || 2}`;
+        case "knownExploit": return d.typeRevealed ? `−${card.power || 4}` : `−${Math.ceil((card.power || 4) / 2)} · blind, loud`;
+        case "sqlInjection":
+            if (!d.typeRevealed) return "reveal it first";
+            return d.type === "database" ? `−${Math.round((card.power || 5) * 1.5)}` : `−${Math.round((card.power || 5) * 0.4)} · weak, loud`;
+        case "privEsc":
+            if (!d.typeRevealed) return "reveal it first";
+            return d.type === "privilege" ? `−${card.power || 6}` : "misfires · loud";
+        case "zeroDay": return "SHATTER";
+        case "bruteForce": return `−${card.power || 6} · loud`;
+        case "backdoor": return `−${card.power || 4} · quiet`;
+        default: return null;
+    }
+}
+
 export function projectedNoise(s: GameState, cardId: string): number {
     const card = CARDS[cardId];
     if (!card) return 0;

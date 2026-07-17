@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Defense, GameState } from "../engine/types.ts";
 import { CARDS } from "../engine/cards.ts";
 import { SYSTEMS, SYSTEM_ORDER } from "../engine/systems.ts";
-import { createInitialState, applyAction, canPlay, projectedNoise, currentLayer, needsTarget, targetableDefenses } from "../engine/engine.ts";
+import { createInitialState, applyAction, canPlay, projectedNoise, currentLayer, needsTarget, targetableDefenses, previewOnTarget } from "../engine/engine.ts";
 
 const newSeed = () => Math.floor(Math.random() * 0xffffffff) >>> 0;
 
@@ -68,7 +68,7 @@ function SelectScreen({ onPick }: { onPick: (key: string) => void }) {
 }
 
 /* ---------- defense chip ---------- */
-function DefenseChip({ d, targetable, onClick }: { d: Defense; targetable: boolean; onClick: () => void }) {
+function DefenseChip({ d, targetable, preview, onClick }: { d: Defense; targetable: boolean; preview?: string | null; onClick: () => void }) {
     const down = d.strength <= 0;
     return (
         <span className={"dchip" + (targetable ? " targetable" : "") + (down ? " down" : "")} onClick={targetable ? onClick : undefined}>
@@ -82,6 +82,7 @@ function DefenseChip({ d, targetable, onClick }: { d: Defense; targetable: boole
                     )}
                 </span>
             )}
+            {targetable && preview && <span className="preview">▸ {preview}</span>}
         </span>
     );
 }
@@ -181,7 +182,13 @@ export function App() {
                             <span className="lname">{l.breached ? "✓ " : isCurrent ? "▶ " : "  "}{l.name}</span>
                             <span className="defs">
                                 {l.breached ? <span className="muted">BREACHED</span> : l.defenses.map((d, di) => (
-                                    <DefenseChip key={di} d={d} targetable={isCurrent && !!armed && d.strength > 0} onClick={() => dispatch(armed!, di)} />
+                                    <DefenseChip
+                                        key={di}
+                                        d={d}
+                                        targetable={isCurrent && !!armed && d.strength > 0}
+                                        preview={isCurrent && armed && d.strength > 0 ? previewOnTarget(state, armed, di) : null}
+                                        onClick={() => dispatch(armed!, di)}
+                                    />
                                 ))}
                             </span>
                         </div>
@@ -189,10 +196,15 @@ export function App() {
                 })}
             </div>
 
+            {/* what just happened — clear feedback for every play */}
+            <div className="last-action">▸ {state.log[state.log.length - 1]}</div>
+
             {armed ? (
-                <div className="amber armed-hint">▶ SELECT A TARGET DEFENSE on the current layer (Esc to cancel)</div>
+                <div className="amber armed-hint">▶ SELECT A TARGET DEFENSE — the ▸ tag on each shows what this card will do (Esc to cancel)</div>
             ) : (
-                <div className="muted" style={{ fontSize: 12 }}>YOUR HAND — click to play. Number is the NOISE it makes.</div>
+                <div className="muted hand-legend">
+                    YOUR HAND — click to play. &nbsp; <span className="amber">◈N</span> = noise added · <span className="cyan">SILENT</span> = no noise · <span className="muted">◎</span> = needs a target
+                </div>
             )}
 
             <div className="hand">

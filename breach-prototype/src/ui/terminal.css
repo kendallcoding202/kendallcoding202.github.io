@@ -135,6 +135,13 @@ hr { border: none; border-top: 1px solid var(--line); margin: 12px 0; }
 .dbar { display: inline-block; width: 70px; height: 9px; border: 1px solid var(--line); vertical-align: middle; background: #000; }
 .dbar .df { height: 100%; background: var(--red); }
 @keyframes pulse { 0%,100% { box-shadow: 0 0 5px #ffb00044; } 50% { box-shadow: 0 0 12px #ffb000aa; } }
+.dchip .preview { color: var(--amber); font-weight: bold; margin-left: 4px; }
+.last-action {
+    margin: 12px 0 4px; padding: 6px 12px;
+    border-left: 3px solid var(--fg); background: #4af6260d;
+    color: var(--fg); font-size: 13px; min-height: 20px;
+}
+.hand-legend { font-size: 12px; margin-top: 12px; }
 .armed-hint { margin-top: 12px; letter-spacing: 1px; }
 .card.armed { border-color: var(--amber); box-shadow: 0 0 12px #ffb00088; transform: translateY(-4px); }
 .tiny { padding: 3px 8px !important; font-size: 11px !important; }
