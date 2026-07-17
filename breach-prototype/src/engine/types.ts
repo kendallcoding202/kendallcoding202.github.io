@@ -117,3 +117,67 @@ export interface GameState {
 export type Action =
     | { type: "playCard"; card: string; target?: number } // target = defense index on current layer
     | { type: "endTurn" };
+
+/* ============================================================
+   CAMPAIGN / RUN LAYER — strings breaches into a story with routes
+   ============================================================ */
+
+/** What the single-breach engine reports back to the run. */
+export interface BreachResult {
+    won: boolean;
+    detection: number;
+    detectionMax: number;
+}
+
+export type RunNodeType = "breach" | "event" | "safehouse";
+
+export interface EventChoice {
+    label: string;
+    outcome: string; // result text shown after choosing
+    heat?: number; // +raises / -lowers run Heat
+    credits?: number;
+    addCard?: string; // card id granted (may cost credits via `cost`)
+    cost?: number; // credits required for this choice
+    removeCard?: boolean; // opens a "scrub a card from your deck" flow
+    requiresCredits?: number; // choice disabled unless you have this many credits
+}
+
+export interface RunNode {
+    id: string;
+    type: RunNodeType;
+    title: string;
+    blurb: string; // the story text for this node
+    systemKey?: string; // breach: which system provides the difficulty
+    reward?: number; // breach: credits on a win
+    choices?: EventChoice[]; // event
+    heatRelief?: number; // safehouse: Heat removed
+    heatCost?: number; // safehouse/event: Heat added when taken
+}
+
+export interface Campaign {
+    id: string;
+    name: string;
+    tagline: string;
+    premise: string; // shown on the select card
+    handler: string; // who's feeding you jobs
+    heatMax: number;
+    intro: string; // run-start briefing
+    winText: string; // ending on success
+    bustedText: string; // ending when Heat maxes out
+    steps: RunNode[][]; // each inner array = the branching options at that step
+    finale: RunNode; // the last job
+}
+
+export type RunOutcome = "running" | "won" | "busted";
+
+export interface RunState {
+    campaignId: string;
+    heat: number;
+    heatMax: number;
+    credits: number;
+    deck: string[];
+    step: number; // index into campaign.steps; === steps.length ⇒ finale
+    story: string[]; // narrative feed
+    outcome: RunOutcome;
+    jobsDone: number;
+}

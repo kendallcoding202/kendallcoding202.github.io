@@ -226,3 +226,56 @@ button.term.ghost:hover { background: var(--dim); color: #000; }
 .overlay.won h2 { color: var(--cyan); }
 .blink { animation: blink 1s steps(2) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
+
+/* ============================================================
+   RUN / CAMPAIGN LAYER
+   ============================================================ */
+.run-stats { display: flex; gap: 20px; align-items: center; margin: 6px 0 10px; font-size: 13px; }
+.run-stats .gold { color: #ffd24a; }
+.gold { color: #ffd24a; }
+.deck-link { cursor: pointer; color: var(--cyan); border-bottom: 1px dotted var(--cyan); }
+.deck-link:hover { color: #fff; }
+
+/* story feed */
+.story { margin: 6px 0 4px; }
+.story-line {
+    margin: 4px 0; padding: 4px 12px; font-size: 13px; line-height: 1.45;
+    border-left: 2px solid var(--line); color: #9fd18f;
+}
+.story-line:last-child { border-left-color: var(--fg); color: var(--fg); }
+
+/* route choices */
+.routes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 6px; }
+.route {
+    border: 1px solid var(--line); background: var(--panel); padding: 11px 13px; cursor: pointer;
+    transition: border-color 0.1s, box-shadow 0.1s, transform 0.1s; display: flex; flex-direction: column;
+}
+.route:hover { border-color: var(--fg); box-shadow: 0 6px 16px #000a; transform: translateY(-3px); }
+.route-breach:hover { border-color: var(--amber); box-shadow: 0 6px 16px #ffb00033; }
+.route-safehouse:hover { border-color: var(--cyan); box-shadow: 0 6px 16px #35e0d833; }
+.route-event:hover { border-color: #c98cff; box-shadow: 0 6px 16px #c98cff33; }
+.route-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+.route-tag { font-size: 11px; font-weight: bold; letter-spacing: 1px; }
+.route-breach .route-tag { color: var(--amber); }
+.route-safehouse .route-tag { color: var(--cyan); }
+.route-event .route-tag { color: #c98cff; }
+.route-diff { letter-spacing: 1px; color: var(--red); font-size: 12px; }
+.route-diff .off { color: var(--line); }
+.route-title { font-weight: bold; color: var(--fg); font-size: 14px; margin-bottom: 4px; }
+.route-blurb { font-size: 12px; color: #9fd18f; line-height: 1.4; flex: 1; }
+.route-foot { font-size: 11px; margin-top: 7px; }
+
+/* event overlay choices */
+.event-choices { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.event-choice { text-align: left; text-transform: none; letter-spacing: 0; }
+.event-choice.disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* deck / reward card grids */
+.card-choices { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin: 18px 0; }
+.grid-cards {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 9px; margin: 16px 0; max-height: 62vh; overflow-y: auto; padding: 2px;
+}
+.card.mini { width: auto; cursor: default; }
+.card.mini.playable { cursor: pointer; }
+.card.mini.playable:hover { transform: translateY(-4px); border-color: var(--fg); box-shadow: 0 6px 14px #000a; }

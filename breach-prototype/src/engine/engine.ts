@@ -18,7 +18,7 @@ const PROXY_REDUCTION = 3;
 
 /* ---------- construction ---------- */
 
-export function createInitialState(seed: number, systemKey: string = DEFAULT_SYSTEM): GameState {
+export function createInitialState(seed: number, systemKey: string = DEFAULT_SYSTEM, deck?: string[]): GameState {
     const sys: SystemDef = SYSTEMS[systemKey] || SYSTEMS[DEFAULT_SYSTEM];
     const state: GameState = {
         system: sys.name,
@@ -50,7 +50,7 @@ export function createInitialState(seed: number, systemKey: string = DEFAULT_SYS
         lossReason: null,
         log: [],
     };
-    state.deck = shuffle(state, STARTER_DECK);
+    state.deck = shuffle(state, (deck && deck.length ? deck : STARTER_DECK).slice());
     draw(state, state.handSize);
     refreshIntent(state);
     log(state, `Breaching ${state.system}. Stay quiet.`);
