@@ -11,7 +11,7 @@ export const CARDS: Record<string, CardDef> = {
     /* ---------- Recon — reveal hidden defenses so exploits land ---------- */
     portScan: {
         id: "portScan", name: "Port Scan", kind: "recon", noise: 2, effect: "revealOne", needsTarget: true,
-        text: "Pick a defense and reveal it — its type and strength. Low noise.",
+        text: "Reveal one defense on this layer — its type and Strength. Low noise.",
     },
     passiveRecon: {
         id: "passiveRecon", name: "Passive Recon", kind: "recon", noise: 0, effect: "revealTypeOnly", needsTarget: false,
@@ -23,29 +23,29 @@ export const CARDS: Record<string, CardDef> = {
     },
     socialEngineer: {
         id: "socialEngineer", name: "Social Engineer", kind: "recon", noise: 1, effect: "revealAndWeaken", power: 2, needsTarget: true,
-        text: "Pick a defense: reveal it and cut its strength by 2. Low noise.",
+        text: "Reveal one defense and reduce its Strength by 2. Low noise.",
     },
 
     /* ---------- Exploits — knock strength off a defense ---------- */
     knownExploit: {
         id: "knownExploit", name: "Known Exploit", kind: "exploit", noise: 3, power: 4, effect: "knownExploit", needsTarget: true,
-        text: "Break 4 off a REVEALED defense. Against a hidden one: only 2 — and much louder.",
+        text: "Reduce a REVEALED defense's Strength by 4. Against a hidden one: only 2 — and much louder.",
     },
     sqlInjection: {
         id: "sqlInjection", name: "SQL Injection", kind: "exploit", noise: 4, power: 5, effect: "sqlInjection", needsTarget: true,
-        text: "Break 8 off a DATABASE defense. Against any other type: only 2, and louder.",
+        text: "Reduce a DATABASE defense's Strength by 8. Against any other type: only 2, and louder.",
     },
     privEsc: {
         id: "privEsc", name: "Privilege Escalation", kind: "exploit", noise: 4, power: 6, effect: "privEsc", needsTarget: true,
-        text: "Break 6 off a PRIVILEGE defense. On any other type it misfires — no effect, loud.",
+        text: "Reduce a PRIVILEGE defense's Strength by 6. On any other type it misfires — no effect, loud.",
     },
     zeroDay: {
         id: "zeroDay", name: "Zero-Day", kind: "exploit", noise: 12, power: 99, effect: "zeroDay", needsTarget: true, exhausts: true,
-        text: "Completely shatter any one defense, whatever its type. Very loud. One use per run.",
+        text: "Instantly drop any one defense's Strength to 0, whatever its type. Very loud. One use per run.",
     },
     bruteForce: {
         id: "bruteForce", name: "Brute Force", kind: "exploit", noise: 16, power: 6, effect: "bruteForce", needsTarget: true,
-        text: "Break 6 off any defense. Extremely loud — a last resort.",
+        text: "Reduce any defense's Strength by 6. Extremely loud — a last resort.",
     },
 
     /* ---------- Stealth — control the detection meter ---------- */
@@ -77,7 +77,7 @@ export const CARDS: Record<string, CardDef> = {
     },
     backdoor: {
         id: "backdoor", name: "Backdoor", kind: "utility", noise: 1, power: 4, effect: "backdoor", needsTarget: true, exhausts: true,
-        text: "Quietly break 4 off a defense — barely a whisper of noise. One use per run.",
+        text: "Quietly reduce a defense's Strength by 4 — barely any noise. One use per run.",
     },
     patchScanner: {
         id: "patchScanner", name: "Deep Scan", kind: "utility", noise: 1, effect: "patchScanner", needsTarget: false,

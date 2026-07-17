@@ -131,7 +131,8 @@ hr { border: none; border-top: 1px solid var(--line); margin: 12px 0; }
 .dchip.down { color: var(--dim); border-color: var(--dim); }
 .dchip.targetable { border-color: var(--amber); color: var(--amber); cursor: crosshair; box-shadow: 0 0 8px #ffb00055; animation: pulse 1.1s infinite; }
 .dchip.targetable b { color: var(--amber); }
-.dchip .ds { color: var(--muted); }
+.dchip .ds { color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
+.dchip .snum { color: var(--muted); font-size: 11px; }
 .dbar { display: inline-block; width: 70px; height: 9px; border: 1px solid var(--line); vertical-align: middle; background: #000; }
 .dbar .df { height: 100%; background: var(--red); }
 @keyframes pulse { 0%,100% { box-shadow: 0 0 5px #ffb00044; } 50% { box-shadow: 0 0 12px #ffb000aa; } }

@@ -27,7 +27,8 @@ function Intro({ onClose }: { onClose: () => void }) {
                 <div className="brief">
                     <p>You're inside a live system. Breach it and exfiltrate the data — before it detects you.</p>
                     <p><span className="amber">DETECTION</span> is everything. Every card makes <b>NOISE</b> that fills the meter. Fill it and you're <span className="red">locked out</span>. Loud tools are powerful; quiet ones keep you invisible.</p>
-                    <p><span className="amber">BREACH INWARD</span> through the layers. Each layer can hold several <b>defenses</b> — all must fall to advance. Defenses start <b>UNKNOWN</b>; spend quiet <b>recon</b> to reveal them, then hit each with the <b>matching exploit</b>.</p>
+                    <p><span className="amber">BREACH INWARD</span> through the layers. Each defense has a <b>Strength</b> number — reduce it to 0 with exploits to take that defense down, and clear every defense on a layer to move inward. Defenses start <b>UNKNOWN</b>; spend quiet <b>recon</b> to reveal their type &amp; Strength, then hit each with its <b>matching exploit</b>.</p>
+                    <p className="muted">To use a targeted card (marked ◎): click the card, then click the glowing defense it should hit.</p>
                     <p><span className="amber">THE SYSTEM REACTS</span> — and it <b>tells you its next move</b> (SYSTEM ALERT panel). Read it and counter: Spoof its patch, or breach a defense before it hardens.</p>
                     <p className="muted">Win: breach the objective layer, then play Payload. Lose: detection maxes out. Enter = end turn · Esc = cancel targeting.</p>
                 </div>
@@ -76,9 +77,12 @@ function DefenseChip({ d, targetable, preview, onClick }: { d: Defense; targetab
             {!down && (
                 <span className="ds">
                     {d.strengthRevealed ? (
-                        <span className="dbar"><span className="df" style={{ width: `${(d.strength / d.maxStrength) * 100}%` }} /></span>
+                        <>
+                            <span className="dbar"><span className="df" style={{ width: `${(d.strength / d.maxStrength) * 100}%` }} /></span>
+                            <span className="snum">STR {d.strength}</span>
+                        </>
                     ) : (
-                        " ??"
+                        <span className="snum">STR ??</span>
                     )}
                 </span>
             )}
@@ -133,7 +137,8 @@ export function App() {
         if (!needsTarget(id)) { dispatch(id); return; }
         const opts = targetableDefenses(state);
         if (opts.length === 0) return;
-        if (opts.length === 1) { dispatch(id, opts[0]); return; }
+        // Always arm targeted cards so the flow is consistent everywhere:
+        // click card → its targets glow → click a defense. (No invisible auto-fire.)
         setArmed(armed === id ? null : id);
     };
 
