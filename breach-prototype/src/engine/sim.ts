@@ -88,11 +88,20 @@ function assertions() {
     const noTarget = applyAction(tt, { type: "playCard", card: "bruteForce" }); // ambiguous -> rejected
     check("ambiguous target rejected (no-op)", noTarget === tt || noTarget.hand.length === 1);
 
-    // payload gating + win
+    // breaching the final objective layer wins outright (no Payload card needed)
     let p = createInitialState(8);
-    p.objectiveExposed = true;
-    p.hand = ["payload"];
-    check("payload wins when objective exposed", applyAction(p, { type: "playCard", card: "payload" }).outcome === "won");
+    p.current = p.layers.length - 1; // objective layer (single defense on Home Server)
+    p.hand = ["zeroDay"];
+    const won = applyAction(p, { type: "playCard", card: "zeroDay", target: 0 });
+    check("breaching the objective layer wins", won.outcome === "won");
+
+    // turn noise accrues per card and resets on end turn
+    let tn = createInitialState(8);
+    tn.hand = ["bruteForce"];
+    const afterCard = applyAction(tn, { type: "playCard", card: "bruteForce" });
+    check("turnNoise accrues from cards", afterCard.turnNoise >= 16);
+    const afterEndT = applyAction(afterCard, { type: "endTurn" });
+    check("turnNoise resets each turn", afterEndT.turnNoise === 0);
 
     // detection max = loss
     let l = createInitialState(9);

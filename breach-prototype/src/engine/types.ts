@@ -99,6 +99,7 @@ export interface GameState {
     discard: string[];
     handSize: number;
     turn: number;
+    turnNoise: number; // noise made from cards THIS turn (resets each turn)
 
     // stealth / persistence flags
     proxyCharges: number; // Proxy Chain: reduce noise on the next N cards

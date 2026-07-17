@@ -39,6 +39,7 @@ export function createInitialState(seed: number, systemKey: string = DEFAULT_SYS
         discard: [],
         handSize: 6,
         turn: 1,
+        turnNoise: 0,
         proxyCharges: 0,
         rootkitReady: false,
         spoofTurns: 0,
@@ -217,8 +218,10 @@ function afterBreachCheck(s: GameState) {
         layer.breached = true;
         const isFinal = s.current === s.layers.length - 1;
         if (isFinal) {
+            // Breaching the objective layer IS the win — you're in, grab it, vanish.
             s.objectiveExposed = true;
-            log(s, `${layer.name} breached — the objective is exposed. Play Payload to exfiltrate.`);
+            s.outcome = "won";
+            log(s, `${layer.name} breached — objective exfiltrated. You're a ghost.`);
         } else {
             log(s, `${layer.name} breached — moving inward.`);
             s.current += 1;
@@ -443,6 +446,7 @@ export function applyAction(prev: GameState, action: Action): GameState {
             s.proxyCharges -= 1;
         }
         addDetection(s, noise);
+        s.turnNoise += noise;
 
         if (card.exhausts) log(s, `${card.name} spent (one-time).`);
         else s.discard.push(cardId);
@@ -457,6 +461,7 @@ export function applyAction(prev: GameState, action: Action): GameState {
         systemReact(s);
         addDetection(s, s.baselineCreep);
         s.rootkitReady = false;
+        s.turnNoise = 0; // reset the per-turn noise budget
         if (s.outcome === "playing") {
             draw(s, s.handSize);
             s.turn += 1;

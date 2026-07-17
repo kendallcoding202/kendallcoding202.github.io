@@ -156,6 +156,15 @@ hr { border: none; border-top: 1px solid var(--line); margin: 7px 0; }
     color: var(--fg); font-size: 13px; min-height: 18px;
 }
 .hand-legend { font-size: 12px; margin-top: 7px; }
+.budget {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    margin-top: 7px; padding: 5px 12px; border: 1px solid var(--line);
+    background: #0a1008; font-size: 13px; flex-wrap: wrap;
+}
+.budget .budget-turn { color: var(--muted); }
+.budget .budget-turn b { color: var(--amber); font-size: 15px; }
+.budget .budget-room { color: var(--muted); }
+.budget .budget-room b { font-size: 15px; }
 .piles { font-size: 12px; margin-left: auto; }
 .turn-note { font-size: 11px; margin-top: 5px; line-height: 1.35; }
 .turn-note b { color: var(--fg); }

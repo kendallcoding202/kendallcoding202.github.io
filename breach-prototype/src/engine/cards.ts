@@ -111,10 +111,6 @@ export const CARDS: Record<string, CardDef> = {
         id: "automate", name: "Automate", kind: "utility", noise: 1, amount: 2, effect: "draw", needsTarget: false,
         text: "Draw 2 cards. More options, more plays this turn.",
     },
-    payload: {
-        id: "payload", name: "Payload", kind: "utility", noise: 5, effect: "payload", needsTarget: false,
-        text: "Steal the data and WIN — but only works once the objective layer is fully breached.",
-    },
 };
 
 /** Prototype starting deck — a bigger, more varied spread (~26 cards).
@@ -130,6 +126,6 @@ export const STARTER_DECK: string[] = [
     "zeroDay", "bruteForce",
     // stealth (6)
     "logWipe", "logWipe", "goDark", "coverTracks", "proxyChain", "spoof",
-    // utility (4)
-    "rootkit", "automate", "patchScanner", "payload",
+    // utility (3)
+    "rootkit", "automate", "patchScanner",
 ];

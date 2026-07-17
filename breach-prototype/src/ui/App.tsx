@@ -31,7 +31,7 @@ function Intro({ onClose }: { onClose: () => void }) {
                     <p className="muted">To use a targeted card (marked ◎): click the card, then click the glowing defense it should hit.</p>
                     <p className="muted">You draw 6 cards a turn. Ending a turn discards whatever you didn't play and draws a fresh hand — your deck recycles, so nothing is ever lost. You don't have to play your whole hand; holding cards is how you stay quiet.</p>
                     <p><span className="amber">THE SYSTEM REACTS</span> — and it <b>tells you its next move</b> (SYSTEM ALERT panel). Read it and counter: Spoof its patch, or breach a defense before it hardens.</p>
-                    <p className="muted">Win: breach the objective layer, then play Payload. Lose: detection maxes out. Enter = end turn · Esc = cancel targeting.</p>
+                    <p className="muted">Win: clear every defense on the final objective layer — you're in, you're gone. Lose: detection maxes out. Enter = end turn · Esc = cancel targeting.</p>
                 </div>
                 <button className="term" onClick={onClose}>Begin ▸</button>
             </div>
@@ -133,6 +133,11 @@ export function App() {
     const targetOpts = targetableDefenses(state);
     const handCards = state.hand.map((id, i) => ({ id, i, def: CARDS[id] }));
 
+    // per-turn noise budget: how much room before the next alert stage / lockout
+    const STAGES = [{ name: "SUSPICIOUS", at: 0.25 }, { name: "ALERTED", at: 0.5 }, { name: "LOCKDOWN", at: 0.8 }];
+    const nextStage = STAGES.find((st) => st.at * state.detectionMax > state.detection) || null;
+    const roomToNext = nextStage ? Math.ceil(nextStage.at * state.detectionMax - state.detection) : null;
+
     const onCardClick = (id: string) => {
         if (!canPlay(state, id)) return;
         if (!needsTarget(id)) { dispatch(id); return; }
@@ -181,10 +186,6 @@ export function App() {
                 </span>
             </div>
 
-            {state.objectiveExposed && (
-                <div className="cyan" style={{ marginTop: 8 }}>▶ OBJECTIVE EXPOSED — play <b>Payload</b> to exfiltrate and win.</div>
-            )}
-
             <div className="layers">
                 {state.layers.map((l, i) => {
                     const isCurrent = i === state.current && !l.breached;
@@ -209,6 +210,18 @@ export function App() {
 
             {/* what just happened — clear feedback for every play */}
             <div className="last-action">▸ {state.log[state.log.length - 1]}</div>
+
+            {/* per-turn noise budget — your "energy" is how much noise you can still afford */}
+            <div className="budget">
+                <span className="budget-turn">◈ NOISE THIS TURN: <b>{state.turnNoise}</b></span>
+                <span className="budget-room">
+                    ROOM LEFT:{" "}
+                    {roomToNext != null && nextStage ? (
+                        <><b className="amber">{roomToNext}</b> before <span className="amber">{nextStage.name}</span> &nbsp;·&nbsp; </>
+                    ) : null}
+                    <b className="red">{room}</b> before <span className="red">LOCKOUT</span>
+                </span>
+            </div>
 
             {armed ? (
                 <div className="amber armed-hint">▶ SELECT A TARGET DEFENSE — the ▸ tag on each shows what this card will do (Esc to cancel)</div>

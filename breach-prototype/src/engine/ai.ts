@@ -29,7 +29,6 @@ function chooseReckless(s: GameState): Action {
     const detFrac = s.detection / s.detectionMax;
     const safe = (id: string) => projectedNoise(s, id) < room;
 
-    if (s.objectiveExposed && has("payload")) return play("payload");
     if (detFrac >= 0.85 && has("killSwitch")) return play("killSwitch");
     if (detFrac >= 0.6 && has("logWipe")) return play("logWipe");
     if (detFrac >= 0.6 && has("goDark")) return play("goDark");
@@ -53,7 +52,6 @@ function chooseClever(s: GameState): Action {
     const intent = s.systemIntent;
 
     // 1. Win the instant we can.
-    if (s.objectiveExposed && has("payload")) return play("payload");
 
     // 2. Counter the telegraph — spoof a patch/purge that would undo progress,
     //    or an obscure that would wipe recon we've invested in.
