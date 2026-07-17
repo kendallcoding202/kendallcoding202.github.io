@@ -84,16 +84,24 @@ for (const id of CAMPAIGN_ORDER) {
     check("event moves you onto the node", after.nodeId === node.id && after.path.includes(node.id));
 }
 
-/* 5. The antagonist transmits, and only on the campaign that has one. */
-{
-    let run = createRun("oracle");
-    const entry = currentOptions(run)[0];
-    const after = resolveBreach(run, entry, winResult());
-    check("rogue AI transmits on the oracle run", !!after.transmission && after.story.some((l) => l.startsWith("⌁")));
-    let ghost = createRun("ghost");
-    const gEntry = currentOptions(ghost)[0];
-    const gAfter = resolveBreach(ghost, gEntry, winResult());
-    check("no transmission on a campaign without an antagonist", gAfter.transmission === null);
+/* 5. Every campaign with a watcher transmits — a fresh line on start and
+      one more line for each depth reached, escalating toward the finale. */
+for (const id of CAMPAIGN_ORDER) {
+    const c = CAMPAIGNS[id];
+    if (!c.antagonist) continue;
+    let run = createRun(id);
+    check(`${id}: watcher speaks the moment the run starts`, run.transmission === c.antagonist.lines[0]);
+    const seen = new Set<string>([run.transmission!]);
+    let guard = 0;
+    while (run.outcome === "running" && guard++ < 20) {
+        const opts = currentOptions(run);
+        const node = opts.find((n) => n.type === "breach") || opts[0];
+        run = takeNode(run, node);
+        if (run.transmission) seen.add(run.transmission);
+    }
+    check(`${id}: watcher delivered several escalating lines`, seen.size >= 4);
+    check(`${id}: every watcher line came from its script`, [...seen].every((l) => c.antagonist!.lines.includes(l)));
+    check(`${id}: story feed carries the transmissions`, run.story.filter((l) => l.startsWith("⌁")).length >= 4);
 }
 
 /* 6. Custom deck flows into a breach. */

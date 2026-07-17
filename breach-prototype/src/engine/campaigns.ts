@@ -66,6 +66,16 @@ const CAMPAIGN_LIST: Campaign[] = [
         intro: "THE BROKER: No names. Work your way up to the vault, take the data, get gone — and keep the trail cold. Heat leads to me, and I don't get caught. Neither do you.",
         winText: "THE BROKER: Clean. The buyer's happy, you're paid, and nobody knows you exist. That's the whole art of it. Same time next quarter.",
         bustedText: "The trace resolved to a face. Yours. The Broker's number is already dead, and a van is already outside. Ghosts don't get caught — you weren't a ghost.",
+        antagonist: {
+            name: "KADE // CORP SECURITY",
+            lines: [
+                "Security note: anomalous access flagged on a low-value host. Probably nothing. I flag everything.",
+                "It wasn't nothing. Same hand, a rung higher. You're methodical — and methodical people leave patterns.",
+                "I've run your pattern against three prior incidents. Someone hired you. I'm going to enjoy finding out who.",
+                "You're near the executive tier now. Every door from here logs a face. I already have most of yours.",
+                "So it's the vault you wanted. I'm standing in it, watching you knock. Come ahead — the Broker can't buy you out of this room.",
+            ],
+        },
         ...buildMap("ghost", {
             P: { title: "Warm-up: a competitor's box", blurb: "A soft target on a home line to see if you're worth the rate.", systemKey: "homeServer", reward: 20 },
             Q: { title: "A rival's mail server", blurb: "An under-patched inbox. Quiet, easy, and it maps the org for you.", systemKey: "homeServer", reward: 20 },
@@ -97,6 +107,16 @@ const CAMPAIGN_LIST: Campaign[] = [
         intro: "COLLECTIVE: They poisoned a town and bought the silence. Work up the chain — shell company, to the fixer, to the men at the top — and dump it all into daylight.",
         winText: "COLLECTIVE: It's live. Every outlet, every feed, the whole filthy paper trail. They can't sue the sunrise. You didn't just breach a system — you broke a story. Go dark and stay proud.",
         bustedText: "They traced the leak before it landed. The files are sealed, the collective is scattering, and your handle is on a warrant. The truth is still in the dark — and now, so are you.",
+        antagonist: {
+            name: "HALE // REPUTATION MGMT",
+            lines: [
+                "You've been poking our little front company. We noticed. We notice everything that's cheap to notice.",
+                "A journalist's word we can kill. A hacker's files are messier. Stop now and this stays a civil matter.",
+                "You're building a case. Cute. We've buried bigger stories under smaller graves. Ask the town.",
+                "Legal has your handle. Security has your metadata. One more door and you stop being a nuisance and start being a liability.",
+                "The boardroom. Of course. Nobody leaves that room with anything but a settlement or a sentence. Choose carefully.",
+            ],
+        },
         ...buildMap("daylight", {
             P: { title: "The shell company's site", blurb: "A paper-thin front hides the money. Start where they're careless.", systemKey: "homeServer", reward: 18 },
             Q: { title: "A staffer's home router", blurb: "One employee works from home with the door wide open. Walk in.", systemKey: "homeServer", reward: 18 },
@@ -128,6 +148,16 @@ const CAMPAIGN_LIST: Campaign[] = [
         intro: "The job worked. That's the problem. Your buyer flipped, your crew's gone, and a very well-funded trace is already warm. You need papers, a wire, and a way out of the country — before the number under your alias hits zero.",
         winText: "The plane lifts off a private strip under a name that doesn't exist. Below, a search grid closes on a person who is no longer there. You were never here. You were never anyone. Clean exit.",
         bustedText: "The trace caught up at the worst moment — a frozen account, a flagged passport, a knock at the door. There's no next breach. Just the sound of the lock, from the wrong side.",
+        antagonist: {
+            name: "THE TRACE",
+            lines: [
+                "There you are. You wiped the alias — that's how I knew which alias to wipe toward. Amateurs delete. Ghosts never existed.",
+                "Papers, a face, a way out. Predictable. I've caught nine of you doing exactly this. They all ran the same direction.",
+                "Your buyer gave you up for less than you'd think. Everyone does. Keep moving — the moving is the part I can follow.",
+                "You're reaching for money now. Money has my name on the alerts. Every account you touch, I get warmer.",
+                "The border. The last stupid hope of every runner. I'm already through it, holding the door from the far side. Run faster.",
+            ],
+        },
         ...buildMap("burn", {
             P: { title: "Kill your old alias", blurb: "Your burned identity is still logged in a cheap server. Wipe it before it's used to find you.", systemKey: "homeServer", reward: 22 },
             Q: { title: "Scrub a traffic cam feed", blurb: "A camera caught your car leaving the job. Reach into the archive and lose the frame.", systemKey: "homeServer", reward: 22 },
