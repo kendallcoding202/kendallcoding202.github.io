@@ -1,6 +1,14 @@
 /* ============================================================
-   Spire of Trials — a Slay the Spire style deckbuilder
-   Pure vanilla JS, no dependencies. All state lives in `G`.
+   COGFALL — a clockwork deckbuilding roguelike
+   Original setting & mechanics. Vanilla JS, no dependencies.
+   All run state lives in `G`.
+
+   Signature mechanics (what makes each character play differently):
+     • The Bulwark    — retains half its Plating each turn + Recoil (thorns)
+     • The Overclocker — builds Heat; spend it for big hits or overheat & burn
+     • The Artificer   — deploys Contraptions that act automatically each turn
+   Shared keywords: Steam (energy), Plating (block), Power, Exposed, Jammed,
+   Precision, Rust (damage over time).
    ============================================================ */
 
 (function () {
@@ -30,371 +38,410 @@
     /* ============================================================
        CARD DEFINITIONS
        type: attack | skill | power
-       effect(ctx) where ctx = {target, enemies} — see playCard
-       Upgraded versions are computed via the `.upg` overrides.
+       play(card, ctx) where ctx = {target, enemies}
+       upg = overrides used when the card is upgraded (+)
        ============================================================ */
     const CARDS = {
-        /* ---- Starter / common ---- */
-        strike: {
-            name: "Strike", type: "attack", cost: 1, art: "🗡️", rarity: "starter",
-            desc: (c) => `Deal <b>${dmgVal(6, c)}</b> damage.`,
+        /* ---------- Universal starters / common ---------- */
+        pistonPunch: {
+            name: "Piston Punch", type: "attack", cost: 1, art: "🥊", rarity: "starter",
+            desc: (c) => `Deal <b>${dv(6, c)}</b> damage.`,
             upg: { dmg: 9 },
-            play: (c, ctx) => dealDamage(ctx.target, val(c, "dmg", 6)),
+            play: (c, x) => dealDamage(x.target, v(c, "dmg", 6)),
         },
-        defend: {
-            name: "Defend", type: "skill", cost: 1, art: "🛡️", rarity: "starter",
-            desc: (c) => `Gain <b>${blkVal(5, c)}</b> Block.`,
+        reinforce: {
+            name: "Reinforce", type: "skill", cost: 1, art: "🔩", rarity: "starter",
+            desc: (c) => `Gain <b>${pv(5, c)}</b> Plating.`,
             upg: { blk: 8 },
-            play: (c) => gainBlock(G.player, val(c, "blk", 5)),
+            play: (c) => gainPlating(G.player, v(c, "blk", 5)),
         },
-        bash: {
-            name: "Bash", type: "attack", cost: 2, art: "🔨", rarity: "starter",
-            desc: (c) => `Deal <b>${dmgVal(8, c)}</b> damage. Apply <b>${val(c, "vuln", 2)}</b> Vulnerable.`,
-            upg: { dmg: 10, vuln: 3 },
-            play: (c, ctx) => {
-                dealDamage(ctx.target, val(c, "dmg", 8));
-                applyStatus(ctx.target, "vuln", val(c, "vuln", 2));
-            },
-        },
-        /* ---- Common attacks ---- */
-        cleave: {
-            name: "Cleave", type: "attack", cost: 1, art: "🪓", rarity: "common",
-            desc: (c) => `Deal <b>${dmgVal(8, c)}</b> damage to <b>ALL</b> enemies.`,
+        sawblade: {
+            name: "Sawblade", type: "attack", cost: 1, art: "🪚", rarity: "common",
+            desc: (c) => `Deal <b>${dv(8, c)}</b> damage to <b>ALL</b> enemies.`,
             upg: { dmg: 11 },
-            play: (c, ctx) => ctx.enemies.slice().forEach((e) => dealDamage(e, val(c, "dmg", 8))),
+            play: (c, x) => x.enemies.slice().forEach((e) => dealDamage(e, v(c, "dmg", 8))),
         },
-        ironWave: {
-            name: "Iron Wave", type: "attack", cost: 1, art: "🌊", rarity: "common",
-            desc: (c) => `Gain <b>${blkVal(5, c)}</b> Block. Deal <b>${dmgVal(5, c)}</b> damage.`,
+        ratchetStrike: {
+            name: "Ratchet Strike", type: "attack", cost: 1, art: "🔧", rarity: "common",
+            desc: (c) => `Gain <b>${pv(5, c)}</b> Plating. Deal <b>${dv(5, c)}</b> damage.`,
             upg: { dmg: 7, blk: 7 },
-            play: (c, ctx) => {
-                gainBlock(G.player, val(c, "blk", 5));
-                dealDamage(ctx.target, val(c, "dmg", 5));
-            },
+            play: (c, x) => { gainPlating(G.player, v(c, "blk", 5)); dealDamage(x.target, v(c, "dmg", 5)); },
         },
-        twinStrike: {
-            name: "Twin Strike", type: "attack", cost: 1, art: "⚔️", rarity: "common",
-            desc: (c) => `Deal <b>${dmgVal(5, c)}</b> damage <b>twice</b>.`,
+        twinRivets: {
+            name: "Twin Rivets", type: "attack", cost: 1, art: "⚙️", rarity: "common",
+            desc: (c) => `Deal <b>${dv(5, c)}</b> damage <b>twice</b>.`,
             upg: { dmg: 7 },
-            play: (c, ctx) => {
-                dealDamage(ctx.target, val(c, "dmg", 5));
-                if (ctx.target.hp > 0) dealDamage(ctx.target, val(c, "dmg", 5));
-            },
+            play: (c, x) => { dealDamage(x.target, v(c, "dmg", 5)); if (x.target.hp > 0) dealDamage(x.target, v(c, "dmg", 5)); },
         },
-        pommelStrike: {
-            name: "Pommel Strike", type: "attack", cost: 1, art: "🤺", rarity: "common",
-            desc: (c) => `Deal <b>${dmgVal(9, c)}</b> damage. Draw <b>${val(c, "draw", 1)}</b> card.`,
+        rivetGun: {
+            name: "Rivet Gun", type: "attack", cost: 1, art: "🔫", rarity: "common",
+            desc: (c) => `Deal <b>${dv(9, c)}</b> damage. Draw <b>${v(c, "draw", 1)}</b> card.`,
             upg: { dmg: 10, draw: 2 },
-            play: (c, ctx) => {
-                dealDamage(ctx.target, val(c, "dmg", 9));
-                drawCards(val(c, "draw", 1));
-            },
+            play: (c, x) => { dealDamage(x.target, v(c, "dmg", 9)); drawCards(v(c, "draw", 1)); },
         },
-        anger: {
-            name: "Anger", type: "attack", cost: 0, art: "😡", rarity: "common",
-            desc: (c) => `Deal <b>${dmgVal(6, c)}</b> damage. Add a copy of Anger to your discard pile.`,
+        scrapshot: {
+            name: "Scrapshot", type: "attack", cost: 0, art: "💢", rarity: "common",
+            desc: (c) => `Deal <b>${dv(6, c)}</b> damage. Add a copy of Scrapshot to your discard pile.`,
             upg: { dmg: 8 },
-            play: (c, ctx) => {
-                dealDamage(ctx.target, val(c, "dmg", 6));
-                G.discard.push(makeCard("anger", c.upgraded));
-            },
+            play: (c, x) => { dealDamage(x.target, v(c, "dmg", 6)); G.discard.push(makeCard("scrapshot", c.upgraded)); },
         },
-        clothesline: {
-            name: "Clothesline", type: "attack", cost: 2, art: "💪", rarity: "common",
-            desc: (c) => `Deal <b>${dmgVal(12, c)}</b> damage. Apply <b>${val(c, "weak", 2)}</b> Weak.`,
-            upg: { dmg: 14, weak: 3 },
-            play: (c, ctx) => {
-                dealDamage(ctx.target, val(c, "dmg", 12));
-                applyStatus(ctx.target, "weak", val(c, "weak", 2));
-            },
+        haymaker: {
+            name: "Haymaker", type: "attack", cost: 2, art: "🦾", rarity: "common",
+            desc: (c) => `Deal <b>${dv(12, c)}</b> damage. Apply <b>${v(c, "jam", 2)}</b> Jammed.`,
+            upg: { dmg: 14, jam: 3 },
+            play: (c, x) => { dealDamage(x.target, v(c, "dmg", 12)); applyStatus(x.target, "jammed", v(c, "jam", 2)); },
         },
-        /* ---- Common skills ---- */
-        shrugItOff: {
-            name: "Shrug It Off", type: "skill", cost: 1, art: "😌", rarity: "common",
-            desc: (c) => `Gain <b>${blkVal(8, c)}</b> Block. Draw <b>1</b> card.`,
+        corrosiveSpray: {
+            name: "Corrosive Spray", type: "attack", cost: 1, art: "🧪", rarity: "common",
+            desc: (c) => `Deal <b>${dv(5, c)}</b> damage. Apply <b>${v(c, "rust", 3)}</b> Rust.`,
+            upg: { dmg: 7, rust: 4 },
+            play: (c, x) => { dealDamage(x.target, v(c, "dmg", 5)); applyStatus(x.target, "rust", v(c, "rust", 3)); },
+        },
+        emergencyPatch: {
+            name: "Emergency Patch", type: "skill", cost: 1, art: "🩹", rarity: "common",
+            desc: (c) => `Gain <b>${pv(8, c)}</b> Plating. Draw <b>1</b> card.`,
             upg: { blk: 11 },
-            play: (c) => {
-                gainBlock(G.player, val(c, "blk", 8));
-                drawCards(1);
-            },
+            play: (c) => { gainPlating(G.player, v(c, "blk", 8)); drawCards(1); },
         },
-        trueGrit: {
-            name: "True Grit", type: "skill", cost: 1, art: "🧱", rarity: "common",
-            desc: (c) => `Gain <b>${blkVal(7, c)}</b> Block. Exhaust a random card in your hand.`,
+        wrenchToss: {
+            name: "Wrench Toss", type: "skill", cost: 1, art: "🛠️", rarity: "common",
+            desc: (c) => `Gain <b>${pv(7, c)}</b> Plating. Exhaust a random card in your hand.`,
             upg: { blk: 9 },
-            play: (c) => {
-                gainBlock(G.player, val(c, "blk", 7));
-                if (G.hand.length) {
-                    const idx = rnd(G.hand.length);
-                    exhaustCard(G.hand[idx]);
-                }
-            },
+            play: (c) => { gainPlating(G.player, v(c, "blk", 7)); if (G.hand.length) exhaustCard(G.hand[rnd(G.hand.length)]); },
         },
-        warcry: {
-            name: "Warcry", type: "skill", cost: 0, art: "📣", rarity: "common",
-            desc: () => `Draw <b>1</b> card. Exhaust this card.`,
+        kickstart: {
+            name: "Kickstart", type: "skill", cost: 0, art: "🔑", rarity: "common",
+            desc: (c) => `Draw <b>${v(c, "draw", 1)}</b> card. Exhaust this card.`,
             upg: { draw: 2 },
             exhaust: true,
-            play: (c) => drawCards(val(c, "draw", 1)),
+            play: (c) => drawCards(v(c, "draw", 1)),
         },
-        /* ---- Uncommon ---- */
-        heavyBlade: {
-            name: "Heavy Blade", type: "attack", cost: 2, art: "🗡️", rarity: "uncommon",
-            desc: (c) => `Deal <b>${dmgVal(14, c)}</b> damage. Strength affects this card <b>${val(c, "mult", 3)}×</b>.`,
+
+        /* ---------- Uncommon ---------- */
+        flywheel: {
+            name: "Flywheel", type: "attack", cost: 2, art: "🌀", rarity: "uncommon",
+            desc: (c) => `Deal <b>${dv(14, c)}</b> damage. Power affects this <b>${v(c, "mult", 3)}×</b>.`,
             upg: { mult: 5 },
-            play: (c, ctx) => {
-                const bonus = (G.player.status.strength || 0) * (val(c, "mult", 3) - 1);
-                dealDamage(ctx.target, val(c, "dmg", 14) + bonus);
+            play: (c, x) => {
+                const bonus = (G.player.status.power || 0) * (v(c, "mult", 3) - 1);
+                dealDamage(x.target, v(c, "dmg", 14) + bonus);
             },
         },
-        bodySlam: {
-            name: "Body Slam", type: "attack", cost: 1, art: "🧍", rarity: "uncommon",
-            desc: () => `Deal damage equal to your current <b>Block</b>.`,
+        recoilSlam: {
+            name: "Recoil Slam", type: "attack", cost: 1, art: "🛡️", rarity: "uncommon",
+            desc: () => `Deal damage equal to your current <b>Plating</b>.`,
             upg: { cost: 0 },
-            play: (c, ctx) => dealDamage(ctx.target, G.player.block),
+            play: (c, x) => dealDamage(x.target, G.player.block),
         },
-        pummel: {
-            name: "Pummel", type: "attack", cost: 1, art: "👊", rarity: "uncommon",
-            desc: (c) => `Deal <b>${dmgVal(2, c)}</b> damage <b>${val(c, "hits", 4)}</b> times. Exhaust.`,
+        rivetStorm: {
+            name: "Rivet Storm", type: "attack", cost: 1, art: "💥", rarity: "uncommon",
+            desc: (c) => `Deal <b>2</b> damage <b>${v(c, "hits", 4)}</b> times. Exhaust.`,
             upg: { hits: 5 },
             exhaust: true,
-            play: (c, ctx) => {
-                const n = val(c, "hits", 4);
-                for (let i = 0; i < n; i++) if (ctx.target.hp > 0) dealDamage(ctx.target, 2);
+            play: (c, x) => { const n = v(c, "hits", 4); for (let i = 0; i < n; i++) if (x.target.hp > 0) dealDamage(x.target, 2); },
+        },
+        hydraulicPress: {
+            name: "Hydraulic Press", type: "attack", cost: 2, art: "🗜️", rarity: "uncommon",
+            desc: (c) => `Deal <b>${dv(13, c)}</b> damage. Apply <b>${v(c, "jam", 1)}</b> Jammed & <b>${v(c, "exp", 1)}</b> Exposed.`,
+            upg: { jam: 2, exp: 2 },
+            play: (c, x) => {
+                dealDamage(x.target, v(c, "dmg", 13));
+                applyStatus(x.target, "jammed", v(c, "jam", 1));
+                applyStatus(x.target, "exposed", v(c, "exp", 1));
             },
         },
-        uppercut: {
-            name: "Uppercut", type: "attack", cost: 2, art: "🥊", rarity: "uncommon",
-            desc: (c) => `Deal <b>${dmgVal(13, c)}</b> damage. Apply <b>1</b> Weak and <b>1</b> Vulnerable.`,
-            upg: { vuln: 2, weak: 2 },
-            play: (c, ctx) => {
-                dealDamage(ctx.target, val(c, "dmg", 13));
-                applyStatus(ctx.target, "weak", val(c, "weak", 1));
-                applyStatus(ctx.target, "vuln", val(c, "vuln", 1));
-            },
-        },
-        secondWind: {
-            name: "Second Wind", type: "skill", cost: 1, art: "🌬️", rarity: "uncommon",
-            desc: (c) => `Exhaust all non-Attack cards in your hand. Gain <b>${val(c, "blk", 5)}</b> Block per card exhausted.`,
+        scrapArmor: {
+            name: "Scrap Armor", type: "skill", cost: 1, art: "♻️", rarity: "uncommon",
+            desc: (c) => `Exhaust all non-Attack cards in your hand. Gain <b>${v(c, "blk", 5)}</b> Plating each.`,
             upg: { blk: 7 },
             play: (c) => {
-                const toEx = G.hand.filter((h) => h.def.type !== "attack" && h !== c);
-                toEx.forEach((h) => {
-                    exhaustCard(h);
-                    gainBlock(G.player, val(c, "blk", 5));
-                });
+                G.hand.filter((h) => h.def.type !== "attack" && h !== c).forEach((h) => { exhaustCard(h); gainPlating(G.player, v(c, "blk", 5)); });
             },
         },
-        bloodletting: {
-            name: "Bloodletting", type: "skill", cost: 0, art: "🩸", rarity: "uncommon",
-            desc: (c) => `Lose <b>3</b> HP. Gain <b>${val(c, "energy", 2)}</b> Energy.`,
-            upg: { energy: 3 },
-            play: (c) => {
-                loseHP(G.player, 3);
-                G.energy += val(c, "energy", 2);
-                renderCombat();
-            },
+        pressureRelease: {
+            name: "Pressure Release", type: "skill", cost: 0, art: "💨", rarity: "uncommon",
+            desc: (c) => `Lose <b>3</b> HP. Gain <b>${v(c, "steam", 2)}</b> Steam.`,
+            upg: { steam: 3 },
+            play: (c) => { loseHP(G.player, 3); G.energy += v(c, "steam", 2); renderCombat(); },
         },
-        inflame: {
-            name: "Inflame", type: "power", cost: 1, art: "🔥", rarity: "uncommon",
-            desc: (c) => `Gain <b>${val(c, "str", 2)}</b> Strength.`,
-            upg: { str: 3 },
-            play: (c) => applyStatus(G.player, "strength", val(c, "str", 2)),
+        overdrive: {
+            name: "Overdrive", type: "power", cost: 1, art: "⚡", rarity: "uncommon",
+            desc: (c) => `Gain <b>${v(c, "pow", 2)}</b> Power.`,
+            upg: { pow: 3 },
+            play: (c) => applyStatus(G.player, "power", v(c, "pow", 2)),
         },
-        metallicize: {
-            name: "Metallicize", type: "power", cost: 1, art: "⚙️", rarity: "uncommon",
-            desc: (c) => `At the end of your turn, gain <b>${val(c, "metal", 3)}</b> Block.`,
+        autoLoader: {
+            name: "Auto-Loader", type: "power", cost: 1, art: "🔁", rarity: "uncommon",
+            desc: (c) => `At the end of your turn, gain <b>${v(c, "metal", 3)}</b> Plating.`,
             upg: { metal: 4 },
-            play: (c) => applyStatus(G.player, "metal", val(c, "metal", 3)),
+            play: (c) => applyStatus(G.player, "platingGen", v(c, "metal", 3)),
         },
-        /* ---- Rare ---- */
-        bludgeon: {
-            name: "Bludgeon", type: "attack", cost: 3, art: "💥", rarity: "rare",
-            desc: (c) => `Deal <b>${dmgVal(32, c)}</b> damage.`,
+        coolantFlush: {
+            name: "Coolant Flush", type: "skill", cost: 1, art: "❄️", rarity: "uncommon",
+            desc: (c) => `Remove <b>6</b> Heat. Gain <b>${pv(6, c)}</b> Plating. Draw <b>1</b>.`,
+            upg: { blk: 9 },
+            play: (c) => { addHeat(-6); gainPlating(G.player, v(c, "blk", 6)); drawCards(1); },
+        },
+        deployWarTurret: {
+            name: "Deploy: War Turret", type: "power", cost: 2, art: "🛰️", rarity: "uncommon",
+            desc: (c) => `Deploy a Contraption that deals <b>${v(c, "amt", 5)}</b> damage to a random enemy each turn.`,
+            upg: { amt: 7 },
+            play: (c) => deployContraption({ name: "War Turret", art: "🛰️", kind: "attack", amount: v(c, "amt", 5) }),
+        },
+
+        /* ---------- Rare ---------- */
+        wreckingBall: {
+            name: "Wrecking Ball", type: "attack", cost: 3, art: "🏀", rarity: "rare",
+            desc: (c) => `Deal <b>${dv(32, c)}</b> damage.`,
             upg: { dmg: 42 },
-            play: (c, ctx) => dealDamage(ctx.target, val(c, "dmg", 32)),
+            play: (c, x) => dealDamage(x.target, v(c, "dmg", 32)),
         },
-        offering: {
-            name: "Offering", type: "skill", cost: 0, art: "🕯️", rarity: "rare",
-            desc: (c) => `Lose <b>6</b> HP. Gain <b>2</b> Energy. Draw <b>${val(c, "draw", 3)}</b> cards. Exhaust.`,
+        juryRig: {
+            name: "Jury-Rig", type: "skill", cost: 0, art: "🎛️", rarity: "rare",
+            desc: (c) => `Lose <b>6</b> HP. Gain <b>2</b> Steam. Draw <b>${v(c, "draw", 3)}</b>. Exhaust.`,
             upg: { draw: 5 },
             exhaust: true,
-            play: (c) => {
-                loseHP(G.player, 6);
-                G.energy += 2;
-                drawCards(val(c, "draw", 3));
-                renderCombat();
-            },
+            play: (c) => { loseHP(G.player, 6); G.energy += 2; drawCards(v(c, "draw", 3)); renderCombat(); },
         },
-        demonForm: {
-            name: "Demon Form", type: "power", cost: 3, art: "😈", rarity: "rare",
-            desc: (c) => `At the start of each turn, gain <b>${val(c, "str", 2)}</b> Strength.`,
-            upg: { str: 3 },
-            play: (c) => applyStatus(G.player, "demon", val(c, "str", 2)),
+        perpetualMotion: {
+            name: "Perpetual Motion", type: "power", cost: 3, art: "♾️", rarity: "rare",
+            desc: (c) => `At the start of each turn, gain <b>${v(c, "pow", 2)}</b> Power.`,
+            upg: { pow: 3 },
+            play: (c) => applyStatus(G.player, "engine", v(c, "pow", 2)),
         },
-        impervious: {
-            name: "Impervious", type: "skill", cost: 2, art: "🏰", rarity: "rare",
-            desc: (c) => `Gain <b>${blkVal(30, c)}</b> Block. Exhaust.`,
+        aegisProtocol: {
+            name: "Aegis Protocol", type: "skill", cost: 2, art: "🏰", rarity: "rare",
+            desc: (c) => `Gain <b>${pv(30, c)}</b> Plating. Exhaust.`,
             upg: { blk: 40 },
             exhaust: true,
-            play: (c) => gainBlock(G.player, val(c, "blk", 30)),
+            play: (c) => gainPlating(G.player, v(c, "blk", 30)),
         },
-        limitBreak: {
-            name: "Limit Break", type: "skill", cost: 1, art: "📈", rarity: "rare",
-            desc: () => `Double your Strength. Exhaust.`,
-            upg: { keep: true },
-            play: (c) => {
-                const s = G.player.status.strength || 0;
-                if (s > 0) applyStatus(G.player, "strength", s);
-            },
+        redline: {
+            name: "Redline", type: "skill", cost: 1, art: "📈", rarity: "rare",
+            desc: () => `Double your Power. Exhaust.`,
+            play: (c) => { const s = G.player.status.power || 0; if (s > 0) applyStatus(G.player, "power", s); },
+        },
+        acidBath: {
+            name: "Acid Bath", type: "skill", cost: 1, art: "🧫", rarity: "rare",
+            desc: (c) => `Apply <b>${v(c, "rust", 4)}</b> Rust to <b>ALL</b> enemies.`,
+            upg: { rust: 6 },
+            play: (c, x) => x.enemies.slice().forEach((e) => applyStatus(e, "rust", v(c, "rust", 4))),
+        },
+
+        /* ---------- The Bulwark — signature ---------- */
+        bulwark: {
+            name: "Bulwark", type: "skill", cost: 2, art: "🛡️", rarity: "special",
+            desc: (c) => `Gain <b>${pv(12, c)}</b> Plating. Gain <b>${v(c, "recoil", 4)}</b> Recoil this combat.`,
+            upg: { blk: 16, recoil: 6 },
+            play: (c) => { gainPlating(G.player, v(c, "blk", 12)); applyStatus(G.player, "recoil", v(c, "recoil", 4)); },
+        },
+
+        /* ---------- The Overclocker — signature (Heat) ---------- */
+        steamBlast: {
+            name: "Steam Blast", type: "attack", cost: 1, art: "♨️", rarity: "special",
+            desc: (c) => `Deal <b>${dv(7, c)}</b> damage. Gain <b>2</b> Heat.`,
+            upg: { dmg: 10 },
+            play: (c, x) => { dealDamage(x.target, v(c, "dmg", 7)); addHeat(2); },
+        },
+        overloadStrike: {
+            name: "Overload Strike", type: "attack", cost: 1, art: "🔥", rarity: "special",
+            desc: (c) => `Deal <b>${dv(6, c)}</b> damage <b>plus your Heat</b>, then lose all Heat.`,
+            upg: { dmg: 9 },
+            play: (c, x) => { const h = G.heat; dealDamage(x.target, v(c, "dmg", 6) + h); addHeat(-h); },
+        },
+        ventSteam: {
+            name: "Vent Steam", type: "skill", cost: 1, art: "🌫️", rarity: "special",
+            desc: (c) => `Lose <b>3</b> Heat. Gain <b>${pv(9, c)}</b> Plating.`,
+            upg: { blk: 12 },
+            play: (c) => { addHeat(-3); gainPlating(G.player, v(c, "blk", 9)); },
+        },
+
+        /* ---------- The Artificer — signature (Contraptions) ---------- */
+        deployTurret: {
+            name: "Deploy: Turret", type: "power", cost: 1, art: "🔭", rarity: "special",
+            desc: (c) => `Deploy a Contraption dealing <b>${v(c, "amt", 3)}</b> damage to a random enemy each turn.`,
+            upg: { amt: 5 },
+            play: (c) => deployContraption({ name: "Turret", art: "🔭", kind: "attack", amount: v(c, "amt", 3) }),
+        },
+        deployCoil: {
+            name: "Deploy: Coil", type: "power", cost: 1, art: "🧲", rarity: "special",
+            desc: (c) => `Deploy a Contraption granting <b>${v(c, "amt", 4)}</b> Plating each turn.`,
+            upg: { amt: 6 },
+            play: (c) => deployContraption({ name: "Coil", art: "🧲", kind: "plating", amount: v(c, "amt", 4) }),
         },
     };
 
-    // Card pools by rarity for rewards
+    // Reward pools by rarity (signature/special cards are NOT randomly offered)
     const POOL = {
-        common: ["cleave", "ironWave", "twinStrike", "pommelStrike", "anger", "clothesline", "shrugItOff", "trueGrit", "warcry"],
-        uncommon: ["heavyBlade", "bodySlam", "pummel", "uppercut", "secondWind", "bloodletting", "inflame", "metallicize"],
-        rare: ["bludgeon", "offering", "demonForm", "impervious", "limitBreak"],
+        common: ["sawblade", "ratchetStrike", "twinRivets", "rivetGun", "scrapshot", "haymaker", "corrosiveSpray", "emergencyPatch", "wrenchToss", "kickstart"],
+        uncommon: ["flywheel", "recoilSlam", "rivetStorm", "hydraulicPress", "scrapArmor", "pressureRelease", "overdrive", "autoLoader", "coolantFlush", "deployWarTurret"],
+        rare: ["wreckingBall", "juryRig", "perpetualMotion", "aegisProtocol", "redline", "acidBath"],
     };
 
     /* ============================================================
-       RELICS — passive effects hooked at various events
+       COGS (relics)
        ============================================================ */
-    const RELICS = {
-        burningBlood: { name: "Burning Blood", art: "🩸", desc: "At the end of combat, heal 6 HP.", onCombatEnd: () => healPlayer(6) },
-        vajra: { name: "Vajra", art: "🔱", desc: "At the start of each combat, gain 1 Strength.", onCombatStart: () => applyStatus(G.player, "strength", 1) },
-        anchor: { name: "Anchor", art: "⚓", desc: "At the start of each combat, gain 10 Block.", onCombatStart: () => gainBlock(G.player, 10) },
-        bagOfPrep: { name: "Bag of Preparation", art: "🎒", desc: "At the start of each combat, draw 2 extra cards.", onFirstTurn: () => drawCards(2) },
-        oddBerry: { name: "Strawberry", art: "🍓", desc: "Raise your Max HP by 7.", onPickup: () => { G.player.maxHp += 7; healPlayer(7); } },
-        bronzeScales: { name: "Bronze Scales", art: "🐉", desc: "Whenever you take unblocked attack damage, deal 3 back.", thorns: 3 },
-        pantograph: { name: "Pantograph", art: "📐", desc: "At the start of Elite & Boss fights, heal 25 HP.", onCombatStart: (kind) => { if (kind === "elite" || kind === "boss") healPlayer(25); } },
-        energyCore: { name: "Energy Core", art: "🔋", desc: "Gain 1 additional Energy at the start of each turn.", energy: 1 },
-        lantern: { name: "Lantern", art: "🏮", desc: "Gain 1 Energy on the first turn of each combat.", onFirstTurn: () => { G.energy += 1; } },
+    const COGS = {
+        furnaceHeart: { name: "Furnace Heart", art: "❤️‍🔥", desc: "At the end of combat, repair 6 HP.", onCombatEnd: () => healPlayer(6) },
+        recoilPlating: { name: "Recoil Plating", art: "🛡️", desc: "When you take unblocked attack damage, deal 3 back.", thorns: 3 },
+        overtunedSpring: { name: "Overtuned Spring", art: "🔧", desc: "At the start of each combat, gain 1 Power.", onCombatStart: () => applyStatus(G.player, "power", 1) },
+        ballast: { name: "Ballast", art: "⚓", desc: "At the start of each combat, gain 10 Plating.", onCombatStart: () => gainPlating(G.player, 10) },
+        preloader: { name: "Preloader", art: "🎒", desc: "At the start of each combat, draw 2 extra cards.", onFirstTurn: () => drawCards(2) },
+        oilCan: { name: "Oil Can", art: "🛢️", desc: "Raise your Max HP by 8.", onPickup: () => { G.player.maxHp += 8; healPlayer(8); } },
+        gyroscope: { name: "Gyroscope", art: "🧭", desc: "At the start of Warden & Core fights, repair 25 HP.", onCombatStart: (k) => { if (k === "elite" || k === "guardian" || k === "boss") healPlayer(25); } },
+        steamCore: { name: "Steam Core", art: "🔋", desc: "Gain 1 additional Steam at the start of each turn.", energy: 1 },
+        sparkPlug: { name: "Spark Plug", art: "🔌", desc: "Gain 1 Steam on the first turn of each combat.", onFirstTurn: () => { G.energy += 1; } },
+        pressureGauge: { name: "Pressure Gauge", art: "🌡️", desc: "At the start of each turn, if your Heat is 8+, vent 3 Heat.", onTurnStart: () => { if (G.usesHeat && G.heat >= 8) addHeat(-3); } },
+        toolkit: { name: "Toolkit", art: "🧰", desc: "At the start of each combat, deploy a Turret (3 dmg/turn).", onCombatStart: () => deployContraption({ name: "Turret", art: "🔭", kind: "attack", amount: 3 }) },
+        reinforcedChassis: { name: "Reinforced Chassis", art: "🦿", desc: "At the start of each combat, gain 3 Precision.", onCombatStart: () => applyStatus(G.player, "precision", 3) },
     };
-    const RELIC_POOL = ["vajra", "anchor", "bagOfPrep", "oddBerry", "bronzeScales", "pantograph", "energyCore", "lantern"];
+    const COG_POOL = ["recoilPlating", "overtunedSpring", "ballast", "preloader", "oilCan", "gyroscope", "steamCore", "sparkPlug", "pressureGauge", "toolkit", "reinforcedChassis"];
 
     /* ============================================================
        CHARACTERS
        ============================================================ */
     const CHARACTERS = {
-        warrior: {
-            name: "The Warrior", emoji: "⚔️", sprite: "🧝‍♂️",
-            desc: "80 HP. A balanced brawler. Starts with Bash for early aggression.",
-            maxHp: 80, relic: "burningBlood",
-            deck: ["strike", "strike", "strike", "strike", "strike", "defend", "defend", "defend", "defend", "bash"],
+        bulwark: {
+            name: "The Bulwark", emoji: "🛡️", sprite: "🤖",
+            desc: "82 HP. Retains HALF its Plating each turn and hits back with Recoil. A fortress that turns defense into damage.",
+            maxHp: 82, cog: "recoilPlating", platingRetain: 0.5, usesHeat: false,
+            deck: ["pistonPunch", "pistonPunch", "pistonPunch", "pistonPunch", "reinforce", "reinforce", "reinforce", "reinforce", "recoilSlam", "bulwark"],
+            hint: "Signature: keep Plating stacking, then unload with Recoil Slam.",
         },
-        knight: {
-            name: "The Knight", emoji: "🛡️", sprite: "🤴",
-            desc: "84 HP. Sturdy and defensive. Starts with extra Defends and Bronze Scales.",
-            maxHp: 84, relic: "bronzeScales",
-            deck: ["strike", "strike", "strike", "strike", "defend", "defend", "defend", "defend", "defend", "ironWave"],
+        overclocker: {
+            name: "The Overclocker", emoji: "🔥", sprite: "🦿",
+            desc: "68 HP. Builds Heat with every blast. Spend it for devastating hits — but let it hit 10 and you'll overheat and burn.",
+            maxHp: 68, cog: "pressureGauge", platingRetain: 0, usesHeat: true, maxHeat: 10, overheatDmg: 6,
+            deck: ["steamBlast", "steamBlast", "steamBlast", "pistonPunch", "reinforce", "reinforce", "reinforce", "ventSteam", "overloadStrike", "overloadStrike"],
+            hint: "Signature: bank Heat with Steam Blast, cash it in with Overload Strike before you overheat.",
         },
-        berserker: {
-            name: "The Berserker", emoji: "🔥", sprite: "🧟",
-            desc: "68 HP. Glass cannon. Lower HP but starts with Vajra (+1 Strength each fight).",
-            maxHp: 68, relic: "vajra",
-            deck: ["strike", "strike", "strike", "strike", "strike", "defend", "defend", "defend", "anger", "twinStrike"],
+        artificer: {
+            name: "The Artificer", emoji: "🔧", sprite: "🛸",
+            desc: "74 HP. Deploys Contraptions that fight for you every turn. Build a machine that wins on its own.",
+            maxHp: 74, cog: "toolkit", platingRetain: 0, usesHeat: false,
+            deck: ["pistonPunch", "pistonPunch", "pistonPunch", "reinforce", "reinforce", "reinforce", "rivetGun", "deployTurret", "deployCoil", "deployTurret"],
+            hint: "Signature: deploy Turrets & Coils early; they act automatically each turn.",
         },
     };
 
     /* ============================================================
-       ENEMIES  — moves define the intent each turn
+       ENEMIES — a clockwork bestiary
        move.type: attack | block | buff | debuff | attackBlock | attackDebuff
        ============================================================ */
     const ENEMIES = {
-        jawWorm: {
-            name: "Jaw Worm", sprite: "🐛", hp: [42, 46],
+        cogSentry: {
+            name: "Cog Sentry", sprite: "🤖", hp: [42, 46],
             moves: [
-                { name: "Chomp", type: "attack", dmg: 11 },
-                { name: "Thrash", type: "attackBlock", dmg: 7, block: 5 },
-                { name: "Bellow", type: "buff", strength: 3, block: 6 },
+                { name: "Ram", type: "attack", dmg: 11 },
+                { name: "Brace", type: "attackBlock", dmg: 7, block: 5 },
+                { name: "Wind Up", type: "buff", power: 3, block: 6 },
             ],
-            ai: (self, turn) => {
-                if (turn === 0) return 0; // chomp first
-                return pick([1, 1, 2]);
-            },
+            ai: (s, t) => (t === 0 ? 0 : pick([1, 1, 2])),
         },
-        cultist: {
-            name: "Cultist", sprite: "🧙", hp: [45, 50],
+        sparrowDrone: {
+            name: "Sparrow Drone", sprite: "🛸", hp: [45, 50],
             moves: [
-                { name: "Incantation", type: "buff", ritual: 3 },
-                { name: "Dark Strike", type: "attack", dmg: 6 },
+                { name: "Spin Up", type: "buff", ritual: 3 },
+                { name: "Zap", type: "attack", dmg: 6 },
             ],
-            ai: (self, turn) => (turn === 0 ? 0 : 1),
+            ai: (s, t) => (t === 0 ? 0 : 1),
         },
-        redLouse: {
-            name: "Red Louse", sprite: "🐞", hp: [10, 15],
+        rustMite: {
+            name: "Rust Mite", sprite: "🐜", hp: [10, 15],
             moves: [
-                { name: "Bite", type: "attack", dmg: 6 },
-                { name: "Grow", type: "buff", strength: 3 },
+                { name: "Nip", type: "attackDebuff", dmg: 5, rust: 1 },
+                { name: "Skitter", type: "buff", power: 3 },
             ],
-            ai: (self, turn) => pick([0, 0, 1]),
+            ai: (s, t) => pick([0, 0, 1]),
         },
-        greenSlime: {
-            name: "Acid Slime", sprite: "🟢", hp: [28, 32],
+        acidSprayer: {
+            name: "Acid Sprayer", sprite: "🟢", hp: [28, 32],
             moves: [
-                { name: "Corrosive Spit", type: "attackDebuff", dmg: 7, weak: 1 },
-                { name: "Lick", type: "debuff", weak: 1 },
-                { name: "Tackle", type: "attack", dmg: 10 },
+                { name: "Spray", type: "attackDebuff", dmg: 7, jam: 1 },
+                { name: "Hiss", type: "debuff", jam: 1 },
+                { name: "Slam", type: "attack", dmg: 10 },
             ],
-            ai: (self, turn) => pick([0, 2, 2, 1]),
+            ai: (s, t) => pick([0, 2, 2, 1]),
         },
-        fungiBeast: {
-            name: "Fungi Beast", sprite: "🍄", hp: [22, 28],
+        furnaceImp: {
+            name: "Furnace Imp", sprite: "🔥", hp: [22, 28],
             moves: [
-                { name: "Bite", type: "attack", dmg: 6 },
-                { name: "Grow", type: "buff", strength: 4 },
+                { name: "Ember", type: "attackDebuff", dmg: 6, rust: 2 },
+                { name: "Stoke", type: "buff", power: 4 },
             ],
-            ai: (self, turn) => pick([0, 0, 1]),
+            ai: (s, t) => pick([0, 0, 1]),
         },
-        // Elites
-        gremlinNob: {
-            name: "Gremlin Nob", sprite: "👹", hp: [82, 86], elite: true,
+        boltHound: {
+            name: "Bolt Hound", sprite: "🐕", hp: [30, 34],
             moves: [
-                { name: "Bellow", type: "buff", strength: 3 },
-                { name: "Rush", type: "attack", dmg: 14 },
-                { name: "Skull Bash", type: "attackDebuff", dmg: 6, vuln: 2 },
+                { name: "Pounce", type: "attack", dmg: 8 },
+                { name: "Snarl", type: "attackDebuff", dmg: 5, jam: 1 },
             ],
-            ai: (self, turn) => {
-                if (turn === 0) return 0;
-                return pick([1, 1, 2]);
-            },
+            ai: (s, t) => pick([0, 0, 1]),
         },
-        sentry: {
-            name: "Sentry", sprite: "🤖", hp: [70, 74], elite: true,
+        // Elites (Wardens)
+        theForeman: {
+            name: "The Foreman", sprite: "👷", hp: [82, 86], elite: true,
+            moves: [
+                { name: "Bellow", type: "buff", power: 3 },
+                { name: "Sledge", type: "attack", dmg: 14 },
+                { name: "Rivet Barrage", type: "attackDebuff", dmg: 6, exp: 2 },
+            ],
+            ai: (s, t) => (t === 0 ? 0 : pick([1, 1, 2])),
+        },
+        wardenUnit: {
+            name: "Warden Unit", sprite: "🦾", hp: [68, 72], elite: true,
             moves: [
                 { name: "Beam", type: "attack", dmg: 9 },
-                { name: "Bolt", type: "attackDebuff", dmg: 7, weak: 2 },
+                { name: "Suppress", type: "attackDebuff", dmg: 7, jam: 2 },
                 { name: "Fortify", type: "block", block: 12 },
             ],
-            ai: (self, turn) => pick([0, 1, 2]),
+            ai: (s, t) => pick([0, 1, 2]),
         },
-        // Boss
-        theColossus: {
-            name: "The Colossus", sprite: "🗿", hp: [140, 140], boss: true,
+        // Sector guardians (gate mini-bosses)
+        grindmaw: {
+            name: "Gate Warden Grindmaw", sprite: "🦿", hp: [96, 100], guardian: true,
             moves: [
-                { name: "Boulder Smash", type: "attack", dmg: 18 },
-                { name: "Stone Skin", type: "block", block: 18 },
-                { name: "Earthquake", type: "attackDebuff", dmg: 10, vuln: 2 },
-                { name: "Enrage", type: "buff", strength: 4 },
+                { name: "Grind", type: "attackDebuff", dmg: 9, rust: 2 },
+                { name: "Lockdown", type: "block", block: 16 },
+                { name: "Crush", type: "attack", dmg: 16 },
+                { name: "Rev Up", type: "buff", power: 3 },
             ],
-            ai: (self, turn) => {
-                if (turn === 0) return 3; // enrage
-                return pick([0, 0, 2, 1]);
-            },
+            ai: (s, t) => (t === 0 ? 3 : pick([0, 2, 1])),
+        },
+        furnaceColossus: {
+            name: "Furnace Colossus", sprite: "🗿", hp: [118, 122], guardian: true,
+            moves: [
+                { name: "Magma Fist", type: "attack", dmg: 20 },
+                { name: "Heat Shield", type: "block", block: 18 },
+                { name: "Cinder Spray", type: "attackDebuff", dmg: 8, rust: 3 },
+                { name: "Ignite", type: "buff", power: 4 },
+            ],
+            ai: (s, t) => (t === 0 ? 3 : pick([0, 0, 2, 1])),
+        },
+        // Final boss
+        aurumCore: {
+            name: "The Aurum Core", sprite: "⚙️", hp: [155, 155], boss: true,
+            moves: [
+                { name: "Piston Barrage", type: "attack", dmg: 20 },
+                { name: "Harden", type: "block", block: 20 },
+                { name: "Seismic Gear", type: "attackDebuff", dmg: 11, exp: 2 },
+                { name: "Overclock", type: "buff", power: 4, block: 8 },
+            ],
+            ai: (s, t) => (t === 0 ? 3 : pick([0, 0, 2, 1])),
         },
     };
 
-    // Encounter groups keyed by difficulty
     const ENCOUNTERS = {
-        easy: [["jawWorm"], ["cultist"], ["redLouse", "redLouse"], ["greenSlime"], ["fungiBeast", "fungiBeast"]],
-        hard: [["jawWorm", "cultist"], ["greenSlime", "fungiBeast"], ["cultist", "cultist"], ["jawWorm", "redLouse", "redLouse"]],
-        elite: [["gremlinNob"], ["sentry", "sentry"]],
-        boss: [["theColossus"]],
+        easy: [["cogSentry"], ["sparrowDrone"], ["rustMite", "rustMite"], ["acidSprayer"], ["furnaceImp", "furnaceImp"], ["boltHound"]],
+        hard: [["cogSentry", "sparrowDrone"], ["acidSprayer", "furnaceImp"], ["sparrowDrone", "sparrowDrone"], ["cogSentry", "rustMite", "rustMite"], ["boltHound", "boltHound"]],
+        elite: [["theForeman"], ["wardenUnit", "wardenUnit"]],
+        guardian: [["grindmaw"], ["furnaceColossus"]],
+        boss: [["aurumCore"]],
     };
 
     /* ============================================================
-       GLOBAL GAME STATE
+       GLOBAL RUN STATE
        ============================================================ */
     let G = null;
 
@@ -407,18 +454,19 @@
                 hp: ch.maxHp, maxHp: ch.maxHp,
                 block: 0, status: {}, isPlayer: true,
             },
+            platingRetain: ch.platingRetain || 0,
+            usesHeat: !!ch.usesHeat, maxHeat: ch.maxHeat || 10, overheatDmg: ch.overheatDmg || 6,
+            heat: 0, contraptions: [],
             deck: ch.deck.map((k) => makeCard(k, false)),
-            relics: [ch.relic],
+            cogs: [ch.cog],
             gold: 99,
             floor: 0,
             map: null,
-            // combat-scoped:
             hand: [], drawPile: [], discard: [], exhaust: [],
             enemies: [], energy: 0, maxEnergy: 3, turn: 0,
             selectedCard: null, inCombat: false, currentNode: null,
         };
-        // relic pickup hooks
-        const r = RELICS[ch.relic];
+        const r = COGS[ch.cog];
         if (r.onPickup) r.onPickup();
         generateMap();
         showMap();
@@ -430,99 +478,109 @@
         return { id: uid(), key, def: CARDS[key], upgraded: !!upgraded };
     }
 
-    /* Card value resolution: base value or upgraded override */
-    function val(card, prop, base) {
+    /* value resolution for upgrades */
+    function v(card, prop, base) {
         if (card.upgraded && card.def.upg && card.def.upg[prop] != null) return card.def.upg[prop];
-        // fall back: upg may define base-changed props; else the passed base
         return base;
     }
     function cardCost(card) {
         if (card.upgraded && card.def.upg && card.def.upg.cost != null) return card.def.upg.cost;
         return card.def.cost;
     }
-    // damage number preview including strength & upgrade
-    function dmgVal(base, card) {
-        const v = card.upgraded && card.def.upg && card.def.upg.dmg != null ? card.def.upg.dmg : base;
-        return v;
-    }
-    function blkVal(base, card) {
-        const v = card.upgraded && card.def.upg && card.def.upg.blk != null ? card.def.upg.blk : base;
-        return v;
-    }
+    function dv(base, card) { return card.upgraded && card.def.upg && card.def.upg.dmg != null ? card.def.upg.dmg : base; }
+    function pv(base, card) { return card.upgraded && card.def.upg && card.def.upg.blk != null ? card.def.upg.blk : base; }
 
     /* ============================================================
-       MAP GENERATION  (rows of branching nodes)
+       MAP — horizontal sectors with forced guardian gates
        ============================================================ */
-    const ROWS = 14;
-    function generateMap() {
-        const map = { rows: [] };
-        for (let r = 0; r < ROWS; r++) {
-            const count = r === 0 ? 3 : r === ROWS - 1 ? 1 : 2 + rnd(3); // 2-4
-            const row = [];
-            for (let i = 0; i < count; i++) {
-                row.push({
-                    row: r, idx: i,
-                    type: nodeType(r),
-                    x: 0, y: 0, next: [], visited: false, reachable: false,
-                });
-            }
-            map.rows.push(row);
-        }
-        // last row is a single boss
-        map.rows[ROWS - 1] = [{ row: ROWS - 1, idx: 0, type: "boss", x: 0, y: 0, next: [], visited: false, reachable: false }];
+    const SECTORS = [
+        { name: "The Foundry", cols: 4 },
+        { name: "The Gearworks", cols: 4 },
+        { name: "The Core Sanctum", cols: 4 },
+    ];
 
-        // connect each node to 1-2 nodes in the next row
-        for (let r = 0; r < ROWS - 1; r++) {
-            const cur = map.rows[r];
-            const nxt = map.rows[r + 1];
-            cur.forEach((node, i) => {
-                const links = 1 + rnd(2);
-                const centerIdx = Math.round((i / Math.max(1, cur.length - 1)) * (nxt.length - 1));
-                const targets = new Set();
-                for (let l = 0; l < links; l++) {
-                    const t = clamp(centerIdx + (rnd(3) - 1), 0, nxt.length - 1);
-                    targets.add(t);
+    function generateMap() {
+        // Build a list of columns left→right. Each sector is `cols` normal
+        // columns followed by a full-height gate (guardian) — except the last
+        // sector, which ends in the Core (boss). Gates funnel every path.
+        const columns = [];
+        SECTORS.forEach((sec, si) => {
+            for (let c = 0; c < sec.cols; c++) {
+                const count = c === 0 && si === 0 ? 3 : 2 + rnd(3); // 2-4 lanes
+                const nodes = [];
+                for (let i = 0; i < count; i++) {
+                    nodes.push(mkNode(nodeType(si, c, sec.cols), columns.length, i, count));
                 }
+                columns.push({ kind: "normal", sector: si, nodes });
+            }
+            // gate at the end of the sector
+            const isLast = si === SECTORS.length - 1;
+            const gate = mkNode(isLast ? "core" : "guardian", columns.length, 0, 1);
+            columns.push({ kind: "gate", sector: si, nodes: [gate] });
+        });
+
+        // connect columns
+        for (let c = 0; c < columns.length - 1; c++) {
+            const cur = columns[c].nodes, nxt = columns[c + 1].nodes;
+            cur.forEach((node, i) => {
+                if (nxt.length === 1) { node.next.push(nxt[0]); return; } // funnel into gate
+                const center = Math.round((i / Math.max(1, cur.length - 1)) * (nxt.length - 1));
+                const targets = new Set();
+                const links = 1 + rnd(2);
+                for (let l = 0; l < links; l++) targets.add(clamp(center + (rnd(3) - 1), 0, nxt.length - 1));
                 targets.forEach((t) => node.next.push(nxt[t]));
             });
-            // guarantee every next-row node is reachable
+            // ensure every next node has a parent
             nxt.forEach((n, ni) => {
-                const hasParent = cur.some((c) => c.next.includes(n));
-                if (!hasParent) {
-                    // connect from nearest current node
-                    let best = 0, bestDist = 1e9;
-                    cur.forEach((c, ci) => {
-                        const d = Math.abs(ci / cur.length - ni / nxt.length);
-                        if (d < bestDist) { bestDist = d; best = ci; }
-                    });
+                if (!cur.some((cc) => cc.next.includes(n))) {
+                    let best = 0, bd = 1e9;
+                    cur.forEach((cc, ci) => { const d = Math.abs(ci / cur.length - ni / nxt.length); if (d < bd) { bd = d; best = ci; } });
                     cur[best].next.push(n);
                 }
             });
         }
-        G.map = map;
-        // first row reachable
-        map.rows[0].forEach((n) => (n.reachable = true));
+
+        G.map = { columns };
+        columns[0].nodes.forEach((n) => (n.reachable = true));
     }
 
-    function nodeType(r) {
-        if (r === 0) return "monster";
-        if (r === ROWS - 2) return "rest"; // rest before boss
+    function mkNode(type, col, idx, count) {
+        return { type, col, idx, count, x: 0, y: 0, next: [], visited: false, reachable: false };
+    }
+
+    function nodeType(sectorIdx, col, secCols) {
+        if (sectorIdx === 0 && col === 0) return "sentinel";
+        if (col === secCols - 1) return "repair"; // repair bay right before each gate
         const roll = Math.random();
-        if (r >= 6 && roll < 0.16) return "elite";
-        if (roll < 0.1) return "rest";
-        if (roll < 0.2) return "treasure";
-        if (roll < 0.3) return "shop";
-        if (roll < 0.42) return "unknown";
-        return "monster";
+        if (col >= 1 && roll < 0.16) return "warden";
+        if (roll < 0.1) return "repair";
+        if (roll < 0.2) return "vault";
+        if (roll < 0.32) return "market";
+        if (roll < 0.44) return "anomaly";
+        return "sentinel";
     }
 
     const NODE_ICON = {
-        monster: "⚔️", elite: "💀", rest: "🔥", treasure: "💰",
-        shop: "🏪", unknown: "❓", boss: "👑",
+        sentinel: "⚔️", warden: "💀", repair: "🔧", vault: "💰",
+        market: "🏪", anomaly: "❓", guardian: "🦿", core: "⚙️",
+    };
+    const NODE_LABEL = {
+        sentinel: "Sentinel", warden: "Warden", repair: "Repair Bay", vault: "Vault",
+        market: "Black Market", anomaly: "Anomaly", guardian: "Sector Guardian", core: "The Aurum Core",
+    };
+    const NODE_DESC = {
+        sentinel: "A machine patrol. Rewards scrap (gold) + a card.",
+        warden: "A tough elite. Drops a Cog.",
+        repair: "Repair 30% HP or modify (upgrade) a card.",
+        vault: "A free Cog.",
+        market: "Spend scrap on cards & Cogs.",
+        anomaly: "A malfunction — could help or harm.",
+        guardian: "A gate mini-boss. Beat it to enter the next sector.",
+        core: "The dead god's heart. Defeat it to win.",
     };
 
     /* ============================================================
-       SCREEN SWITCHING
+       SCREENS
        ============================================================ */
     function hideAllScreens() {
         ["#title-screen", "#map-screen", "#combat-screen"].forEach((s) => $(s).classList.add("hidden"));
@@ -536,84 +594,66 @@
     function renderMap() {
         const inner = $("#map-inner");
         inner.innerHTML = "";
-        const rowGap = 78, colGap = 92;
-        const maxCols = Math.max(...G.map.rows.map((r) => r.length));
-        const width = Math.max(700, maxCols * colGap + 60);
-        const height = ROWS * rowGap + 40;
+        const colGap = 116, rowGap = 74;
+        const cols = G.map.columns;
+        const maxLanes = Math.max(...cols.map((c) => c.nodes.length), 3);
+        const width = cols.length * colGap + 80;
+        const height = Math.max(360, maxLanes * rowGap + 60);
         inner.style.width = width + "px";
         inner.style.height = height + "px";
 
-        // compute positions (bottom row 0 = start at bottom)
-        G.map.rows.forEach((row, r) => {
-            const y = height - 40 - r * rowGap;
-            const spread = (row.length - 1) * colGap;
-            row.forEach((node, i) => {
-                node.x = width / 2 - spread / 2 + i * colGap;
-                node.y = y;
+        cols.forEach((col, ci) => {
+            const x = 50 + ci * colGap;
+            const n = col.nodes.length;
+            const spread = (n - 1) * rowGap;
+            col.nodes.forEach((node, i) => {
+                node.x = x;
+                node.y = height / 2 - spread / 2 + i * rowGap;
             });
         });
 
-        // draw connecting lines
+        // sector band labels
         const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         svg.setAttribute("class", "map-svg");
         svg.setAttribute("width", width);
         svg.setAttribute("height", height);
-        G.map.rows.forEach((row) => {
-            row.forEach((node) => {
-                node.next.forEach((n) => {
+        cols.forEach((col) => {
+            col.nodes.forEach((node) => {
+                node.next.forEach((nx) => {
                     const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-                    line.setAttribute("x1", node.x);
-                    line.setAttribute("y1", node.y);
-                    line.setAttribute("x2", n.x);
-                    line.setAttribute("y2", n.y);
-                    const active = node.visited && n.reachable;
-                    line.setAttribute("stroke", active ? "#ffcc44" : "#4a4266");
+                    line.setAttribute("x1", node.x); line.setAttribute("y1", node.y);
+                    line.setAttribute("x2", nx.x); line.setAttribute("y2", nx.y);
+                    const active = node.visited && nx.reachable;
+                    line.setAttribute("stroke", active ? "#d4af37" : "#5a4d33");
                     line.setAttribute("stroke-width", active ? 3 : 2);
-                    line.setAttribute("stroke-dasharray", active ? "0" : "5,5");
+                    line.setAttribute("stroke-dasharray", active ? "0" : "5,6");
                     svg.appendChild(line);
                 });
             });
         });
         inner.appendChild(svg);
 
-        // draw nodes
-        G.map.rows.forEach((row) => {
-            row.forEach((node) => {
-                const d = el("div", "map-node", NODE_ICON[node.type]);
+        cols.forEach((col) => {
+            col.nodes.forEach((node) => {
+                const d = el("div", "map-node" + (col.kind === "gate" ? " gate" : ""), NODE_ICON[node.type]);
                 d.style.left = node.x + "px";
                 d.style.top = node.y + "px";
                 if (node.visited) d.classList.add("visited");
                 if (node === G.currentNode) d.classList.add("current");
-                if (node.reachable && !node.visited) {
-                    d.classList.add("reachable");
-                    d.onclick = () => enterNode(node);
-                }
-                attachTip(d, `<b>${nodeLabel(node.type)}</b><br>${nodeDesc(node.type)}`);
+                if (node.reachable && !node.visited) { d.classList.add("reachable"); d.onclick = () => enterNode(node); }
+                attachTip(d, `<b>${NODE_LABEL[node.type]}</b><br>${NODE_DESC[node.type]}`);
                 inner.appendChild(d);
             });
         });
-        // scroll to bottom (start)
-        $("#map-scroll").scrollLeft = (width - $("#map-scroll").clientWidth) / 2;
-    }
 
-    function nodeLabel(t) {
-        return { monster: "Monster", elite: "Elite", rest: "Rest Site", treasure: "Treasure", shop: "Shop", unknown: "Unknown", boss: "Boss" }[t];
-    }
-    function nodeDesc(t) {
-        return {
-            monster: "A normal fight. Rewards gold + a card.",
-            elite: "A tough fight, but drops a relic.",
-            rest: "Heal 30% HP or upgrade a card.",
-            treasure: "A free relic.",
-            shop: "Spend gold on cards & relics.",
-            unknown: "A random event — could be good or bad.",
-            boss: "The guardian of the spire. Beat it to win!",
-        }[t];
+        // scroll so the current/left edge is visible
+        const sc = $("#map-scroll");
+        if (G.currentNode) sc.scrollLeft = clamp(G.currentNode.x - sc.clientWidth / 2, 0, width);
+        else sc.scrollLeft = 0;
     }
 
     function enterNode(node) {
-        // mark reachability
-        G.map.rows.forEach((row) => row.forEach((n) => (n.reachable = false)));
+        G.map.columns.forEach((col) => col.nodes.forEach((n) => (n.reachable = false)));
         node.visited = true;
         G.currentNode = node;
         node.next.forEach((n) => (n.reachable = true));
@@ -621,24 +661,24 @@
         updateTopbar();
 
         switch (node.type) {
-            case "monster": startCombat(difficultyEncounter("monster"), "monster"); break;
-            case "elite": startCombat(pick(ENCOUNTERS.elite), "elite"); break;
-            case "boss": startCombat(ENCOUNTERS.boss[0], "boss"); break;
-            case "rest": restSite(); break;
-            case "treasure": treasureRoom(); break;
-            case "shop": shopRoom(); break;
-            case "unknown": unknownEvent(); break;
+            case "sentinel": startCombat(difficultyEncounter(), "monster"); break;
+            case "warden": startCombat(pick(ENCOUNTERS.elite), "elite"); break;
+            case "guardian": startCombat(pick(ENCOUNTERS.guardian), "guardian"); break;
+            case "core": startCombat(ENCOUNTERS.boss[0], "boss"); break;
+            case "repair": repairBay(); break;
+            case "vault": vaultRoom(); break;
+            case "market": marketRoom(); break;
+            case "anomaly": anomalyEvent(); break;
         }
     }
 
     function difficultyEncounter() {
-        // scale up as floors progress
-        const grp = G.floor < 5 ? ENCOUNTERS.easy : Math.random() < 0.5 ? ENCOUNTERS.easy : ENCOUNTERS.hard;
+        const grp = G.floor < 4 ? ENCOUNTERS.easy : Math.random() < 0.5 ? ENCOUNTERS.easy : ENCOUNTERS.hard;
         return pick(grp);
     }
 
     /* ============================================================
-       COMBAT ENGINE
+       COMBAT
        ============================================================ */
     function startCombat(encounterKeys, kind) {
         hideAllScreens();
@@ -647,63 +687,54 @@
         G.combatKind = kind;
         G.turn = 0;
         G.player.block = 0;
-        G.player.status = {}; // status clears between combats
-        // build enemies
+        G.player.status = {};
+        G.heat = 0;
+        G.contraptions = [];
         G.enemies = encounterKeys.map((k) => spawnEnemy(k));
-        // piles
-        G.hand = [];
-        G.discard = [];
-        G.exhaust = [];
+        G.hand = []; G.discard = []; G.exhaust = [];
         G.drawPile = shuffle(G.deck.map((c) => c));
         G.maxEnergy = 3;
         G.log = [];
 
-        // relic combat-start hooks
-        G.relics.forEach((rk) => {
-            const r = RELICS[rk];
-            if (r.onCombatStart) r.onCombatStart(kind);
-        });
+        G.cogs.forEach((rk) => { const r = COGS[rk]; if (r.onCombatStart) r.onCombatStart(kind); });
 
-        logMsg(`⚔️ Combat begins!`);
+        logMsg("⚙️ The machines stir. Combat begins!");
         startPlayerTurn(true);
     }
 
     function spawnEnemy(key) {
         const def = ENEMIES[key];
         const hp = def.hp[0] + rnd(def.hp[1] - def.hp[0] + 1);
-        return {
-            key, def, name: def.name, sprite: def.sprite,
-            hp, maxHp: hp, block: 0, status: {},
-            isPlayer: false, turnCount: 0, intent: null,
-        };
+        return { key, def, name: def.name, sprite: def.sprite, hp, maxHp: hp, block: 0, status: {}, isPlayer: false, turnCount: 0, intent: null };
     }
 
     function startPlayerTurn(first) {
         G.turn++;
-        G.player.block = 0; // block resets (unless Barricade — not implemented)
-        // energy
+        // plating retention (Bulwark keeps a fraction)
+        G.player.block = Math.floor(G.player.block * (G.platingRetain || 0));
+        // steam
         G.energy = G.maxEnergy;
-        G.relics.forEach((rk) => { if (RELICS[rk].energy) G.energy += RELICS[rk].energy; });
+        G.cogs.forEach((rk) => { if (COGS[rk].energy) G.energy += COGS[rk].energy; });
+        // engine powers (Perpetual Motion)
+        if (G.player.status.engine) applyStatus(G.player, "power", G.player.status.engine, true);
+        // cog turn-start hooks (e.g. Pressure Gauge venting)
+        G.cogs.forEach((rk) => { if (COGS[rk].onTurnStart) COGS[rk].onTurnStart(); });
+        // Rust ticks on the player at the start of their turn
+        tickRust(G.player);
+        if (G.player.hp <= 0) return;
+        // Contraptions act
+        triggerContraptions();
+        if (G.enemies.every((e) => e.hp <= 0)) { renderCombat(); return winCombat(); }
 
-        // demon form: strength each turn
-        if (G.player.status.demon) applyStatus(G.player, "strength", G.player.status.demon, true);
-
-        // draw
         drawCards(5);
+        if (first) G.cogs.forEach((rk) => { if (COGS[rk].onFirstTurn) COGS[rk].onFirstTurn(); });
 
-        if (first) {
-            G.relics.forEach((rk) => { if (RELICS[rk].onFirstTurn) RELICS[rk].onFirstTurn(); });
-        }
-
-        // set enemy intents for the coming turn
         G.enemies.forEach((e) => setIntent(e));
-
         renderCombat();
     }
 
     function setIntent(enemy) {
-        const moveIdx = enemy.def.ai(enemy, enemy.turnCount);
-        enemy.intent = enemy.def.moves[moveIdx];
+        enemy.intent = enemy.def.moves[enemy.def.ai(enemy, enemy.turnCount)];
     }
 
     function drawCards(n) {
@@ -717,46 +748,67 @@
         }
     }
 
+    /* ---------- Heat (Overclocker) ---------- */
+    function addHeat(n) {
+        if (!G.usesHeat) return;
+        G.heat = Math.max(0, G.heat + n);
+        renderCombat();
+    }
+
+    /* ---------- Contraptions (Artificer) ---------- */
+    function deployContraption(c) {
+        G.contraptions.push(c);
+        if (G.inCombat) { logMsg(`Deployed <b>${c.name}</b>.`); renderCombat(); }
+    }
+    function triggerContraptions() {
+        G.contraptions.forEach((c) => {
+            if (c.kind === "attack") {
+                const alive = G.enemies.filter((e) => e.hp > 0);
+                if (alive.length) { const t = pick(alive); dealDamage(t, c.amount); logMsg(`${c.art} ${c.name} hits ${t.name} for ${c.amount}.`); }
+            } else if (c.kind === "plating") {
+                gainPlating(G.player, c.amount);
+            } else if (c.kind === "power") {
+                applyStatus(G.player, "power", c.amount, true);
+            } else if (c.kind === "heat") {
+                addHeat(c.amount);
+            }
+        });
+        cleanupDeadEnemies();
+    }
+
     /* ---------- damage & status math ---------- */
     function attackDamage(attacker, base) {
-        let dmg = base + (attacker.status.strength || 0);
-        if (attacker.status.weak) dmg = Math.floor(dmg * 0.75);
+        let dmg = base + (attacker.status.power || 0);
+        if (attacker.status.jammed) dmg = Math.floor(dmg * 0.75);
         return Math.max(0, dmg);
     }
-    // damage dealt TO a target, accounting for target's vulnerable
     function incomingDamage(target, dmg) {
-        if (target.status.vuln) dmg = Math.floor(dmg * 1.5);
+        if (target.status.exposed) dmg = Math.floor(dmg * 1.5);
         return dmg;
     }
-
-    // Player deals damage to an enemy target
     function dealDamage(target, base) {
         if (!target || target.hp <= 0) return;
-        let dmg = attackDamage(G.player, base);
-        dmg = incomingDamage(target, dmg);
+        let dmg = incomingDamage(target, attackDamage(G.player, base));
         applyDamageToCombatant(target, dmg, true);
     }
-
-    // generic damage application returning unblocked amount
     function applyDamageToCombatant(target, dmg, fromPlayer) {
         let remaining = dmg;
         if (target.block > 0) {
             const absorbed = Math.min(target.block, remaining);
-            target.block -= absorbed;
-            remaining -= absorbed;
+            target.block -= absorbed; remaining -= absorbed;
         }
         if (remaining > 0) {
             target.hp = Math.max(0, target.hp - remaining);
             floatText(target, "-" + remaining, "dmg");
             shakeSprite(target);
-            // bronze scales / thorns when PLAYER is hit
             if (target.isPlayer && fromPlayer === false) {
-                G.relics.forEach((rk) => {
-                    const r = RELICS[rk];
-                    if (r.thorns && G._currentAttacker && G._currentAttacker.hp > 0) {
-                        applyDamageToCombatant(G._currentAttacker, r.thorns, true);
-                    }
-                });
+                let thorns = 0;
+                G.cogs.forEach((rk) => { if (COGS[rk].thorns) thorns += COGS[rk].thorns; });
+                thorns += G.player.status.recoil || 0;
+                if (thorns > 0 && G._currentAttacker && G._currentAttacker.hp > 0) {
+                    applyDamageToCombatant(G._currentAttacker, thorns, true);
+                    floatText(G._currentAttacker, "⚡" + thorns, "dmg");
+                }
             }
         } else {
             floatText(target, "Blocked", "block");
@@ -765,16 +817,14 @@
         if (target.isPlayer && target.hp <= 0) checkPlayerDeath();
     }
 
-    function gainBlock(who, amount) {
-        let a = amount + (who.status.dexterity || 0);
-        if (who.status.frail) a = Math.floor(a * 0.75);
+    function gainPlating(who, amount) {
+        let a = amount + (who.status.precision || 0);
         a = Math.max(0, a);
         who.block += a;
         floatText(who, "+" + a + "🛡️", "block");
     }
-
     function healPlayer(n) {
-        if (!G.player) return;
+        if (!G || !G.player) return;
         const before = G.player.hp;
         G.player.hp = Math.min(G.player.maxHp, G.player.hp + n);
         const healed = G.player.hp - before;
@@ -786,100 +836,85 @@
         floatText(who, "-" + n, "dmg");
         if (who.isPlayer) { updateTopbar(); checkPlayerDeath(); }
     }
-
     function applyStatus(who, key, amount, silent) {
         who.status[key] = (who.status[key] || 0) + amount;
         if (who.status[key] === 0) delete who.status[key];
         if (!silent && G.inCombat) renderCombat();
     }
 
-    /* ---------- playing cards ---------- */
-    function canPlay(card) {
-        return G.energy >= cardCost(card);
+    // Rust: damage over time, ignores Plating, then decays by 1.
+    function tickRust(who) {
+        const r = who.status.rust;
+        if (!r) return;
+        who.hp = Math.max(0, who.hp - r);
+        floatText(who, "-" + r + "🦠", "dmg");
+        who.status.rust = r - 1;
+        if (who.status.rust <= 0) delete who.status.rust;
+        if (who.hp <= 0 && !who.isPlayer) onEnemyDeath(who);
+        if (who.isPlayer && who.hp <= 0) checkPlayerDeath();
     }
+
+    /* ---------- playing cards ---------- */
+    const canPlay = (card) => G.energy >= cardCost(card);
+    function isAllTarget(card) { return ["sawblade", "acidBath"].includes(card.key); }
 
     function onCardClicked(card) {
         if (!canPlay(card)) return;
         const needsTarget = card.def.type === "attack" && !isAllTarget(card);
         if (needsTarget) {
-            // toggle target-selection mode
-            if (G.selectedCard === card) {
-                G.selectedCard = null;
-            } else {
-                G.selectedCard = card;
-            }
+            G.selectedCard = G.selectedCard === card ? null : card;
             renderCombat();
         } else {
             resolveCard(card, null);
         }
     }
-    function isAllTarget(card) {
-        return card.key === "cleave"; // cards that hit all enemies need no single target
-    }
-
     function onEnemyClicked(enemy) {
-        if (!G.selectedCard) return;
-        if (enemy.hp <= 0) return;
-        const card = G.selectedCard;
-        G.selectedCard = null;
+        if (!G.selectedCard || enemy.hp <= 0) return;
+        const card = G.selectedCard; G.selectedCard = null;
         resolveCard(card, enemy);
     }
-
     function resolveCard(card, target) {
         if (!canPlay(card)) return;
-        // default target = first alive enemy for all-target or auto
         if (!target) target = G.enemies.find((e) => e.hp > 0);
         G.energy -= cardCost(card);
-        // remove from hand
         const idx = G.hand.indexOf(card);
         if (idx >= 0) G.hand.splice(idx, 1);
-
         logMsg(`You play <b>${card.def.name}</b>${card.upgraded ? "+" : ""}.`);
-        const ctx = { target, enemies: G.enemies.filter((e) => e.hp > 0) };
-        card.def.play(card, ctx);
+        card.def.play(card, { target, enemies: G.enemies.filter((e) => e.hp > 0) });
 
-        // where the card goes
-        if (card.def.type === "power") {
-            // powers are consumed (already applied)
-        } else if (card.def.exhaust) {
-            G.exhaust.push(card);
-        } else {
-            G.discard.push(card);
-        }
+        if (card.def.type === "power") { /* consumed */ }
+        else if (card.def.exhaust) G.exhaust.push(card);
+        else G.discard.push(card);
+
         cleanupDeadEnemies();
         renderCombat();
         if (G.enemies.every((e) => e.hp <= 0)) winCombat();
     }
-
     function exhaustCard(card) {
         const idx = G.hand.indexOf(card);
-        if (idx >= 0) {
-            G.hand.splice(idx, 1);
-            G.exhaust.push(card);
-        }
+        if (idx >= 0) { G.hand.splice(idx, 1); G.exhaust.push(card); }
     }
 
     function endTurn() {
         if (!G.inCombat) return;
-        // metallicize
-        if (G.player.status.metal) gainBlock(G.player, G.player.status.metal);
-        // discard hand
+        if (G.player.status.platingGen) gainPlating(G.player, G.player.status.platingGen);
+        // Overheat penalty (Overclocker)
+        if (G.usesHeat && G.heat >= G.maxHeat) {
+            logMsg(`🔥 <b>Overheat!</b> You take ${G.overheatDmg} damage and vent all Heat.`);
+            floatText(G.player, "OVERHEAT!", "dmg");
+            G.heat = 0;
+            loseHP(G.player, G.overheatDmg);
+            if (G.player.hp <= 0) return;
+        }
         G.discard.push(...G.hand);
         G.hand = [];
         G.selectedCard = null;
-        // decrement player debuffs at end of turn
         tickStatusEndOfTurn(G.player);
         renderCombat();
         setTimeout(enemyTurn, 350);
     }
-
     function tickStatusEndOfTurn(who) {
-        ["weak", "vuln", "frail"].forEach((k) => {
-            if (who.status[k]) {
-                who.status[k]--;
-                if (who.status[k] <= 0) delete who.status[k];
-            }
-        });
+        ["jammed", "exposed"].forEach((k) => { if (who.status[k]) { who.status[k]--; if (who.status[k] <= 0) delete who.status[k]; } });
     }
 
     /* ---------- enemy turn ---------- */
@@ -895,274 +930,190 @@
             const e = alive[i++];
             if (e.hp > 0) doEnemyMove(e);
             renderCombat();
-            setTimeout(step, 550);
+            setTimeout(step, 520);
         };
         step();
     }
-
     function doEnemyMove(enemy) {
-        enemy.block = 0; // enemy block resets on their turn start
-        // ritual: cultist-style strength gain accrues
-        if (enemy.status.ritual) applyStatus(enemy, "strength", enemy.status.ritual, true);
-
+        // Rust ticks on the enemy at the start of its turn
+        tickRust(enemy);
+        if (enemy.hp <= 0) { renderCombat(); return; }
+        enemy.block = 0;
+        if (enemy.status.ritual) applyStatus(enemy, "power", enemy.status.ritual, true);
         const m = enemy.intent || enemy.def.moves[0];
         G._currentAttacker = enemy;
-
         const doAttack = (dmg) => {
-            let d = attackDamage(enemy, dmg);
-            d = incomingDamage(G.player, d);
+            let d = incomingDamage(G.player, attackDamage(enemy, dmg));
             applyDamageToCombatant(G.player, d, false);
             updateTopbar();
         };
-
         switch (m.type) {
-            case "attack": doAttack(m.dmg); logMsg(`${enemy.name} attacks for ${attackDamage(enemy, m.dmg)}.`); break;
+            case "attack": doAttack(m.dmg); logMsg(`${enemy.name} strikes for ${attackDamage(enemy, m.dmg)}.`); break;
             case "attackBlock": doAttack(m.dmg); enemy.block += m.block; break;
             case "attackDebuff":
                 doAttack(m.dmg);
-                if (m.weak) applyStatus(G.player, "weak", m.weak, true);
-                if (m.vuln) applyStatus(G.player, "vuln", m.vuln, true);
+                if (m.jam) applyStatus(G.player, "jammed", m.jam, true);
+                if (m.exp) applyStatus(G.player, "exposed", m.exp, true);
+                if (m.rust) applyStatus(G.player, "rust", m.rust, true);
                 break;
-            case "block": enemy.block += m.block; logMsg(`${enemy.name} defends.`); break;
+            case "block": enemy.block += m.block; logMsg(`${enemy.name} fortifies.`); break;
             case "buff":
-                if (m.strength) applyStatus(enemy, "strength", m.strength, true);
+                if (m.power) applyStatus(enemy, "power", m.power, true);
                 if (m.block) enemy.block += m.block;
                 if (m.ritual) applyStatus(enemy, "ritual", m.ritual, true);
-                logMsg(`${enemy.name} empowers itself.`);
+                logMsg(`${enemy.name} powers up.`);
                 break;
             case "debuff":
-                if (m.weak) applyStatus(G.player, "weak", m.weak, true);
-                logMsg(`${enemy.name} weakens you.`);
+                if (m.jam) applyStatus(G.player, "jammed", m.jam, true);
+                if (m.rust) applyStatus(G.player, "rust", m.rust, true);
+                logMsg(`${enemy.name} sabotages you.`);
                 break;
         }
         G._currentAttacker = null;
         enemy.turnCount++;
-        tickStatusEndOfTurn(enemy);
         if (G.player.hp <= 0) return;
     }
 
-    function cleanupDeadEnemies() {
-        G.enemies.forEach((e) => { if (e.hp < 0) e.hp = 0; });
-    }
-    function onEnemyDeath(e) {
-        floatText(e, "💀", "dmg");
-    }
-
+    function cleanupDeadEnemies() { G.enemies.forEach((e) => { if (e.hp < 0) e.hp = 0; }); }
+    function onEnemyDeath(e) { floatText(e, "💥", "dmg"); }
     function checkPlayerDeath() {
-        if (G.player.hp <= 0 && G.inCombat) {
-            G.inCombat = false;
-            setTimeout(gameOver, 500);
-        }
+        if (G.player.hp <= 0 && G.inCombat) { G.inCombat = false; setTimeout(gameOver, 500); }
     }
 
-    /* ---------- combat resolution ---------- */
+    /* ---------- rewards ---------- */
     function winCombat() {
         if (!G.inCombat) return;
         G.inCombat = false;
-        // relic end-of-combat hooks
-        G.relics.forEach((rk) => { if (RELICS[rk].onCombatEnd) RELICS[rk].onCombatEnd(); });
+        G.cogs.forEach((rk) => { if (COGS[rk].onCombatEnd) COGS[rk].onCombatEnd(); });
         setTimeout(() => combatRewards(G.combatKind), 400);
     }
-
     function combatRewards(kind) {
-        const goldGain = kind === "boss" ? 100 + rnd(20) : kind === "elite" ? 30 + rnd(15) : 10 + rnd(11);
+        const goldGain = kind === "boss" ? 100 + rnd(20) : (kind === "elite" || kind === "guardian") ? 30 + rnd(15) : 10 + rnd(11);
         G.gold += goldGain;
         updateTopbar();
-
-        // Build a persistent reward list so partially-claimed rewards survive
-        // sub-screens (like the card chooser) and re-renders.
         const rewards = [
-            { icon: "🪙", label: `<b class="gold">${goldGain} Gold</b>`, claimed: true, info: true },
+            { icon: "🪙", label: `<b class="gold">${goldGain} Scrap</b>`, claimed: true, info: true },
             { icon: "🃏", label: "Add a card to your deck", claimed: false, type: "card" },
         ];
-        if (kind === "elite" || kind === "boss") {
-            const relicKey = randomRelic();
-            if (relicKey) {
-                rewards.push({
-                    icon: RELICS[relicKey].art,
-                    label: `<b>Relic:</b> ${RELICS[relicKey].name} <span class="muted">— ${RELICS[relicKey].desc}</span>`,
-                    claimed: false, type: "relic", relicKey,
-                });
-            }
+        if (kind === "elite" || kind === "guardian" || kind === "boss") {
+            const cogKey = randomCog();
+            if (cogKey) rewards.push({ icon: COGS[cogKey].art, label: `<b>Cog:</b> ${COGS[cogKey].name} <span class="muted">— ${COGS[cogKey].desc}</span>`, claimed: false, type: "cog", cogKey });
         }
         renderRewardScreen(kind, rewards);
     }
-
     function renderRewardScreen(kind, rewards) {
         const isBoss = kind === "boss";
         openOverlay(`
-            <h2>${isBoss ? "👑 Boss Defeated!" : "Victory!"}</h2>
+            <h2>${isBoss ? "⚙️ The Core Falls!" : "Victory!"}</h2>
             <p class="muted">Claim your rewards, then continue.</p>
             <div class="reward-list" id="reward-list"></div>
             <button class="big-btn" id="reward-continue">${isBoss ? "🏆 You Win! Play Again" : "Continue ▶"}</button>
         `);
         const list = $("#reward-list");
         rewards.forEach((it) => {
-            const row = el("div", "reward-item" + (it.claimed ? " taken" : ""),
-                `<span class="r-icon">${it.icon}</span><span>${it.label}</span>`);
+            const row = el("div", "reward-item" + (it.claimed ? " taken" : ""), `<span class="r-icon">${it.icon}</span><span>${it.label}</span>`);
             if (!it.claimed && !it.info) {
                 row.onclick = () => {
-                    if (it.type === "card") {
-                        showCardReward(kind, rewards, it);
-                    } else if (it.type === "relic") {
-                        addRelic(it.relicKey);
-                        it.claimed = true;
-                        renderRewardScreen(kind, rewards);
-                    }
+                    if (it.type === "card") showCardReward(kind, rewards, it);
+                    else if (it.type === "cog") { addCog(it.cogKey); it.claimed = true; renderRewardScreen(kind, rewards); }
                 };
             }
             list.appendChild(row);
         });
-        $("#reward-continue").onclick = () => {
-            closeOverlay();
-            if (isBoss) { winRun(); } else { showMap(); }
-        };
+        $("#reward-continue").onclick = () => { closeOverlay(); isBoss ? winRun() : showMap(); };
     }
-
     function showCardReward(kind, rewards, rewardItem) {
         const choices = [];
         for (let i = 0; i < 3; i++) {
-            let rarity;
-            const roll = Math.random() + (kind === "elite" ? 0.15 : 0) + (kind === "boss" ? 0.3 : 0);
-            if (roll > 0.92) rarity = "rare";
-            else if (roll > 0.62) rarity = "uncommon";
-            else rarity = "common";
-            let key;
-            let tries = 0;
+            const roll = Math.random() + (kind === "elite" || kind === "guardian" ? 0.15 : 0) + (kind === "boss" ? 0.3 : 0);
+            const rarity = roll > 0.92 ? "rare" : roll > 0.62 ? "uncommon" : "common";
+            let key, tries = 0;
             do { key = pick(POOL[rarity]); tries++; } while (choices.some((c) => c.key === key) && tries < 20);
             choices.push(makeCard(key, false));
         }
         const back = () => { rewardItem.claimed = true; renderRewardScreen(kind, rewards); };
-        openOverlay(`
-            <h2>Choose a card</h2>
-            <div class="card-choices" id="card-choices"></div>
-            <button class="pile-btn" id="skip-card">Skip</button>
-        `);
+        openOverlay(`<h2>Choose a card</h2><div class="card-choices" id="card-choices"></div><button class="pile-btn" id="skip-card">Skip</button>`);
         const cc = $("#card-choices");
         choices.forEach((card) => {
-            const cel = renderCardEl(card, true);
+            const cel = renderCardEl(card);
             cel.classList.add("playable");
-            cel.onclick = () => {
-                G.deck.push(card);
-                updateTopbar();
-                back();
-            };
+            cel.onclick = () => { G.deck.push(card); updateTopbar(); back(); };
             cc.appendChild(cel);
         });
         $("#skip-card").onclick = back;
     }
 
-    function randomRelic() {
-        const owned = new Set(G.relics);
-        const avail = RELIC_POOL.filter((r) => !owned.has(r));
-        if (avail.length === 0) return null;
-        return pick(avail);
+    function randomCog() {
+        const owned = new Set(G.cogs);
+        const avail = COG_POOL.filter((r) => !owned.has(r));
+        return avail.length ? pick(avail) : null;
     }
-    function addRelic(key) {
-        if (G.relics.includes(key)) return;
-        G.relics.push(key);
-        const r = RELICS[key];
-        if (r.onPickup) r.onPickup();
+    function addCog(key) {
+        if (G.cogs.includes(key)) return;
+        G.cogs.push(key);
+        if (COGS[key].onPickup) COGS[key].onPickup();
         updateTopbar();
     }
 
     /* ============================================================
        NON-COMBAT ROOMS
        ============================================================ */
-    function restSite() {
+    function repairBay() {
         openOverlay(`
-            <h2>🔥 Rest Site</h2>
-            <p class="muted">Take a moment to recover or hone your skills.</p>
+            <h2>🔧 Repair Bay</h2>
+            <p class="muted">Patch yourself up or refine your gear.</p>
             <div class="reward-list">
-                <div class="reward-item" id="rest-heal">
-                    <span class="r-icon">❤️</span>
-                    <span>Rest — heal <b>${Math.floor(G.player.maxHp * 0.3)}</b> HP</span>
-                </div>
-                <div class="reward-item" id="rest-upgrade">
-                    <span class="r-icon">⚒️</span>
-                    <span>Smith — upgrade a card in your deck</span>
-                </div>
+                <div class="reward-item" id="rb-heal"><span class="r-icon">❤️</span><span>Repair — restore <b>${Math.floor(G.player.maxHp * 0.3)}</b> HP</span></div>
+                <div class="reward-item" id="rb-upg"><span class="r-icon">⚒️</span><span>Modify — upgrade a card in your deck</span></div>
             </div>
         `);
-        $("#rest-heal").onclick = () => {
-            healPlayer(Math.floor(G.player.maxHp * 0.3));
-            closeOverlay();
-            showMap();
-        };
-        $("#rest-upgrade").onclick = () => showUpgradeChooser();
+        $("#rb-heal").onclick = () => { healPlayer(Math.floor(G.player.maxHp * 0.3)); closeOverlay(); showMap(); };
+        $("#rb-upg").onclick = () => showUpgradeChooser();
     }
-
     function showUpgradeChooser() {
         const upgradable = G.deck.filter((c) => !c.upgraded && c.def.upg);
-        if (upgradable.length === 0) {
-            openOverlay(`<h2>Nothing to upgrade</h2><p class="muted">All your cards are already upgraded.</p><button class="big-btn" id="ok">OK</button>`);
+        if (!upgradable.length) {
+            openOverlay(`<h2>Nothing to modify</h2><p class="muted">All your cards are already upgraded.</p><button class="big-btn" id="ok">OK</button>`);
             $("#ok").onclick = () => { closeOverlay(); showMap(); };
             return;
         }
-        openOverlay(`
-            <h2>Upgrade a card</h2>
-            <div class="grid-cards" id="upg-cards"></div>
-        `);
+        openOverlay(`<h2>Modify a card</h2><div class="grid-cards" id="upg-cards"></div>`);
         const wrap = $("#upg-cards");
         G.deck.forEach((card) => {
-            const cel = renderCardEl(card, true);
-            if (!card.upgraded && card.def.upg) {
-                cel.classList.add("playable");
-                cel.onclick = () => {
-                    card.upgraded = true;
-                    closeOverlay();
-                    showMap();
-                };
-            } else {
-                cel.classList.add("unplayable");
-            }
+            const cel = renderCardEl(card);
+            if (!card.upgraded && card.def.upg) { cel.classList.add("playable"); cel.onclick = () => { card.upgraded = true; closeOverlay(); showMap(); }; }
+            else cel.classList.add("unplayable");
             wrap.appendChild(cel);
         });
     }
-
-    function treasureRoom() {
-        const relicKey = randomRelic();
-        if (!relicKey) {
-            const g = 50 + rnd(50);
-            G.gold += g;
-            updateTopbar();
-            openOverlay(`<h2>💰 Treasure!</h2><p>No new relics — you find <b class="gold">${g} gold</b> instead.</p><button class="big-btn" id="ok">Take it</button>`);
+    function vaultRoom() {
+        const cogKey = randomCog();
+        if (!cogKey) {
+            const g = 50 + rnd(50); G.gold += g; updateTopbar();
+            openOverlay(`<h2>💰 Vault</h2><p>No new Cogs — you salvage <b class="gold">${g} scrap</b> instead.</p><button class="big-btn" id="ok">Take it</button>`);
             $("#ok").onclick = () => { closeOverlay(); showMap(); };
             return;
         }
-        const r = RELICS[relicKey];
+        const r = COGS[cogKey];
         openOverlay(`
-            <h2>💰 Treasure!</h2>
-            <p>You found a relic:</p>
-            <div class="reward-item" style="justify-content:center; cursor:default; pointer-events:none;">
-                <span class="r-icon">${r.art}</span>
-                <span><b>${r.name}</b> — ${r.desc}</span>
-            </div>
-            <button class="big-btn" id="take-relic">Take Relic</button>
+            <h2>💰 Vault</h2><p>You pry loose a Cog:</p>
+            <div class="reward-item" style="justify-content:center; cursor:default; pointer-events:none;"><span class="r-icon">${r.art}</span><span><b>${r.name}</b> — ${r.desc}</span></div>
+            <button class="big-btn" id="take-cog">Install Cog</button>
         `);
-        $("#take-relic").onclick = () => { addRelic(relicKey); closeOverlay(); showMap(); };
+        $("#take-cog").onclick = () => { addCog(cogKey); closeOverlay(); showMap(); };
     }
-
-    function shopRoom() {
-        // 3 cards + 1 relic + card-removal service
+    function marketRoom() {
         const cards = [];
-        for (let i = 0; i < 4; i++) {
-            const roll = Math.random();
-            const rarity = roll > 0.85 ? "rare" : roll > 0.5 ? "uncommon" : "common";
-            cards.push(makeCard(pick(POOL[rarity]), false));
-        }
-        const relicKey = randomRelic();
-        const cardPrice = (c) => ({ common: 45, uncommon: 70, rare: 130, starter: 40 }[c.def.rarity] || 50);
+        for (let i = 0; i < 4; i++) { const roll = Math.random(); const rarity = roll > 0.85 ? "rare" : roll > 0.5 ? "uncommon" : "common"; cards.push(makeCard(pick(POOL[rarity]), false)); }
+        const cogKey = randomCog();
+        const cardPrice = (c) => ({ common: 45, uncommon: 70, rare: 130, starter: 40, special: 60 }[c.def.rarity] || 50);
 
         openOverlay(`
-            <h2>🏪 The Merchant</h2>
-            <p class="muted">Gold: <span class="gold" id="shop-gold">${G.gold}</span></p>
-            <div id="shop-cards"></div>
-            <div id="shop-relic"></div>
-            <div id="shop-remove"></div>
-            <button class="big-btn" id="shop-leave">Leave Shop</button>
+            <h2>🏪 Black Market</h2>
+            <p class="muted">Scrap: <span class="gold" id="shop-gold">${G.gold}</span></p>
+            <div id="shop-cards"></div><div id="shop-cog"></div><div id="shop-remove"></div>
+            <button class="big-btn" id="shop-leave">Leave Market</button>
         `);
-
         const cardsWrap = $("#shop-cards");
         cards.forEach((card) => {
             const price = cardPrice(card);
@@ -1170,167 +1121,101 @@
             row.innerHTML = `<span>${card.def.art} <b>${card.def.name}</b> <span class="muted">(${card.def.type})</span></span>`;
             const btn = el("button", "buy-btn", `🪙 ${price}`);
             btn.disabled = G.gold < price;
-            btn.onclick = () => {
-                if (G.gold < price) return;
-                G.gold -= price;
-                G.deck.push(card);
-                row.remove();
-                updateTopbar();
-                refreshShop();
-            };
-            row.appendChild(btn);
-            cardsWrap.appendChild(row);
+            btn.onclick = () => { if (G.gold < price) return; G.gold -= price; G.deck.push(card); row.remove(); updateTopbar(); refreshShop(); };
+            row.appendChild(btn); cardsWrap.appendChild(row);
         });
-
-        if (relicKey) {
-            const price = 150;
-            const r = RELICS[relicKey];
+        if (cogKey) {
+            const price = 150, r = COGS[cogKey];
             const row = el("div", "shop-item");
             row.innerHTML = `<span>${r.art} <b>${r.name}</b> <span class="muted">— ${r.desc}</span></span>`;
             const btn = el("button", "buy-btn", `🪙 ${price}`);
             btn.disabled = G.gold < price;
-            btn.onclick = () => {
-                if (G.gold < price) return;
-                G.gold -= price;
-                addRelic(relicKey);
-                row.remove();
-                refreshShop();
-            };
-            row.appendChild(btn);
-            $("#shop-relic").appendChild(row);
+            btn.onclick = () => { if (G.gold < price) return; G.gold -= price; addCog(cogKey); row.remove(); refreshShop(); };
+            row.appendChild(btn); $("#shop-cog").appendChild(row);
         }
-
-        // card removal
         const remRow = el("div", "shop-item");
-        remRow.innerHTML = `<span>🗑️ <b>Remove a card</b> <span class="muted">from your deck</span></span>`;
+        remRow.innerHTML = `<span>🗑️ <b>Scrap a card</b> <span class="muted">remove it from your deck</span></span>`;
         const remBtn = el("button", "buy-btn", `🪙 75`);
         remBtn.disabled = G.gold < 75 || G.deck.length <= 1;
         remBtn.onclick = () => showRemoveChooser();
-        remRow.appendChild(remBtn);
-        $("#shop-remove").appendChild(remRow);
+        remRow.appendChild(remBtn); $("#shop-remove").appendChild(remRow);
 
         function refreshShop() {
             $("#shop-gold").textContent = G.gold;
-            document.querySelectorAll(".buy-btn").forEach((b) => {
-                const label = b.textContent.replace("🪙", "").trim();
-                const p = parseInt(label, 10);
-                if (!isNaN(p)) b.disabled = G.gold < p;
-            });
+            document.querySelectorAll(".buy-btn").forEach((b) => { const p = parseInt(b.textContent.replace("🪙", "").trim(), 10); if (!isNaN(p)) b.disabled = G.gold < p; });
             remBtn.disabled = G.gold < 75 || G.deck.length <= 1;
         }
-
         $("#shop-leave").onclick = () => { closeOverlay(); showMap(); };
     }
-
     function showRemoveChooser() {
-        openOverlay(`<h2>Remove a card (🪙75)</h2><div class="grid-cards" id="rem-cards"></div><button class="pile-btn" id="rem-cancel">Cancel</button>`);
+        openOverlay(`<h2>Scrap a card (🪙75)</h2><div class="grid-cards" id="rem-cards"></div><button class="pile-btn" id="rem-cancel">Cancel</button>`);
         const wrap = $("#rem-cards");
         G.deck.forEach((card) => {
-            const cel = renderCardEl(card, true);
-            cel.classList.add("playable");
-            cel.onclick = () => {
-                G.gold -= 75;
-                const idx = G.deck.indexOf(card);
-                if (idx >= 0) G.deck.splice(idx, 1);
-                updateTopbar();
-                closeOverlay();
-                shopRoom();
-            };
+            const cel = renderCardEl(card); cel.classList.add("playable");
+            cel.onclick = () => { G.gold -= 75; const i = G.deck.indexOf(card); if (i >= 0) G.deck.splice(i, 1); updateTopbar(); closeOverlay(); marketRoom(); };
             wrap.appendChild(cel);
         });
-        $("#rem-cancel").onclick = () => { closeOverlay(); shopRoom(); };
+        $("#rem-cancel").onclick = () => { closeOverlay(); marketRoom(); };
     }
-
-    function unknownEvent() {
+    function anomalyEvent() {
         const events = [
-            {
-                title: "🕳️ A Mysterious Shrine",
-                text: "An altar hums with power. You may offer 6 HP for a surge of strength (a random relic), or leave.",
-                options: [
-                    { label: "Offer 6 HP", run: () => { loseHP(G.player, 6); const rk = randomRelic(); if (rk) addRelic(rk); else { G.gold += 40; updateTopbar(); } endEvent(); } },
-                    { label: "Leave", run: endEvent },
-                ],
-            },
-            {
-                title: "💰 Wandering Merchant",
-                text: "A traveler drops a coin purse as they flee. Free gold!",
-                options: [{ label: "Take 40 gold", run: () => { G.gold += 40; updateTopbar(); endEvent(); } }],
-            },
-            {
-                title: "⛲ Healing Spring",
-                text: "Crystal water glimmers. Drink to heal 20 HP, or bottle it (raise Max HP by 4).",
-                options: [
-                    { label: "Drink (heal 20)", run: () => { healPlayer(20); endEvent(); } },
-                    { label: "Bottle it (+4 Max HP)", run: () => { G.player.maxHp += 4; healPlayer(4); endEvent(); } },
-                ],
-            },
-            {
-                title: "👺 Ambush!",
-                text: "Bandits leap from the shadows. There's no avoiding this fight.",
-                options: [{ label: "Fight!", run: () => { closeOverlay(); startCombat(difficultyEncounter("monster"), "monster"); } }],
-            },
-            {
-                title: "📜 Ancient Writings",
-                text: "You study a stone tablet and gain insight — upgrade a random card in your deck.",
-                options: [{ label: "Study", run: () => {
-                    const up = G.deck.filter((c) => !c.upgraded && c.def.upg);
-                    if (up.length) pick(up).upgraded = true;
-                    endEvent();
-                } }],
-            },
+            { title: "🕳️ Dormant Assembler", text: "A half-built machine offers an upgrade — for a price. Sacrifice 6 HP to install a Cog, or leave.",
+              options: [{ label: "Sacrifice 6 HP", run: () => { loseHP(G.player, 6); const c = randomCog(); if (c) addCog(c); else { G.gold += 40; updateTopbar(); } end(); } }, { label: "Leave", run: end }] },
+            { title: "💰 Scrap Cache", text: "A toppled supply drone spills its cargo. Free scrap!",
+              options: [{ label: "Take 40 scrap", run: () => { G.gold += 40; updateTopbar(); end(); } }] },
+            { title: "⛲ Coolant Reservoir", text: "Clean coolant pools here. Drink to repair 20 HP, or bottle it to reinforce your frame (+4 Max HP).",
+              options: [{ label: "Drink (repair 20)", run: () => { healPlayer(20); end(); } }, { label: "Bottle (+4 Max HP)", run: () => { G.player.maxHp += 4; healPlayer(4); end(); } }] },
+            { title: "👺 Ambush Protocol", text: "Security drones lock on. No way around this one.",
+              options: [{ label: "Fight!", run: () => { closeOverlay(); startCombat(difficultyEncounter(), "monster"); } }] },
+            { title: "📜 Schematic Fragment", text: "You decode an old blueprint and gain insight — upgrade a random card in your deck.",
+              options: [{ label: "Study", run: () => { const up = G.deck.filter((c) => !c.upgraded && c.def.upg); if (up.length) pick(up).upgraded = true; end(); } }] },
         ];
         const ev = pick(events);
-        openOverlay(`
-            <h2>${ev.title}</h2>
-            <p class="muted">${ev.text}</p>
-            <div class="reward-list" id="ev-opts"></div>
-        `);
+        openOverlay(`<h2>${ev.title}</h2><p class="muted">${ev.text}</p><div class="reward-list" id="ev-opts"></div>`);
         const wrap = $("#ev-opts");
-        ev.options.forEach((o) => {
-            const row = el("div", "reward-item", `<span>${o.label}</span>`);
-            row.style.justifyContent = "center";
-            row.onclick = o.run;
-            wrap.appendChild(row);
-        });
-        function endEvent() { closeOverlay(); showMap(); }
+        ev.options.forEach((o) => { const row = el("div", "reward-item", `<span>${o.label}</span>`); row.style.justifyContent = "center"; row.onclick = o.run; wrap.appendChild(row); });
+        function end() { closeOverlay(); showMap(); }
     }
 
     /* ============================================================
-       RENDERING — combat
+       COMBAT RENDERING
        ============================================================ */
     function renderCombat() {
         if (!$("#combat-screen")) return;
         renderPlayer();
         renderEnemies();
         renderHand();
-        // energy
         $("#ui-energy").textContent = G.energy;
         $("#ui-maxenergy").textContent = G.maxEnergy + relicEnergyBonus();
         $("#ui-drawcount").textContent = G.drawPile.length;
         $("#ui-discardcount").textContent = G.discard.length;
-        // target hint
         $("#target-hint").textContent = G.selectedCard ? "↳ Click an enemy to target" : "";
         renderLog();
         updateTopbar();
     }
-    function relicEnergyBonus() {
-        let b = 0;
-        G.relics.forEach((rk) => { if (RELICS[rk].energy) b += RELICS[rk].energy; });
-        return b;
-    }
+    function relicEnergyBonus() { let b = 0; G.cogs.forEach((rk) => { if (COGS[rk].energy) b += COGS[rk].energy; }); return b; }
 
     function renderPlayer() {
         const side = $("#player-side");
         side.innerHTML = "";
         const c = el("div", "combatant" + (G.player._hit ? " hit" : ""));
         c.id = "cmb-player";
-        c.innerHTML = `
-            <div class="sprite">${G.player.sprite}</div>
-            <div class="name">${G.player.name}</div>
-            ${hpBarHTML(G.player)}
-            ${badgesHTML(G.player)}
-        `;
+        let extra = "";
+        if (G.usesHeat) {
+            const pct = clamp((G.heat / G.maxHeat) * 100, 0, 100);
+            const hot = G.heat >= G.maxHeat ? " danger" : G.heat >= G.maxHeat - 2 ? " warn" : "";
+            extra += `<div class="heat-gauge${hot}" title="Heat ${G.heat}/${G.maxHeat} — overheats at ${G.maxHeat}">
+                <div class="heat-fill" style="width:${pct}%"></div><span class="heat-label">🔥 ${G.heat}/${G.maxHeat}</span></div>`;
+        }
+        if (G.contraptions.length) {
+            extra += `<div class="contraptions">` + G.contraptions.map((k) =>
+                `<span class="contraption" title="${k.name}: ${contraptionDesc(k)}">${k.art}${k.kind === "attack" ? "⚔️" : k.kind === "plating" ? "🛡️" : ""}${k.amount}</span>`).join("") + `</div>`;
+        }
+        c.innerHTML = `<div class="sprite">${G.player.sprite}</div><div class="name">${G.player.name}</div>${hpBarHTML(G.player)}${extra}${badgesHTML(G.player)}`;
         side.appendChild(c);
+    }
+    function contraptionDesc(k) {
+        return k.kind === "attack" ? `${k.amount} dmg/turn` : k.kind === "plating" ? `${k.amount} Plating/turn` : k.kind === "power" ? `${k.amount} Power/turn` : `${k.amount} Heat/turn`;
     }
 
     function renderEnemies() {
@@ -1342,98 +1227,72 @@
             c.dataset.enemy = i;
             const targetable = G.selectedCard && e.hp > 0;
             if (targetable) c.classList.add("targetable");
-            c.innerHTML = `
-                <div>${intentHTML(e)}</div>
-                <div class="sprite">${e.sprite}</div>
-                <div class="name">${e.name}</div>
-                ${hpBarHTML(e)}
-                ${badgesHTML(e)}
-            `;
+            c.innerHTML = `<div>${intentHTML(e)}</div><div class="sprite">${e.sprite}</div><div class="name">${e.name}</div>${hpBarHTML(e)}${badgesHTML(e)}`;
             if (targetable) c.onclick = () => onEnemyClicked(e);
             side.appendChild(c);
         });
     }
-
     function intentHTML(e) {
         const m = e.intent;
         if (!m) return `<div class="intent">❔</div>`;
         let icon = "❔", extra = "";
         if (m.type === "attack" || m.type === "attackBlock" || m.type === "attackDebuff") {
             const d = incomingDamage(G.player, attackDamage(e, m.dmg));
-            icon = "🗡️";
-            extra = `<span class="dmg">${d}</span>`;
+            icon = "🗡️"; extra = `<span class="dmg">${d}</span>`;
             if (m.type === "attackDebuff") extra += ` <span class="muted">+debuff</span>`;
             if (m.type === "attackBlock") extra += ` 🛡️`;
         } else if (m.type === "block") icon = "🛡️";
-        else if (m.type === "buff") icon = "💪";
+        else if (m.type === "buff") icon = "⬆️";
         else if (m.type === "debuff") icon = "☠️";
         return `<div class="intent" title="${m.name}">${icon} ${extra}</div>`;
     }
-
     function hpBarHTML(who) {
         const pct = clamp((who.hp / who.maxHp) * 100, 0, 100);
-        const blockBadge = who.block > 0 ? `<span style="color:var(--block)">🛡️${who.block}</span>` : "";
-        return `
-            <div class="hp-bar">
-                <div class="hp-fill" style="width:${pct}%"></div>
-                <div class="hp-label">${who.hp}/${who.maxHp} ${blockBadge}</div>
-            </div>`;
+        const plate = who.block > 0 ? `<span style="color:var(--block)">🛡️${who.block}</span>` : "";
+        return `<div class="hp-bar"><div class="hp-fill" style="width:${pct}%"></div><div class="hp-label">${who.hp}/${who.maxHp} ${plate}</div></div>`;
     }
-
     function badgesHTML(who) {
-        const s = who.status;
-        const b = [];
-        if (who.block > 0) b.push(`<span class="badge block">🛡️ ${who.block}</span>`);
-        if (s.strength) b.push(`<span class="badge strength" title="Strength: +dmg">💪 ${s.strength}</span>`);
-        if (s.dexterity) b.push(`<span class="badge dex" title="Dexterity: +block">🤸 ${s.dexterity}</span>`);
-        if (s.vuln) b.push(`<span class="badge vuln" title="Vulnerable: takes 50% more">💔 ${s.vuln}</span>`);
-        if (s.weak) b.push(`<span class="badge weak" title="Weak: deals 25% less">🥴 ${s.weak}</span>`);
-        if (s.ritual) b.push(`<span class="badge ritual" title="Ritual: gains Strength each turn">🔮 ${s.ritual}</span>`);
-        if (s.metal) b.push(`<span class="badge metal" title="Metallicize: block each turn">⚙️ ${s.metal}</span>`);
-        if (s.demon) b.push(`<span class="badge strength" title="Demon Form: Strength each turn">😈 ${s.demon}</span>`);
+        const s = who.status, b = [];
+        if (who.block > 0) b.push(`<span class="badge block" title="Plating: absorbs damage">🛡️ ${who.block}</span>`);
+        if (s.power) b.push(`<span class="badge strength" title="Power: +damage">⚡ ${s.power}</span>`);
+        if (s.precision) b.push(`<span class="badge dex" title="Precision: +Plating">🎯 ${s.precision}</span>`);
+        if (s.exposed) b.push(`<span class="badge vuln" title="Exposed: takes 50% more">💥 ${s.exposed}</span>`);
+        if (s.jammed) b.push(`<span class="badge weak" title="Jammed: deals 25% less">🔧 ${s.jammed}</span>`);
+        if (s.rust) b.push(`<span class="badge poison" title="Rust: damage over time">🦠 ${s.rust}</span>`);
+        if (s.recoil) b.push(`<span class="badge strength" title="Recoil: deal damage back when hit">🌵 ${s.recoil}</span>`);
+        if (s.ritual) b.push(`<span class="badge ritual" title="Spin Up: gains Power each turn">🔮 ${s.ritual}</span>`);
+        if (s.platingGen) b.push(`<span class="badge metal" title="Auto-Loader: Plating each turn">🔁 ${s.platingGen}</span>`);
+        if (s.engine) b.push(`<span class="badge strength" title="Perpetual Motion: Power each turn">♾️ ${s.engine}</span>`);
         return `<div class="badges">${b.join("")}</div>`;
     }
-
     function renderHand() {
         const hand = $("#hand");
         hand.innerHTML = "";
         G.hand.forEach((card) => {
-            const cel = renderCardEl(card, false);
-            if (canPlay(card)) {
-                cel.classList.add("playable");
-                if (G.selectedCard === card) cel.classList.add("selected");
-                cel.onclick = () => onCardClicked(card);
-            } else {
-                cel.classList.add("unplayable");
-            }
+            const cel = renderCardEl(card);
+            if (canPlay(card)) { cel.classList.add("playable"); if (G.selectedCard === card) cel.classList.add("selected"); cel.onclick = () => onCardClicked(card); }
+            else cel.classList.add("unplayable");
             hand.appendChild(cel);
         });
         $("#btn-end-turn").disabled = false;
     }
-
-    function renderCardEl(card, showFull) {
+    function renderCardEl(card) {
         const d = card.def;
         const cel = el("div", "card " + d.type);
-        const cost = cardCost(card);
         cel.innerHTML = `
-            <div class="cost">${cost}</div>
+            <div class="cost">${cardCost(card)}</div>
             <div class="card-name">${d.name}${card.upgraded ? '<span class="upg">+</span>' : ""}</div>
             <div class="card-art">${d.art}</div>
             <div class="card-type">${d.type}</div>
-            <div class="card-desc">${d.desc(card)}</div>
-        `;
+            <div class="card-desc">${d.desc(card)}</div>`;
         return cel;
     }
 
     /* ---------- visual feedback ---------- */
     function floatText(who, text, cls) {
-        const map = who.isPlayer ? "#cmb-player" : `[data-enemy]`;
         let container;
         if (who.isPlayer) container = $("#cmb-player");
-        else {
-            const idx = G.enemies.indexOf(who);
-            container = document.querySelector(`.combatant[data-enemy="${idx}"]`);
-        }
+        else container = document.querySelector(`.combatant[data-enemy="${G.enemies.indexOf(who)}"]`);
         if (!container) return;
         const f = el("div", "floating " + cls, text);
         container.appendChild(f);
@@ -1441,13 +1300,11 @@
     }
     function shakeSprite(who) {
         who._hit = true;
-        setTimeout(() => { who._hit = false; renderCombat(); }, 300);
-        // trigger immediate class without full re-render race
+        setTimeout(() => { who._hit = false; if (G && G.inCombat) renderCombat(); }, 300);
         const sel = who.isPlayer ? "#cmb-player" : `.combatant[data-enemy="${G.enemies.indexOf(who)}"]`;
         const node = document.querySelector(sel);
         if (node) node.classList.add("hit");
     }
-
     function logMsg(m) {
         if (!G.log) G.log = [];
         G.log.push(m);
@@ -1462,7 +1319,7 @@
     }
 
     /* ============================================================
-       TOP BAR + DECK VIEW + RELIC TIPS
+       TOP BAR, DECK VIEW, COG TIPS
        ============================================================ */
     function updateTopbar() {
         if (!G) return;
@@ -1473,76 +1330,53 @@
         $("#ui-decksize").textContent = G.deck.length;
         const rw = $("#ui-relics");
         rw.innerHTML = "";
-        G.relics.forEach((rk) => {
-            const r = RELICS[rk];
-            const span = el("span", "relic", r.art);
-            attachTip(span, `<b>${r.name}</b><br>${r.desc}`);
-            rw.appendChild(span);
-        });
+        G.cogs.forEach((rk) => { const r = COGS[rk]; const span = el("span", "relic", r.art); attachTip(span, `<b>${r.name}</b><br>${r.desc}`); rw.appendChild(span); });
     }
-
     function showDeck() {
         const sorted = G.deck.slice().sort((a, b) => a.def.name.localeCompare(b.def.name));
         openOverlay(`<h2>Your Deck (${G.deck.length})</h2><div class="grid-cards" id="deck-grid"></div><button class="big-btn" id="deck-close">Close</button>`);
         const grid = $("#deck-grid");
-        sorted.forEach((c) => grid.appendChild(renderCardEl(c, true)));
+        sorted.forEach((c) => grid.appendChild(renderCardEl(c)));
         $("#deck-close").onclick = () => closeOverlay();
     }
 
     /* ============================================================
        OVERLAYS + TOOLTIPS
        ============================================================ */
-    function openOverlay(html) {
-        const ov = $("#overlay");
-        ov.innerHTML = `<div class="overlay-inner">${html}</div>`;
-        ov.classList.remove("hidden");
-    }
-    function closeOverlay() {
-        $("#overlay").classList.add("hidden");
-        $("#overlay").innerHTML = "";
-    }
+    function openOverlay(html) { const ov = $("#overlay"); ov.innerHTML = `<div class="overlay-inner">${html}</div>`; ov.classList.remove("hidden"); }
+    function closeOverlay() { $("#overlay").classList.add("hidden"); $("#overlay").innerHTML = ""; }
 
-    const tip = () => $("#tooltip");
+    const tipEl = () => $("#tooltip");
     function attachTip(node, html) {
-        node.addEventListener("mouseenter", (e) => {
-            tip().innerHTML = html;
-            tip().classList.remove("hidden");
-            moveTip(e);
-        });
+        node.addEventListener("mouseenter", (e) => { tipEl().innerHTML = html; tipEl().classList.remove("hidden"); moveTip(e); });
         node.addEventListener("mousemove", moveTip);
-        node.addEventListener("mouseleave", () => tip().classList.add("hidden"));
+        node.addEventListener("mouseleave", () => tipEl().classList.add("hidden"));
     }
     function moveTip(e) {
-        const t = tip();
+        const t = tipEl();
         let x = e.clientX + 14, y = e.clientY + 14;
         const rect = t.getBoundingClientRect();
         if (x + rect.width > window.innerWidth) x = e.clientX - rect.width - 14;
         if (y + rect.height > window.innerHeight) y = e.clientY - rect.height - 14;
-        t.style.left = x + "px";
-        t.style.top = y + "px";
+        t.style.left = x + "px"; t.style.top = y + "px";
     }
 
     /* ============================================================
        WIN / LOSE
        ============================================================ */
     function gameOver() {
-        openOverlay(`
-            <h2>💀 You Died</h2>
-            <p class="muted">You fell on floor ${G.floor}. The spire claims another challenger.</p>
-            <button class="big-btn" id="go-restart">Try Again</button>
-        `);
+        openOverlay(`<h2>💀 Systems Offline</h2><p class="muted">You were dismantled on floor ${G.floor}. The Aurum Core sleeps on.</p><button class="big-btn" id="go-restart">Reboot</button>`);
         $("#go-restart").onclick = () => { closeOverlay(); resetToTitle(); };
     }
     function winRun() {
         openOverlay(`
-            <h2>🏆 The Spire is Yours!</h2>
-            <p class="muted">You defeated The Colossus and conquered the Spire of Trials. Well fought, ${G.player.name}!</p>
-            <p>Final deck size: <b>${G.deck.length}</b> · Relics: <b>${G.relics.length}</b> · Gold: <b class="gold">${G.gold}</b></p>
+            <h2>🏆 The Machine Is Yours!</h2>
+            <p class="muted">You reached the heart of the dead god and shattered the Aurum Core. Cogfall is complete, ${G.player.name}!</p>
+            <p>Final deck: <b>${G.deck.length}</b> cards · Cogs: <b>${G.cogs.length}</b> · Scrap: <b class="gold">${G.gold}</b></p>
             <button class="big-btn" id="win-restart">Play Again</button>
         `);
         $("#win-restart").onclick = () => { closeOverlay(); resetToTitle(); };
     }
-
     function resetToTitle() {
         G = null;
         $("#topbar").classList.add("hidden");
@@ -1553,52 +1387,41 @@
     /* ============================================================
        TITLE SCREEN + WIRING
        ============================================================ */
-    let selectedChar = "warrior";
+    let selectedChar = "bulwark";
     function buildCharPicker() {
         const wrap = $("#char-picker");
         wrap.innerHTML = "";
         Object.entries(CHARACTERS).forEach(([key, ch]) => {
             const c = el("div", "char-card" + (key === selectedChar ? " selected" : ""));
-            const r = RELICS[ch.relic];
-            c.innerHTML = `
-                <div class="emoji">${ch.emoji}</div>
-                <h3>${ch.name}</h3>
-                <p>${ch.desc}</p>
-                <p class="gold">Starts with: ${r.art} ${r.name}</p>
-            `;
+            const r = COGS[ch.cog];
+            c.innerHTML = `<div class="emoji">${ch.emoji}</div><h3>${ch.name}</h3><p>${ch.desc}</p><p class="hint">${ch.hint}</p><p class="gold">Cog: ${r.art} ${r.name}</p>`;
             c.onclick = () => { selectedChar = key; buildCharPicker(); };
             wrap.appendChild(c);
         });
     }
-
     function wire() {
         buildCharPicker();
         $("#btn-start").onclick = () => newGame(selectedChar);
         $("#btn-end-turn").onclick = endTurn;
         $("#btn-deck").onclick = showDeck;
         $("#btn-abandon").onclick = () => {
-            openOverlay(`<h2>Abandon this run?</h2><p class="muted">Your progress will be lost.</p>
-                <button class="big-btn" id="ab-yes">Abandon</button>
-                <button class="pile-btn" id="ab-no" style="margin-left:10px">Keep Playing</button>`);
+            openOverlay(`<h2>Abandon this run?</h2><p class="muted">Your progress will be lost.</p><button class="big-btn" id="ab-yes">Abandon</button> <button class="pile-btn" id="ab-no" style="margin-left:10px">Keep Playing</button>`);
             $("#ab-yes").onclick = () => { closeOverlay(); resetToTitle(); };
             $("#ab-no").onclick = () => closeOverlay();
         };
         $("#btn-draw-pile").onclick = () => showPile("Draw Pile", G.drawPile, true);
         $("#btn-discard-pile").onclick = () => showPile("Discard Pile", G.discard, false);
-
-        // keyboard: E ends turn
         document.addEventListener("keydown", (e) => {
             if (!G || !G.inCombat) return;
             if (e.key === "e" || e.key === "E") endTurn();
             if (e.key === "Escape") { G.selectedCard = null; renderCombat(); }
         });
     }
-
     function showPile(title, pile, shuffled) {
         const arr = shuffled ? shuffle(pile.slice()) : pile.slice();
         openOverlay(`<h2>${title} (${pile.length})</h2>${shuffled ? '<p class="muted">Order hidden (shuffled).</p>' : ""}<div class="grid-cards" id="pile-grid"></div><button class="big-btn" id="pile-close">Close</button>`);
         const grid = $("#pile-grid");
-        arr.forEach((c) => grid.appendChild(renderCardEl(c, true)));
+        arr.forEach((c) => grid.appendChild(renderCardEl(c)));
         $("#pile-close").onclick = () => closeOverlay();
     }
 

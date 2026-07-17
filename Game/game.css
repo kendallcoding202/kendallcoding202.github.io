@@ -1,21 +1,22 @@
 /* ============================================================
-   Spire of Trials — a Slay the Spire style deckbuilder
+   COGFALL — a clockwork deckbuilding roguelike
    ============================================================ */
 
 :root {
-    --bg: #12101a;
-    --panel: #1e1a2e;
-    --panel-light: #2a2440;
-    --accent: #8a2be2;
-    --gold: #ffcc44;
-    --hp: #d94a4a;
-    --block: #6fa8dc;
-    --energy: #ffd24a;
-    --text: #ece7f7;
-    --muted: #9c93b8;
-    --attack: #c0392b;
-    --skill: #2c7be5;
-    --power: #7d5fff;
+    --bg: #14110c;
+    --panel: #241d13;
+    --panel-light: #33291a;
+    --accent: #c9962a;
+    --gold: #e8c247;
+    --hp: #cf5a3a;
+    --block: #7fb0c9;
+    --energy: #e8b34a;
+    --text: #f2e8d5;
+    --muted: #b0a082;
+    --attack: #b5502a;
+    --skill: #4a86a8;
+    --power: #a06a2c;
+    --heat: #e8642a;
 }
 
 * {
@@ -25,7 +26,12 @@
 body {
     margin: 0;
     background:
-        radial-gradient(circle at 50% -10%, #2a1f45 0%, var(--bg) 60%);
+        radial-gradient(circle at 50% -10%, #3a2e1a 0%, var(--bg) 60%),
+        repeating-linear-gradient(
+            45deg,
+            #00000000 0 22px,
+            #ffffff05 22px 24px
+        );
     color: var(--text);
     font-family: "Trebuchet MS", "Segoe UI", sans-serif;
     min-height: 100vh;
@@ -54,7 +60,7 @@ button {
     align-items: center;
     gap: 18px;
     padding: 10px 18px;
-    background: linear-gradient(#241d3a, #191428);
+    background: linear-gradient(#2a2113, #17120b);
     border-bottom: 2px solid var(--accent);
     flex-wrap: wrap;
 }
@@ -132,25 +138,25 @@ button {
     line-height: 1.5;
 }
 .big-btn {
-    background: linear-gradient(var(--accent), #5b1a9c);
+    background: linear-gradient(var(--accent), #7a4a12);
     color: #fff;
     border: none;
     padding: 14px 34px;
     font-size: 20px;
     border-radius: 12px;
     margin-top: 20px;
-    box-shadow: 0 4px 0 #3a0d63;
+    box-shadow: 0 4px 0 #4a2c08;
     transition:
         transform 0.1s,
         box-shadow 0.1s;
 }
 .big-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 0 #3a0d63;
+    box-shadow: 0 6px 0 #4a2c08;
 }
 .big-btn:active {
     transform: translateY(2px);
-    box-shadow: 0 2px 0 #3a0d63;
+    box-shadow: 0 2px 0 #4a2c08;
 }
 
 .char-picker {
@@ -421,7 +427,7 @@ button {
 /* ---------- Hand / cards ---------- */
 .combat-hud {
     margin-top: auto;
-    background: linear-gradient(#191428, #12101a);
+    background: linear-gradient(#17120b, #12100a);
     border-top: 2px solid var(--accent);
     padding: 10px 16px 16px;
 }
@@ -488,7 +494,7 @@ button {
     width: 130px;
     height: 176px;
     border-radius: 12px;
-    background: linear-gradient(#3a3356, #211c33);
+    background: linear-gradient(#3a3222, #211c12);
     border: 3px solid #6b6484;
     padding: 8px;
     display: flex;
@@ -727,6 +733,77 @@ button {
 .buy-btn:disabled {
     filter: grayscale(1);
     cursor: not-allowed;
+}
+
+/* ---------- Heat gauge (Overclocker) ---------- */
+.heat-gauge {
+    width: 150px;
+    height: 16px;
+    background: #000;
+    border-radius: 9px;
+    margin: 6px auto 0;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid #5a3410;
+}
+.heat-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #e8b34a, var(--heat) 70%, #c0301a);
+    transition: width 0.3s;
+}
+.heat-gauge .heat-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: bold;
+    text-shadow: 1px 1px #000;
+}
+.heat-gauge.warn {
+    box-shadow: 0 0 8px var(--heat);
+}
+.heat-gauge.danger {
+    box-shadow: 0 0 12px #ff3b1a;
+    animation: pulse 0.8s infinite;
+    border-color: #ff3b1a;
+}
+
+/* ---------- Contraptions (Artificer) ---------- */
+.contraptions {
+    display: flex;
+    gap: 5px;
+    justify-content: center;
+    margin-top: 6px;
+    flex-wrap: wrap;
+}
+.contraption {
+    font-size: 13px;
+    background: #00000060;
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    padding: 2px 7px;
+    cursor: help;
+    color: var(--gold);
+}
+
+/* ---------- Character hint ---------- */
+.char-card .hint {
+    color: var(--block);
+    font-size: 12px;
+    font-style: italic;
+    line-height: 1.35;
+}
+
+/* ---------- Gate (guardian/boss) map nodes ---------- */
+.map-node.gate {
+    width: 58px;
+    height: 58px;
+    font-size: 28px;
+    border-color: var(--accent);
+    background: radial-gradient(circle at 35% 30%, #4a3a1e, #241d13);
+    box-shadow: 0 0 10px #c9962a55;
 }
 
 @media (max-width: 640px) {
