@@ -12,6 +12,7 @@ import { STARTER_DECK } from "./cards.ts";
 import { rollModifier } from "./modifiers.ts";
 import { GENERIC_EVENTS } from "./events.ts";
 import { aggregateImplants } from "./implants.ts";
+import { threatEffects } from "./threat.ts";
 import { shuffle } from "./rng.ts";
 
 const LOSE_HEAT = 25; // Heat spike for getting detected on a job
@@ -24,11 +25,11 @@ export function getCampaign(id: string): Campaign {
 /** How hard the watcher is pressing, from the current trace (Heat). This
     is applied to every breach you START while at that heat, so pushing loud
     makes each job tougher — and lying low (safehouses) buys it back. */
-export function huntPressure(heat: number, heatMax: number): HuntPressure {
+export function huntPressure(heat: number, heatMax: number, offset = 0): HuntPressure {
     const f = heat / Math.max(1, heatMax);
-    if (f >= 0.85) return { tier: 3, label: "HUNTED · critical", blurb: "The watcher is on top of you — targets start alert, reinforced, and patching fast.", detectionStartFrac: 0.22, creepDelta: 2, strengthDelta: 1 };
-    if (f >= 0.65) return { tier: 2, label: "HUNTED · hot", blurb: "Live intel is reaching your targets — systems start alert and patch faster.", detectionStartFrac: 0.16, creepDelta: 1 };
-    if (f >= 0.40) return { tier: 1, label: "HUNTED · warm", blurb: "The watcher warned your targets — you start each breach a little exposed.", detectionStartFrac: 0.10 };
+    if (f >= 0.85 - offset) return { tier: 3, label: "HUNTED · critical", blurb: "The watcher is on top of you — targets start alert, reinforced, and patching fast.", detectionStartFrac: 0.22, creepDelta: 2, strengthDelta: 1 };
+    if (f >= 0.65 - offset) return { tier: 2, label: "HUNTED · hot", blurb: "Live intel is reaching your targets — systems start alert and patch faster.", detectionStartFrac: 0.16, creepDelta: 1 };
+    if (f >= 0.40 - offset) return { tier: 1, label: "HUNTED · warm", blurb: "The watcher warned your targets — you start each breach a little exposed.", detectionStartFrac: 0.10 };
     return { tier: 0, label: "", blurb: "" };
 }
 
@@ -41,7 +42,7 @@ export const HUNT_ACTION_LINES: Record<number, string> = {
 /** After Heat changes, escalate (or relax) the watcher and, on a rise,
     fire an incoming transmission announcing what it's doing to you. */
 function applyHeatWatcher(run: RunState) {
-    const tier = huntPressure(run.heat, run.heatMax).tier;
+    const tier = huntPressure(run.heat, run.heatMax, threatEffects(run.threat).huntOffset).tier;
     if (tier > run.huntTier) {
         run.huntTier = tier;
         const ant = getCampaign(run.campaignId).antagonist;
@@ -60,8 +61,10 @@ export function getNode(campaign: Campaign, id: string | null): MapNode | null {
     return campaign.map.find((n) => n.id === id) || null;
 }
 
-export function createRun(campaignId: string, seed = 1): RunState {
+export function createRun(campaignId: string, seed = 1, threat = 0): RunState {
     const c = getCampaign(campaignId);
+    const eff = threatEffects(threat);
+    const heatMax = Math.max(30, Math.round(c.heatMax * eff.heatMaxMul));
     // Roll a per-run modifier onto every breach so the map plays differently
     // each run. Deterministic from the seed for testability.
     const rngState = { rng: seed >>> 0 };
@@ -76,9 +79,10 @@ export function createRun(campaignId: string, seed = 1): RunState {
     eventNodes.forEach((n, i) => { const e = pool[i % pool.length]; events[n.id] = { title: e.title, blurb: e.blurb, choices: e.choices }; });
     const run: RunState = {
         campaignId: c.id,
+        threat,
         seed: seed >>> 0,
-        heat: 0,
-        heatMax: c.heatMax,
+        heat: Math.round(eff.startHeatFrac * heatMax),
+        heatMax,
         credits: 0,
         deck: STARTER_DECK.slice(),
         nodeId: null,

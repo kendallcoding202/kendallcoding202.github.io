@@ -13,6 +13,8 @@ import { SYSTEMS } from "../engine/systems.ts";
 import { CAMPAIGNS, CAMPAIGN_ORDER, REWARD_POOL } from "../engine/campaigns.ts";
 import { getModifier } from "../engine/modifiers.ts";
 import { IMPLANTS, IMPLANT_ORDER, getImplant, aggregateImplants } from "../engine/implants.ts";
+import { threatEffects, threatLabel, THREAT_STEPS, MAX_THREAT } from "../engine/threat.ts";
+import { recordWin, isCampaignUnlocked, availableThreat, maxThreatCleared, campaignRequirement, loadProfile } from "./meta.ts";
 import { sfx } from "./audio.ts";
 import { createInitialState, applyAction, canPlay, projectedNoise, needsTarget, targetableDefenses, previewOnTarget } from "../engine/engine.ts";
 import { createRun, currentOptions, atFinale, isTerminal, resolveBreach, resolveEvent, resolveSafehouse, addCard, addImplant, removeCard, getCampaign, getNode, clearTransmission, huntPressure } from "../engine/run.ts";
@@ -128,8 +130,8 @@ function Transmission({ name, text, onClose }: { name: string; text: string; onC
 /* ============================================================
    BREACH SCREEN (one job)
    ============================================================ */
-function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, onComplete }: { systemKey: string; systemTitle: string; deck: string[]; modifier?: SystemModifier | null; hunt?: HuntPressure | null; implants?: string[]; onComplete: (r: BreachResult) => void }) {
-    const [state, setState] = useState<GameState>(() => createInitialState(newSeed(), systemKey, deck, modifier, hunt, aggregateImplants(implants || [])));
+function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat, onComplete }: { systemKey: string; systemTitle: string; deck: string[]; modifier?: SystemModifier | null; hunt?: HuntPressure | null; implants?: string[]; threat?: number; onComplete: (r: BreachResult) => void }) {
+    const [state, setState] = useState<GameState>(() => createInitialState(newSeed(), systemKey, deck, modifier, hunt, aggregateImplants(implants || []), threatEffects(threat || 0)));
     const [armed, setArmed] = useState<string | null>(null);
     const [showIntro, setShowIntro] = useState(() => { try { return localStorage.getItem("breach_seen_intro") !== "1"; } catch { return true; } });
     const closeIntro = () => { setShowIntro(false); try { localStorage.setItem("breach_seen_intro", "1"); } catch { /* ignore */ } };
@@ -311,28 +313,52 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, onComp
 /* ============================================================
    CAMPAIGN SELECT
    ============================================================ */
-function CampaignSelect({ onPick }: { onPick: (id: string) => void }) {
+function CampaignSelect({ onPick }: { onPick: (id: string, threat: number) => void }) {
+    const profile = loadProfile();
+    const [threats, setThreats] = useState<Record<string, number>>(() =>
+        Object.fromEntries(CAMPAIGN_ORDER.map((id) => [id, availableThreat(id, profile)])));
+    const setThreat = (id: string, t: number) => setThreats((s) => ({ ...s, [id]: t }));
+
     return (
         <div className="wrap">
             <div className="title">BREACH <span style={{ float: "right" }}><MuteButton /></span></div>
-            <p className="muted">A hacking roguelike. Choose a storyline — a branching map of breaches, a rising trace, and a deck you build as you go.</p>
+            <p className="muted">A hacking roguelike. Choose a storyline — a branching map of breaches, a rising trace, and a deck you build as you go.{profile.totalWins > 0 ? ` · ${profile.totalWins} contract${profile.totalWins === 1 ? "" : "s"} completed` : ""}</p>
             <hr />
             <div className="systems">
                 {CAMPAIGN_ORDER.map((id) => {
                     const c = CAMPAIGNS[id];
                     const depth = Math.max(...c.map.map((n) => n.col)) + 1;
                     const length = depth <= 3 ? "SHORT" : depth >= 6 ? "LONG" : "MEDIUM";
+                    const unlocked = isCampaignUnlocked(id, profile);
+                    const avail = availableThreat(id, profile);
+                    const cleared = maxThreatCleared(id, profile);
+                    const t = Math.min(threats[id] ?? 0, avail);
                     return (
-                        <div className="syscard" key={id} onClick={() => onPick(id)}>
+                        <div className={"syscard" + (unlocked ? "" : " locked")} key={id}>
                             <div className="sysname">{c.name} <span className={"lentag " + length.toLowerCase()}>{length}</span></div>
                             <div className="cyan" style={{ fontSize: 12, margin: "2px 0 6px" }}>{c.tagline}</div>
                             <div className="sysflavor">{c.premise}</div>
                             <div className="sysmeta muted">Handler: {c.handler} · {depth}-stop map{c.antagonist ? " · ⌁ watched" : ""}</div>
-                            <button className="term">Begin ▸</button>
+                            {unlocked ? (
+                                <>
+                                    {avail > 0 && (
+                                        <div className="threatpick">
+                                            <button className="tstep" disabled={t <= 0} onClick={() => setThreat(id, Math.max(0, t - 1))}>◀</button>
+                                            <span className="tlabel">{threatLabel(t)}{cleared >= t && t > 0 ? " ✓" : ""}</span>
+                                            <button className="tstep" disabled={t >= avail} onClick={() => setThreat(id, Math.min(avail, t + 1))}>▶</button>
+                                        </div>
+                                    )}
+                                    {t > 0 && <div className="threatdesc">＋ {THREAT_STEPS[t]}</div>}
+                                    <button className="term" onClick={() => onPick(id, t)}>Begin ▸</button>
+                                </>
+                            ) : (
+                                <div className="lockbox">🔒 Complete {campaignRequirement(id)} contract{campaignRequirement(id) === 1 ? "" : "s"} to unlock</div>
+                            )}
                         </div>
                     );
                 })}
             </div>
+            <p className="muted" style={{ fontSize: 11, marginTop: 12 }}>Complete a storyline to raise its <b className="amber">Threat Level</b> — each one stacks a new twist, all the way to Threat {MAX_THREAT}. Progress is saved.</p>
         </div>
     );
 }
@@ -453,7 +479,7 @@ function RunView({ run, campaign, onLaunchBreach, onRun, onOpenDeck }: {
     const [removing, setRemoving] = useState<{ choice: EventChoice; node: MapNode } | null>(null);
     const finale = atFinale(run);
     const heatFrac = run.heat / run.heatMax;
-    const hp = huntPressure(run.heat, run.heatMax);
+    const hp = huntPressure(run.heat, run.heatMax, threatEffects(run.threat).huntOffset);
     const watcherName = campaign.antagonist ? campaign.antagonist.name : "The watcher";
 
     const pickChoice = (node: MapNode, choice: EventChoice) => {
@@ -474,7 +500,7 @@ function RunView({ run, campaign, onLaunchBreach, onRun, onOpenDeck }: {
 
     return (
         <div className="wrap">
-            <div className="title">{campaign.name} <span className="sub">// {finale ? "the final job" : "choose your route"}</span></div>
+            <div className="title">{campaign.name} <span className="sub">// {finale ? "the final job" : "choose your route"}</span>{run.threat > 0 ? <span className="threatbadge"> ⚠ THREAT {run.threat}</span> : null}</div>
             <div className="run-stats">
                 <span>💾 <b className="gold">{run.credits}</b>cr</span>
                 <span className="deck-link" onClick={onOpenDeck}>🃏 deck: <b>{run.deck.length}</b> ▸</span>
@@ -559,7 +585,7 @@ function Ending({ run, campaign, onRestart }: { run: RunState; campaign: Campaig
                     <h2 className={won ? "cyan" : "red"} style={{ textAlign: "center" }}>{won ? "CONTRACT COMPLETE" : "BUSTED"}</h2>
                     <p className="brief">{won ? campaign.winText : campaign.bustedText}</p>
                     <div className="runsummary">
-                        <div className="rs-row"><span>Campaign</span><b>{campaign.name}</b></div>
+                        <div className="rs-row"><span>Campaign</span><b>{campaign.name}{run.threat > 0 ? ` · Threat ${run.threat}` : ""}</b></div>
                         <div className="rs-row"><span>Jobs pulled</span><b>{run.jobsDone}</b></div>
                         <div className="rs-row"><span>Route length</span><b>{run.path.length} stops</b></div>
                         <div className="rs-row"><span>Final trace (Heat)</span><b style={{ color: meterColor(heatFrac) }}>{run.heat} / {run.heatMax}</b></div>
@@ -569,6 +595,8 @@ function Ending({ run, campaign, onRestart }: { run: RunState; campaign: Campaig
                         {run.implants.length > 0 && <div className="rs-row"><span>Implants installed</span><b>{run.implants.length}</b></div>}
                     </div>
                     <p className="muted" style={{ fontSize: 12, fontStyle: "italic", marginTop: 8 }}>{verdict}</p>
+                    {won && run.threat < MAX_THREAT && <p className="amber" style={{ fontSize: 13, textAlign: "center", marginTop: 6 }}>▲ THREAT {run.threat + 1} unlocked for {campaign.name}.</p>}
+                    {won && run.threat >= MAX_THREAT && <p className="cyan" style={{ fontSize: 13, textAlign: "center", marginTop: 6 }}>★ You cleared the maximum Threat. You've mastered this contract.</p>}
                     <button className="term" style={{ marginTop: 14, display: "block", marginInline: "auto" }} onClick={onRestart}>◂ Choose another storyline</button>
                 </div>
             </div>
@@ -588,7 +616,7 @@ export function App() {
 
     const campaign = run ? getCampaign(run.campaignId) : null;
 
-    const startCampaign = (id: string) => { setRun(createRun(id, newSeed())); setActiveNode(null); setReward(null); setMode("run"); };
+    const startCampaign = (id: string, threat = 0) => { setRun(createRun(id, newSeed(), threat)); setActiveNode(null); setReward(null); setMode("run"); };
     const launchBreach = (n: MapNode) => { setActiveNode(n); setMode("breach"); };
 
     const onBreachComplete = (result: BreachResult) => {
@@ -596,13 +624,18 @@ export function App() {
         const newRun = resolveBreach(run, activeNode, result);
         setRun(newRun);
         setActiveNode(null);
-        if (newRun.outcome !== "running") { setMode("ending"); return; }
+        if (newRun.outcome !== "running") {
+            if (newRun.outcome === "won") recordWin(newRun.campaignId, newRun.threat); // meta-progression
+            setMode("ending");
+            return;
+        }
         setMode("run");
         if (result.won) {
             // sometimes the salvage is cyberware (an implant) rather than a card
+            const lean = threatEffects(newRun.threat).leanRewards; // higher Threat = leaner salvage
             const available = IMPLANT_ORDER.filter((i) => !newRun.implants.includes(i));
-            if (available.length >= 2 && Math.random() < 0.4) setReward({ kind: "implant", options: pickN(available, 2) });
-            else setReward({ kind: "card", options: pick3(REWARD_POOL) });
+            if (available.length >= 2 && Math.random() < (lean ? 0.3 : 0.4)) setReward({ kind: "implant", options: pickN(available, 2) });
+            else setReward({ kind: "card", options: pickN(REWARD_POOL, lean ? 2 : 3) });
             sfx.play("reward");
         }
     };
@@ -615,7 +648,7 @@ export function App() {
     if (mode === "campaign" || !run || !campaign) return <CampaignSelect onPick={startCampaign} />;
 
     if (mode === "breach" && activeNode) {
-        return <Breach systemKey={activeNode.systemKey || "homeServer"} systemTitle={activeNode.title} deck={run.deck} modifier={getModifier(run.mods[activeNode.id])} hunt={huntPressure(run.heat, run.heatMax)} implants={run.implants} onComplete={onBreachComplete} />;
+        return <Breach systemKey={activeNode.systemKey || "homeServer"} systemTitle={activeNode.title} deck={run.deck} modifier={getModifier(run.mods[activeNode.id])} hunt={huntPressure(run.heat, run.heatMax, threatEffects(run.threat).huntOffset)} implants={run.implants} threat={run.threat} onComplete={onBreachComplete} />;
     }
 
     if (mode === "ending") return <Ending run={run} campaign={campaign} onRestart={() => { setMode("campaign"); setRun(null); }} />;

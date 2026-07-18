@@ -291,6 +291,7 @@ export interface RunStats {
 
 export interface RunState {
     campaignId: string;
+    threat: number; // ascension level — stacks escalating difficulty
     seed: number; // deterministic seed for this run's rolled modifiers
     heat: number;
     heatMax: number;

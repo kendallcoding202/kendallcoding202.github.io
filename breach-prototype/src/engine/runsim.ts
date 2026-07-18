@@ -8,6 +8,7 @@ import { createInitialState, applyAction, projectedNoise } from "./engine.ts";
 import { SYSTEMS } from "./systems.ts";
 import { MODIFIERS, getModifier } from "./modifiers.ts";
 import { aggregateImplants } from "./implants.ts";
+import { threatEffects, MAX_THREAT } from "./threat.ts";
 
 let passed = 0;
 const failures: string[] = [];
@@ -390,6 +391,44 @@ for (const id of CAMPAIGN_ORDER) {
     const after = resolveBreach(run, node, winResult(0.3));
     check("Black-Market Uplink adds credits per breach", after.credits === before + (node.reward || 20) + 8);
     check("implants don't duplicate", addImplant(addImplant(createRun("ghost", 1), "cortex"), "cortex").implants.length === 1);
+}
+
+/* 15. Threat Levels (ascension) — stacking difficulty above Threat 0. */
+{
+    const base = threatEffects(0);
+    check("Threat 0 is neutral", base.heatMaxMul === 1 && base.strengthDelta === 0 && base.creepDelta === 0 && !base.leanRewards);
+    const t2 = threatEffects(2);
+    check("Threat 2 hardens defenses & cuts headroom", t2.strengthDelta === 1 && t2.heatMaxMul < 1);
+    const t10 = threatEffects(10);
+    check("Threat scales to the top", t10.strengthDelta === 3 && t10.creepDelta === 2 && t10.leanRewards);
+    check("Threat clamps at MAX", threatEffects(99).strengthDelta === threatEffects(MAX_THREAT).strengthDelta);
+
+    // run creation
+    const r0 = createRun("ghost", 1, 0);
+    const r7 = createRun("ghost", 1, 7);
+    check("higher Threat lowers the heat cap", r7.heatMax < r0.heatMax);
+    check("Threat 7 starts you warm", r7.heat > 0);
+    check("run records its Threat", r7.threat === 7 && r0.threat === 0);
+
+    // breach effects
+    const b0 = createInitialState(1, "smallBusiness");
+    const b2 = createInitialState(1, "smallBusiness", undefined, null, null, null, threatEffects(2));
+    check("Threat raises defense strength in a breach", b2.layers[0].defenses[0].strength === b0.layers[0].defenses[0].strength + 1);
+    const b8 = createInitialState(1, "smallBusiness", undefined, null, null, null, threatEffects(8));
+    check("Threat 8 tightens the detection ceiling", b8.detectionMax < b0.detectionMax);
+
+    // watcher offset: the same Heat reaches a higher pressure tier
+    check("Threat makes the watcher bite sooner", huntPressure(60, 100, 0.12).tier > huntPressure(60, 100, 0).tier);
+
+    // a Threat run is still completable by playing well
+    let run = createRun("ghost", 1, 3);
+    let guard = 0;
+    while (run.outcome === "running" && guard++ < 20) {
+        const opts = currentOptions(run);
+        const node = opts.find((n) => n.type === "breach") || opts[0];
+        run = node.type === "breach" ? resolveBreach(run, node, winResult(0.3)) : takeNode(run, node);
+    }
+    check("a Threat 3 run can still be won", run.outcome === "won");
 }
 
 console.log(`=== RUN-ENGINE ASSERTIONS: ${passed} passed, ${failures.length} failed ===`);

@@ -136,6 +136,20 @@ hr { border: none; border-top: 1px solid var(--line); margin: 7px 0; }
 .syscard .sysflavor { font-size: 12px; color: #9fd18f; line-height: 1.4; margin: 6px 0; min-height: 52px; }
 .syscard .sysmeta { font-size: 11px; }
 .syscard .term { margin-top: 10px; width: 100%; }
+/* meta-progression: locks + threat selector on the campaign cards */
+.syscard.locked { opacity: 0.72; }
+.syscard.locked .sysname, .syscard.locked .sysflavor { filter: grayscale(0.4); }
+.lockbox { margin-top: 10px; padding: 9px; border: 1px dashed var(--dim); text-align: center; color: var(--amber); font-size: 12px; }
+.threatpick { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 10px; }
+.threatpick .tstep {
+    background: #000; border: 1px solid var(--amber); color: var(--amber);
+    width: 30px; height: 28px; font-family: inherit; cursor: pointer; font-size: 13px;
+}
+.threatpick .tstep:hover:not(:disabled) { background: var(--amber); color: #000; }
+.threatpick .tstep:disabled { border-color: var(--line); color: var(--line); cursor: default; }
+.threatpick .tlabel { min-width: 132px; text-align: center; font-weight: bold; letter-spacing: 1px; color: var(--amber); font-size: 13px; }
+.threatdesc { margin-top: 6px; font-size: 11px; color: #ff9d3c; line-height: 1.35; min-height: 30px; }
+.threatbadge { color: var(--red); font-weight: bold; letter-spacing: 1px; margin-left: 8px; font-size: 13px; }
 
 /* layer stack */
 .layers { margin: 7px 0; }

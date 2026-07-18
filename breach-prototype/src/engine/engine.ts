@@ -11,6 +11,7 @@
 
 import type { Action, AlertStage, CardDef, Defense, GameState, HuntPressure, Layer, SystemDef, SystemIntent, SystemModifier } from "./types.ts";
 import type { ImplantLoadout } from "./implants.ts";
+import type { ThreatEffects } from "./threat.ts";
 import { CARDS, STARTER_DECK } from "./cards.ts";
 import { SYSTEMS, DEFAULT_SYSTEM } from "./systems.ts";
 import { shuffle } from "./rng.ts";
@@ -19,20 +20,21 @@ const PROXY_REDUCTION = 3;
 
 /* ---------- construction ---------- */
 
-export function createInitialState(seed: number, systemKey: string = DEFAULT_SYSTEM, deck?: string[], modifier?: SystemModifier | null, hunt?: HuntPressure | null, implants?: ImplantLoadout | null): GameState {
+export function createInitialState(seed: number, systemKey: string = DEFAULT_SYSTEM, deck?: string[], modifier?: SystemModifier | null, hunt?: HuntPressure | null, implants?: ImplantLoadout | null, threat?: ThreatEffects | null): GameState {
     const sys: SystemDef = SYSTEMS[systemKey] || SYSTEMS[DEFAULT_SYSTEM];
     const m = modifier || null;
     const h = hunt && hunt.tier > 0 ? hunt : null; // the watcher's grip, if Heat is high
     const im = implants || null; // installed cyberware, applied to the whole run
-    const sDelta = (m?.strengthDelta || 0) + (h?.strengthDelta || 0);
-    const detectionMax = Math.max(60, sys.detectionMax + (m?.detectionMaxDelta || 0) + (im?.detectionMaxDelta || 0));
+    const th = threat || null; // ascension difficulty, if playing above Threat 0
+    const sDelta = (m?.strengthDelta || 0) + (h?.strengthDelta || 0) + (th?.strengthDelta || 0);
+    const detectionMax = Math.max(60, Math.round((sys.detectionMax + (m?.detectionMaxDelta || 0) + (im?.detectionMaxDelta || 0)) * (th?.detectionMaxMul ?? 1)));
     const startFrac = Math.min(0.5, (m?.detectionStartFrac || 0) + (h?.detectionStartFrac || 0));
     const state: GameState = {
         system: sys.name,
         behavior: sys.behavior || null,
         detection: startFrac > 0 ? Math.round(startFrac * detectionMax) : 0,
         detectionMax,
-        baselineCreep: Math.max(1, sys.baselineCreep + (m?.creepDelta || 0) + (h?.creepDelta || 0) - (im?.creepDelta || 0)),
+        baselineCreep: Math.max(1, sys.baselineCreep + (m?.creepDelta || 0) + (h?.creepDelta || 0) + (th?.creepDelta || 0) - (im?.creepDelta || 0)),
         layers: sys.layers.map((l): Layer => ({
             name: l.name,
             breached: false,
