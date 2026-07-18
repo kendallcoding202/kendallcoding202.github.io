@@ -1,0 +1,19 @@
+// SteamPipe depot-build script — BREACH full game depot.
+// Ships everything under content_full\ (stage BREACH.exe there before uploading).
+"DepotBuildConfig"
+{
+	"DepotID"	"FULL_DEPOT_ID"
+
+	// Folder whose contents become the depot. Put the built, runnable game here
+	// (at minimum BREACH.exe — the Tauri exe is self-contained on Windows).
+	"ContentRoot"	".\content_full\"
+
+	"FileMapping"
+	{
+		"LocalPath"	"*"       // everything in ContentRoot
+		"DepotPath"	"."       // …maps to the depot root
+		"recursive"	"1"
+	}
+
+	"FileExclusion"	"*.pdb"    // never ship debug symbols
+}

@@ -1,0 +1,17 @@
+// SteamPipe app-build script — BREACH (full game).
+// Fill in FULL_APP_ID and FULL_DEPOT_ID from your Steamworks app, then run:
+//   steamcmd +login <builder_account> +run_app_build <abs-path>\app_build_full.vdf +quit
+"appbuild"
+{
+	"appid"	"FULL_APP_ID"          // e.g. 1234560 — the full game's App ID
+	"desc"	"BREACH full build"     // internal build label (shows in Steamworks build list)
+	"buildoutput"	".\output\"      // SteamPipe logs/chunks land here (git-ignored)
+	"contentroot"	"."
+	"setlive"	""                   // leave EMPTY. Set live to a branch (e.g. "playtest")
+	                                 // from the Steamworks build page after it uploads.
+
+	"depots"
+	{
+		"FULL_DEPOT_ID"	"depot_build_full.vdf"   // e.g. 1234561
+	}
+}

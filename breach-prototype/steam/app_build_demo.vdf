@@ -1,0 +1,16 @@
+// SteamPipe app-build script — BREACH DEMO (a SEPARATE Steam app linked to the
+// main app). Fill in DEMO_APP_ID and DEMO_DEPOT_ID, then run:
+//   steamcmd +login <builder_account> +run_app_build <abs-path>\app_build_demo.vdf +quit
+"appbuild"
+{
+	"appid"	"DEMO_APP_ID"          // the demo's OWN App ID (not the full game's)
+	"desc"	"BREACH demo build"
+	"buildoutput"	".\output\"
+	"contentroot"	"."
+	"setlive"	""                   // leave EMPTY; set live from Steamworks after upload.
+
+	"depots"
+	{
+		"DEMO_DEPOT_ID"	"depot_build_demo.vdf"
+	}
+}

@@ -1,6 +1,12 @@
 node_modules/
 dist/
 dist-demo/
+# Steam: staged binaries + SteamPipe output (never commit build artifacts)
+steam/content_full/*
+steam/content_demo/*
+!steam/content_full/.gitkeep
+!steam/content_demo/.gitkeep
+steam/output/
 .DS_Store
 *.local
 .vite/

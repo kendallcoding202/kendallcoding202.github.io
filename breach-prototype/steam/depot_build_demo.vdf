@@ -1,0 +1,13 @@
+// SteamPipe depot-build script — BREACH demo depot.
+"DepotBuildConfig"
+{
+	"DepotID"	"DEMO_DEPOT_ID"
+	"ContentRoot"	".\content_demo\"    // stage the DEMO BREACH.exe here
+	"FileMapping"
+	{
+		"LocalPath"	"*"
+		"DepotPath"	"."
+		"recursive"	"1"
+	}
+	"FileExclusion"	"*.pdb"
+}
