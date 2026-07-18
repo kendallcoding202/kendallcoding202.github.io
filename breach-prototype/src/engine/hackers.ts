@@ -68,12 +68,11 @@ const HACKER_LIST: Hacker[] = [
         bio: "Doesn't break systems — infects them. Plants quiet rot and walks away while the target decays from within. Patience is the weapon; the kill happens on a timer.",
         quote: "Let it spread.",
         passiveName: "Necrosis",
-        passiveBlurb: "Your logic bombs tick +2 harder — and breaching a layer draws a card, so the rot keeps pace.",
-        // Necrosis was too marginal: the slow-decay style fell behind in short
-        // runs (no time to tick) and long ones (heat outpaced it). +2 per tick
-        // makes bombs a real payoff, and the breach-draw gives HEX the velocity
-        // its patient plan needs.
-        passive: { bombBonus: 2, breachDraw: true },
+        passiveBlurb: "Your logic bombs tick +2 harder — patient rot that really bites.",
+        // +2 per tick makes the slow-decay plan a real payoff without the extra
+        // breach-draw velocity, which (once a pilot actually cashes bombs in with
+        // Detonate) pushed HEX from the weakest operator to the strongest.
+        passive: { bombBonus: 2 },
         deck: [...BASE, "logicBomb", "logicBomb", "contagion", "detonate", "trojan", "backdoor", "goDark", "coverTracks", "enumerate", "firewallBypass", "idsEvasion", "momentum", "analyze", "proxyChain", "patchScanner", "zeroDay"],
     },
     {
