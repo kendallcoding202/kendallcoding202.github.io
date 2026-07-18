@@ -65,9 +65,11 @@ jobs:
 
       # The raw, self-contained exe is what Steam ships as depot content
       # (Steam launches the exe directly — it does not run installers).
+      # Glob *.exe because the binary may be BREACH.exe or breach.exe depending
+      # on Tauri's rename step — the first real run tells you which.
       - name: Upload standalone exe (for SteamPipe depot)
         uses: actions/upload-artifact@v4
         with:
           name: breach-exe-${{ matrix.name }}
           if-no-files-found: warn
-          path: breach-prototype/src-tauri/target/release/BREACH.exe
+          path: breach-prototype/src-tauri/target/release/*.exe
