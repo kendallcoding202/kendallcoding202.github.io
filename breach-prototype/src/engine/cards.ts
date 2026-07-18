@@ -189,6 +189,137 @@ export const CARDS: Record<string, CardDef> = {
         id: "trojan", name: "Trojan", kind: "utility", noise: 1, power: 3, amount: 3, effect: "trojan", needsTarget: true, exhausts: true,
         text: "Quietly reduce a defense by 3 AND lower detection by 3 — infiltrate without a trace. One use per run.",
     },
+
+    /* ==========================================================
+       EXPANSION SET — deepens every archetype + flexible generalists.
+       Mostly draftable from the reward pool; a few seed operator decks.
+       ========================================================== */
+
+    /* ---- GHOST: silent, unseen, patient ---- */
+    phantomJab: {
+        id: "phantomJab", name: "Phantom Jab", kind: "exploit", noise: 0, power: 3, effect: "silentScale", needsTarget: true, tag: "ghost",
+        text: "SILENT. Reduce a defense by 3, +2 for every silent card you've already played this turn.",
+    },
+    ghostInTheShell: {
+        id: "ghostInTheShell", name: "Ghost in the Shell", kind: "exploit", noise: 1, power: 9, amount: 2, effect: "lowDetStrike", needsTarget: true, tag: "ghost",
+        text: "If your detection is under 25%, reduce a defense by 9 — otherwise just 2. A killer opener.",
+    },
+    quietScan: {
+        id: "quietScan", name: "Quiet Scan", kind: "recon", noise: 0, effect: "quietScan", needsTarget: false, tag: "ghost",
+        text: "Reveal the TYPE of every defense on this layer AND draw a card. Completely silent.",
+    },
+    deadDrop: {
+        id: "deadDrop", name: "Dead Drop", kind: "utility", noise: 0, effect: "silentDraw", needsTarget: false, tag: "ghost",
+        text: "Draw a card. If every card you've played this turn was silent, draw 2 instead. Silent.",
+    },
+    vanish: {
+        id: "vanish", name: "Vanish", kind: "stealth", noise: 0, amount: 3, effect: "vanish", needsTarget: false, tag: "ghost",
+        text: "Lower detection by 3, and your next 2 cards each make 3 less noise. Silent.",
+    },
+    cloak: {
+        id: "cloak", name: "Cloak", kind: "stealth", noise: 0, amount: 6, effect: "logWipe", needsTarget: false, tag: "ghost",
+        text: "Lower detection by 6. Makes no noise.",
+    },
+
+    /* ---- OVERLOAD: turn your own noise into power ---- */
+    powerSurge: {
+        id: "powerSurge", name: "Power Surge", kind: "exploit", noise: 8, power: 4, effect: "overload", needsTarget: true, tag: "overload",
+        text: "Reduce a defense by 4, +1 for every 10 detection you've drawn. Hits hard once you're loud.",
+    },
+    shortCircuit: {
+        id: "shortCircuit", name: "Short Circuit", kind: "exploit", noise: 9, power: 4, effect: "exploitAll", needsTarget: false, tag: "overload",
+        text: "Reduce EVERY standing defense on this layer by 4. Loud — clears a crowded layer.",
+    },
+    thermalRunaway: {
+        id: "thermalRunaway", name: "Thermal Runaway", kind: "exploit", noise: 11, amount: 10, effect: "meltdown", needsTarget: false, exhausts: true, tag: "overload",
+        text: "Reduce EVERY defense here by 1 for every 10 detection you've drawn. A finisher for a loud run. One use.",
+    },
+    adrenalineRush: {
+        id: "adrenalineRush", name: "Adrenaline Rush", kind: "utility", noise: 0, power: 8, amount: 2, effect: "spike", needsTarget: false, tag: "overload",
+        text: "Go loud on purpose: raise your OWN detection by 8, draw 2 cards, and your next exploit hits +2.",
+    },
+    wreckingBall: {
+        id: "wreckingBall", name: "Wrecking Ball", kind: "exploit", noise: 15, power: 9, effect: "bruteForce", needsTarget: true, tag: "overload",
+        text: "Reduce any defense by 9. Extremely loud — the sledgehammer.",
+    },
+
+    /* ---- WORM: plant, spread, decay ---- */
+    parasite: {
+        id: "parasite", name: "Parasite", kind: "exploit", noise: 1, power: 2, amount: 4, effect: "logicBomb", needsTarget: true, tag: "worm",
+        text: "Plant on a defense: it loses 2 Strength at the end of each of your next 4 turns. Very quiet.",
+    },
+    blight: {
+        id: "blight", name: "Blight", kind: "exploit", noise: 3, power: 3, amount: 2, effect: "contagion", needsTarget: false, tag: "worm",
+        text: "Plant a decay on EVERY standing defense here: each loses 3 at the end of your next 2 turns.",
+    },
+    incubate: {
+        id: "incubate", name: "Incubate", kind: "exploit", noise: 1, power: 5, amount: 2, effect: "logicBomb", needsTarget: true, tag: "worm",
+        text: "Plant on a defense: it loses 5 Strength at the end of each of your next 2 turns. Quiet.",
+    },
+    viralLoad: {
+        id: "viralLoad", name: "Viral Load", kind: "exploit", noise: 3, power: 2, effect: "wormScale", needsTarget: true, tag: "worm",
+        text: "Reduce a defense by 2, +2 for every logic bomb currently ticking. The worm's payoff.",
+    },
+    necroticTouch: {
+        id: "necroticTouch", name: "Necrotic Touch", kind: "exploit", noise: 2, power: 3, amount: 2, effect: "drainPlant", needsTarget: true, tag: "worm",
+        text: "Reduce a defense by 3 now, AND plant a decay on it (2/turn for 2 turns).",
+    },
+
+    /* ---- CHAIN: reward long, draw-fuelled turns ---- */
+    quickHack: {
+        id: "quickHack", name: "Quick Hack", kind: "exploit", noise: 1, power: 1, effect: "chainReaction", needsTarget: true, tag: "chain",
+        text: "Reduce a defense by 1, +1 for every card you've already played this turn. Dirt cheap.",
+    },
+    daisyChain: {
+        id: "daisyChain", name: "Daisy Chain", kind: "exploit", noise: 2, power: 2, effect: "chainExploit", needsTarget: true, tag: "chain",
+        text: "Reduce a defense by 2, +2 for every other exploit you've already played this turn.",
+    },
+    scriptRunner: {
+        id: "scriptRunner", name: "Script Runner", kind: "utility", noise: 1, effect: "cadence", needsTarget: false, tag: "chain",
+        text: "Draw a card — draw 2 instead if you've already played 3+ cards this turn.",
+    },
+    macro: {
+        id: "macro", name: "Macro", kind: "utility", noise: 2, amount: 3, effect: "draw", needsTarget: false, tag: "chain",
+        text: "Draw 3 cards. Fuel for a big combo turn.",
+    },
+    overflow: {
+        id: "overflow", name: "Overflow", kind: "exploit", noise: 3, effect: "overflowAll", needsTarget: false, exhausts: true, tag: "chain",
+        text: "Reduce EVERY standing defense by 1 for every 2 cards you've played this turn. One use — the chain finisher.",
+    },
+
+    /* ---- FLEXIBLE generalists + second-tier specialists ---- */
+    heuristicEngine: {
+        id: "heuristicEngine", name: "Heuristic Engine", kind: "exploit", noise: 5, power: 6, effect: "adaptiveExploit", needsTarget: true,
+        text: "Reduce ANY defense by 6 — revealed or not, whatever its type. The reliable workhorse.",
+    },
+    bufferOverflow: {
+        id: "bufferOverflow", name: "Buffer Overflow", kind: "exploit", noise: 5, power: 4, effect: "splitHit", needsTarget: false,
+        text: "Reduce the TWO weakest standing defenses by 4 each. Cracks multi-lock chokepoints.",
+    },
+    portKnock: {
+        id: "portKnock", name: "Port Knock", kind: "exploit", noise: 2, power: 6, amount: 2, effect: "firstStrike", needsTarget: true,
+        text: "Reduce a defense by 6 if it's at full Strength — otherwise only 2. Strike before it's softened.",
+    },
+    sqlmap: {
+        id: "sqlmap", name: "sqlmap", kind: "exploit", noise: 3, power: 4, effect: "typedExploit", matchType: "database", needsTarget: true,
+        text: "Reduce a DATABASE defense by 6. Against any other type: only 2, and louder.",
+    },
+    dictionaryAttack: {
+        id: "dictionaryAttack", name: "Dictionary Attack", kind: "exploit", noise: 3, power: 4, effect: "typedExploit", matchType: "auth", needsTarget: true,
+        text: "Reduce an AUTH defense by 6. Against any other type: only 2, and louder.",
+    },
+    wafBypass: {
+        id: "wafBypass", name: "WAF Bypass", kind: "exploit", noise: 3, power: 4, effect: "typedExploit", matchType: "firewall", needsTarget: true,
+        text: "Reduce a FIREWALL defense by 6. Against any other type: only 2, and louder.",
+    },
+    icePick: {
+        id: "icePick", name: "ICE Pick", kind: "exploit", noise: 3, power: 4, effect: "typedExploit", matchType: "ids", needsTarget: true,
+        text: "Reduce an IDS defense by 6. Against any other type: only 2, and louder.",
+    },
+    honeypot: {
+        id: "honeypot", name: "Honeypot", kind: "stealth", noise: 2, amount: 2, effect: "feint", needsTarget: false,
+        text: "Feed the system a fake target: cancels its next 2 moves. Buys two clean turns.",
+    },
 };
 
 /** Prototype starting deck — a bigger, more varied spread (~26 cards).

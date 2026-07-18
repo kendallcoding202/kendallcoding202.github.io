@@ -55,7 +55,7 @@ function chooseClever(s: GameState): Action {
 
     // 2. Counter the telegraph — spoof/misdirect/feint a patch/purge that would
     //    undo progress, or an obscure that would wipe recon we've invested in.
-    const spoofer = ["spoof", "misdirect", "feint"].find((c) => has(c) && safe(c));
+    const spoofer = ["spoof", "misdirect", "feint", "honeypot"].find((c) => has(c) && safe(c));
     if (spoofer && intent) {
         const layerDamaged = !!layer && layer.defenses.some((d) => d.strength > 0 && d.strength < d.maxStrength);
         const reconInvested = !!layer && layer.defenses.some((d) => d.typeRevealed || d.strengthRevealed);
@@ -67,8 +67,10 @@ function chooseClever(s: GameState): Action {
     if (detFrac >= 0.85 && has("killSwitch")) return play("killSwitch");
     if (detFrac >= 0.55) {
         if (has("misdirect")) return play("misdirect");
+        if (has("vanish")) return play("vanish");
         if (has("coverTracks")) return play("coverTracks");
         if (has("logWipe")) return play("logWipe");
+        if (has("cloak")) return play("cloak");
         if (has("goDark")) return play("goDark");
     }
 
@@ -83,7 +85,10 @@ function chooseClever(s: GameState): Action {
     // 4. Draw for options while it's quiet and the hand is thin.
     if (detFrac < 0.5 && s.hand.length <= 4) {
         if (has("automate") && safe("automate")) return play("automate");
+        if (has("macro") && safe("macro")) return play("macro");
         if (has("dataSiphon") && safe("dataSiphon")) return play("dataSiphon");
+        if (has("scriptRunner") && safe("scriptRunner")) return play("scriptRunner");
+        if (has("deadDrop")) return play("deadDrop");
         if (has("analyze") && firstUnknown != null && safe("analyze")) return play("analyze");
         if (firstUnknown != null && has("packetSniffer")) return playT("packetSniffer", firstUnknown);
     }
@@ -91,6 +96,7 @@ function chooseClever(s: GameState): Action {
     // 5. Recon unknown defenses (cheap, quiet) before committing exploits.
     if (firstUnknown != null && detFrac < 0.75) {
         if (has("passiveRecon")) return play("passiveRecon");
+        if (has("quietScan")) return play("quietScan");
         if (has("packetSniffer")) return playT("packetSniffer", firstUnknown);
         if (has("patchScanner") && safe("patchScanner")) return play("patchScanner");
         if (has("portScan")) return playT("portScan", firstUnknown);
@@ -140,6 +146,12 @@ function chooseClever(s: GameState): Action {
         } else if (c.effect === "contagion") {
             // plant on all standing; delayed, so discounted
             consider(play(id), standing.reduce((sum, i) => sum + Math.min((c.power || 2) * (c.amount || 3), defs[i].strength), 0) * 0.6);
+        } else if (c.effect === "splitHit") {
+            const two = standing.slice().sort((a, b) => defs[a].strength - defs[b].strength).slice(0, 2);
+            consider(play(id), two.reduce((sum, i) => sum + Math.min(c.power || 4, defs[i].strength), 0));
+        } else if (c.effect === "overflowAll") {
+            const per = Math.floor(s.cardsThisTurn / 2);
+            if (per >= 1) consider(play(id), standing.reduce((sum, i) => sum + Math.min(per, defs[i].strength), 0));
         }
     }
     if (best) return (best as { action: Action; val: number }).action;

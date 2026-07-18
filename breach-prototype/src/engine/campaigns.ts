@@ -18,6 +18,13 @@ export const REWARD_POOL: string[] = [
     "empBurst", "overclock", "cascade", "logicBomb", "trojan", "feint", "analyze",
     "polymorph", "precisionStrike", "overload", "momentum", "dataSiphon", "misdirect",
     "ghostProtocol", "blindSpot", "meltdown", "contagion", "detonate", "chainReaction",
+    // --- expansion set: deepens each archetype's draft options ---
+    "phantomJab", "ghostInTheShell", "quietScan", "deadDrop", "vanish", "cloak",
+    "powerSurge", "shortCircuit", "thermalRunaway", "adrenalineRush", "wreckingBall",
+    "parasite", "blight", "incubate", "viralLoad", "necroticTouch",
+    "quickHack", "daisyChain", "scriptRunner", "macro", "overflow",
+    "heuristicEngine", "bufferOverflow", "portKnock", "sqlmap", "dictionaryAttack",
+    "wafBypass", "icePick", "honeypot",
 ];
 
 type Topo = { id: string; col: number; row: number; next: string[] }[];

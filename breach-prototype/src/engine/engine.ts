@@ -468,6 +468,48 @@ function applyEffect(s: GameState, card: CardDef, target: number): number {
             log(s, `EMP Burst — every defense on ${layer ? layer.name : "the layer"} hit for ${base} (${standing} struck).`);
             return 0;
         }
+        case "splitHit": {
+            // hit the TWO weakest standing defenses — great against chokepoints
+            const power = (card.power || 4) + takeExploitBonus(s);
+            const order = defs.map((x, i) => i).filter((i) => defs[i].strength > 0).sort((a, b) => defs[a].strength - defs[b].strength).slice(0, 2);
+            order.forEach((i) => reduceDefenseAt(s, s.current, i, power));
+            log(s, `${card.name} forks — ${power} off the ${order.length} weakest defense${order.length === 1 ? "" : "s"}.`);
+            return 0;
+        }
+        case "firstStrike": {
+            // big on a full-strength (unhit) defense, weak on a softened one
+            if (!d) return 0;
+            const fresh = d.strength >= d.maxStrength;
+            const power = (fresh ? card.power || 6 : card.amount || 2) + takeExploitBonus(s);
+            damageDefense(s, target, power);
+            log(s, fresh ? `${card.name} catches ${d.typeRevealed ? d.type : "it"} cold — ${power} off.` : `${card.name} — already softened, only ${power}.`);
+            return 0;
+        }
+        case "wormScale": {
+            // scales with how many logic bombs are currently ticking — a worm payoff
+            if (!d) return 0;
+            const bombs = s.bombs.length;
+            const power = (card.power || 2) + 2 * bombs + takeExploitBonus(s);
+            damageDefense(s, target, power);
+            log(s, `${card.name} feeds on ${bombs} active bomb${bombs === 1 ? "" : "s"} — ${power} off.`);
+            return 0;
+        }
+        case "drainPlant": {
+            // immediate hit AND a plant on the same defense
+            if (!d) return 0;
+            const power = (card.power || 3) + takeExploitBonus(s);
+            damageDefense(s, target, power);
+            if (d.strength > 0) s.bombs.push({ layer: s.current, def: target, amt: card.amount || 2, turns: 2 });
+            log(s, `${card.name} — ${power} off now, and rot set in (${card.amount || 2}/turn ×2).`);
+            return 0;
+        }
+        case "overflowAll": {
+            // reduce EVERY standing defense by 1 per 2 cards played this turn
+            const per = Math.floor(s.cardsThisTurn / 2) + takeExploitBonus(s);
+            if (per > 0) for (let i = defs.length - 1; i >= 0; i--) if (defs[i].strength > 0) reduceDefenseAt(s, s.current, i, per);
+            log(s, `${card.name} overflows — ${per} off every defense (${s.cardsThisTurn} cards this turn).`);
+            return 0;
+        }
         case "chainExploit": {
             if (!d) return 0;
             const power = (card.power || 3) + 2 * s.exploitsThisTurn + takeExploitBonus(s);
@@ -535,6 +577,38 @@ function applyEffect(s: GameState, card: CardDef, target: number): number {
             log(s, `Data Siphon — drew ${n} (1 + breached layers).`);
             return 0;
         }
+        case "spike": {
+            // deliberately go loud: spend detection for tempo + a buffed next exploit
+            draw(s, card.amount || 2);
+            s.exploitBonus += 2;
+            log(s, `${card.name} — you jack the throttle: draw ${card.amount || 2}, next exploit +2.`);
+            return card.power || 8; // returns EXTRA noise (raises your own detection on purpose)
+        }
+        case "silentDraw": {
+            // draw more if you've kept the whole turn silent — a ghost engine
+            const allSilent = s.cardsThisTurn > 0 && s.silentThisTurn >= s.cardsThisTurn;
+            const n = allSilent ? 2 : 1;
+            draw(s, n);
+            log(s, `${card.name} — drew ${n}${allSilent ? " (dead silent so far)" : ""}.`);
+            return 0;
+        }
+        case "cadence": {
+            // draws more the longer your turn has run — a chain engine
+            const n = s.cardsThisTurn >= 3 ? 2 : 1;
+            draw(s, n);
+            log(s, `${card.name} — drew ${n} (${s.cardsThisTurn} cards in already).`);
+            return 0;
+        }
+        case "vanish":
+            reduceDetection(s, card.amount || 3);
+            s.proxyCharges += 2;
+            log(s, `${card.name} — detection −${card.amount || 3}; your next 2 cards run quieter.`);
+            return 0;
+        case "quietScan":
+            defs.forEach((x) => (x.typeRevealed = true));
+            draw(s, 1);
+            log(s, `${card.name} — every defense type here mapped, drew a card. Silent.`);
+            return 0;
         case "misdirect":
             s.spoofTurns += 1;
             reduceDetection(s, card.amount || 4);
@@ -597,6 +671,9 @@ export function previewOnTarget(s: GameState, cardId: string, idx: number): stri
         case "momentum": return `−${(card.power || 3) + (card.amount || 2) * (layer ? s.layers.filter((l) => l.breached).length : 0) + bonus} · deeper = bigger`;
         case "logicBomb": return `plant ${card.power || 3}/turn ×${card.amount || 3}`;
         case "trojan": return `−${(card.power || 3) + bonus}, −det${plus}`;
+        case "firstStrike": return d.strength >= d.maxStrength ? `−${(card.power || 6) + bonus}${plus} · fresh target` : `−${(card.amount || 2) + bonus} · already softened`;
+        case "wormScale": return `−${(card.power || 2) + 2 * s.bombs.length + bonus} · +2 per active bomb`;
+        case "drainPlant": return `−${(card.power || 3) + bonus} now +plant ${card.amount || 2}/turn ×2`;
         case "privEsc":
             if (!d.typeRevealed) return "reveal it first";
             return d.type === "privilege" ? `−${(card.power || 6) + bonus}${plus}` : "misfires · loud";
@@ -630,6 +707,10 @@ export function predictDamage(s: GameState, cardId: string, idx: number): number
         case "chainExploit": return (card.power || 3) + 2 * s.exploitsThisTurn + bonus;
         case "logicBomb": return (card.power || 3) * (card.amount || 3);
         case "trojan": return (card.power || 3) + bonus;
+        case "firstStrike": return (d.strength >= d.maxStrength ? card.power || 6 : card.amount || 2) + bonus;
+        case "wormScale": return (card.power || 2) + 2 * s.bombs.length + bonus;
+        case "drainPlant": return (card.power || 3) + bonus + (card.amount || 2) * 2; // immediate + planted total
+        case "splitHit": return (card.power || 4) + bonus; // per-defense; AI sums across the two weakest itself
         case "privEsc": return d.type === "privilege" ? (card.power || 6) + bonus : 0;
         case "zeroDay": return 999;
         case "bruteForce": return (card.power || 6) + bonus;

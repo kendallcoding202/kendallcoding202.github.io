@@ -10,8 +10,9 @@ import { getHacker, HACKER_ORDER } from "./hackers.ts";
 import { threatEffects } from "./threat.ts";
 import {
     createRun, currentOptions, isTerminal, resolveBreach, resolveEvent, resolveSafehouse,
-    getCampaign, huntPressure,
+    getCampaign, huntPressure, addCard,
 } from "./run.ts";
+import { REWARD_POOL } from "./campaigns.ts";
 
 /** Play one breach node headlessly with the smart AI; return the result. */
 function playBreach(run: any, node: MapNode, seed: number): BreachResult {
@@ -42,6 +43,8 @@ function pickNode(run: any, opts: MapNode[]): MapNode {
 
 function playRun(campaignId: string, hackerId: string, seed: number): boolean {
     let run = createRun(campaignId, seed, 0, hackerId);
+    let rng = (seed * 2654435761) >>> 0;
+    const nextRnd = () => { rng = (rng * 1103515245 + 12345) & 0x7fffffff; return rng / 0x7fffffff; };
     let guard = 0;
     while (run.outcome === "running" && guard++ < 40) {
         const opts = currentOptions(run);
@@ -50,6 +53,11 @@ function playRun(campaignId: string, hackerId: string, seed: number): boolean {
         if (node.type === "breach") {
             const res = playBreach(run, node, seed * 131 + guard);
             run = resolveBreach(run, node, res);
+            // draft a reward card ~60% of the time (mimics the in-game reward flow),
+            // picking a random pool card to test the whole pool, not a curated pick
+            if (res.won && run.outcome === "running" && nextRnd() < 0.6) {
+                run = addCard(run, REWARD_POOL[Math.floor(nextRnd() * REWARD_POOL.length)]);
+            }
             // finale retry: if we failed the finale and still alive, loop tries again
             if (!res.won && isTerminal(node) && run.outcome === "running") { /* retry next loop */ }
         } else if (node.type === "event") {

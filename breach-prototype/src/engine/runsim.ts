@@ -2,7 +2,7 @@
    Run: node --experimental-strip-types src/engine/runsim.ts */
 
 import type { BreachResult, MapNode, RunState } from "./types.ts";
-import { CAMPAIGNS, CAMPAIGN_ORDER } from "./campaigns.ts";
+import { CAMPAIGNS, CAMPAIGN_ORDER, REWARD_POOL } from "./campaigns.ts";
 import { createRun, currentOptions, isTerminal, resolveBreach, resolveEvent, resolveSafehouse, addCard, addImplant, getCampaign, huntPressure, HUNT_ACTION_LINES } from "./run.ts";
 import { createInitialState, applyAction, projectedNoise } from "./engine.ts";
 import { SYSTEMS } from "./systems.ts";
@@ -469,6 +469,54 @@ for (const id of CAMPAIGN_ORDER) {
 
     // operator passive stacks with a collected implant
     check("operator passive stacks with implants", combineLoadouts(HACKERS.byte.passive, aggregateImplants(["cortex"])).handSize === 2);
+}
+
+/* 17. Expansion set — the new attack mechanics. */
+{
+    // splitHit — Buffer Overflow hits the two WEAKEST standing defenses for 4 each
+    let sp = createInitialState(30, "blackSite", ["bufferOverflow"]);
+    sp.layers[0].defenses = [
+        { type: "firewall", strength: 20, maxStrength: 20, typeRevealed: true, strengthRevealed: true },
+        { type: "ids", strength: 5, maxStrength: 20, typeRevealed: true, strengthRevealed: true },
+        { type: "auth", strength: 8, maxStrength: 20, typeRevealed: true, strengthRevealed: true },
+    ];
+    sp = applyAction(sp, { type: "playCard", card: "bufferOverflow" });
+    const spd = sp.layers[0].defenses;
+    check("Buffer Overflow forks the two weakest for 4 each", spd[0].strength === 20 && spd[1].strength === 1 && spd[2].strength === 4);
+
+    // firstStrike — Port Knock: 6 on a full defense, 2 on a softened one
+    let fs = createInitialState(31, "smallBusiness", ["portKnock", "portKnock"]);
+    fs.layers[0].defenses[0].strength = 20; fs.layers[0].defenses[0].maxStrength = 20; fs.layers[0].defenses[0].typeRevealed = true;
+    fs = applyAction(fs, { type: "playCard", card: "portKnock", target: 0 });
+    check("Port Knock hits a fresh defense for 6", fs.layers[0].defenses[0].strength === 14);
+    fs = applyAction(fs, { type: "playCard", card: "portKnock", target: 0 });
+    check("Port Knock only 2 on an already-softened defense", fs.layers[0].defenses[0].strength === 12);
+
+    // wormScale — Viral Load: +2 per ticking bomb (2 + 2*2 = 6)
+    let vl = createInitialState(32, "smallBusiness", ["logicBomb", "logicBomb", "viralLoad"]);
+    vl.layers[0].defenses[0].strength = 30; vl.layers[0].defenses[0].maxStrength = 30; vl.layers[0].defenses[0].typeRevealed = true;
+    vl = applyAction(vl, { type: "playCard", card: "logicBomb", target: 0 });
+    vl = applyAction(vl, { type: "playCard", card: "logicBomb", target: 0 });
+    const vls = vl.layers[0].defenses[0].strength;
+    vl = applyAction(vl, { type: "playCard", card: "viralLoad", target: 0 });
+    check("Viral Load scales +2 per active bomb", vls - vl.layers[0].defenses[0].strength === 6);
+
+    // drainPlant — Necrotic Touch: 3 now AND plants a bomb
+    let nt = createInitialState(33, "smallBusiness", ["necroticTouch"]);
+    nt.layers[0].defenses[0].strength = 30; nt.layers[0].defenses[0].maxStrength = 30; nt.layers[0].defenses[0].typeRevealed = true;
+    nt = applyAction(nt, { type: "playCard", card: "necroticTouch", target: 0 });
+    check("Necrotic Touch deals 3 now and plants a bomb", nt.layers[0].defenses[0].strength === 27 && nt.bombs.length === 1);
+
+    // overflowAll — Overflow: floor(cardsThisTurn/2) off every defense
+    let ov = createInitialState(34, "blackSite", ["passiveRecon", "passiveRecon", "passiveRecon", "passiveRecon", "overflow"]);
+    ov.layers[0].defenses.forEach((d) => { d.strength = 20; d.maxStrength = 20; });
+    for (let i = 0; i < 4; i++) ov = applyAction(ov, { type: "playCard", card: "passiveRecon" });
+    const ovs = ov.layers[0].defenses.map((d) => d.strength);
+    ov = applyAction(ov, { type: "playCard", card: "overflow" });
+    check("Overflow hits every defense for cards-played/2", ov.layers[0].defenses.every((d, i) => ovs[i] - d.strength === 2));
+
+    // every reward-pool card is a real, defined card
+    check("reward pool holds only real cards", REWARD_POOL.every((c) => !!CARDS[c]));
 }
 
 console.log(`=== RUN-ENGINE ASSERTIONS: ${passed} passed, ${failures.length} failed ===`);
