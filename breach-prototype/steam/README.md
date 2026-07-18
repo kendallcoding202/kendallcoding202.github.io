@@ -14,6 +14,8 @@ Two ways:
 - **Local:** on a Windows machine, `cd breach-prototype && npm ci && npm run desktop:build` (full) or `npm run desktop:demo` (demo). The exe lands at `breach-prototype/src-tauri/target/release/BREACH.exe`.
 
 > The Tauri exe is self-contained on Windows (WebView2 ships with Windows 10/11). If you later add assets/DLLs, drop them next to the exe and they'll be included.
+>
+> **Exe name:** the binary may be `BREACH.exe` or `breach.exe` depending on Tauri's rename step — check the CI artifact, stage whichever you get, and set Steam's **Launch Option** to that exact name.
 
 ## 2. Stage the content
 - Copy the full-game `BREACH.exe` into `steam/content_full/`
