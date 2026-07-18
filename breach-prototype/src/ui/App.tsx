@@ -15,7 +15,8 @@ import { getModifier } from "../engine/modifiers.ts";
 import { IMPLANTS, IMPLANT_ORDER, getImplant, aggregateImplants, combineLoadouts } from "../engine/implants.ts";
 import { HACKERS, HACKER_ORDER, getHacker } from "../engine/hackers.ts";
 import { threatEffects, threatLabel, THREAT_STEPS, MAX_THREAT } from "../engine/threat.ts";
-import { recordWin, isCampaignUnlocked, availableThreat, maxThreatCleared, campaignRequirement, loadProfile } from "./meta.ts";
+import { recordWin, syncAchievements, isCampaignUnlocked, availableThreat, maxThreatCleared, campaignRequirement, loadProfile, unlockedAchievements, TOTAL_ACHIEVEMENTS } from "./meta.ts";
+import { ACHIEVEMENTS, getAchievement } from "../engine/achievements.ts";
 import { IS_DEMO, STEAM_URL, demoOperatorUnlocked, demoCampaignUnlocked } from "./demo.ts";
 import { sfx } from "./audio.ts";
 import { createInitialState, applyAction, canPlay, projectedNoise, needsTarget, targetableDefenses, previewOnTarget } from "../engine/engine.ts";
@@ -343,16 +344,17 @@ function HackerSelect({ onPick }: { onPick: (id: string) => void }) {
     );
 }
 
-function CampaignSelect({ onPick, onBack, hacker }: { onPick: (id: string, threat: number) => void; onBack: () => void; hacker: string }) {
+function CampaignSelect({ onPick, onBack, hacker, onShowAchievements }: { onPick: (id: string, threat: number) => void; onBack: () => void; hacker: string; onShowAchievements: () => void }) {
     const h = getHacker(hacker);
     const profile = loadProfile();
+    const achCount = unlockedAchievements(profile).length;
     const [threats, setThreats] = useState<Record<string, number>>(() =>
         Object.fromEntries(CAMPAIGN_ORDER.map((id) => [id, availableThreat(id, profile)])));
     const setThreat = (id: string, t: number) => setThreats((s) => ({ ...s, [id]: t }));
 
     return (
         <div className="wrap">
-            <div className="title">BREACH{IS_DEMO && <span className="demo-badge">DEMO</span>} <span style={{ float: "right" }}><MuteButton /></span></div>
+            <div className="title">BREACH{IS_DEMO && <span className="demo-badge">DEMO</span>} <span style={{ float: "right" }}><span className="deck-link" onClick={onShowAchievements} style={{ marginRight: 12 }}>🏆 Achievements {achCount}/{TOTAL_ACHIEVEMENTS}</span><MuteButton /></span></div>
             <p className="muted">Operator: <b className="cyan">{h.glyph} {h.name}</b> · {h.passiveName} <span className="deck-link" onClick={onBack} style={{ marginLeft: 6 }}>◂ change</span>{profile.totalWins > 0 ? ` · ${profile.totalWins} contract${profile.totalWins === 1 ? "" : "s"} completed` : ""}</p>
             <hr />
             <div className="systems">
@@ -398,6 +400,32 @@ function CampaignSelect({ onPick, onBack, hacker }: { onPick: (id: string, threa
             ) : (
                 <p className="muted" style={{ fontSize: 11, marginTop: 12 }}>Complete a storyline to raise its <b className="amber">Threat Level</b> — each one stacks a new twist, all the way to Threat {MAX_THREAT}. Progress is saved.</p>
             )}
+        </div>
+    );
+}
+
+function AchievementsModal({ onClose }: { onClose: () => void }) {
+    const earned = new Set(unlockedAchievements());
+    return (
+        <div className="overlay" onClick={onClose}>
+            <div className="box" style={{ maxWidth: 720 }} onClick={(e) => e.stopPropagation()}>
+                <h2 className="cyan">Achievements <span className="muted" style={{ fontSize: 14 }}>{earned.size}/{TOTAL_ACHIEVEMENTS}</span></h2>
+                <div className="ach-grid">
+                    {ACHIEVEMENTS.map((a) => {
+                        const got = earned.has(a.id);
+                        return (
+                            <div className={"ach-card" + (got ? " got" : "")} key={a.id}>
+                                <div className="ach-card-g">{got ? a.glyph : "🔒"}</div>
+                                <div className="ach-card-body">
+                                    <div className="ach-card-name">{a.name}</div>
+                                    <div className="ach-card-desc">{a.desc}</div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+                <button className="term" style={{ marginTop: 12 }} onClick={onClose}>Close</button>
+            </div>
         </div>
     );
 }
@@ -609,7 +637,7 @@ function RunView({ run, campaign, onLaunchBreach, onRun, onOpenDeck }: {
 /* ============================================================
    ENDING
    ============================================================ */
-function Ending({ run, campaign, onRestart }: { run: RunState; campaign: Campaign; onRestart: () => void }) {
+function Ending({ run, campaign, newlyUnlocked, onRestart }: { run: RunState; campaign: Campaign; newlyUnlocked: string[]; onRestart: () => void }) {
     const won = run.outcome === "won";
     const s = run.stats;
     const heatFrac = run.heat / run.heatMax;
@@ -635,6 +663,13 @@ function Ending({ run, campaign, onRestart }: { run: RunState; campaign: Campaig
                         {run.implants.length > 0 && <div className="rs-row"><span>Implants installed</span><b>{run.implants.length}</b></div>}
                     </div>
                     <p className="muted" style={{ fontSize: 12, fontStyle: "italic", marginTop: 8 }}>{verdict}</p>
+                    {newlyUnlocked.length > 0 && (
+                        <div className="ach-earned">
+                            {newlyUnlocked.map((id) => { const a = getAchievement(id); return a ? (
+                                <div className="ach-earned-row" key={id}><span className="ach-g">{a.glyph}</span> <b>ACHIEVEMENT UNLOCKED</b> — {a.name}</div>
+                            ) : null; })}
+                        </div>
+                    )}
                     {IS_DEMO ? (
                         <div className="demo-cta">
                             <p className="cyan" style={{ textAlign: "center", fontWeight: "bold", marginBottom: 4 }}>{won ? "That's the demo." : "Want another shot? That's the demo."}</p>
@@ -664,6 +699,8 @@ export function App() {
     const [activeNode, setActiveNode] = useState<MapNode | null>(null);
     const [reward, setReward] = useState<{ kind: "card" | "implant"; options: string[] } | null>(null);
     const [showDeck, setShowDeck] = useState(false);
+    const [showAchievements, setShowAchievements] = useState(false);
+    const [endAchievements, setEndAchievements] = useState<string[]>([]);
 
     const campaign = run ? getCampaign(run.campaignId) : null;
 
@@ -671,14 +708,34 @@ export function App() {
     const startCampaign = (id: string, threat = 0) => { setRun(createRun(id, newSeed(), threat, hackerId)); setActiveNode(null); setReward(null); setMode("run"); };
     const launchBreach = (n: MapNode) => { setActiveNode(n); setMode("breach"); };
 
+    // Finalize a finished run: record the win (meta-progression) and evaluate
+    // achievements, stashing any freshly earned for the ending screen to show.
+    const finishRun = (newRun: RunState) => {
+        if (newRun.outcome === "won") recordWin(newRun.campaignId, newRun.threat, newRun.hackerId);
+        const earned = syncAchievements({
+            won: newRun.outcome === "won",
+            campaignId: newRun.campaignId,
+            hackerId: newRun.hackerId,
+            threat: newRun.threat,
+            jobsDone: newRun.jobsDone,
+            loudestPct: newRun.stats.loudestPct,
+            quietestPct: newRun.stats.quietestPct,
+            heatFrac: newRun.heat / Math.max(1, newRun.heatMax),
+            implantsInstalled: newRun.implants.length,
+            deckSize: newRun.deck.length,
+            credits: newRun.credits,
+        });
+        setEndAchievements(earned);
+        setMode("ending");
+    };
+
     const onBreachComplete = (result: BreachResult) => {
         if (!run || !activeNode) return;
         const newRun = resolveBreach(run, activeNode, result);
         setRun(newRun);
         setActiveNode(null);
         if (newRun.outcome !== "running") {
-            if (newRun.outcome === "won") recordWin(newRun.campaignId, newRun.threat); // meta-progression
-            setMode("ending");
+            finishRun(newRun);
             return;
         }
         setMode("run");
@@ -691,7 +748,7 @@ export function App() {
             sfx.play("reward");
         }
     };
-    const onRun = (r: RunState) => { setRun(r); if (r.outcome !== "running") setMode("ending"); };
+    const onRun = (r: RunState) => { setRun(r); if (r.outcome !== "running") finishRun(r); };
     const takeReward = (id: string | null) => {
         if (id && run && reward) setRun(reward.kind === "implant" ? addImplant(run, id) : addCard(run, id));
         setReward(null);
@@ -699,13 +756,18 @@ export function App() {
 
     if (mode === "hacker") return <HackerSelect onPick={pickHacker} />;
 
-    if (mode === "campaign" || !run || !campaign) return <CampaignSelect onPick={startCampaign} onBack={() => setMode("hacker")} hacker={hackerId} />;
+    if (mode === "campaign" || !run || !campaign) return (
+        <>
+            <CampaignSelect onPick={startCampaign} onBack={() => setMode("hacker")} hacker={hackerId} onShowAchievements={() => setShowAchievements(true)} />
+            {showAchievements && <AchievementsModal onClose={() => setShowAchievements(false)} />}
+        </>
+    );
 
     if (mode === "breach" && activeNode) {
         return <Breach systemKey={activeNode.systemKey || "homeServer"} systemTitle={activeNode.title} deck={run.deck} modifier={getModifier(run.mods[activeNode.id])} hunt={huntPressure(run.heat, run.heatMax, threatEffects(run.threat).huntOffset)} implants={run.implants} threat={run.threat} hackerId={run.hackerId} onComplete={onBreachComplete} />;
     }
 
-    if (mode === "ending") return <Ending run={run} campaign={campaign} onRestart={() => { setMode("campaign"); setRun(null); }} />;
+    if (mode === "ending") return <Ending run={run} campaign={campaign} newlyUnlocked={endAchievements} onRestart={() => { setMode("campaign"); setRun(null); }} />;
 
     // run mode — the map, plus reward / deck / transmission overlays
     return (

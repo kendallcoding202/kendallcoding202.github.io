@@ -153,6 +153,19 @@ hr { border: none; border-top: 1px solid var(--line); margin: 7px 0; }
 }
 .term.wishlist:hover { filter: brightness(1.12); }
 
+/* ---- achievements ---- */
+.ach-earned { margin-top: 12px; }
+.ach-earned-row { color: var(--amber); font-size: 13px; padding: 5px 8px; border: 1px solid var(--amber); background: #ffb62208; margin-top: 6px; }
+.ach-earned-row .ach-g { font-size: 16px; }
+.ach-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; max-height: 62vh; overflow-y: auto; }
+.ach-card { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); padding: 9px 11px; background: var(--panel); opacity: 0.55; }
+.ach-card.got { opacity: 1; border-color: var(--amber); box-shadow: 0 0 10px #ffb62222; }
+.ach-card-g { font-size: 24px; line-height: 1.1; }
+.ach-card-name { font-weight: bold; color: var(--fg); font-size: 14px; }
+.ach-card.got .ach-card-name { color: var(--amber); }
+.ach-card-desc { font-size: 12px; color: #9fd18f; line-height: 1.4; margin-top: 2px; }
+@media (max-width: 640px) { .ach-grid { grid-template-columns: 1fr; } }
+
 /* system select */
 .systems { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin-top: 16px; }
 .syscard {

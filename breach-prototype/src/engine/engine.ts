@@ -59,6 +59,8 @@ export function createInitialState(seed: number, systemKey: string = DEFAULT_SYS
         firstCardSilent: !!im?.firstCardSilent,
         exploitFlatBonus: im?.exploitFlatBonus || 0,
         bombBonus: im?.bombBonus || 0,
+        breachHeal: im?.breachHeal || 0,
+        overkillCarry: !!im?.overkillCarry,
         proxyCharges: 0,
         rootkitReady: false,
         spoofTurns: 0,
@@ -79,6 +81,7 @@ export function createInitialState(seed: number, systemKey: string = DEFAULT_SYS
     };
     state.deck = shuffle(state, (deck && deck.length ? deck : STARTER_DECK).slice());
     draw(state, state.handSize);
+    if (im?.startTypeReveal && state.layers[0]) state.layers[0].defenses.forEach((d) => (d.typeRevealed = true)); // Wardriver implant
     refreshIntent(state);
     log(state, `Breaching ${state.system}. Stay quiet.`);
     return state;
@@ -234,7 +237,16 @@ function damageDefense(s: GameState, idx: number, amount: number) {
     if (!layer || layer.breached) return;
     const d = layer.defenses[idx];
     if (!d || d.strength <= 0) return;
+    const overkill = amount - d.strength;
     d.strength = Math.max(0, d.strength - amount);
+    // Kinetic Sink implant: excess damage spills onto the next standing defense
+    if (s.overkillCarry && overkill > 0) {
+        const next = layer.defenses.findIndex((x, i) => i !== idx && x.strength > 0);
+        if (next >= 0) {
+            layer.defenses[next].strength = Math.max(0, layer.defenses[next].strength - overkill);
+            log(s, `Kinetic Sink — ${overkill} overkill spilled onto the next defense.`);
+        }
+    }
     afterBreachCheck(s);
 }
 
@@ -281,6 +293,7 @@ function afterBreachCheck(s: GameState) {
             log(s, `${layer.name} breached — moving inward.`);
             s.current += 1;
             if (s.breachDraw) { draw(s, 1); log(s, "Auto-Exfil — breaching pulled you a card."); } // implant
+            if (s.breachHeal > 0) { reduceDetection(s, s.breachHeal); log(s, `Regen Mesh — crossing in cooled the trace by ${s.breachHeal}.`); } // implant
             applyBehaviorOnBreach(s);
         }
     }

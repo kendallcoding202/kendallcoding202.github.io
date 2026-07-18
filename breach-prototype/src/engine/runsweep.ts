@@ -5,12 +5,12 @@ import type { Action, BreachResult, MapNode } from "./types.ts";
 import { createInitialState, applyAction } from "./engine.ts";
 import { chooseAction } from "./ai.ts";
 import { getModifier } from "./modifiers.ts";
-import { combineLoadouts, aggregateImplants } from "./implants.ts";
+import { combineLoadouts, aggregateImplants, IMPLANT_ORDER } from "./implants.ts";
 import { getHacker, HACKER_ORDER } from "./hackers.ts";
 import { threatEffects } from "./threat.ts";
 import {
     createRun, currentOptions, isTerminal, resolveBreach, resolveEvent, resolveSafehouse,
-    getCampaign, huntPressure, addCard,
+    getCampaign, huntPressure, addCard, addImplant,
 } from "./run.ts";
 import { REWARD_POOL } from "./campaigns.ts";
 
@@ -53,10 +53,13 @@ function playRun(campaignId: string, hackerId: string, seed: number): boolean {
         if (node.type === "breach") {
             const res = playBreach(run, node, seed * 131 + guard);
             run = resolveBreach(run, node, res);
-            // draft a reward card ~60% of the time (mimics the in-game reward flow),
-            // picking a random pool card to test the whole pool, not a curated pick
-            if (res.won && run.outcome === "running" && nextRnd() < 0.6) {
-                run = addCard(run, REWARD_POOL[Math.floor(nextRnd() * REWARD_POOL.length)]);
+            // draft a reward after a win — ~40% a random implant, else a random
+            // pool card — mirroring the in-game reward flow, to exercise the whole
+            // pool + implant set rather than a curated pick
+            if (res.won && run.outcome === "running") {
+                const free = IMPLANT_ORDER.filter((i) => !run.implants.includes(i));
+                if (free.length && nextRnd() < 0.4) run = addImplant(run, free[Math.floor(nextRnd() * free.length)]);
+                else run = addCard(run, REWARD_POOL[Math.floor(nextRnd() * REWARD_POOL.length)]);
             }
             // finale retry: if we failed the finale and still alive, loop tries again
             if (!res.won && isTerminal(node) && run.outcome === "running") { /* retry next loop */ }

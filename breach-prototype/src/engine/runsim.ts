@@ -3,6 +3,7 @@
 
 import type { BreachResult, MapNode, RunState } from "./types.ts";
 import { CAMPAIGNS, CAMPAIGN_ORDER, REWARD_POOL } from "./campaigns.ts";
+import { satisfiedAchievements } from "./achievements.ts";
 import { createRun, currentOptions, isTerminal, resolveBreach, resolveEvent, resolveSafehouse, addCard, addImplant, getCampaign, huntPressure, HUNT_ACTION_LINES } from "./run.ts";
 import { createInitialState, applyAction, projectedNoise } from "./engine.ts";
 import { SYSTEMS } from "./systems.ts";
@@ -393,6 +394,40 @@ for (const id of CAMPAIGN_ORDER) {
     const after = resolveBreach(run, node, winResult(0.3));
     check("Black-Market Uplink adds credits per breach", after.credits === before + (node.reward || 20) + 8);
     check("implants don't duplicate", addImplant(addImplant(createRun("ghost", 1), "cortex"), "cortex").implants.length === 1);
+
+    // --- expansion implants ---
+    // Neural Lace: +1 to every exploit (via the loadout, like an operator passive)
+    let nl = createInitialState(5, "smallBusiness", ["knownExploit"], null, null, aggregateImplants(["neuralLace"]));
+    nl.layers[0].defenses[0].strength = 30; nl.layers[0].defenses[0].maxStrength = 30; nl.layers[0].defenses[0].typeRevealed = true;
+    nl = applyAction(nl, { type: "playCard", card: "knownExploit", target: 0 }); // 4 + 1 = 5
+    check("Neural Lace: exploits hit +1", 30 - nl.layers[0].defenses[0].strength === 5);
+
+    // Wetware Graft: bombs tick +1 (aggregate provides bombBonus)
+    check("Wetware Graft aggregates bombBonus", aggregateImplants(["wetware"]).bombBonus === 1);
+    check("Black ICE stacks two effects", aggregateImplants(["blackIce"]).noiseReduction === 1 && aggregateImplants(["blackIce"]).exploitFlatBonus === 1);
+
+    // Wardriver: first layer's types are known from the start
+    const wd = createInitialState(6, "corpNetwork", undefined, null, null, aggregateImplants(["wardriver"]));
+    check("Wardriver reveals the first layer's types at start", wd.layers[0].defenses.every((d) => d.typeRevealed));
+
+    // Regen Mesh: breaching a layer lowers detection by 5 (isolate via with/without)
+    const breachOnce = (withMesh: boolean) => {
+        let g = createInitialState(7, "homeServer", ["zeroDay"], null, null, withMesh ? aggregateImplants(["regenMesh"]) : null);
+        g.layers[0].defenses = [{ type: "firewall", strength: 5, maxStrength: 5, typeRevealed: true, strengthRevealed: true }];
+        g.detection = 30;
+        return applyAction(g, { type: "playCard", card: "zeroDay", target: 0 });
+    };
+    const withMesh = breachOnce(true), noMesh = breachOnce(false);
+    check("Regen Mesh cools the trace by 5 on a breach", withMesh.current === 1 && noMesh.detection - withMesh.detection === 5);
+
+    // Kinetic Sink: overkill spills onto the next defense
+    let ks = createInitialState(8, "smallBusiness", ["zeroDay"], null, null, aggregateImplants(["kineticSink"]));
+    ks.layers[0].defenses = [
+        { type: "firewall", strength: 3, maxStrength: 30, typeRevealed: true, strengthRevealed: true },
+        { type: "ids", strength: 30, maxStrength: 30, typeRevealed: true, strengthRevealed: true },
+    ];
+    ks = applyAction(ks, { type: "playCard", card: "zeroDay", target: 0 }); // 99 dmg, 3 kills def0, ~96 spills
+    check("Kinetic Sink spills overkill onto the next defense", ks.layers[0].defenses[1].strength === 0);
 }
 
 /* 15. Threat Levels (ascension) — stacking difficulty above Threat 0. */
@@ -517,6 +552,18 @@ for (const id of CAMPAIGN_ORDER) {
 
     // every reward-pool card is a real, defined card
     check("reward pool holds only real cards", REWARD_POOL.every((c) => !!CARDS[c]));
+}
+
+/* 18. Achievements evaluate correctly against a run context. */
+{
+    const base = { won: true, campaignId: "burn", hackerId: "wraith", threat: 0, jobsDone: 3, loudestPct: 20, quietestPct: 5, heatFrac: 0.1, implantsInstalled: 0, deckSize: 20, credits: 0, totalWins: 1, operatorsWonCount: 1, campaignsWonCount: 1 };
+    const quiet = satisfiedAchievements(base);
+    check("ach: quiet Burn win fires first/ghost/clean/smash", ["first_contract", "ghost", "clean_exit", "smash_grab"].every((id) => quiet.includes(id)));
+    const extreme = satisfiedAchievements({ ...base, loudestPct: 95, heatFrac: 0.9, campaignId: "oracle", threat: 10, totalWins: 25, operatorsWonCount: 4, campaignsWonCount: 4 });
+    check("ach: extreme Oracle run fires the hard set", ["sledgehammer", "the_gauntlet", "apex", "legend", "full_roster", "grand_slam", "deicide", "hunted", "escalation"].every((id) => extreme.includes(id)));
+    check("ach: a quiet run does NOT count as loud", !quiet.includes("sledgehammer"));
+    const loss = satisfiedAchievements({ ...base, won: false, loudestPct: null, quietestPct: null });
+    check("ach: a loss earns no win-gated achievements", !loss.includes("first_contract") && !loss.includes("ghost") && !loss.includes("smash_grab"));
 }
 
 console.log(`=== RUN-ENGINE ASSERTIONS: ${passed} passed, ${failures.length} failed ===`);

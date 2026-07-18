@@ -184,6 +184,8 @@ export interface GameState {
     firstCardSilent: boolean; // the first card each turn makes no noise
     exploitFlatBonus: number; // every exploit deals +N (persistent, not consumed)
     bombBonus: number; // logic bombs tick +N harder
+    breachHeal: number; // breaching a layer lowers detection by N (implant)
+    overkillCarry: boolean; // overkill damage spills onto the next defense (implant)
 
     // stealth / persistence flags
     proxyCharges: number; // Proxy Chain: reduce noise on the next N cards
