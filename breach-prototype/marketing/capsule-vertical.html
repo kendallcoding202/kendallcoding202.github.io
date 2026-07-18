@@ -1,0 +1,48 @@
+<!doctype html>
+<html><head><meta charset="utf8"><style>
+  html,body{margin:0;padding:0;background:#05070a;}
+  *{box-sizing:border-box;font-family:"DejaVu Sans Mono","Courier New",monospace;}
+  .cap{position:relative;width:100vw;height:100vh;overflow:hidden;
+    background:
+      radial-gradient(90% 55% at 50% 8%, rgba(0,255,140,.18), transparent 60%),
+      radial-gradient(80% 40% at 50% 96%, rgba(0,150,255,.12), transparent 60%),
+      linear-gradient(180deg,#060c0f 0%,#04070a 55%,#03050a 100%);}
+  .cap::before{content:"";position:absolute;inset:0;
+    background-image:repeating-linear-gradient(0deg,rgba(0,255,150,.04) 0 1px,transparent 1px 3px);
+    mix-blend-mode:screen;pointer-events:none;}
+  .cap::after{content:"";position:absolute;inset:0;
+    background-image:linear-gradient(rgba(0,255,150,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,150,.06) 1px,transparent 1px);
+    background-size:6vw 6vw;opacity:.3;pointer-events:none;
+    -webkit-mask-image:radial-gradient(90% 90% at 50% 30%,#000,transparent 78%);}
+  .inner{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;
+    align-items:center;text-align:center;padding:9vh 6vw;}
+  .kick{color:#5ff29a;font-size:2.0vh;letter-spacing:.5vw;opacity:.85;text-transform:uppercase;}
+  .logo{margin-top:auto;font-size:13.5vw;font-weight:bold;letter-spacing:.3vw;line-height:.9;color:#eafff2;
+    text-shadow:0 0 4vh rgba(0,255,140,.55),0 0 1vh rgba(0,255,140,.9);}
+  .logo b{color:#28ff9a;}
+  .tag{margin-top:3vh;color:#cdeedb;font-size:2.9vh;letter-spacing:.1vw;line-height:1.5;opacity:.92;}
+  .tag .amp{color:#ff5b6a;display:block;margin-top:1vh;}
+  .chips{margin-top:auto;display:flex;flex-direction:column;gap:1.4vh;width:100%;align-items:center;}
+  .chip{border:1px solid rgba(95,242,154,.5);color:#9df0bd;font-size:2.4vh;padding:1vh 0;width:78%;
+    letter-spacing:.2vw;border-radius:.5vh;background:rgba(0,255,140,.05);}
+  .glyph{margin-top:6vh;font-size:3.2vh;letter-spacing:.15vw;color:#7ff2ad;
+    border:1px solid rgba(95,242,154,.35);border-radius:.6vh;padding:2.2vh 4vw;
+    background:rgba(0,255,140,.045);box-shadow:0 0 4vh rgba(0,255,140,.25) inset;
+    text-align:left;line-height:1.7;}
+  .glyph .p{color:#28ff9a;}
+  .glyph .cur{background:#28ff9a;color:#04070a;}
+</style></head>
+<body>
+  <div class="cap">
+    <div class="inner">
+      <div class="kick">// the system is watching</div>
+      <div class="glyph"><span class="p">root@target:~#</span> ./breach<br><span class="p">›</span> access granted<span class="cur">█</span></div>
+      <div class="logo">BRE<b>A</b>CH</div>
+      <div class="tag">A hacking roguelike deckbuilder.<span class="amp">Get in. Get the data. Get gone.</span></div>
+      <div class="chips">
+        <span class="chip">4 OPERATORS · BRANCHING RUNS</span>
+        <span class="chip">A ROGUE AI THAT HUNTS YOU</span>
+      </div>
+    </div>
+  </div>
+</body></html>

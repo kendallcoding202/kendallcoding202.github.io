@@ -1,0 +1,66 @@
+<!doctype html>
+<html><head><meta charset="utf8"><style>
+  @import url('data:,');
+  html,body{margin:0;padding:0;background:#05070a;}
+  *{box-sizing:border-box;font-family:"DejaVu Sans Mono","Courier New",monospace;}
+  .cap{position:relative;width:100vw;height:100vh;overflow:hidden;
+    background:
+      radial-gradient(120% 140% at 78% 12%, rgba(0,255,140,.16), transparent 55%),
+      radial-gradient(90% 120% at 12% 95%, rgba(0,180,255,.10), transparent 55%),
+      linear-gradient(160deg,#060b0e 0%,#04070a 60%,#03060b 100%);
+  }
+  /* scanline + grid texture */
+  .cap::before{content:"";position:absolute;inset:0;
+    background-image:repeating-linear-gradient(0deg,rgba(0,255,150,.035) 0 1px,transparent 1px 3px);
+    mix-blend-mode:screen;pointer-events:none;}
+  .cap::after{content:"";position:absolute;inset:0;
+    background-image:linear-gradient(rgba(0,255,150,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,150,.05) 1px,transparent 1px);
+    background-size:3.2vw 3.2vw;opacity:.35;pointer-events:none;
+    -webkit-mask-image:radial-gradient(120% 100% at 80% 20%,#000,transparent 75%);}
+  .inner{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;justify-content:center;
+    padding:0 7.5vw;}
+  .kick{color:#5ff29a;font-size:3.1vh;letter-spacing:.55vw;opacity:.85;margin-bottom:1.8vh;
+    text-transform:uppercase;}
+  .kick .cur{background:#5ff29a;color:#05070a;padding:0 .3vw;animation:none;}
+  .logo{font-size:15.5vh;font-weight:bold;letter-spacing:.4vw;line-height:.92;color:#eafff2;
+    text-shadow:0 0 3vh rgba(0,255,140,.55), 0 0 .6vh rgba(0,255,140,.9);}
+  .logo b{color:#28ff9a;}
+  .tag{margin-top:2.6vh;color:#bfedd2;font-size:3.4vh;letter-spacing:.12vw;opacity:.92;}
+  .tag .amp{color:#ff5b6a;}
+  .chips{margin-top:3.2vh;display:flex;gap:1.2vw;}
+  .chip{border:1px solid rgba(95,242,154,.5);color:#9df0bd;font-size:2.3vh;padding:.7vh 1.2vw;
+    letter-spacing:.12vw;border-radius:.4vh;background:rgba(0,255,140,.05);}
+  /* right-side faux terminal glyphs */
+  .rail{position:absolute;top:0;right:0;height:100%;width:34%;z-index:1;opacity:.5;
+    color:#1c6b45;font-size:2.0vh;line-height:1.5;padding:3vh 2vw;overflow:hidden;
+    -webkit-mask-image:linear-gradient(90deg,transparent,#000 60%);}
+</style></head>
+<body>
+  <div class="cap">
+    <div class="rail" id="rail"></div>
+    <div class="inner">
+      <div class="kick">// intrusion in progress <span class="cur">█</span></div>
+      <div class="logo">BRE<b>A</b>CH</div>
+      <div class="tag">Get in. Get the data. Get gone. <span class="amp">The system is watching.</span></div>
+      <div class="chips">
+        <span class="chip">ROGUELIKE</span>
+        <span class="chip">DECKBUILDER</span>
+        <span class="chip">HACKING</span>
+      </div>
+    </div>
+  </div>
+  <script>
+    // fill the right rail with deterministic hex/opcode noise (no Math.random needed at build)
+    const rail=document.getElementById('rail');
+    const hx="0123456789ABCDEF";
+    const ops=["port_scan","exploit","0day","proxy","logwipe","rootkit","payload","trace","spoof","bomb"];
+    let s="";let seed=1337;
+    const rnd=()=>{seed=(seed*1103515245+12345)&0x7fffffff;return seed/0x7fffffff;};
+    for(let i=0;i<60;i++){
+      let line="";
+      for(let j=0;j<10;j++){ line+= (rnd()<.28? ops[(rnd()*ops.length)|0]+" " : hx[(rnd()*16)|0]+hx[(rnd()*16)|0]+" "); }
+      s+=line+"\n";
+    }
+    rail.textContent=s;
+  </script>
+</body></html>
