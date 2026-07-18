@@ -76,7 +76,7 @@ for (const id of CAMPAIGN_ORDER) {
 
 /* 2. Busted path — repeated failures spike Heat past the cap. */
 {
-    let run = createRun("burn"); // lowest heatMax (85)
+    let run = createRun("burn"); // a low-heatMax run that busts fast on repeated fails
     let guard = 0;
     while (run.outcome === "running" && guard++ < 30) {
         const opts = currentOptions(run);
