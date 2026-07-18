@@ -59,6 +59,46 @@ npm run typecheck # tsc --noEmit
 `--experimental-strip-types`). If your Node is older, `npx tsx src/engine/sim.ts`
 works too.
 
+## Desktop app (Tauri → Steam)
+
+BREACH ships to Steam as a native desktop app via **Tauri**, which wraps this
+exact web build in a lightweight native window (small binaries, uses the OS's
+own webview). **The game code is unchanged** — Tauri is only the shell, so every
+gameplay change we make flows straight into the desktop build on the next
+rebuild. The Tauri project lives in `src-tauri/`.
+
+**Prerequisites (on the machine you build from):**
+
+- **Rust** toolchain — install from <https://rustup.rs>.
+- A platform webview:
+  - **Windows** (the primary Steam target): WebView2 — preinstalled on Win 10/11.
+  - **macOS**: built in (WKWebView).
+  - **Linux**: `webkit2gtk-4.1` + `librsvg2` dev packages.
+
+**Commands:**
+
+```bash
+npm install
+npm run desktop        # run the game in a native window (hot-reloads like dev)
+npm run desktop:build  # produce a release binary + installer
+```
+
+`npm run desktop:build` outputs to `src-tauri/target/release/`:
+
+- the runnable executable (`BREACH.exe` on Windows), and
+- installers under `src-tauri/target/release/bundle/` (`.msi`/`.exe` on Windows,
+  `.dmg`/`.app` on macOS, `.deb`/`.AppImage` on Linux).
+
+Build on the platform you're targeting — for Steam that's almost always the
+**Windows** binary (most Steam players are on Windows), built on a Windows PC.
+
+**App icon:** regenerate all icon sizes from one 1024×1024 PNG with
+`npm run tauri icon path/to/icon.png` (writes into `src-tauri/icons/`).
+
+**To Steam:** in Steamworks, point your app's depot at the built binary/bundle,
+upload, and set the launch executable. Steam overlay works out of the box;
+achievements / cloud saves are an optional later step via the Steamworks SDK.
+
 ## Tuning loop
 
 Because the engine is pure and seeded, you can balance the whole game without
