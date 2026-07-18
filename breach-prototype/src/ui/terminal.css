@@ -238,6 +238,15 @@ hr { border: none; border-top: 1px solid var(--line); margin: 7px 0; }
 .card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--k, var(--line)); opacity: 0.9; }
 .card:hover:not(.disabled) { border-color: var(--k, var(--fg)); }
 
+/* implants get their own family colour (magenta cyberware) + a wider card */
+.card.implant { --k: #ff6ac1; width: 200px; cursor: pointer; }
+.card.implant .ctext { color: #f0b9dd; }
+
+/* installed-implant readouts */
+.implant-strip { font-size: 11px; margin-top: 5px; }
+.implants-owned { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 3px 0 8px; }
+.implant-chip { border: 1px solid #8a3a6e; color: #ff9ad4; padding: 2px 8px; font-size: 11px; background: #1a0a14; white-space: nowrap; }
+
 /* build-archetype tags — so synergy families are visible when deckbuilding */
 .card .synergy { font-weight: bold; letter-spacing: 0.5px; }
 .card .synergy.s-ghost { color: #8fd6ff; }

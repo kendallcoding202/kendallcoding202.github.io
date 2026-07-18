@@ -12,18 +12,39 @@ import { CARDS } from "../engine/cards.ts";
 import { SYSTEMS } from "../engine/systems.ts";
 import { CAMPAIGNS, CAMPAIGN_ORDER, REWARD_POOL } from "../engine/campaigns.ts";
 import { getModifier } from "../engine/modifiers.ts";
+import { IMPLANTS, IMPLANT_ORDER, getImplant, aggregateImplants } from "../engine/implants.ts";
+import { sfx } from "./audio.ts";
 import { createInitialState, applyAction, canPlay, projectedNoise, needsTarget, targetableDefenses, previewOnTarget } from "../engine/engine.ts";
-import { createRun, currentOptions, atFinale, isTerminal, resolveBreach, resolveEvent, resolveSafehouse, addCard, removeCard, getCampaign, getNode, clearTransmission, huntPressure } from "../engine/run.ts";
+import { createRun, currentOptions, atFinale, isTerminal, resolveBreach, resolveEvent, resolveSafehouse, addCard, addImplant, removeCard, getCampaign, getNode, clearTransmission, huntPressure } from "../engine/run.ts";
 import type { HuntPressure, SystemModifier } from "../engine/types.ts";
 
 const newSeed = () => Math.floor(Math.random() * 0xffffffff) >>> 0;
 const meterColor = (f: number) => (f < 0.3 ? "#4af626" : f < 0.6 ? "#ffb000" : f < 0.85 ? "#ff7a1a" : "#ff4141");
-function pick3(pool: string[]): string[] {
+function pickN(pool: string[], n: number): string[] {
     const a = pool.slice();
     for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
-    return a.slice(0, 3);
+    return a.slice(0, n);
+}
+const pick3 = (pool: string[]) => pickN(pool, 3);
+
+/** A card-sized panel for an implant (in the reward chooser). */
+function ImplantCard({ id, onClick }: { id: string; onClick?: () => void }) {
+    const im = getImplant(id);
+    if (!im) return null;
+    return (
+        <div className={"card implant" + (onClick ? " playable" : "")} onClick={onClick} title={im.blurb}>
+            <div className="chead"><span className="cname">◆ {im.name}</span></div>
+            <div className="kind">implant · passive</div>
+            <div className="ctext">{im.blurb}</div>
+        </div>
+    );
 }
 const nodeIcon = (n: MapNode) => (n.type === "breach" ? (isTerminal(n) ? "★" : "◈") : n.type === "safehouse" ? "☂" : "❋");
+
+function MuteButton() {
+    const [m, setM] = useState(sfx.isMuted());
+    return <button className="term ghost tiny" onClick={() => setM(sfx.toggleMute())} title={m ? "sound off — click for sound" : "sound on"}>{m ? "🔇" : "🔊"}</button>;
+}
 
 /* ---------- rules briefing (accessible via ?) ---------- */
 function Intro({ onClose }: { onClose: () => void }) {
@@ -81,6 +102,7 @@ function Transmission({ name, text, onClose }: { name: string; text: string; onC
     const [shown, setShown] = useState("");
     const done = shown.length >= text.length;
     useEffect(() => {
+        sfx.play("transmission");
         setShown("");
         let i = 0;
         const id = setInterval(() => { i++; setShown(text.slice(0, i)); if (i >= text.length) clearInterval(id); }, 26);
@@ -106,8 +128,8 @@ function Transmission({ name, text, onClose }: { name: string; text: string; onC
 /* ============================================================
    BREACH SCREEN (one job)
    ============================================================ */
-function Breach({ systemKey, systemTitle, deck, modifier, hunt, onComplete }: { systemKey: string; systemTitle: string; deck: string[]; modifier?: SystemModifier | null; hunt?: HuntPressure | null; onComplete: (r: BreachResult) => void }) {
-    const [state, setState] = useState<GameState>(() => createInitialState(newSeed(), systemKey, deck, modifier, hunt));
+function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, onComplete }: { systemKey: string; systemTitle: string; deck: string[]; modifier?: SystemModifier | null; hunt?: HuntPressure | null; implants?: string[]; onComplete: (r: BreachResult) => void }) {
+    const [state, setState] = useState<GameState>(() => createInitialState(newSeed(), systemKey, deck, modifier, hunt, aggregateImplants(implants || [])));
     const [armed, setArmed] = useState<string | null>(null);
     const [showIntro, setShowIntro] = useState(() => { try { return localStorage.getItem("breach_seen_intro") !== "1"; } catch { return true; } });
     const closeIntro = () => { setShowIntro(false); try { localStorage.setItem("breach_seen_intro", "1"); } catch { /* ignore */ } };
@@ -125,6 +147,24 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, onComplete }: { 
         return () => window.removeEventListener("keydown", onKey);
     }, [state, showIntro]);
 
+    // sound: derive SFX from state transitions (fires once per commit)
+    const prevRef = useRef(state);
+    useEffect(() => {
+        const prev = prevRef.current;
+        if (state !== prev) {
+            const total = (s: GameState) => s.layers.reduce((a, l) => a + l.defenses.reduce((b, d) => b + Math.max(0, d.strength), 0), 0);
+            const brk = (s: GameState) => s.layers.filter((l) => l.breached).length;
+            const rank: Record<string, number> = { IDLE: 0, SUSPICIOUS: 1, ALERTED: 2, LOCKDOWN: 3 };
+            if (state.outcome === "won" && prev.outcome === "playing") sfx.play("win");
+            else if (state.outcome === "lost" && prev.outcome === "playing") sfx.play("fail");
+            else if (brk(state) > brk(prev)) sfx.play("breach");
+            else if (state.turn > prev.turn) sfx.play("turn");
+            else if (state.log.length > prev.log.length) sfx.play(total(state) < total(prev) ? "hit" : "card");
+            if (state.outcome === "playing" && rank[state.alert] > rank[prev.alert]) sfx.play("alert");
+            prevRef.current = state;
+        }
+    }, [state]);
+
     const detFrac = state.detection / state.detectionMax;
     const room = state.detectionMax - state.detection;
     const targetOpts = targetableDefenses(state);
@@ -136,6 +176,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, onComplete }: { 
         if (!canPlay(state, id)) return;
         if (!needsTarget(id)) { dispatch(id); return; }
         if (targetableDefenses(state).length === 0) return;
+        sfx.play("select");
         setArmed(armed === id ? null : id);
     };
 
@@ -157,6 +198,9 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, onComplete }: { 
                     <span className="modtag">⌁ {state.huntLabel}</span>
                     <span className="modblurb">{state.huntBlurb}</span>
                 </div>
+            )}
+            {implants && implants.length > 0 && (
+                <div className="implant-strip muted">◆ implants: {implants.map((id) => IMPLANTS[id] && IMPLANTS[id].name).filter(Boolean).join(" · ")}</div>
             )}
             <hr />
 
@@ -241,6 +285,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, onComplete }: { 
             <div className="controls">
                 <button className="term" onClick={endTurn}>End Turn ▸</button>
                 <button className="term ghost" onClick={() => setShowIntro(true)}>?</button>
+                <MuteButton />
                 <span className="piles muted">🂠 draw {state.deck.length} · discard {state.discard.length}</span>
             </div>
             <div className="muted turn-note">Ending a turn <b>discards your hand and draws {state.handSize} fresh</b> (cards recycle), then the system acts and the trace climbs +{state.baselineCreep}.</div>
@@ -269,7 +314,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, onComplete }: { 
 function CampaignSelect({ onPick }: { onPick: (id: string) => void }) {
     return (
         <div className="wrap">
-            <div className="title">BREACH</div>
+            <div className="title">BREACH <span style={{ float: "right" }}><MuteButton /></span></div>
             <p className="muted">A hacking roguelike. Choose a storyline — a branching map of breaches, a rising trace, and a deck you build as you go.</p>
             <hr />
             <div className="systems">
@@ -421,6 +466,7 @@ function RunView({ run, campaign, onLaunchBreach, onRun, onOpenDeck }: {
         setRemoving(null); setActiveEvent(null);
     };
     const pickNode = (n: MapNode) => {
+        sfx.play("select");
         if (n.type === "breach") onLaunchBreach(n);
         else if (n.type === "safehouse") onRun(resolveSafehouse(run, n));
         else setActiveEvent(n);
@@ -434,6 +480,12 @@ function RunView({ run, campaign, onLaunchBreach, onRun, onOpenDeck }: {
                 <span className="deck-link" onClick={onOpenDeck}>🃏 deck: <b>{run.deck.length}</b> ▸</span>
                 <span className="muted">jobs pulled: {run.jobsDone}</span>
             </div>
+            {run.implants.length > 0 && (
+                <div className="implants-owned">
+                    <span className="muted">◆ INSTALLED:</span>
+                    {run.implants.map((id) => <span key={id} className="implant-chip" title={IMPLANTS[id] ? IMPLANTS[id].blurb : ""}>{IMPLANTS[id] ? IMPLANTS[id].name : id}</span>)}
+                </div>
+            )}
 
             <div className="meter-label"><span className="red">TRACE ON YOU (HEAT)</span><span style={{ color: meterColor(heatFrac) }}>{run.heat} / {run.heatMax}</span></div>
             <div className="meter"><div className="fill" style={{ width: `${heatFrac * 100}%`, background: meterColor(heatFrac) }} /></div>
@@ -514,6 +566,7 @@ function Ending({ run, campaign, onRestart }: { run: RunState; campaign: Campaig
                         {s.quietestPct != null && <div className="rs-row"><span>Quietest breach</span><b className="cyan">{s.quietestPct}% detection</b></div>}
                         {s.loudestPct != null && <div className="rs-row"><span>Loudest breach</span><b className="amber">{s.loudestPct}% detection</b></div>}
                         <div className="rs-row"><span>Deck</span><b>{run.deck.length} cards</b></div>
+                        {run.implants.length > 0 && <div className="rs-row"><span>Implants installed</span><b>{run.implants.length}</b></div>}
                     </div>
                     <p className="muted" style={{ fontSize: 12, fontStyle: "italic", marginTop: 8 }}>{verdict}</p>
                     <button className="term" style={{ marginTop: 14, display: "block", marginInline: "auto" }} onClick={onRestart}>◂ Choose another storyline</button>
@@ -530,7 +583,7 @@ export function App() {
     const [mode, setMode] = useState<"campaign" | "run" | "breach" | "ending">("campaign");
     const [run, setRun] = useState<RunState | null>(null);
     const [activeNode, setActiveNode] = useState<MapNode | null>(null);
-    const [reward, setReward] = useState<string[] | null>(null);
+    const [reward, setReward] = useState<{ kind: "card" | "implant"; options: string[] } | null>(null);
     const [showDeck, setShowDeck] = useState(false);
 
     const campaign = run ? getCampaign(run.campaignId) : null;
@@ -545,15 +598,24 @@ export function App() {
         setActiveNode(null);
         if (newRun.outcome !== "running") { setMode("ending"); return; }
         setMode("run");
-        if (result.won) setReward(pick3(REWARD_POOL)); // offer a card after a successful job
+        if (result.won) {
+            // sometimes the salvage is cyberware (an implant) rather than a card
+            const available = IMPLANT_ORDER.filter((i) => !newRun.implants.includes(i));
+            if (available.length >= 2 && Math.random() < 0.4) setReward({ kind: "implant", options: pickN(available, 2) });
+            else setReward({ kind: "card", options: pick3(REWARD_POOL) });
+            sfx.play("reward");
+        }
     };
     const onRun = (r: RunState) => { setRun(r); if (r.outcome !== "running") setMode("ending"); };
-    const takeReward = (id: string | null) => { if (id && run) setRun(addCard(run, id)); setReward(null); };
+    const takeReward = (id: string | null) => {
+        if (id && run && reward) setRun(reward.kind === "implant" ? addImplant(run, id) : addCard(run, id));
+        setReward(null);
+    };
 
     if (mode === "campaign" || !run || !campaign) return <CampaignSelect onPick={startCampaign} />;
 
     if (mode === "breach" && activeNode) {
-        return <Breach systemKey={activeNode.systemKey || "homeServer"} systemTitle={activeNode.title} deck={run.deck} modifier={getModifier(run.mods[activeNode.id])} hunt={huntPressure(run.heat, run.heatMax)} onComplete={onBreachComplete} />;
+        return <Breach systemKey={activeNode.systemKey || "homeServer"} systemTitle={activeNode.title} deck={run.deck} modifier={getModifier(run.mods[activeNode.id])} hunt={huntPressure(run.heat, run.heatMax)} implants={run.implants} onComplete={onBreachComplete} />;
     }
 
     if (mode === "ending") return <Ending run={run} campaign={campaign} onRestart={() => { setMode("campaign"); setRun(null); }} />;
@@ -564,10 +626,13 @@ export function App() {
             <RunView run={run} campaign={campaign} onLaunchBreach={launchBreach} onRun={onRun} onOpenDeck={() => setShowDeck(true)} />
             {reward && (
                 <div className="overlay">
-                    <div className="box" style={{ maxWidth: 620 }}>
-                        <h2 className="cyan">JOB PAID — pick up a new tool</h2>
-                        <div className="card-choices">{reward.map((id, i) => <CardMini key={i} id={id} onClick={() => takeReward(id)} />)}</div>
-                        <button className="term ghost" onClick={() => takeReward(null)}>Skip — keep the deck lean</button>
+                    <div className="box" style={{ maxWidth: 660 }}>
+                        <h2 className="cyan">{reward.kind === "implant" ? "SALVAGE — install cyberware" : "JOB PAID — pick up a new tool"}</h2>
+                        {reward.kind === "implant" && <p className="muted" style={{ marginTop: -4 }}>Passive. Applies to every breach for the rest of the run.</p>}
+                        <div className="card-choices">{reward.options.map((id, i) => reward.kind === "implant"
+                            ? <ImplantCard key={i} id={id} onClick={() => takeReward(id)} />
+                            : <CardMini key={i} id={id} onClick={() => takeReward(id)} />)}</div>
+                        <button className="term ghost" onClick={() => takeReward(null)}>{reward.kind === "implant" ? "Skip — stay unmodified" : "Skip — keep the deck lean"}</button>
                     </div>
                 </div>
             )}

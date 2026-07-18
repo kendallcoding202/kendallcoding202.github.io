@@ -10,6 +10,7 @@
    ============================================================ */
 
 import type { Action, AlertStage, CardDef, Defense, GameState, HuntPressure, Layer, SystemDef, SystemIntent, SystemModifier } from "./types.ts";
+import type { ImplantLoadout } from "./implants.ts";
 import { CARDS, STARTER_DECK } from "./cards.ts";
 import { SYSTEMS, DEFAULT_SYSTEM } from "./systems.ts";
 import { shuffle } from "./rng.ts";
@@ -18,19 +19,20 @@ const PROXY_REDUCTION = 3;
 
 /* ---------- construction ---------- */
 
-export function createInitialState(seed: number, systemKey: string = DEFAULT_SYSTEM, deck?: string[], modifier?: SystemModifier | null, hunt?: HuntPressure | null): GameState {
+export function createInitialState(seed: number, systemKey: string = DEFAULT_SYSTEM, deck?: string[], modifier?: SystemModifier | null, hunt?: HuntPressure | null, implants?: ImplantLoadout | null): GameState {
     const sys: SystemDef = SYSTEMS[systemKey] || SYSTEMS[DEFAULT_SYSTEM];
     const m = modifier || null;
     const h = hunt && hunt.tier > 0 ? hunt : null; // the watcher's grip, if Heat is high
+    const im = implants || null; // installed cyberware, applied to the whole run
     const sDelta = (m?.strengthDelta || 0) + (h?.strengthDelta || 0);
-    const detectionMax = Math.max(60, sys.detectionMax + (m?.detectionMaxDelta || 0));
+    const detectionMax = Math.max(60, sys.detectionMax + (m?.detectionMaxDelta || 0) + (im?.detectionMaxDelta || 0));
     const startFrac = Math.min(0.5, (m?.detectionStartFrac || 0) + (h?.detectionStartFrac || 0));
     const state: GameState = {
         system: sys.name,
         behavior: sys.behavior || null,
         detection: startFrac > 0 ? Math.round(startFrac * detectionMax) : 0,
         detectionMax,
-        baselineCreep: Math.max(1, sys.baselineCreep + (m?.creepDelta || 0) + (h?.creepDelta || 0)),
+        baselineCreep: Math.max(1, sys.baselineCreep + (m?.creepDelta || 0) + (h?.creepDelta || 0) - (im?.creepDelta || 0)),
         layers: sys.layers.map((l): Layer => ({
             name: l.name,
             breached: false,
@@ -44,11 +46,15 @@ export function createInitialState(seed: number, systemKey: string = DEFAULT_SYS
         deck: [],
         hand: [],
         discard: [],
-        handSize: 6,
+        handSize: 6 + (im?.handSize || 0),
         turn: 1,
         turnNoise: 0,
         cardsThisTurn: 0,
         silentThisTurn: 0,
+        noiseReduction: im?.noiseReduction || 0,
+        breachDraw: !!im?.breachDraw,
+        reconDraw: !!im?.reconDraw,
+        firstCardSilent: !!im?.firstCardSilent,
         proxyCharges: 0,
         rootkitReady: false,
         spoofTurns: 0,
@@ -270,6 +276,7 @@ function afterBreachCheck(s: GameState) {
         } else {
             log(s, `${layer.name} breached — moving inward.`);
             s.current += 1;
+            if (s.breachDraw) { draw(s, 1); log(s, "Auto-Exfil — breaching pulled you a card."); } // implant
             applyBehaviorOnBreach(s);
         }
     }
@@ -630,8 +637,9 @@ export function predictDamage(s: GameState, cardId: string, idx: number): number
 export function projectedNoise(s: GameState, cardId: string): number {
     const card = CARDS[cardId];
     if (!card) return 0;
-    let noise = card.noise;
     if (s.rootkitReady) return 0;
+    if (s.firstCardSilent && s.cardsThisTurn === 0) return 0;
+    let noise = Math.max(0, card.noise - s.noiseReduction);
     if (s.proxyCharges > 0) noise = Math.max(0, noise - PROXY_REDUCTION);
     return noise;
 }
@@ -661,9 +669,12 @@ export function applyAction(prev: GameState, action: Action): GameState {
         const rootkitBefore = s.rootkitReady;
         const proxyBefore = s.proxyCharges;
 
+        const firstSilent = s.firstCardSilent && s.cardsThisTurn === 0; // Stealth Boot implant
         const extraNoise = applyEffect(s, card, target);
-        let noise = card.noise + extraNoise;
-        if (rootkitBefore && noise > 0) {
+        let noise = Math.max(0, card.noise + extraNoise - s.noiseReduction);
+        if (firstSilent) {
+            noise = 0;
+        } else if (rootkitBefore && noise > 0) {
             noise = 0;
             s.rootkitReady = false;
             log(s, `${card.name} hidden by Rootkit — silent.`);
@@ -676,6 +687,7 @@ export function applyAction(prev: GameState, action: Action): GameState {
         s.cardsThisTurn += 1;
         if (noise === 0) s.silentThisTurn += 1;
         if (card.kind === "exploit") s.exploitsThisTurn += 1;
+        if (s.reconDraw && card.kind === "recon") draw(s, 1); // Recon Suite implant
 
         if (card.exhausts) log(s, `${card.name} spent (one-time).`);
         else s.discard.push(cardId);

@@ -3,10 +3,11 @@
 
 import type { BreachResult, MapNode, RunState } from "./types.ts";
 import { CAMPAIGNS, CAMPAIGN_ORDER } from "./campaigns.ts";
-import { createRun, currentOptions, isTerminal, resolveBreach, resolveEvent, resolveSafehouse, addCard, getCampaign, huntPressure, HUNT_ACTION_LINES } from "./run.ts";
-import { createInitialState, applyAction } from "./engine.ts";
+import { createRun, currentOptions, isTerminal, resolveBreach, resolveEvent, resolveSafehouse, addCard, addImplant, getCampaign, huntPressure, HUNT_ACTION_LINES } from "./run.ts";
+import { createInitialState, applyAction, projectedNoise } from "./engine.ts";
 import { SYSTEMS } from "./systems.ts";
 import { MODIFIERS, getModifier } from "./modifiers.ts";
+import { aggregateImplants } from "./implants.ts";
 
 let passed = 0;
 const failures: string[] = [];
@@ -345,6 +346,50 @@ for (const id of CAMPAIGN_ORDER) {
     adp = applyAction(adp, { type: "playCard", card: "zeroDay", target: 0 }); // one of two defenses
     adp = applyAction(adp, { type: "playCard", card: "zeroDay", target: 1 }); // breach the layer
     check("adaptive hardens the remaining layers on breach", adp.layers[1].defenses.every((d, i) => d.maxStrength === nextMax[i] + 1));
+}
+
+/* 14. Implants — passive cyberware applied to the whole run. */
+{
+    const base = createInitialState(1, "smallBusiness");
+    const damp = createInitialState(1, "smallBusiness", undefined, null, null, aggregateImplants(["dampener"]));
+    check("Signal Dampener lowers card noise", projectedNoise(damp, "bruteForce") === projectedNoise(base, "bruteForce") - 1);
+    const cortex = createInitialState(1, "smallBusiness", undefined, null, null, aggregateImplants(["cortex"]));
+    check("Overclocked Cortex draws +1 a turn", cortex.handSize === 7 && cortex.hand.length === base.hand.length + 1);
+    const cool = createInitialState(1, "smallBusiness", undefined, null, null, aggregateImplants(["coolant"]));
+    check("Coolant slows the trace", cool.baselineCreep === base.baselineCreep - 1);
+    const buf = createInitialState(1, "smallBusiness", undefined, null, null, aggregateImplants(["buffer"]));
+    check("Expanded Buffer raises the ceiling", buf.detectionMax === base.detectionMax + 18);
+
+    // Stealth Boot: only the FIRST card each turn is silent
+    let sb = createInitialState(2, "smallBusiness", ["bruteForce", "bruteForce"], null, null, aggregateImplants(["stealthBoot"]));
+    sb = applyAction(sb, { type: "playCard", card: "bruteForce" });
+    check("Stealth Boot silences the first card", sb.detection === 0);
+    sb = applyAction(sb, { type: "playCard", card: "bruteForce" });
+    check("Stealth Boot spares only the first card", sb.detection > 0);
+
+    // Recon Suite: recon cards also draw
+    const rdeck = Array(10).fill("passiveRecon");
+    let br = createInitialState(3, "smallBusiness", rdeck);
+    br = applyAction(br, { type: "playCard", card: "passiveRecon" });
+    let rs = createInitialState(3, "smallBusiness", rdeck, null, null, aggregateImplants(["reconSuite"]));
+    rs = applyAction(rs, { type: "playCard", card: "passiveRecon" });
+    check("Recon Suite draws a card on recon", rs.hand.length === br.hand.length + 1);
+
+    // Auto-Exfil: draw when you breach a layer
+    const xdeck = ["zeroDay", "logWipe", "logWipe", "logWipe", "logWipe", "logWipe", "logWipe"];
+    let bx = createInitialState(4, "homeServer", xdeck);
+    bx = applyAction(bx, { type: "playCard", card: "zeroDay", target: 0 });
+    let ex = createInitialState(4, "homeServer", xdeck, null, null, aggregateImplants(["exfil"]));
+    ex = applyAction(ex, { type: "playCard", card: "zeroDay", target: 0 });
+    check("Auto-Exfil draws a card on breach", ex.hand.length === bx.hand.length + 1);
+
+    // Uplink: extra credits per breach (run-level)
+    let run = addImplant(createRun("ghost", 1), "uplink");
+    const node = getCampaign("ghost").map.find((n) => n.type === "breach")!;
+    const before = run.credits;
+    const after = resolveBreach(run, node, winResult(0.3));
+    check("Black-Market Uplink adds credits per breach", after.credits === before + (node.reward || 20) + 8);
+    check("implants don't duplicate", addImplant(addImplant(createRun("ghost", 1), "cortex"), "cortex").implants.length === 1);
 }
 
 console.log(`=== RUN-ENGINE ASSERTIONS: ${passed} passed, ${failures.length} failed ===`);

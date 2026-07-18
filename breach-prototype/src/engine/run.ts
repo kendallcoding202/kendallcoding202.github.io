@@ -11,6 +11,7 @@ import { CAMPAIGNS } from "./campaigns.ts";
 import { STARTER_DECK } from "./cards.ts";
 import { rollModifier } from "./modifiers.ts";
 import { GENERIC_EVENTS } from "./events.ts";
+import { aggregateImplants } from "./implants.ts";
 import { shuffle } from "./rng.ts";
 
 const LOSE_HEAT = 25; // Heat spike for getting detected on a job
@@ -84,6 +85,7 @@ export function createRun(campaignId: string, seed = 1): RunState {
         path: [],
         mods,
         events,
+        implants: [],
         huntTier: 0,
         stats: { breaches: 0, quietestPct: null, loudestPct: null },
         story: [c.intro],
@@ -168,8 +170,9 @@ export function resolveBreach(prev: RunState, node: MapNode, result: BreachResul
         const loudness = Math.round((result.detection / Math.max(1, result.detectionMax)) * 12);
         const gained = 4 + loudness;
         run.heat += gained;
-        run.credits += node.reward || 20;
-        run.story.push(`✓ ${node.title} — data secured. +${node.reward || 20}cr. The job raised the trace by ${gained}.`);
+        const bonusCredits = aggregateImplants(run.implants).creditsPerBreach;
+        run.credits += (node.reward || 20) + bonusCredits;
+        run.story.push(`✓ ${node.title} — data secured. +${(node.reward || 20) + bonusCredits}cr. The job raised the trace by ${gained}.`);
         moveTo(run, node);
         if (finale) {
             run.outcome = "won";
@@ -215,6 +218,11 @@ export function resolveSafehouse(prev: RunState, node: MapNode): RunState {
 export function addCard(prev: RunState, cardId: string): RunState {
     const run = clone(prev);
     run.deck.push(cardId);
+    return run;
+}
+export function addImplant(prev: RunState, implantId: string): RunState {
+    const run = clone(prev);
+    if (!run.implants.includes(implantId)) run.implants.push(implantId);
     return run;
 }
 export function removeCard(prev: RunState, cardId: string): RunState {

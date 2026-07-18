@@ -167,6 +167,11 @@ export interface GameState {
     turnNoise: number; // noise made from cards THIS turn (resets each turn)
     cardsThisTurn: number; // total cards played this turn (for chain/combo payoffs)
     silentThisTurn: number; // cards played that made ZERO noise this turn (for ghost payoffs)
+    // passive implant effects (installed for the whole run)
+    noiseReduction: number; // every card makes this much less noise
+    breachDraw: boolean; // draw a card whenever you breach a layer
+    reconDraw: boolean; // recon cards also draw a card
+    firstCardSilent: boolean; // the first card each turn makes no noise
 
     // stealth / persistence flags
     proxyCharges: number; // Proxy Chain: reduce noise on the next N cards
@@ -295,6 +300,7 @@ export interface RunState {
     path: string[]; // ids of nodes resolved so far, in order
     mods: Record<string, string>; // breach node id -> SystemModifier key (rolled at run start)
     events: Record<string, RunEvent>; // event node id -> the event dealt this run
+    implants: string[]; // passive cyberware installed this run (Implant ids)
     huntTier: number; // highest watcher-pressure tier reached (to detect crossings)
     stats: RunStats;
     story: string[]; // narrative feed
