@@ -18,6 +18,11 @@ export const IS_DEMO: boolean = (import.meta as unknown as { env?: Record<string
 // TODO: swap in the real Steam app id once the store page exists.
 export const STEAM_URL = "https://store.steampowered.com/app/0000000/BREACH/";
 
+// Where playtest feedback is emailed if the tester chooses the email option.
+// The primary path is copy-to-clipboard (works everywhere); this is a fallback.
+// TODO: set your collection address (a dedicated inbox, not a personal one).
+export const FEEDBACK_EMAIL = "playtest@breach.example";
+
 export const DEMO_OPERATORS = ["wraith", "torch"];
 export const DEMO_CAMPAIGN = "burn";
 

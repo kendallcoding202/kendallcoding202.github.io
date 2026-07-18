@@ -8,6 +8,7 @@
 import { MAX_THREAT } from "../engine/threat.ts";
 import { ACHIEVEMENTS, satisfiedAchievements } from "../engine/achievements.ts";
 import type { AchievementCtx } from "../engine/achievements.ts";
+import { readRaw, writeRaw, downloadText, pickTextFile } from "./storage.ts";
 
 export interface Profile {
     totalWins: number;
@@ -25,23 +26,23 @@ function fresh(): Profile {
 
 let cache: Profile | null = null;
 
+function normalize(p: Partial<Profile>): Profile {
+    return { totalWins: p.totalWins || 0, wins: p.wins || {}, maxThreatCleared: p.maxThreatCleared || {}, operatorWins: p.operatorWins || {}, achievements: p.achievements || [] };
+}
+
 export function loadProfile(): Profile {
     if (cache) return cache;
     try {
-        const raw = localStorage.getItem(KEY);
-        if (raw) {
-            const p = JSON.parse(raw) as Partial<Profile>;
-            cache = { totalWins: p.totalWins || 0, wins: p.wins || {}, maxThreatCleared: p.maxThreatCleared || {}, operatorWins: p.operatorWins || {}, achievements: p.achievements || [] };
-            return cache;
-        }
-    } catch { /* storage blocked — fall through to in-memory */ }
+        const raw = readRaw(KEY);
+        if (raw) { cache = normalize(JSON.parse(raw) as Partial<Profile>); return cache; }
+    } catch { /* corrupt/blocked — fall through to in-memory */ }
     cache = fresh();
     return cache;
 }
 
 function save(p: Profile) {
     cache = p;
-    try { localStorage.setItem(KEY, JSON.stringify(p)); } catch { /* ignore */ }
+    writeRaw(KEY, JSON.stringify(p));
 }
 
 /** Record a campaign win at a given Threat Level (unlocks the next). */
@@ -108,4 +109,36 @@ export function resetProfile(): Profile {
     const p = fresh();
     save(p);
     return p;
+}
+
+/* ---- save portability (manual backup / cross-machine transfer) ---- */
+
+/** Download the current profile as a JSON file the player can keep or move. */
+export function exportProfile(): void {
+    downloadText("breach-save.json", JSON.stringify(loadProfile(), null, 2));
+}
+
+/** Prompt for a save file and merge it in (takes the better of each stat, so
+    importing an older backup never erases progress). Returns the merged profile. */
+export async function importProfile(): Promise<Profile | null> {
+    const text = await pickTextFile();
+    if (!text) return null;
+    let incoming: Profile;
+    try { incoming = normalize(JSON.parse(text) as Partial<Profile>); } catch { return null; }
+    const cur = loadProfile();
+    const mergedWins: Record<string, number> = { ...cur.wins };
+    for (const k of Object.keys(incoming.wins)) mergedWins[k] = Math.max(mergedWins[k] || 0, incoming.wins[k]);
+    const mergedOps: Record<string, number> = { ...cur.operatorWins };
+    for (const k of Object.keys(incoming.operatorWins)) mergedOps[k] = Math.max(mergedOps[k] || 0, incoming.operatorWins[k]);
+    const mergedThreat: Record<string, number> = { ...cur.maxThreatCleared };
+    for (const k of Object.keys(incoming.maxThreatCleared)) mergedThreat[k] = Math.max(mergedThreat[k] ?? -1, incoming.maxThreatCleared[k]);
+    const merged: Profile = {
+        totalWins: Math.max(cur.totalWins, incoming.totalWins),
+        wins: mergedWins,
+        maxThreatCleared: mergedThreat,
+        operatorWins: mergedOps,
+        achievements: Array.from(new Set([...cur.achievements, ...incoming.achievements])),
+    };
+    save(merged);
+    return merged;
 }

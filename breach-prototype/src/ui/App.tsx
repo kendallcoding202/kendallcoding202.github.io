@@ -15,9 +15,9 @@ import { getModifier } from "../engine/modifiers.ts";
 import { IMPLANTS, IMPLANT_ORDER, getImplant, aggregateImplants, combineLoadouts } from "../engine/implants.ts";
 import { HACKERS, HACKER_ORDER, getHacker } from "../engine/hackers.ts";
 import { threatEffects, threatLabel, THREAT_STEPS, MAX_THREAT } from "../engine/threat.ts";
-import { recordWin, syncAchievements, isCampaignUnlocked, availableThreat, maxThreatCleared, campaignRequirement, loadProfile, unlockedAchievements, TOTAL_ACHIEVEMENTS } from "./meta.ts";
+import { recordWin, syncAchievements, isCampaignUnlocked, availableThreat, maxThreatCleared, campaignRequirement, loadProfile, unlockedAchievements, TOTAL_ACHIEVEMENTS, exportProfile, importProfile } from "./meta.ts";
 import { ACHIEVEMENTS, getAchievement } from "../engine/achievements.ts";
-import { IS_DEMO, STEAM_URL, demoOperatorUnlocked, demoCampaignUnlocked } from "./demo.ts";
+import { IS_DEMO, STEAM_URL, FEEDBACK_EMAIL, demoOperatorUnlocked, demoCampaignUnlocked } from "./demo.ts";
 import { sfx } from "./audio.ts";
 import { createInitialState, applyAction, canPlay, projectedNoise, needsTarget, targetableDefenses, previewOnTarget } from "../engine/engine.ts";
 import { createRun, currentOptions, atFinale, isTerminal, resolveBreach, resolveEvent, resolveSafehouse, addCard, addImplant, removeCard, getCampaign, getNode, clearTransmission, huntPressure } from "../engine/run.ts";
@@ -33,12 +33,12 @@ function pickN(pool: string[], n: number): string[] {
 const pick3 = (pool: string[]) => pickN(pool, 3);
 
 /** A card-sized panel for an implant (in the reward chooser). */
-function ImplantCard({ id, onClick }: { id: string; onClick?: () => void }) {
+function ImplantCard({ id, onClick, num }: { id: string; onClick?: () => void; num?: number }) {
     const im = getImplant(id);
     if (!im) return null;
     return (
         <div className={"card implant" + (onClick ? " playable" : "")} onClick={onClick} title={im.blurb}>
-            <div className="chead"><span className="cname">◆ {im.name}</span></div>
+            <div className="chead"><span className="cname">{num ? <span className="kbd">{num}</span> : null}◆ {im.name}</span></div>
             <div className="kind">implant · passive</div>
             <div className="ctext">{im.blurb}</div>
         </div>
@@ -70,10 +70,11 @@ function Intro({ onClose }: { onClose: () => void }) {
     );
 }
 
-function DefenseChip({ d, targetable, preview, onClick }: { d: Defense; targetable: boolean; preview?: string | null; onClick: () => void }) {
+function DefenseChip({ d, targetable, preview, kbdNum, onClick }: { d: Defense; targetable: boolean; preview?: string | null; kbdNum?: number; onClick: () => void }) {
     const down = d.strength <= 0;
     return (
         <span className={"dchip" + (targetable ? " targetable" : "") + (down ? " down" : "") + (d.typeRevealed && !down ? " t-" + d.type : "")} onClick={targetable ? onClick : undefined}>
+            {targetable && kbdNum ? <span className="kbd">{kbdNum}</span> : null}
             {down ? "✓ down" : d.typeRevealed ? <b className={"dtype t-" + d.type}>{d.type}</b> : <span className="muted">???</span>}
             {!down && (
                 <span className="ds">
@@ -87,13 +88,13 @@ function DefenseChip({ d, targetable, preview, onClick }: { d: Defense; targetab
     );
 }
 
-function CardMini({ id, onClick, dim }: { id: string; onClick?: () => void; dim?: boolean }) {
+function CardMini({ id, onClick, dim, num }: { id: string; onClick?: () => void; dim?: boolean; num?: number }) {
     const def = CARDS[id];
     if (!def) return null;
     return (
         <div className={"card mini kind-" + def.kind + (onClick ? " playable" : "") + (dim ? " disabled" : "")} onClick={onClick} title={def.text}>
             <div className="chead">
-                <span className="cname">{def.name}{def.needsTarget ? <span className="muted"> ◎</span> : null}</span>
+                <span className="cname">{num ? <span className="kbd">{num}</span> : null}{def.name}{def.needsTarget ? <span className="muted"> ◎</span> : null}</span>
                 <span className="noise" style={{ color: def.noise === 0 ? "#35e0d8" : "#ffb000" }}>{def.noise === 0 ? "SILENT" : "◈" + def.noise}</span>
             </div>
             <div className="kind">{def.kind}{def.tag ? <span className={"synergy s-" + def.tag}> · {def.tag}</span> : null}</div>
@@ -146,12 +147,26 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
             if (state.outcome !== "playing" || showIntro) return;
-            if (e.key === "Enter") { e.preventDefault(); endTurn(); }
-            if (e.key === "Escape") setArmed(null);
+            if (e.key === "Enter" || e.key === " " || e.key === "e" || e.key === "E") { e.preventDefault(); endTurn(); return; }
+            if (e.key === "Escape") { setArmed(null); return; }
+            // number keys: pick a target when armed, else play the Nth hand card
+            if (e.key >= "1" && e.key <= "9") {
+                const n = parseInt(e.key, 10) - 1;
+                const opts = targetableDefenses(state);
+                if (armed) {
+                    if (n < opts.length) dispatch(armed, opts[n]);
+                    return;
+                }
+                const id = state.hand[n];
+                if (!id || !canPlay(state, id)) return;
+                if (!needsTarget(id)) dispatch(id);
+                else if (opts.length === 1) dispatch(id, opts[0]); // only one target — just play it
+                else if (opts.length > 1) { sfx.play("select"); setArmed(id); }
+            }
         };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
-    }, [state, showIntro]);
+    }, [state, showIntro, armed]);
 
     // sound: derive SFX from state transitions (fires once per commit)
     const prevRef = useRef(state);
@@ -239,7 +254,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                             <span className="lname">{l.breached ? "✓ " : isCurrent ? "▶ " : "  "}{l.name}</span>
                             <span className="defs">
                                 {l.breached ? <span className="muted">BREACHED</span> : l.defenses.map((d, di) => (
-                                    <DefenseChip key={di} d={d} targetable={isCurrent && !!armed && d.strength > 0} preview={isCurrent && armed && d.strength > 0 ? previewOnTarget(state, armed, di) : null} onClick={() => dispatch(armed!, di)} />
+                                    <DefenseChip key={di} d={d} targetable={isCurrent && !!armed && d.strength > 0} preview={isCurrent && armed && d.strength > 0 ? previewOnTarget(state, armed, di) : null} kbdNum={isCurrent && armed ? targetOpts.indexOf(di) + 1 : undefined} onClick={() => dispatch(armed!, di)} />
                                 ))}
                             </span>
                         </div>
@@ -259,9 +274,9 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
             </div>
 
             {armed ? (
-                <div className="amber armed-hint">▶ SELECT A TARGET DEFENSE — the ▸ tag shows what this card will do (Esc to cancel)</div>
+                <div className="amber armed-hint">▶ SELECT A TARGET DEFENSE — click it or press its number · the ▸ tag shows what the card will do (Esc to cancel)</div>
             ) : (
-                <div className="muted hand-legend">YOUR HAND — click to play. &nbsp; <span className="amber">◈N</span> = noise · <span className="cyan">SILENT</span> = no noise · <span className="muted">◎</span> = needs a target</div>
+                <div className="muted hand-legend">YOUR HAND — click or press <b className="kbd-inline">1</b>–<b className="kbd-inline">9</b> to play · <b className="kbd-inline">Enter</b> ends turn. &nbsp; <span className="amber">◈N</span> = noise · <span className="cyan">SILENT</span> = no noise · <span className="muted">◎</span> = needs a target</div>
             )}
 
             <div className="hand">
@@ -275,7 +290,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                     return (
                         <div key={i} className={"card kind-" + def.kind + (playable && !blocked ? "" : " disabled") + (danger ? " danger" : "") + (armed === id ? " armed" : "")} onClick={() => !blocked && onCardClick(id)} title={def.text}>
                             <div className="chead">
-                                <span className="cname">{def.name}{needsT ? <span className="muted"> ◎</span> : null}</span>
+                                <span className="cname">{i < 9 && !armed ? <span className="kbd">{i + 1}</span> : null}{def.name}{needsT ? <span className="muted"> ◎</span> : null}</span>
                                 <span className="noise" style={{ color: danger ? "#ff4141" : noise === 0 ? "#35e0d8" : "#ffb000" }}>{noise === 0 ? "SILENT" : "◈" + noise}</span>
                             </div>
                             <div className="kind">{def.kind}{def.tag ? <span className={"synergy s-" + def.tag}> · {def.tag}</span> : null}</div>
@@ -344,7 +359,7 @@ function HackerSelect({ onPick }: { onPick: (id: string) => void }) {
     );
 }
 
-function CampaignSelect({ onPick, onBack, hacker, onShowAchievements }: { onPick: (id: string, threat: number) => void; onBack: () => void; hacker: string; onShowAchievements: () => void }) {
+function CampaignSelect({ onPick, onBack, hacker, onShowAchievements, onShowFeedback }: { onPick: (id: string, threat: number) => void; onBack: () => void; hacker: string; onShowAchievements: () => void; onShowFeedback: () => void }) {
     const h = getHacker(hacker);
     const profile = loadProfile();
     const achCount = unlockedAchievements(profile).length;
@@ -354,7 +369,7 @@ function CampaignSelect({ onPick, onBack, hacker, onShowAchievements }: { onPick
 
     return (
         <div className="wrap">
-            <div className="title">BREACH{IS_DEMO && <span className="demo-badge">DEMO</span>} <span style={{ float: "right" }}><span className="deck-link" onClick={onShowAchievements} style={{ marginRight: 12 }}>🏆 Achievements {achCount}/{TOTAL_ACHIEVEMENTS}</span><MuteButton /></span></div>
+            <div className="title">BREACH{IS_DEMO && <span className="demo-badge">DEMO</span>} <span style={{ float: "right" }}><span className="deck-link" onClick={onShowFeedback} style={{ marginRight: 12 }}>💬 Feedback</span><span className="deck-link" onClick={onShowAchievements} style={{ marginRight: 12 }}>🏆 Achievements {achCount}/{TOTAL_ACHIEVEMENTS}</span><MuteButton /></span></div>
             <p className="muted">Operator: <b className="cyan">{h.glyph} {h.name}</b> · {h.passiveName} <span className="deck-link" onClick={onBack} style={{ marginLeft: 6 }}>◂ change</span>{profile.totalWins > 0 ? ` · ${profile.totalWins} contract${profile.totalWins === 1 ? "" : "s"} completed` : ""}</p>
             <hr />
             <div className="systems">
@@ -424,7 +439,81 @@ function AchievementsModal({ onClose }: { onClose: () => void }) {
                         );
                     })}
                 </div>
-                <button className="term" style={{ marginTop: 12 }} onClick={onClose}>Close</button>
+                <div className="ach-actions">
+                    <button className="term ghost tiny" onClick={() => exportProfile()} title="Download your progress as a file">⭳ Export save</button>
+                    <button className="term ghost tiny" onClick={async () => { if (await importProfile()) location.reload(); }} title="Load progress from a file (merges, never erases)">⭱ Import save</button>
+                    <button className="term" onClick={onClose}>Close</button>
+                </div>
+                <p className="muted" style={{ fontSize: 10, marginTop: 8 }}>Progress saves automatically. On Steam it syncs to the Cloud; anywhere, Export keeps a backup you can move between machines.</p>
+            </div>
+        </div>
+    );
+}
+
+function FeedbackModal({ onClose }: { onClose: () => void }) {
+    const [fun, setFun] = useState(0);
+    const [difficulty, setDifficulty] = useState("");
+    const [operator, setOperator] = useState("");
+    const [confusing, setConfusing] = useState("");
+    const [comments, setComments] = useState("");
+    const [sent, setSent] = useState<"" | "copied" | "failed">("");
+    const p = loadProfile();
+
+    const summary = () => [
+        "=== BREACH playtest feedback ===",
+        `Build: ${IS_DEMO ? "DEMO" : "FULL"}`,
+        `Contracts completed: ${p.totalWins}`,
+        `Fun: ${fun ? fun + "/5" : "—"}`,
+        `Difficulty: ${difficulty || "—"}`,
+        `Favorite operator: ${operator || "—"}`,
+        `Confusing / unclear: ${confusing.trim() || "—"}`,
+        `Other comments: ${comments.trim() || "—"}`,
+    ].join("\n");
+
+    const copy = async () => {
+        try { await navigator.clipboard.writeText(summary()); setSent("copied"); }
+        catch { setSent("failed"); }
+    };
+    const email = () => {
+        const url = `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent("BREACH playtest feedback")}&body=${encodeURIComponent(summary())}`;
+        try { window.open(url, "_blank"); } catch { /* ignore */ }
+    };
+
+    return (
+        <div className="overlay" onClick={onClose}>
+            <div className="box fb" style={{ maxWidth: 600 }} onClick={(e) => e.stopPropagation()}>
+                <h2 className="cyan">Tester feedback</h2>
+                <p className="muted" style={{ fontSize: 12, marginTop: -4 }}>Two minutes of notes genuinely shapes the game. Nothing is sent automatically — you copy it and share it however you like.</p>
+
+                <div className="fb-q"><label>How much fun was that? (1–5)</label>
+                    <div className="fb-scale">{[1, 2, 3, 4, 5].map((n) => (
+                        <button key={n} className={"fb-pip" + (fun === n ? " on" : "")} onClick={() => setFun(n)}>{n}</button>
+                    ))}</div>
+                </div>
+                <div className="fb-q"><label>Difficulty felt…</label>
+                    <div className="fb-opts">{["too easy", "about right", "too hard"].map((d) => (
+                        <button key={d} className={"fb-opt" + (difficulty === d ? " on" : "")} onClick={() => setDifficulty(d)}>{d}</button>
+                    ))}</div>
+                </div>
+                <div className="fb-q"><label>Favorite operator</label>
+                    <div className="fb-opts">{HACKER_ORDER.map((id) => (
+                        <button key={id} className={"fb-opt" + (operator === HACKERS[id].name ? " on" : "")} onClick={() => setOperator(HACKERS[id].name)}>{HACKERS[id].glyph} {HACKERS[id].name}</button>
+                    ))}</div>
+                </div>
+                <div className="fb-q"><label>Anything confusing or unclear?</label>
+                    <textarea value={confusing} onChange={(e) => setConfusing(e.target.value)} rows={2} placeholder="A card, a screen, a mechanic…" />
+                </div>
+                <div className="fb-q"><label>Anything else? (bugs, ideas, what you'd pay)</label>
+                    <textarea value={comments} onChange={(e) => setComments(e.target.value)} rows={2} placeholder="Say anything." />
+                </div>
+
+                <div className="ach-actions">
+                    <button className="term" onClick={copy}>⧉ Copy feedback</button>
+                    <button className="term ghost" onClick={email}>✉ Email it</button>
+                    <button className="term ghost tiny" onClick={onClose}>Close</button>
+                </div>
+                {sent === "copied" && <p className="cyan" style={{ fontSize: 12, marginTop: 8 }}>Copied to your clipboard — paste it into Discord, email, or the feedback thread. Thank you!</p>}
+                {sent === "failed" && <p className="amber" style={{ fontSize: 12, marginTop: 8 }}>Couldn't reach the clipboard here — use “Email it”, or select the summary manually.</p>}
             </div>
         </div>
     );
@@ -637,7 +726,7 @@ function RunView({ run, campaign, onLaunchBreach, onRun, onOpenDeck }: {
 /* ============================================================
    ENDING
    ============================================================ */
-function Ending({ run, campaign, newlyUnlocked, onRestart }: { run: RunState; campaign: Campaign; newlyUnlocked: string[]; onRestart: () => void }) {
+function Ending({ run, campaign, newlyUnlocked, onRestart, onFeedback }: { run: RunState; campaign: Campaign; newlyUnlocked: string[]; onRestart: () => void; onFeedback: () => void }) {
     const won = run.outcome === "won";
     const s = run.stats;
     const heatFrac = run.heat / run.heatMax;
@@ -683,6 +772,7 @@ function Ending({ run, campaign, newlyUnlocked, onRestart }: { run: RunState; ca
                         </>
                     )}
                     <button className="term" style={{ marginTop: 14, display: "block", marginInline: "auto" }} onClick={onRestart}>◂ {IS_DEMO ? "Play again" : "Choose another storyline"}</button>
+                    <div style={{ textAlign: "center", marginTop: 10 }}><span className="deck-link" onClick={onFeedback}>💬 Share feedback on this run</span></div>
                 </div>
             </div>
         </div>
@@ -700,6 +790,7 @@ export function App() {
     const [reward, setReward] = useState<{ kind: "card" | "implant"; options: string[] } | null>(null);
     const [showDeck, setShowDeck] = useState(false);
     const [showAchievements, setShowAchievements] = useState(false);
+    const [showFeedback, setShowFeedback] = useState(false);
     const [endAchievements, setEndAchievements] = useState<string[]>([]);
 
     const campaign = run ? getCampaign(run.campaignId) : null;
@@ -753,13 +844,24 @@ export function App() {
         if (id && run && reward) setRun(reward.kind === "implant" ? addImplant(run, id) : addCard(run, id));
         setReward(null);
     };
+    // keyboard: pick a reward with number keys, skip with Esc/0
+    useEffect(() => {
+        if (!reward) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === "Escape" || e.key === "0") { takeReward(null); return; }
+            if (e.key >= "1" && e.key <= "9") { const n = parseInt(e.key, 10) - 1; if (n < reward.options.length) takeReward(reward.options[n]); }
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [reward]); // eslint-disable-line react-hooks/exhaustive-deps
 
     if (mode === "hacker") return <HackerSelect onPick={pickHacker} />;
 
     if (mode === "campaign" || !run || !campaign) return (
         <>
-            <CampaignSelect onPick={startCampaign} onBack={() => setMode("hacker")} hacker={hackerId} onShowAchievements={() => setShowAchievements(true)} />
+            <CampaignSelect onPick={startCampaign} onBack={() => setMode("hacker")} hacker={hackerId} onShowAchievements={() => setShowAchievements(true)} onShowFeedback={() => setShowFeedback(true)} />
             {showAchievements && <AchievementsModal onClose={() => setShowAchievements(false)} />}
+            {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
         </>
     );
 
@@ -767,7 +869,12 @@ export function App() {
         return <Breach systemKey={activeNode.systemKey || "homeServer"} systemTitle={activeNode.title} deck={run.deck} modifier={getModifier(run.mods[activeNode.id])} hunt={huntPressure(run.heat, run.heatMax, threatEffects(run.threat).huntOffset)} implants={run.implants} threat={run.threat} hackerId={run.hackerId} onComplete={onBreachComplete} />;
     }
 
-    if (mode === "ending") return <Ending run={run} campaign={campaign} newlyUnlocked={endAchievements} onRestart={() => { setMode("campaign"); setRun(null); }} />;
+    if (mode === "ending") return (
+        <>
+            <Ending run={run} campaign={campaign} newlyUnlocked={endAchievements} onRestart={() => { setMode("campaign"); setRun(null); }} onFeedback={() => setShowFeedback(true)} />
+            {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
+        </>
+    );
 
     // run mode — the map, plus reward / deck / transmission overlays
     return (
@@ -778,9 +885,10 @@ export function App() {
                     <div className="box" style={{ maxWidth: 660 }}>
                         <h2 className="cyan">{reward.kind === "implant" ? "SALVAGE — install cyberware" : "JOB PAID — pick up a new tool"}</h2>
                         {reward.kind === "implant" && <p className="muted" style={{ marginTop: -4 }}>Passive. Applies to every breach for the rest of the run.</p>}
+                        <p className="muted" style={{ fontSize: 11, marginTop: -2 }}>Click, or press <b className="kbd-inline">1</b>–<b className="kbd-inline">{reward.options.length}</b> to pick · <b className="kbd-inline">Esc</b> to skip.</p>
                         <div className="card-choices">{reward.options.map((id, i) => reward.kind === "implant"
-                            ? <ImplantCard key={i} id={id} onClick={() => takeReward(id)} />
-                            : <CardMini key={i} id={id} onClick={() => takeReward(id)} />)}</div>
+                            ? <ImplantCard key={i} id={id} num={i + 1} onClick={() => takeReward(id)} />
+                            : <CardMini key={i} id={id} num={i + 1} onClick={() => takeReward(id)} />)}</div>
                         <button className="term ghost" onClick={() => takeReward(null)}>{reward.kind === "implant" ? "Skip — stay unmodified" : "Skip — keep the deck lean"}</button>
                     </div>
                 </div>
