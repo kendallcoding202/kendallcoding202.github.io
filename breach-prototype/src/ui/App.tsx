@@ -16,6 +16,7 @@ import { IMPLANTS, IMPLANT_ORDER, getImplant, aggregateImplants, combineLoadouts
 import { HACKERS, HACKER_ORDER, getHacker } from "../engine/hackers.ts";
 import { threatEffects, threatLabel, THREAT_STEPS, MAX_THREAT } from "../engine/threat.ts";
 import { recordWin, isCampaignUnlocked, availableThreat, maxThreatCleared, campaignRequirement, loadProfile } from "./meta.ts";
+import { IS_DEMO, STEAM_URL, demoOperatorUnlocked, demoCampaignUnlocked } from "./demo.ts";
 import { sfx } from "./audio.ts";
 import { createInitialState, applyAction, canPlay, projectedNoise, needsTarget, targetableDefenses, previewOnTarget } from "../engine/engine.ts";
 import { createRun, currentOptions, atFinale, isTerminal, resolveBreach, resolveEvent, resolveSafehouse, addCard, addImplant, removeCard, getCampaign, getNode, clearTransmission, huntPressure } from "../engine/run.ts";
@@ -319,20 +320,21 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
 function HackerSelect({ onPick }: { onPick: (id: string) => void }) {
     return (
         <div className="wrap">
-            <div className="title">BREACH <span style={{ float: "right" }}><MuteButton /></span></div>
+            <div className="title">BREACH{IS_DEMO && <span className="demo-badge">DEMO</span>} <span style={{ float: "right" }}><MuteButton /></span></div>
             <p className="muted">Choose your operator. Each runs a different starting deck and a signature passive — a completely different way to break in.</p>
             <hr />
             <div className="hackers">
                 {HACKER_ORDER.map((id) => {
                     const h = HACKERS[id];
+                    const locked = !demoOperatorUnlocked(id);
                     return (
-                        <div className="hackercard" key={id} onClick={() => onPick(id)}>
+                        <div className={"hackercard" + (locked ? " locked" : "")} key={id} onClick={() => !locked && onPick(id)}>
                             <div className="hhead"><span className="hglyph">{h.glyph}</span><span className="hname">{h.name}</span></div>
                             <div className="hstyle cyan">{h.style}</div>
                             <div className="hbio">{h.bio}</div>
                             <div className="hpassive"><span className="amber">◆ {h.passiveName}</span> — {h.passiveBlurb}</div>
                             <div className="hquote muted">“{h.quote}”</div>
-                            <button className="term">Jack in ▸</button>
+                            {locked ? <div className="lockbox">🔒 In the full game</div> : <button className="term">Jack in ▸</button>}
                         </div>
                     );
                 })}
@@ -350,7 +352,7 @@ function CampaignSelect({ onPick, onBack, hacker }: { onPick: (id: string, threa
 
     return (
         <div className="wrap">
-            <div className="title">BREACH <span style={{ float: "right" }}><MuteButton /></span></div>
+            <div className="title">BREACH{IS_DEMO && <span className="demo-badge">DEMO</span>} <span style={{ float: "right" }}><MuteButton /></span></div>
             <p className="muted">Operator: <b className="cyan">{h.glyph} {h.name}</b> · {h.passiveName} <span className="deck-link" onClick={onBack} style={{ marginLeft: 6 }}>◂ change</span>{profile.totalWins > 0 ? ` · ${profile.totalWins} contract${profile.totalWins === 1 ? "" : "s"} completed` : ""}</p>
             <hr />
             <div className="systems">
@@ -358,8 +360,12 @@ function CampaignSelect({ onPick, onBack, hacker }: { onPick: (id: string, threa
                     const c = CAMPAIGNS[id];
                     const depth = Math.max(...c.map.map((n) => n.col)) + 1;
                     const length = depth <= 3 ? "SHORT" : depth >= 6 ? "LONG" : "MEDIUM";
-                    const unlocked = isCampaignUnlocked(id, profile);
-                    const avail = availableThreat(id, profile);
+                    const demoLocked = !demoCampaignUnlocked(id);
+                    // in the demo the one featured campaign is always open (ignore the
+                    // full-game win-gate); everything else is a locked full-game tease.
+                    const unlocked = IS_DEMO ? !demoLocked : isCampaignUnlocked(id, profile);
+                    // the demo runs at Threat 0 only — the ascension ladder is a full-game hook
+                    const avail = IS_DEMO ? 0 : availableThreat(id, profile);
                     const cleared = maxThreatCleared(id, profile);
                     const t = Math.min(threats[id] ?? 0, avail);
                     return (
@@ -381,13 +387,17 @@ function CampaignSelect({ onPick, onBack, hacker }: { onPick: (id: string, threa
                                     <button className="term" onClick={() => onPick(id, t)}>Begin ▸</button>
                                 </>
                             ) : (
-                                <div className="lockbox">🔒 Complete {campaignRequirement(id)} contract{campaignRequirement(id) === 1 ? "" : "s"} to unlock</div>
+                                <div className="lockbox">🔒 {demoLocked ? "In the full game" : `Complete ${campaignRequirement(id)} contract${campaignRequirement(id) === 1 ? "" : "s"} to unlock`}</div>
                             )}
                         </div>
                     );
                 })}
             </div>
-            <p className="muted" style={{ fontSize: 11, marginTop: 12 }}>Complete a storyline to raise its <b className="amber">Threat Level</b> — each one stacks a new twist, all the way to Threat {MAX_THREAT}. Progress is saved.</p>
+            {IS_DEMO ? (
+                <p className="muted" style={{ fontSize: 11, marginTop: 12 }}>This is the <b className="amber">free demo</b>. The full game adds 3 more campaigns, 2 more operators, collectible implants, and a 10-level <b className="amber">Threat Level</b> ascension ladder.</p>
+            ) : (
+                <p className="muted" style={{ fontSize: 11, marginTop: 12 }}>Complete a storyline to raise its <b className="amber">Threat Level</b> — each one stacks a new twist, all the way to Threat {MAX_THREAT}. Progress is saved.</p>
+            )}
         </div>
     );
 }
@@ -625,9 +635,19 @@ function Ending({ run, campaign, onRestart }: { run: RunState; campaign: Campaig
                         {run.implants.length > 0 && <div className="rs-row"><span>Implants installed</span><b>{run.implants.length}</b></div>}
                     </div>
                     <p className="muted" style={{ fontSize: 12, fontStyle: "italic", marginTop: 8 }}>{verdict}</p>
-                    {won && run.threat < MAX_THREAT && <p className="amber" style={{ fontSize: 13, textAlign: "center", marginTop: 6 }}>▲ THREAT {run.threat + 1} unlocked for {campaign.name}.</p>}
-                    {won && run.threat >= MAX_THREAT && <p className="cyan" style={{ fontSize: 13, textAlign: "center", marginTop: 6 }}>★ You cleared the maximum Threat. You've mastered this contract.</p>}
-                    <button className="term" style={{ marginTop: 14, display: "block", marginInline: "auto" }} onClick={onRestart}>◂ Choose another storyline</button>
+                    {IS_DEMO ? (
+                        <div className="demo-cta">
+                            <p className="cyan" style={{ textAlign: "center", fontWeight: "bold", marginBottom: 4 }}>{won ? "That's the demo." : "Want another shot? That's the demo."}</p>
+                            <p className="muted" style={{ fontSize: 12, textAlign: "center" }}>The full game: 4 operators, 4 campaigns (short to long), collectible implants, and a 10-level Threat ascension ladder.</p>
+                            <a className="term wishlist" href={STEAM_URL} target="_blank" rel="noreferrer" style={{ marginTop: 10, display: "block", textAlign: "center" }}>★ Wishlist BREACH on Steam</a>
+                        </div>
+                    ) : (
+                        <>
+                            {won && run.threat < MAX_THREAT && <p className="amber" style={{ fontSize: 13, textAlign: "center", marginTop: 6 }}>▲ THREAT {run.threat + 1} unlocked for {campaign.name}.</p>}
+                            {won && run.threat >= MAX_THREAT && <p className="cyan" style={{ fontSize: 13, textAlign: "center", marginTop: 6 }}>★ You cleared the maximum Threat. You've mastered this contract.</p>}
+                        </>
+                    )}
+                    <button className="term" style={{ marginTop: 14, display: "block", marginInline: "auto" }} onClick={onRestart}>◂ {IS_DEMO ? "Play again" : "Choose another storyline"}</button>
                 </div>
             </div>
         </div>

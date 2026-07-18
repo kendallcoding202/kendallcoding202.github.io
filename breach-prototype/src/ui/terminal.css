@@ -134,6 +134,24 @@ hr { border: none; border-top: 1px solid var(--line); margin: 7px 0; }
 .hackercard .hpassive .amber { font-weight: bold; }
 .hackercard .hquote { font-size: 12px; font-style: italic; margin-top: 8px; }
 .hackercard .term { margin-top: 12px; width: 100%; }
+.hackercard.locked { opacity: 0.66; cursor: default; }
+.hackercard.locked:hover { border-color: var(--line); box-shadow: none; transform: none; }
+.hackercard.locked .hname, .hackercard.locked .hbio { filter: grayscale(0.5); }
+.hackercard.locked .lockbox { margin-top: 12px; }
+
+/* ---- demo build chrome ---- */
+.demo-badge {
+    font-size: 11px; letter-spacing: 2px; font-weight: bold; color: var(--bg);
+    background: var(--amber); padding: 1px 7px; border-radius: 3px; vertical-align: middle;
+    margin-left: 8px;
+}
+.demo-cta { margin-top: 12px; padding: 12px; border: 1px solid var(--cyan); background: #0bf5d40e; }
+.demo-cta p { margin: 2px 0; }
+.term.wishlist {
+    background: var(--amber); color: var(--bg); border-color: var(--amber);
+    font-weight: bold; letter-spacing: 1px; text-decoration: none; padding: 9px;
+}
+.term.wishlist:hover { filter: brightness(1.12); }
 
 /* system select */
 .systems { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin-top: 16px; }

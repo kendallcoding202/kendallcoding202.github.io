@@ -6,13 +6,16 @@
     "description": "A roguelike deckbuilder where you breach reactive computer systems — quiet-and-clever vs. loud-and-caught.",
     "scripts": {
         "dev": "vite",
+        "dev:demo": "VITE_DEMO=1 vite",
         "build": "vite build",
+        "build:demo": "VITE_DEMO=1 vite build --outDir dist-demo",
         "preview": "vite preview",
         "sim": "node --experimental-strip-types src/engine/sim.ts",
         "typecheck": "tsc --noEmit",
         "tauri": "tauri",
         "desktop": "tauri dev",
-        "desktop:build": "tauri build"
+        "desktop:build": "tauri build",
+        "desktop:demo": "VITE_DEMO=1 tauri build"
     },
     "dependencies": {
         "react": "^18.3.1",
