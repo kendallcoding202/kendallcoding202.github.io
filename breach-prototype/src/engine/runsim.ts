@@ -402,7 +402,7 @@ for (const id of CAMPAIGN_ORDER) {
     const t2 = threatEffects(2);
     check("Threat 2 hardens defenses & cuts headroom", t2.strengthDelta === 1 && t2.heatMaxMul < 1);
     const t10 = threatEffects(10);
-    check("Threat scales to the top", t10.strengthDelta === 3 && t10.creepDelta === 2 && t10.leanRewards);
+    check("Threat scales to the top", t10.strengthDelta === 2 && t10.creepDelta === 1 && t10.leanRewards);
     check("Threat clamps at MAX", threatEffects(99).strengthDelta === threatEffects(MAX_THREAT).strengthDelta);
 
     // run creation
@@ -454,14 +454,14 @@ for (const id of CAMPAIGN_ORDER) {
     t = applyAction(t, { type: "playCard", card: "knownExploit", target: 0 }); // 4 + 1
     check("TORCH: exploits hit +1", ts - t.layers[0].defenses[0].strength === 5);
 
-    // HEX — Necrosis: logic bombs tick +1 (system idle at low detection, so no patch)
+    // HEX — Necrosis: logic bombs tick +2 (system idle at low detection, so no patch)
     let hx = createInitialState(2, "smallBusiness", ["logicBomb"], null, null, combineLoadouts(HACKERS.hex.passive));
     hx.layers[0].defenses[0].typeRevealed = true; hx.layers[0].defenses[0].strength = 30; hx.layers[0].defenses[0].maxStrength = 30;
     hx.hand = ["logicBomb"];
     hx = applyAction(hx, { type: "playCard", card: "logicBomb", target: 0 });
     const hs = hx.layers[0].defenses[0].strength;
-    hx = applyAction(hx, { type: "endTurn" }); // tick: 3 + 1 = 4
-    check("HEX: bombs tick +1 harder", hs - hx.layers[0].defenses[0].strength === 4);
+    hx = applyAction(hx, { type: "endTurn" }); // tick: 3 + 2 = 5
+    check("HEX: bombs tick +2 harder", hs - hx.layers[0].defenses[0].strength === 5);
 
     // WRAITH — Ghostwalk (first card silent); BYTE — Caffeine (+1 hand)
     check("WRAITH: first card is silent", createInitialState(3, "homeServer", undefined, null, null, combineLoadouts(HACKERS.wraith.passive)).firstCardSilent === true);

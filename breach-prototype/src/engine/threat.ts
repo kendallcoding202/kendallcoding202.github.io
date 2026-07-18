@@ -19,19 +19,23 @@ export interface ThreatEffects {
     leanRewards: boolean; // fewer reward options
 }
 
-/** What each level ADDS on top of the previous one (for the UI). */
+/** What each level ADDS on top of the previous one (for the UI).
+    The ladder squeezes the HEAT economy first — less headroom, a warmer
+    start, an earlier watcher — and lets the (gradual) hunt system supply the
+    on-breach escalation, rather than flatly bombing every breach with creep
+    and strength. That keeps T0→T10 a smooth climb instead of a wall at T5. */
 export const THREAT_STEPS: string[] = [
     "", // T0 — base game
-    "The trace runs hotter — 8% less Heat headroom.",
+    "The trace runs hotter — 6% less Heat headroom.",
     "Targets are hardened — every defense +1 Strength.",
-    "Leaner salvage — one fewer reward option.",
-    "The watcher wakes early — its pressure hits 12% sooner.",
-    "Faster trace — every breach climbs +1 per turn.",
+    "Leaner salvage — one fewer reward option, and the watcher stirs early.",
+    "Less room to breathe — another 5% less Heat headroom.",
+    "You start warm — begin each run already at 5% Heat.",
+    "Tighter breaches — 5% less room before lockout.",
+    "Relentless watcher — its pressure hits 7% sooner.",
     "Harder targets — every defense +1 (total +2).",
-    "You start warm — begin each run at 15% Heat.",
-    "Tighter breaches — 6% less room before lockout.",
-    "Relentless watcher — pressure hits another 10% sooner.",
-    "The gauntlet — defenses +1 (total +3) and trace +1 (total +2).",
+    "The net tightens — less headroom and a warmer start (10% Heat).",
+    "The gauntlet — the trace climbs +1 per turn and breaches tighten further.",
 ];
 
 /** Compute the cumulative effects for Threat Level `level` (0..MAX_THREAT). */
@@ -43,16 +47,16 @@ export function threatEffects(level: number): ThreatEffects {
     const n = Math.max(0, Math.min(MAX_THREAT, Math.floor(level)));
     for (let l = 1; l <= n; l++) {
         switch (l) {
-            case 1: eff.heatMaxMul -= 0.08; break;
+            case 1: eff.heatMaxMul -= 0.06; break;
             case 2: eff.strengthDelta += 1; break;
-            case 3: eff.leanRewards = true; break;
-            case 4: eff.huntOffset += 0.12; break;
-            case 5: eff.creepDelta += 1; break;
-            case 6: eff.strengthDelta += 1; break;
-            case 7: eff.startHeatFrac += 0.15; break;
-            case 8: eff.detectionMaxMul -= 0.06; break;
-            case 9: eff.huntOffset += 0.10; break;
-            case 10: eff.strengthDelta += 1; eff.creepDelta += 1; break;
+            case 3: eff.leanRewards = true; eff.huntOffset += 0.06; break;
+            case 4: eff.heatMaxMul -= 0.05; break;
+            case 5: eff.startHeatFrac += 0.05; break;
+            case 6: eff.detectionMaxMul -= 0.05; break;
+            case 7: eff.huntOffset += 0.07; break;
+            case 8: eff.strengthDelta += 1; break;
+            case 9: eff.heatMaxMul -= 0.05; eff.startHeatFrac += 0.05; break;
+            case 10: eff.creepDelta += 1; eff.detectionMaxMul -= 0.04; break;
         }
     }
     return eff;

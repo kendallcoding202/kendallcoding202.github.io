@@ -38,7 +38,10 @@ const HACKER_LIST: Hacker[] = [
         passiveName: "Ghostwalk",
         passiveBlurb: "The first card you play each turn makes no noise.",
         passive: { firstCardSilent: true },
-        deck: [...BASE, "goDark", "coverTracks", "misdirect", "proxyChain", "feint", "spoof", "rootkit", "ghostProtocol", "blindSpot", "precisionStrike", "enumerate", "firewallBypass", "idsEvasion", "privEsc", "patchScanner", "zeroDay"],
+        // A true stealth kit: heavy on evasion, light on raw firepower. WRAITH
+        // stays invisible but must DRAFT the muscle to crack the deep systems —
+        // it can't out-remove a Black Site on its starter alone.
+        deck: [...BASE, "goDark", "coverTracks", "misdirect", "proxyChain", "feint", "spoof", "rootkit", "ghostProtocol", "blindSpot", "enumerate", "firewallBypass", "idsEvasion", "zeroDay"],
     },
     {
         id: "torch",
@@ -49,8 +52,11 @@ const HACKER_LIST: Hacker[] = [
         bio: "Dares the trace to keep up. Loud, fast, and hits like a freight train — subtlety is for people who lose. Manages the noise by simply moving faster than the alarm.",
         quote: "Knock knock.",
         passiveName: "Live Wire",
-        passiveBlurb: "Every exploit you play hits +1 harder.",
-        passive: { exploitFlatBonus: 1 },
+        passiveBlurb: "Every exploit hits +1 harder — and you move so fast the alarm lags: every card makes 1 less noise.",
+        // The loud operator was drowning in its own detection. Live Wire now
+        // also shaves noise, so brute force stays survivable deep in — TORCH
+        // outruns the trace instead of getting buried by it.
+        passive: { exploitFlatBonus: 1, noiseReduction: 1 },
         deck: [...BASE, "bruteForce", "bruteForce", "overload", "overload", "empBurst", "momentum", "cascade", "firewallBypass", "idsEvasion", "sqlInjection", "goDark", "automate", "killSwitch", "precisionStrike", "knownExploit", "zeroDay"],
     },
     {
@@ -62,8 +68,12 @@ const HACKER_LIST: Hacker[] = [
         bio: "Doesn't break systems — infects them. Plants quiet rot and walks away while the target decays from within. Patience is the weapon; the kill happens on a timer.",
         quote: "Let it spread.",
         passiveName: "Necrosis",
-        passiveBlurb: "Your logic bombs tick +1 harder.",
-        passive: { bombBonus: 1 },
+        passiveBlurb: "Your logic bombs tick +2 harder — and breaching a layer draws a card, so the rot keeps pace.",
+        // Necrosis was too marginal: the slow-decay style fell behind in short
+        // runs (no time to tick) and long ones (heat outpaced it). +2 per tick
+        // makes bombs a real payoff, and the breach-draw gives HEX the velocity
+        // its patient plan needs.
+        passive: { bombBonus: 2, breachDraw: true },
         deck: [...BASE, "logicBomb", "logicBomb", "contagion", "detonate", "trojan", "backdoor", "goDark", "coverTracks", "enumerate", "firewallBypass", "idsEvasion", "momentum", "analyze", "proxyChain", "patchScanner", "zeroDay"],
     },
     {
@@ -77,7 +87,10 @@ const HACKER_LIST: Hacker[] = [
         passiveName: "Caffeine",
         passiveBlurb: "Draw one extra card every turn.",
         passive: { handSize: 1 },
-        deck: [...BASE, "automate", "automate", "dataSiphon", "cascade", "chainReaction", "overclock", "packetSniffer", "spoof", "coverTracks", "firewallBypass", "idsEvasion", "momentum", "precisionStrike", "knownExploit", "zeroDay"],
+        // The extra card already makes BYTE the most consistent operator, so its
+        // starter runs leaner on premium removal — the engine is the payoff, not
+        // a stacked toolkit. Draft the finishers you want.
+        deck: [...BASE, "automate", "automate", "dataSiphon", "cascade", "chainReaction", "overclock", "packetSniffer", "spoof", "coverTracks", "firewallBypass", "idsEvasion", "momentum", "zeroDay"],
     },
 ];
 
