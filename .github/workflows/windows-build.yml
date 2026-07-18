@@ -1,0 +1,75 @@
+# Builds the BREACH Windows desktop binaries (full game + free demo) with Tauri.
+# Windows runners already have WebView2, so no system deps are needed (unlike Linux).
+# Run it manually from the Actions tab, or it fires automatically on a v* tag.
+name: Windows desktop build
+
+on:
+  workflow_dispatch: {}       # manual: Actions tab → "Run workflow"
+  push:
+    tags: ["v*"]              # e.g. push tag v0.1.0 to cut builds
+
+permissions:
+  contents: read
+
+concurrency:
+  group: win-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: full          # the full game
+            demo: ""
+          - name: demo          # the free demo (VITE_DEMO=1)
+            demo: "1"
+    defaults:
+      run:
+        working-directory: breach-prototype
+    env:
+      VITE_DEMO: ${{ matrix.demo }}   # Vite bakes this in; empty = full game
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: breach-prototype/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: breach-prototype/src-tauri
+
+      - name: Install JS deps
+        run: npm ci
+
+      # `tauri build` runs the frontend build (npm run build) first, then bundles
+      # the Windows installer + a standalone BREACH.exe.
+      - name: Build (${{ matrix.name }})
+        run: npm run tauri build
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: breach-windows-${{ matrix.name }}
+          if-no-files-found: warn
+          path: |
+            breach-prototype/src-tauri/target/release/bundle/nsis/*
+            breach-prototype/src-tauri/target/release/bundle/msi/*
+
+      # The raw, self-contained exe is what Steam ships as depot content
+      # (Steam launches the exe directly — it does not run installers).
+      # Glob *.exe because the binary may be BREACH.exe or breach.exe depending
+      # on Tauri's rename step — the first real run tells you which.
+      - name: Upload standalone exe (for SteamPipe depot)
+        uses: actions/upload-artifact@v4
+        with:
+          name: breach-exe-${{ matrix.name }}
+          if-no-files-found: warn
+          path: breach-prototype/src-tauri/target/release/*.exe
