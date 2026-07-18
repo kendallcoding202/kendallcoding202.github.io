@@ -167,11 +167,13 @@ export interface GameState {
     turnNoise: number; // noise made from cards THIS turn (resets each turn)
     cardsThisTurn: number; // total cards played this turn (for chain/combo payoffs)
     silentThisTurn: number; // cards played that made ZERO noise this turn (for ghost payoffs)
-    // passive implant effects (installed for the whole run)
+    // passive effects (installed implants + operator passive, for the whole run)
     noiseReduction: number; // every card makes this much less noise
     breachDraw: boolean; // draw a card whenever you breach a layer
     reconDraw: boolean; // recon cards also draw a card
     firstCardSilent: boolean; // the first card each turn makes no noise
+    exploitFlatBonus: number; // every exploit deals +N (persistent, not consumed)
+    bombBonus: number; // logic bombs tick +N harder
 
     // stealth / persistence flags
     proxyCharges: number; // Proxy Chain: reduce noise on the next N cards
@@ -291,6 +293,7 @@ export interface RunStats {
 
 export interface RunState {
     campaignId: string;
+    hackerId: string; // the operator you're playing (starting deck + passive)
     threat: number; // ascension level — stacks escalating difficulty
     seed: number; // deterministic seed for this run's rolled modifiers
     heat: number;

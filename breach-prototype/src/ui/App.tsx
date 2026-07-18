@@ -12,7 +12,8 @@ import { CARDS } from "../engine/cards.ts";
 import { SYSTEMS } from "../engine/systems.ts";
 import { CAMPAIGNS, CAMPAIGN_ORDER, REWARD_POOL } from "../engine/campaigns.ts";
 import { getModifier } from "../engine/modifiers.ts";
-import { IMPLANTS, IMPLANT_ORDER, getImplant, aggregateImplants } from "../engine/implants.ts";
+import { IMPLANTS, IMPLANT_ORDER, getImplant, aggregateImplants, combineLoadouts } from "../engine/implants.ts";
+import { HACKERS, HACKER_ORDER, getHacker } from "../engine/hackers.ts";
 import { threatEffects, threatLabel, THREAT_STEPS, MAX_THREAT } from "../engine/threat.ts";
 import { recordWin, isCampaignUnlocked, availableThreat, maxThreatCleared, campaignRequirement, loadProfile } from "./meta.ts";
 import { sfx } from "./audio.ts";
@@ -130,8 +131,9 @@ function Transmission({ name, text, onClose }: { name: string; text: string; onC
 /* ============================================================
    BREACH SCREEN (one job)
    ============================================================ */
-function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat, onComplete }: { systemKey: string; systemTitle: string; deck: string[]; modifier?: SystemModifier | null; hunt?: HuntPressure | null; implants?: string[]; threat?: number; onComplete: (r: BreachResult) => void }) {
-    const [state, setState] = useState<GameState>(() => createInitialState(newSeed(), systemKey, deck, modifier, hunt, aggregateImplants(implants || []), threatEffects(threat || 0)));
+function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat, hackerId, onComplete }: { systemKey: string; systemTitle: string; deck: string[]; modifier?: SystemModifier | null; hunt?: HuntPressure | null; implants?: string[]; threat?: number; hackerId?: string; onComplete: (r: BreachResult) => void }) {
+    const hacker = getHacker(hackerId || "wraith");
+    const [state, setState] = useState<GameState>(() => createInitialState(newSeed(), systemKey, deck, modifier, hunt, combineLoadouts(hacker.passive, aggregateImplants(implants || [])), threatEffects(threat || 0)));
     const [armed, setArmed] = useState<string | null>(null);
     const [showIntro, setShowIntro] = useState(() => { try { return localStorage.getItem("breach_seen_intro") !== "1"; } catch { return true; } });
     const closeIntro = () => { setShowIntro(false); try { localStorage.setItem("breach_seen_intro", "1"); } catch { /* ignore */ } };
@@ -201,9 +203,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                     <span className="modblurb">{state.huntBlurb}</span>
                 </div>
             )}
-            {implants && implants.length > 0 && (
-                <div className="implant-strip muted">◆ implants: {implants.map((id) => IMPLANTS[id] && IMPLANTS[id].name).filter(Boolean).join(" · ")}</div>
-            )}
+            <div className="implant-strip muted">{hacker.glyph} <b>{hacker.name}</b> · <span className="cyan">{hacker.passiveName}</span>{implants && implants.length > 0 ? " · ◆ " + implants.map((id) => IMPLANTS[id] && IMPLANTS[id].name).filter(Boolean).join(" · ") : ""}</div>
             <hr />
 
             <div className="meter-label">
@@ -313,7 +313,36 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
 /* ============================================================
    CAMPAIGN SELECT
    ============================================================ */
-function CampaignSelect({ onPick }: { onPick: (id: string, threat: number) => void }) {
+/* ============================================================
+   OPERATOR SELECT — choose your hacker
+   ============================================================ */
+function HackerSelect({ onPick }: { onPick: (id: string) => void }) {
+    return (
+        <div className="wrap">
+            <div className="title">BREACH <span style={{ float: "right" }}><MuteButton /></span></div>
+            <p className="muted">Choose your operator. Each runs a different starting deck and a signature passive — a completely different way to break in.</p>
+            <hr />
+            <div className="hackers">
+                {HACKER_ORDER.map((id) => {
+                    const h = HACKERS[id];
+                    return (
+                        <div className="hackercard" key={id} onClick={() => onPick(id)}>
+                            <div className="hhead"><span className="hglyph">{h.glyph}</span><span className="hname">{h.name}</span></div>
+                            <div className="hstyle cyan">{h.style}</div>
+                            <div className="hbio">{h.bio}</div>
+                            <div className="hpassive"><span className="amber">◆ {h.passiveName}</span> — {h.passiveBlurb}</div>
+                            <div className="hquote muted">“{h.quote}”</div>
+                            <button className="term">Jack in ▸</button>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+function CampaignSelect({ onPick, onBack, hacker }: { onPick: (id: string, threat: number) => void; onBack: () => void; hacker: string }) {
+    const h = getHacker(hacker);
     const profile = loadProfile();
     const [threats, setThreats] = useState<Record<string, number>>(() =>
         Object.fromEntries(CAMPAIGN_ORDER.map((id) => [id, availableThreat(id, profile)])));
@@ -322,7 +351,7 @@ function CampaignSelect({ onPick }: { onPick: (id: string, threat: number) => vo
     return (
         <div className="wrap">
             <div className="title">BREACH <span style={{ float: "right" }}><MuteButton /></span></div>
-            <p className="muted">A hacking roguelike. Choose a storyline — a branching map of breaches, a rising trace, and a deck you build as you go.{profile.totalWins > 0 ? ` · ${profile.totalWins} contract${profile.totalWins === 1 ? "" : "s"} completed` : ""}</p>
+            <p className="muted">Operator: <b className="cyan">{h.glyph} {h.name}</b> · {h.passiveName} <span className="deck-link" onClick={onBack} style={{ marginLeft: 6 }}>◂ change</span>{profile.totalWins > 0 ? ` · ${profile.totalWins} contract${profile.totalWins === 1 ? "" : "s"} completed` : ""}</p>
             <hr />
             <div className="systems">
                 {CAMPAIGN_ORDER.map((id) => {
@@ -502,6 +531,7 @@ function RunView({ run, campaign, onLaunchBreach, onRun, onOpenDeck }: {
         <div className="wrap">
             <div className="title">{campaign.name} <span className="sub">// {finale ? "the final job" : "choose your route"}</span>{run.threat > 0 ? <span className="threatbadge"> ⚠ THREAT {run.threat}</span> : null}</div>
             <div className="run-stats">
+                <span className="cyan">{getHacker(run.hackerId).glyph} {getHacker(run.hackerId).name}</span>
                 <span>💾 <b className="gold">{run.credits}</b>cr</span>
                 <span className="deck-link" onClick={onOpenDeck}>🃏 deck: <b>{run.deck.length}</b> ▸</span>
                 <span className="muted">jobs pulled: {run.jobsDone}</span>
@@ -608,7 +638,8 @@ function Ending({ run, campaign, onRestart }: { run: RunState; campaign: Campaig
    APP — mode machine
    ============================================================ */
 export function App() {
-    const [mode, setMode] = useState<"campaign" | "run" | "breach" | "ending">("campaign");
+    const [mode, setMode] = useState<"hacker" | "campaign" | "run" | "breach" | "ending">("hacker");
+    const [hackerId, setHackerId] = useState<string>("wraith");
     const [run, setRun] = useState<RunState | null>(null);
     const [activeNode, setActiveNode] = useState<MapNode | null>(null);
     const [reward, setReward] = useState<{ kind: "card" | "implant"; options: string[] } | null>(null);
@@ -616,7 +647,8 @@ export function App() {
 
     const campaign = run ? getCampaign(run.campaignId) : null;
 
-    const startCampaign = (id: string, threat = 0) => { setRun(createRun(id, newSeed(), threat)); setActiveNode(null); setReward(null); setMode("run"); };
+    const pickHacker = (id: string) => { setHackerId(id); setMode("campaign"); };
+    const startCampaign = (id: string, threat = 0) => { setRun(createRun(id, newSeed(), threat, hackerId)); setActiveNode(null); setReward(null); setMode("run"); };
     const launchBreach = (n: MapNode) => { setActiveNode(n); setMode("breach"); };
 
     const onBreachComplete = (result: BreachResult) => {
@@ -645,10 +677,12 @@ export function App() {
         setReward(null);
     };
 
-    if (mode === "campaign" || !run || !campaign) return <CampaignSelect onPick={startCampaign} />;
+    if (mode === "hacker") return <HackerSelect onPick={pickHacker} />;
+
+    if (mode === "campaign" || !run || !campaign) return <CampaignSelect onPick={startCampaign} onBack={() => setMode("hacker")} hacker={hackerId} />;
 
     if (mode === "breach" && activeNode) {
-        return <Breach systemKey={activeNode.systemKey || "homeServer"} systemTitle={activeNode.title} deck={run.deck} modifier={getModifier(run.mods[activeNode.id])} hunt={huntPressure(run.heat, run.heatMax, threatEffects(run.threat).huntOffset)} implants={run.implants} threat={run.threat} onComplete={onBreachComplete} />;
+        return <Breach systemKey={activeNode.systemKey || "homeServer"} systemTitle={activeNode.title} deck={run.deck} modifier={getModifier(run.mods[activeNode.id])} hunt={huntPressure(run.heat, run.heatMax, threatEffects(run.threat).huntOffset)} implants={run.implants} threat={run.threat} hackerId={run.hackerId} onComplete={onBreachComplete} />;
     }
 
     if (mode === "ending") return <Ending run={run} campaign={campaign} onRestart={() => { setMode("campaign"); setRun(null); }} />;

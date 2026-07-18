@@ -57,6 +57,8 @@ export function createInitialState(seed: number, systemKey: string = DEFAULT_SYS
         breachDraw: !!im?.breachDraw,
         reconDraw: !!im?.reconDraw,
         firstCardSilent: !!im?.firstCardSilent,
+        exploitFlatBonus: im?.exploitFlatBonus || 0,
+        bombBonus: im?.bombBonus || 0,
         proxyCharges: 0,
         rootkitReady: false,
         spoofTurns: 0,
@@ -251,7 +253,7 @@ function reduceDefenseAt(s: GameState, layerIdx: number, defIdx: number, amount:
 function tickBombs(s: GameState) {
     if (s.bombs.length === 0) return;
     for (const b of s.bombs) {
-        reduceDefenseAt(s, b.layer, b.def, b.amt);
+        reduceDefenseAt(s, b.layer, b.def, b.amt + s.bombBonus);
         b.turns -= 1;
     }
     const before = s.bombs.length;
@@ -305,9 +307,10 @@ function applyBehaviorOnBreach(s: GameState) {
 
 /* ---------- card effects (return EXTRA noise beyond base) ---------- */
 
-/** Consume the one-shot Overclock bonus (added to a single exploit's damage). */
+/** Bonus damage added to an exploit: the persistent operator/implant flat bonus
+    plus the one-shot Overclock charge (which is then consumed). */
 function takeExploitBonus(s: GameState): number {
-    const b = s.exploitBonus;
+    const b = s.exploitBonus + s.exploitFlatBonus;
     s.exploitBonus = 0;
     return b;
 }
@@ -575,7 +578,7 @@ export function previewOnTarget(s: GameState, cardId: string, idx: number): stri
     if (!card || !card.needsTarget || !layer) return null;
     const d = layer.defenses[idx];
     if (!d || d.strength <= 0) return null;
-    const bonus = s.exploitBonus;
+    const bonus = s.exploitBonus + s.exploitFlatBonus;
     const plus = bonus ? ` (+${bonus})` : "";
     switch (card.effect) {
         case "revealOne": return "reveal";
@@ -612,7 +615,7 @@ export function predictDamage(s: GameState, cardId: string, idx: number): number
     if (!card || !layer) return 0;
     const d = layer.defenses[idx];
     if (!d || d.strength <= 0) return 0;
-    const bonus = s.exploitBonus;
+    const bonus = s.exploitBonus + s.exploitFlatBonus;
     switch (card.effect) {
         case "knownExploit": return (d.typeRevealed ? card.power || 4 : Math.ceil((card.power || 4) / 2)) + bonus;
         case "typedExploit": return (d.type === card.matchType ? Math.round((card.power || 5) * 1.6) : Math.round((card.power || 5) * 0.4)) + bonus;

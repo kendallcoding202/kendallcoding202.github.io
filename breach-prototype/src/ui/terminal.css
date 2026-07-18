@@ -118,6 +118,23 @@ hr { border: none; border-top: 1px solid var(--line); margin: 7px 0; }
 .stage.ALERTED { color: #ff7a1a; }
 .stage.LOCKDOWN { color: var(--red); animation: blink 1.2s steps(2) infinite; }
 
+/* operator (hacker) select */
+.hackers { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 16px; }
+.hackercard {
+    border: 1px solid var(--line); background: var(--panel); padding: 16px 14px; cursor: pointer;
+    display: flex; flex-direction: column; transition: border-color 0.1s, box-shadow 0.1s, transform 0.1s;
+}
+.hackercard:hover { border-color: var(--cyan); box-shadow: 0 6px 18px #000a, 0 0 14px #35e0d833; transform: translateY(-3px); }
+.hackercard .hhead { display: flex; align-items: center; gap: 10px; }
+.hackercard .hglyph { font-size: 30px; line-height: 1; }
+.hackercard .hname { font-weight: bold; font-size: 20px; letter-spacing: 3px; color: var(--fg); }
+.hackercard .hstyle { font-size: 12px; letter-spacing: 1px; margin: 4px 0 8px; }
+.hackercard .hbio { font-size: 12px; color: #9fd18f; line-height: 1.45; flex: 1; }
+.hackercard .hpassive { font-size: 12px; margin-top: 10px; line-height: 1.4; color: #cfe6c4; }
+.hackercard .hpassive .amber { font-weight: bold; }
+.hackercard .hquote { font-size: 12px; font-style: italic; margin-top: 8px; }
+.hackercard .term { margin-top: 12px; width: 100%; }
+
 /* system select */
 .systems { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin-top: 16px; }
 .syscard {

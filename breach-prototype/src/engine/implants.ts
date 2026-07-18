@@ -29,6 +29,32 @@ export interface ImplantLoadout {
     reconDraw: boolean;
     firstCardSilent: boolean;
     creditsPerBreach: number;
+    exploitFlatBonus: number; // every exploit deals +N (operator passives)
+    bombBonus: number; // logic bombs tick +N harder
+}
+
+const EMPTY_LOADOUT: ImplantLoadout = {
+    handSize: 0, noiseReduction: 0, detectionMaxDelta: 0, creepDelta: 0,
+    breachDraw: false, reconDraw: false, firstCardSilent: false, creditsPerBreach: 0,
+    exploitFlatBonus: 0, bombBonus: 0,
+};
+
+/** Merge loadouts (e.g. an operator's passive + collected implants). */
+export function combineLoadouts(...parts: Partial<ImplantLoadout>[]): ImplantLoadout {
+    const acc: ImplantLoadout = { ...EMPTY_LOADOUT };
+    for (const p of parts) {
+        acc.handSize += p.handSize || 0;
+        acc.noiseReduction += p.noiseReduction || 0;
+        acc.detectionMaxDelta += p.detectionMaxDelta || 0;
+        acc.creepDelta += p.creepDelta || 0;
+        acc.creditsPerBreach += p.creditsPerBreach || 0;
+        acc.exploitFlatBonus += p.exploitFlatBonus || 0;
+        acc.bombBonus += p.bombBonus || 0;
+        acc.breachDraw = acc.breachDraw || !!p.breachDraw;
+        acc.reconDraw = acc.reconDraw || !!p.reconDraw;
+        acc.firstCardSilent = acc.firstCardSilent || !!p.firstCardSilent;
+    }
+    return acc;
 }
 
 export const IMPLANTS: Record<string, Implant> = {
@@ -50,10 +76,7 @@ export function getImplant(id: string): Implant | undefined {
 
 /** Sum a set of installed implants into a single loadout for the breach engine. */
 export function aggregateImplants(ids: string[]): ImplantLoadout {
-    const acc: ImplantLoadout = {
-        handSize: 0, noiseReduction: 0, detectionMaxDelta: 0, creepDelta: 0,
-        breachDraw: false, reconDraw: false, firstCardSilent: false, creditsPerBreach: 0,
-    };
+    const acc: ImplantLoadout = { ...EMPTY_LOADOUT };
     for (const id of ids) {
         const im = IMPLANTS[id];
         if (!im) continue;

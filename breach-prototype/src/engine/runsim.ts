@@ -7,8 +7,10 @@ import { createRun, currentOptions, isTerminal, resolveBreach, resolveEvent, res
 import { createInitialState, applyAction, projectedNoise } from "./engine.ts";
 import { SYSTEMS } from "./systems.ts";
 import { MODIFIERS, getModifier } from "./modifiers.ts";
-import { aggregateImplants } from "./implants.ts";
+import { aggregateImplants, combineLoadouts } from "./implants.ts";
 import { threatEffects, MAX_THREAT } from "./threat.ts";
+import { HACKERS, HACKER_ORDER } from "./hackers.ts";
+import { CARDS } from "./cards.ts";
 
 let passed = 0;
 const failures: string[] = [];
@@ -429,6 +431,44 @@ for (const id of CAMPAIGN_ORDER) {
         run = node.type === "breach" ? resolveBreach(run, node, winResult(0.3)) : takeNode(run, node);
     }
     check("a Threat 3 run can still be won", run.outcome === "won");
+}
+
+/* 16. Operators (hackers): distinct decks + signature passives. */
+{
+    for (const id of HACKER_ORDER) {
+        const h = HACKERS[id];
+        check(`${id}: deck is a full set of real cards`, h.deck.length >= 20 && h.deck.every((c) => !!CARDS[c]));
+        check(`${id}: has a passive`, !!h.passiveName && Object.keys(h.passive).length > 0);
+    }
+    const four = HACKER_ORDER.length;
+    check("there are four operators", four === 4);
+
+    // the run uses the operator's deck
+    const r = createRun("ghost", 1, 0, "torch");
+    check("run uses the operator's starting deck", JSON.stringify(r.deck) === JSON.stringify(HACKERS.torch.deck) && r.hackerId === "torch");
+
+    // TORCH — Live Wire: every exploit hits +1
+    let t = createInitialState(1, "smallBusiness", ["knownExploit"], null, null, combineLoadouts(HACKERS.torch.passive));
+    t.layers[0].defenses[0].typeRevealed = true; t.layers[0].defenses[0].strength = 30; t.layers[0].defenses[0].maxStrength = 30;
+    const ts = t.layers[0].defenses[0].strength;
+    t = applyAction(t, { type: "playCard", card: "knownExploit", target: 0 }); // 4 + 1
+    check("TORCH: exploits hit +1", ts - t.layers[0].defenses[0].strength === 5);
+
+    // HEX — Necrosis: logic bombs tick +1 (system idle at low detection, so no patch)
+    let hx = createInitialState(2, "smallBusiness", ["logicBomb"], null, null, combineLoadouts(HACKERS.hex.passive));
+    hx.layers[0].defenses[0].typeRevealed = true; hx.layers[0].defenses[0].strength = 30; hx.layers[0].defenses[0].maxStrength = 30;
+    hx.hand = ["logicBomb"];
+    hx = applyAction(hx, { type: "playCard", card: "logicBomb", target: 0 });
+    const hs = hx.layers[0].defenses[0].strength;
+    hx = applyAction(hx, { type: "endTurn" }); // tick: 3 + 1 = 4
+    check("HEX: bombs tick +1 harder", hs - hx.layers[0].defenses[0].strength === 4);
+
+    // WRAITH — Ghostwalk (first card silent); BYTE — Caffeine (+1 hand)
+    check("WRAITH: first card is silent", createInitialState(3, "homeServer", undefined, null, null, combineLoadouts(HACKERS.wraith.passive)).firstCardSilent === true);
+    check("BYTE: +1 hand size", createInitialState(3, "homeServer", undefined, null, null, combineLoadouts(HACKERS.byte.passive)).handSize === 7);
+
+    // operator passive stacks with a collected implant
+    check("operator passive stacks with implants", combineLoadouts(HACKERS.byte.passive, aggregateImplants(["cortex"])).handSize === 2);
 }
 
 console.log(`=== RUN-ENGINE ASSERTIONS: ${passed} passed, ${failures.length} failed ===`);

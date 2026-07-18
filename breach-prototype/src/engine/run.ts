@@ -8,11 +8,11 @@
 
 import type { BreachResult, Campaign, EventChoice, EventDef, HuntPressure, MapNode, RunEvent, RunState } from "./types.ts";
 import { CAMPAIGNS } from "./campaigns.ts";
-import { STARTER_DECK } from "./cards.ts";
 import { rollModifier } from "./modifiers.ts";
 import { GENERIC_EVENTS } from "./events.ts";
 import { aggregateImplants } from "./implants.ts";
 import { threatEffects } from "./threat.ts";
+import { getHacker } from "./hackers.ts";
 import { shuffle } from "./rng.ts";
 
 const LOSE_HEAT = 25; // Heat spike for getting detected on a job
@@ -61,8 +61,9 @@ export function getNode(campaign: Campaign, id: string | null): MapNode | null {
     return campaign.map.find((n) => n.id === id) || null;
 }
 
-export function createRun(campaignId: string, seed = 1, threat = 0): RunState {
+export function createRun(campaignId: string, seed = 1, threat = 0, hackerId = "wraith"): RunState {
     const c = getCampaign(campaignId);
+    const hacker = getHacker(hackerId);
     const eff = threatEffects(threat);
     const heatMax = Math.max(30, Math.round(c.heatMax * eff.heatMaxMul));
     // Roll a per-run modifier onto every breach so the map plays differently
@@ -79,12 +80,13 @@ export function createRun(campaignId: string, seed = 1, threat = 0): RunState {
     eventNodes.forEach((n, i) => { const e = pool[i % pool.length]; events[n.id] = { title: e.title, blurb: e.blurb, choices: e.choices }; });
     const run: RunState = {
         campaignId: c.id,
+        hackerId: hacker.id,
         threat,
         seed: seed >>> 0,
         heat: Math.round(eff.startHeatFrac * heatMax),
         heatMax,
         credits: 0,
-        deck: STARTER_DECK.slice(),
+        deck: hacker.deck.slice(),
         nodeId: null,
         path: [],
         mods,
