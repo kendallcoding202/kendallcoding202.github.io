@@ -70,10 +70,11 @@ function Intro({ onClose }: { onClose: () => void }) {
     );
 }
 
-function DefenseChip({ d, targetable, preview, kbdNum, onClick }: { d: Defense; targetable: boolean; preview?: string | null; kbdNum?: number; onClick: () => void }) {
+function DefenseChip({ d, targetable, preview, kbdNum, hit, onClick }: { d: Defense; targetable: boolean; preview?: string | null; kbdNum?: number; hit?: { amt: number; key: number }; onClick: () => void }) {
     const down = d.strength <= 0;
     return (
         <span className={"dchip" + (targetable ? " targetable" : "") + (down ? " down" : "") + (d.typeRevealed && !down ? " t-" + d.type : "")} onClick={targetable ? onClick : undefined}>
+            {hit && hit.amt > 0 ? <span className="dmg-float" key={hit.key}>−{hit.amt}</span> : null}
             {targetable && kbdNum ? <span className="kbd">{kbdNum}</span> : null}
             {down ? "✓ down" : d.typeRevealed ? <b className={"dtype t-" + d.type}>{d.type}</b> : <span className="muted">???</span>}
             {!down && (
@@ -140,6 +141,12 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
     const [armed, setArmed] = useState<string | null>(null);
     const [showIntro, setShowIntro] = useState(() => { try { return localStorage.getItem("breach_seen_intro") !== "1"; } catch { return true; } });
     const closeIntro = () => { setShowIntro(false); try { localStorage.setItem("breach_seen_intro", "1"); } catch { /* ignore */ } };
+    // --- juice / game-feel transient state ---
+    const [shaking, setShaking] = useState(false);
+    const [breachFx, setBreachFx] = useState(false);
+    const [spike, setSpike] = useState(false);
+    const [hits, setHits] = useState<Record<string, { amt: number; key: number }>>({});
+    const fxKey = useRef(0);
 
     const dispatch = (card: string, target?: number) => { setState((s) => applyAction(s, { type: "playCard", card, target })); setArmed(null); };
     const endTurn = () => { setState((s) => applyAction(s, { type: "endTurn" })); setArmed(null); };
@@ -182,6 +189,27 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
             else if (state.turn > prev.turn) sfx.play("turn");
             else if (state.log.length > prev.log.length) sfx.play(total(state) < total(prev) ? "hit" : "card");
             if (state.outcome === "playing" && rank[state.alert] > rank[prev.alert]) sfx.play("alert");
+
+            // --- juice triggers ---
+            const dDet = state.detection - prev.detection;
+            if (dDet >= 6) { setSpike(true); window.setTimeout(() => setSpike(false), 380); }
+            if (brk(state) > brk(prev)) {
+                setShaking(true); setBreachFx(true);
+                window.setTimeout(() => setShaking(false), 340);
+                window.setTimeout(() => setBreachFx(false), 560);
+            }
+            // per-defense damage → floating numbers (keyed by defense, replays on new hit)
+            const newHits: Record<string, { amt: number; key: number }> = {};
+            for (let li = 0; li < state.layers.length; li++) {
+                const pl = prev.layers[li], cl = state.layers[li];
+                if (!pl || !cl) continue;
+                for (let di = 0; di < cl.defenses.length; di++) {
+                    const b = pl.defenses[di]?.strength ?? 0, a = cl.defenses[di]?.strength ?? 0;
+                    if (b - a > 0) newHits[`${li}-${di}`] = { amt: b - a, key: ++fxKey.current };
+                }
+            }
+            if (Object.keys(newHits).length) setHits((h) => ({ ...h, ...newHits }));
+
             prevRef.current = state;
         }
     }, [state]);
@@ -202,7 +230,8 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
     };
 
     return (
-        <div className="wrap">
+        <div className={"wrap" + (shaking ? " shaking" : "")}>
+            {breachFx && <div className="breach-flash"><div className="bd">LAYER DOWN</div></div>}
             <div className="title">
                 BREACH <span className="sub">// {systemTitle}</span>
                 <button className="term ghost tiny" style={{ marginLeft: 14 }} onClick={() => onComplete({ won: false, detection: state.detectionMax, detectionMax: state.detectionMax })}>abort job</button>
@@ -227,7 +256,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                 <span className="amber">DETECTION</span>
                 <span style={{ color: meterColor(detFrac) }}>{state.detection} / {state.detectionMax}</span>
             </div>
-            <div className="meter">
+            <div className={"meter" + (detFrac >= 0.8 ? " hot" : "") + (spike ? " spike" : "")}>
                 <div className="fill" style={{ width: `${detFrac * 100}%`, background: meterColor(detFrac) }} />
                 <div className="ticks" />
                 <div className="mark" style={{ left: "25%" }} /><div className="mark" style={{ left: "50%" }} /><div className="mark" style={{ left: "80%" }} />
@@ -254,7 +283,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                             <span className="lname">{l.breached ? "✓ " : isCurrent ? "▶ " : "  "}{l.name}</span>
                             <span className="defs">
                                 {l.breached ? <span className="muted">BREACHED</span> : l.defenses.map((d, di) => (
-                                    <DefenseChip key={di} d={d} targetable={isCurrent && !!armed && d.strength > 0} preview={isCurrent && armed && d.strength > 0 ? previewOnTarget(state, armed, di) : null} kbdNum={isCurrent && armed ? targetOpts.indexOf(di) + 1 : undefined} onClick={() => dispatch(armed!, di)} />
+                                    <DefenseChip key={di} d={d} targetable={isCurrent && !!armed && d.strength > 0} preview={isCurrent && armed && d.strength > 0 ? previewOnTarget(state, armed, di) : null} kbdNum={isCurrent && armed ? targetOpts.indexOf(di) + 1 : undefined} hit={hits[`${i}-${di}`]} onClick={() => dispatch(armed!, di)} />
                                 ))}
                             </span>
                         </div>
@@ -779,6 +808,37 @@ function Ending({ run, campaign, newlyUnlocked, onRestart, onFeedback }: { run: 
     );
 }
 
+/* ---------- boot intro: a 2s fake connection sequence on load ---------- */
+function BootIntro({ onDone }: { onDone: () => void }) {
+    const LINES = [
+        { t: "establishing uplink" },
+        { t: "spoofing MAC address" },
+        { t: "routing through 7 proxies" },
+        { t: "cracking the handshake" },
+        { t: "ACCESS GRANTED", grant: true },
+    ];
+    const [n, setN] = useState(0);
+    const [leaving, setLeaving] = useState(false);
+    const finish = () => { if (leaving) return; setLeaving(true); sfx.play("transmission"); window.setTimeout(onDone, 480); };
+    useEffect(() => {
+        let i = 0;
+        const id = window.setInterval(() => { i++; setN(i); if (i >= LINES.length) { window.clearInterval(id); window.setTimeout(finish, 650); } }, 320);
+        return () => window.clearInterval(id);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    return (
+        <div className={"boot" + (leaving ? " done" : "")} onClick={finish}>
+            {LINES.slice(0, n).map((l, i) => (
+                <div className="bline" key={i}>
+                    {l.grant
+                        ? <span className="ok" style={{ fontWeight: "bold", letterSpacing: "3px" }}>&gt; {l.t}{i === n - 1 && <span className="bcursor" />}</span>
+                        : <>&gt; {l.t}{".".repeat(Math.max(3, 26 - l.t.length))} <span className="ok">ok</span></>}
+                </div>
+            ))}
+            <div className="bskip">click to skip ▸</div>
+        </div>
+    );
+}
+
 /* ============================================================
    APP — mode machine
    ============================================================ */
@@ -792,6 +852,8 @@ export function App() {
     const [showAchievements, setShowAchievements] = useState(false);
     const [showFeedback, setShowFeedback] = useState(false);
     const [endAchievements, setEndAchievements] = useState<string[]>([]);
+    const [booted, setBooted] = useState(() => { try { return sessionStorage.getItem("breach_booted") === "1"; } catch { return false; } });
+    const finishBoot = () => { setBooted(true); try { sessionStorage.setItem("breach_booted", "1"); } catch { /* ignore */ } };
 
     const campaign = run ? getCampaign(run.campaignId) : null;
 
@@ -854,6 +916,8 @@ export function App() {
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
     }, [reward]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    if (!booted) return <BootIntro onDone={finishBoot} />;
 
     if (mode === "hacker") return <HackerSelect onPick={pickHacker} />;
 
