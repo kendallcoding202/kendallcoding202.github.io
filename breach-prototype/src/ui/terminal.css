@@ -196,15 +196,15 @@ hr { border: none; border-top: 1px solid var(--line); margin: 7px 0; }
         linear-gradient(rgba(0, 255, 150, 0.045) 1px, transparent 1px),
         linear-gradient(90deg, rgba(0, 255, 150, 0.045) 1px, transparent 1px);
     background-size: 46px 46px;
-    animation: griddrift 26s linear infinite;
+    /* the grid is STATIC — a drifting grid behind stationary nodes induced an
+       illusion that the map nodes were bobbing. Kept as texture, not motion. */
     -webkit-mask-image: radial-gradient(120% 90% at 50% 25%, #000, transparent 80%);
     mask-image: radial-gradient(120% 90% at 50% 25%, #000, transparent 80%);
 }
-@keyframes griddrift { from { background-position: 0 0; } to { background-position: 46px 46px; } }
 body::before {
     content: ""; position: fixed; left: 0; right: 0; height: 140px; z-index: 49; pointer-events: none;
-    background: linear-gradient(180deg, transparent, rgba(53, 224, 150, 0.05), transparent);
-    animation: scansweep 7s linear infinite;
+    background: linear-gradient(180deg, transparent, rgba(53, 224, 150, 0.03), transparent);
+    animation: scansweep 12s linear infinite;
 }
 @keyframes scansweep { 0% { top: -140px; } 100% { top: 100%; } }
 
@@ -598,12 +598,12 @@ button.term.ghost:hover { background: var(--dim); color: #000; }
 .mnode.done { opacity: 0.75; border-color: var(--dim); background: #071009; }
 .mnode.done .micon { color: var(--dim); }
 .mnode.cur { border-color: var(--fg); box-shadow: 0 0 12px #4af62655; opacity: 1; }
-.mnode.open { cursor: pointer; opacity: 1; border-color: var(--amber); box-shadow: 0 0 8px #ffb00044; animation: nodepulse 2.8s ease-in-out infinite; }
+/* open nodes are lit with a STEADY glow — no pulse/animation, so they read as
+   live without any breathing motion (that throb read as "bouncing"). */
+.mnode.open { cursor: pointer; opacity: 1; border-color: var(--amber); box-shadow: 0 0 9px #ffb00055; }
 .mnode.open:hover { border-color: #ffd684; box-shadow: 0 0 14px #ffb00088; z-index: 5; }
 .mnode.open .mlabel { color: var(--fg); }
 .mnode.sel { outline: 2px solid var(--cyan); outline-offset: 2px; z-index: 6; }
-/* a gentle glow breathe (no movement) so open nodes read as live without bouncing */
-@keyframes nodepulse { 0%,100% { box-shadow: 0 0 6px #ffb00030; } 50% { box-shadow: 0 0 10px #ffb00060; } }
 
 /* touch devices apply :hover on tap and it STICKS — that read as glitchy when
    the map advanced. Neutralise hover-transforms where there's no real pointer. */
