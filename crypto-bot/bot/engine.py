@@ -231,6 +231,26 @@ def _summarize(cfg: Config, pf: PaperPortfolio, equity_curve: List[float]) -> di
             buy_cost = None
     win_rate = wins / len(sells) if sells else 0.0
 
+    # Per-trade log with round-trip P&L attached to each closing SELL.
+    trade_log = []
+    open_buy = None
+    for t in pf.trades:
+        row = {
+            "time": t.timestamp,
+            "side": t.side,
+            "price": round(t.price, 2),
+            "usd": round(t.usd_value, 2),
+            "fee": round(t.fee, 2),
+            "reason": t.reason,
+            "pnl": None,
+        }
+        if t.side == "BUY":
+            open_buy = t
+        elif open_buy is not None:
+            row["pnl"] = round((t.usd_value - t.fee) - open_buy.usd_value, 2)
+            open_buy = None
+        trade_log.append(row)
+
     return {
         "starting_cash": round(start, 2),
         "final_equity": round(final, 2),
@@ -240,4 +260,5 @@ def _summarize(cfg: Config, pf: PaperPortfolio, equity_curve: List[float]) -> di
         "round_trips": len(sells),
         "win_rate_pct": round(win_rate * 100, 2),
         "realized_pnl": round(pf.realized_pnl, 2),
+        "trades": trade_log,
     }

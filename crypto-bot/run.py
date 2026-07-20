@@ -40,8 +40,25 @@ def cmd_backtest(args: argparse.Namespace) -> int:
         print("Not enough historical data returned.", file=sys.stderr)
         return 1
     result = run_backtest(cfg, candles)
+    trades = result.pop("trades", [])
+
     print(f"\nBacktest over {len(candles)} bars "
           f"({cfg.strategy.ma_type} {cfg.strategy.fast_period}/{cfg.strategy.slow_period}):")
+
+    if trades:
+        print("\n  when                            side  price        value       fee     P&L")
+        print("  " + "-" * 76)
+        for t in trades:
+            when = t["time"][:19].replace("T", " ")
+            pnl = "" if t["pnl"] is None else f"{t['pnl']:>+9.2f}"
+            reason = "" if t["side"] == "BUY" else f"  ({t['reason']})"
+            print(f"  {when}  {t['side']:<4}  {t['price']:>10.2f}  {t['usd']:>10.2f}  "
+                  f"{t['fee']:>6.2f}  {pnl}{reason}")
+        print("  " + "-" * 76)
+    else:
+        print("\n  (no trades were triggered over this window)")
+
+    print("\nSummary:")
     print(json.dumps(result, indent=2))
     print("\nPast performance does not predict future results. Fees and slippage "
           "are simulated; real fills will differ.")
