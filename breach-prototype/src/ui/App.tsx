@@ -653,6 +653,14 @@ function RunMap({ run, campaign, onPick }: { run: RunState; campaign: Campaign; 
                     })}
                 </div>
             </div>
+            <div className="maplegend">
+                <span className="lg"><span className="li" style={{ color: "var(--amber)" }}>◈</span> job</span>
+                <span className="lg"><span className="li" style={{ color: "#ffd24a" }}>★</span> final job</span>
+                <span className="lg"><span className="li" style={{ color: "var(--cyan)" }}>☂</span> safehouse <span className="muted">· cools heat</span></span>
+                <span className="lg"><span className="li" style={{ color: "#c98cff" }}>❋</span> event <span className="muted">· a choice</span></span>
+                <span className="lg"><span className="li" style={{ color: "var(--red)" }}>◆</span> difficulty</span>
+                <span className="lg"><span className="li" style={{ color: "var(--red)" }}>⚠</span> harder <span className="muted">/</span> <span className="li" style={{ color: "var(--cyan)" }}>▽</span> easier <span className="muted">twist</span></span>
+            </div>
             <div className={"mapdetail" + (detail ? "" : " empty")}>
                 {detail ? (
                     <>

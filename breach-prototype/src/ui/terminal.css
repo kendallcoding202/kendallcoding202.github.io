@@ -630,6 +630,17 @@ button.term.ghost:hover { background: var(--dim); color: #000; }
     .mnode.open:hover, .card:hover:not(.disabled), .syscard:hover, .route:hover { transform: none; }
 }
 
+/* compact always-visible key so the map icons don't need memorising */
+.maplegend {
+    display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center;
+    margin: 6px 2px 0; padding: 5px 10px;
+    border: 1px dashed #1c3a28; border-radius: 3px; background: #06120c80;
+    font-size: 11px; color: #8fb89f; line-height: 1.4;
+}
+.maplegend .lg { white-space: nowrap; }
+.maplegend .li { font-weight: bold; }
+.maplegend .muted { color: var(--dim); }
+
 .mapdetail {
     margin: 8px 0 2px; padding: 7px 12px; border: 1px solid var(--line); background: var(--panel);
     display: flex; flex-direction: column; gap: 2px; min-height: 62px;
