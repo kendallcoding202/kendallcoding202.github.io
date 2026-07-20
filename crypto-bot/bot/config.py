@@ -34,6 +34,13 @@ class StrategyConfig:
     ma_type: str = "ema"
     fast_period: int = 12
     slow_period: int = 26
+    # RSI confirmation filter: when enabled, a BUY crossover only fires if RSI
+    # is inside [rsi_buy_min, rsi_buy_max] — i.e. momentum is bullish but not
+    # already overbought.
+    use_rsi_filter: bool = True
+    rsi_period: int = 14
+    rsi_buy_min: float = 50.0
+    rsi_buy_max: float = 70.0
 
 
 @dataclass
@@ -70,6 +77,13 @@ class Config:
             )
         if s.ma_type not in ("ema", "sma"):
             raise ValueError("strategy.ma_type must be 'ema' or 'sma'")
+        if s.use_rsi_filter:
+            if s.rsi_period < 2:
+                raise ValueError("strategy.rsi_period must be >= 2")
+            if not 0 <= s.rsi_buy_min < s.rsi_buy_max <= 100:
+                raise ValueError(
+                    "require 0 <= rsi_buy_min < rsi_buy_max <= 100"
+                )
         if self.trading.granularity not in (60, 300, 900, 3600, 21600, 86400):
             raise ValueError(
                 "granularity must be one of 60, 300, 900, 3600, 21600, 86400 (Coinbase limits)"

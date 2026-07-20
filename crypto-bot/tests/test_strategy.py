@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from bot.config import PortfolioConfig, StrategyConfig  # noqa: E402
-from bot.indicators import ema, sma  # noqa: E402
+from bot.indicators import ema, rsi, sma  # noqa: E402
 from bot.portfolio import PaperPortfolio  # noqa: E402
 from bot.strategy import MACrossoverStrategy, Signal  # noqa: E402
 
@@ -27,9 +27,27 @@ def test_ema_length_and_seed():
     assert out[0] == 2.0
 
 
+# -- rsi --------------------------------------------------------------------
+def test_rsi_all_gains_is_100():
+    assert rsi([1, 2, 3, 4, 5, 6], period=3)[-1] == 100.0
+
+
+def test_rsi_all_losses_is_zero():
+    assert rsi([6, 5, 4, 3, 2, 1], period=3)[-1] == 0.0
+
+
+def test_rsi_bounds():
+    vals = [1, 3, 2, 4, 3, 5, 4, 6, 5, 7, 6, 8]
+    for r in rsi(vals, period=5):
+        assert 0.0 <= r <= 100.0
+
+
 # -- strategy ---------------------------------------------------------------
-def _strategy():
-    return MACrossoverStrategy(StrategyConfig(ma_type="sma", fast_period=2, slow_period=4))
+def _strategy(use_rsi_filter=False):
+    # Filter off by default so the crossover tests isolate the MA logic.
+    return MACrossoverStrategy(StrategyConfig(
+        ma_type="sma", fast_period=2, slow_period=4, use_rsi_filter=use_rsi_filter
+    ))
 
 
 def test_hold_when_warming_up():
@@ -52,6 +70,31 @@ def test_hold_after_cross_already_happened():
     # Once crossed and holding above, subsequent bars are HOLD, not repeated BUYs.
     closes = [10, 10, 10, 10, 10, 10, 30, 31, 32]
     assert _strategy().evaluate(closes).signal is Signal.HOLD
+
+
+# -- RSI confirmation filter ------------------------------------------------
+def _rsi_strategy(rsi_buy_max):
+    return MACrossoverStrategy(StrategyConfig(
+        ma_type="sma", fast_period=2, slow_period=4,
+        use_rsi_filter=True, rsi_period=3, rsi_buy_min=50, rsi_buy_max=rsi_buy_max,
+    ))
+
+
+def test_rsi_filter_blocks_overbought_buy():
+    # A sharp spike triggers a crossover but drives RSI to ~100 (overbought),
+    # so the tight band blocks the entry.
+    closes = [10, 10, 10, 10, 10, 10, 30]
+    reading = _rsi_strategy(rsi_buy_max=70).evaluate(closes)
+    assert reading.signal is Signal.HOLD
+    assert reading.rsi_blocked is True
+
+
+def test_rsi_filter_allows_buy_when_band_permits():
+    # Same crossover, but a band up to 100 lets the RSI-confirmed BUY through.
+    closes = [10, 10, 10, 10, 10, 10, 30]
+    reading = _rsi_strategy(rsi_buy_max=100).evaluate(closes)
+    assert reading.signal is Signal.BUY
+    assert reading.rsi_blocked is False
 
 
 # -- portfolio --------------------------------------------------------------

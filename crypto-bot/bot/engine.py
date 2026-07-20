@@ -96,6 +96,8 @@ class TradingEngine:
         reading = self.strategy.evaluate(closes)
         halted = self.guard.is_halted(equity)
 
+        rsi_txt = "n/a" if reading.rsi is None else f"{reading.rsi:.1f}"
+
         if reading.signal is Signal.BUY and not self.portfolio.has_position:
             if halted:
                 self.logger.warning("BUY signal ignored: daily-loss halt active")
@@ -104,9 +106,9 @@ class TradingEngine:
                 trade = self.portfolio.open_position(price, usd, ts, "signal")
                 if trade:
                     self.logger.info(
-                        "BUY @ %.2f | size=%.6f cost=%.2f fast=%.2f slow=%.2f",
+                        "BUY @ %.2f | size=%.6f cost=%.2f fast=%.2f slow=%.2f rsi=%s",
                         trade.price, trade.base_amount, trade.usd_value,
-                        reading.fast, reading.slow,
+                        reading.fast, reading.slow, rsi_txt,
                     )
         elif reading.signal is Signal.SELL and self.portfolio.has_position:
             trade = self.portfolio.close_position(price, ts, "signal")
@@ -114,10 +116,17 @@ class TradingEngine:
                 "SELL @ %.2f | equity=%.2f realized=%.2f",
                 trade.price, self.portfolio.equity(price), self.portfolio.realized_pnl,
             )
+        elif reading.rsi_blocked:
+            self.logger.info(
+                "BUY cross skipped: RSI %s outside [%.0f, %.0f] | price=%.2f",
+                rsi_txt, self.cfg.strategy.rsi_buy_min,
+                self.cfg.strategy.rsi_buy_max, price,
+            )
         else:
             self.logger.info(
-                "HOLD | price=%.2f equity=%.2f position=%s%s",
-                price, equity, "yes" if self.portfolio.has_position else "flat",
+                "HOLD | price=%.2f equity=%.2f rsi=%s position=%s%s",
+                price, equity, rsi_txt,
+                "yes" if self.portfolio.has_position else "flat",
                 " [HALTED]" if halted else "",
             )
 

@@ -31,8 +31,11 @@ intentionally not included here.
 
 - Polls Coinbase public candles + ticker on an interval (no API key needed).
 - Computes a fast and slow moving average (EMA or SMA) and trades the crossover:
-  - **Buy** when the fast MA crosses above the slow MA.
+  - **Buy** when the fast MA crosses above the slow MA **and** RSI confirms
+    (RSI inside a configurable band — bullish, but not already overbought).
   - **Sell** when it crosses back below.
+- Optional **RSI filter** (on by default) that suppresses buy crossovers firing
+  into an overbought move, to cut down on chasing tops in choppy markets.
 - Applies risk controls on every iteration:
   - **Position sizing** — deploy a fixed fraction of equity per entry.
   - **Stop-loss / take-profit** — hard exits that override the strategy.
@@ -88,10 +91,13 @@ commented list). The knobs you'll touch most:
 
 | Setting | Meaning |
 | --- | --- |
-| `trading.product_id` | Market to trade, e.g. `BTC-USD`, `ETH-USD` |
+| `trading.product_id` | Market to trade, e.g. `SOL-USD`, `BTC-USD`, `ETH-USD` |
 | `trading.granularity` | Candle size in seconds (60 / 300 / 900 / 3600 / 21600 / 86400) |
 | `strategy.fast_period` / `slow_period` | The two moving-average lengths |
 | `strategy.ma_type` | `ema` or `sma` |
+| `strategy.use_rsi_filter` | Require RSI to confirm a buy crossover (default `true`) |
+| `strategy.rsi_period` | RSI lookback (default 14) |
+| `strategy.rsi_buy_min` / `rsi_buy_max` | RSI band a buy must fall inside (default 50–70) |
 | `risk.position_pct` | Fraction of equity per entry |
 | `risk.stop_loss_pct` / `take_profit_pct` | Protective exits |
 | `risk.max_daily_loss_pct` | Daily-loss circuit breaker |

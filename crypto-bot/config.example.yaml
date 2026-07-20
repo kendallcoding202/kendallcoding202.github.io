@@ -14,7 +14,7 @@ exchange:
   timeout: 10          # HTTP timeout in seconds
 
 trading:
-  product_id: "BTC-USD"   # market to trade
+  product_id: "SOL-USD"   # market to trade (e.g. SOL-USD, BTC-USD, ETH-USD)
   granularity: 300        # candle size in seconds: 60, 300, 900, 3600, 21600, 86400
   poll_interval: 60       # seconds the bot sleeps between iterations
 
@@ -28,6 +28,13 @@ strategy:
   ma_type: "ema"          # "ema" or "sma"
   fast_period: 12
   slow_period: 26
+  # RSI confirmation: a BUY crossover only fires when RSI is inside the band
+  # below (bullish momentum, but not yet overbought). Set use_rsi_filter to
+  # false to trade pure crossovers.
+  use_rsi_filter: true
+  rsi_period: 14
+  rsi_buy_min: 50         # RSI must be at least this (momentum agrees)
+  rsi_buy_max: 70         # ...and at most this (don't chase an overbought top)
 
 risk:
   position_pct: 0.25      # fraction of equity deployed per entry

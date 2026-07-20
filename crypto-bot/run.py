@@ -20,6 +20,7 @@ from bot.config import load_config
 from bot.engine import TradingEngine, run_backtest
 from bot.exchange import CoinbaseClient
 from bot.portfolio import PaperPortfolio
+from bot.strategy import MACrossoverStrategy
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -67,23 +68,41 @@ def cmd_backtest(args: argparse.Namespace) -> int:
 
 def cmd_status(args: argparse.Namespace) -> int:
     cfg = load_config(args.config)
-    pf = PaperPortfolio.load(cfg.state.file)
-    if pf is None:
-        print("No saved state yet — run the bot first.")
-        return 0
     client = CoinbaseClient(cfg.exchange.base_url, cfg.exchange.timeout)
     price = client.get_price(cfg.trading.product_id)
-    print(json.dumps({
+
+    # Live indicator snapshot (mirrors a dashboard view).
+    strategy = MACrossoverStrategy(cfg.strategy)
+    candles = client.get_candles(cfg.trading.product_id, cfg.trading.granularity)
+    reading = strategy.evaluate([c.close for c in candles])
+
+    pf = PaperPortfolio.load(cfg.state.file)
+    if pf is None:
+        pf = PaperPortfolio.new(
+            cfg.portfolio.starting_cash, cfg.portfolio.fee_rate, cfg.portfolio.slippage
+        )
+
+    snapshot = {
         "product": cfg.trading.product_id,
-        "price": price,
-        "cash": round(pf.cash, 2),
+        "signal": reading.signal.value,
+        "price": round(price, 4),
+        "ema_fast": None if reading.fast is None else round(reading.fast, 4),
+        "ema_slow": None if reading.slow is None else round(reading.slow, 4),
+        "rsi": None if reading.rsi is None else round(reading.rsi, 1),
+        "rsi_blocked_buy": reading.rsi_blocked,
         "position_base": round(pf.base_amount, 8),
-        "entry_price": round(pf.entry_price, 2),
+        "entry_price": round(pf.entry_price, 4),
+        "cash": round(pf.cash, 2),
         "equity": round(pf.equity(price), 2),
         "unrealized_pnl": round(pf.unrealized_pnl(price), 2),
         "realized_pnl": round(pf.realized_pnl, 2),
         "num_trades": len(pf.trades),
-    }, indent=2))
+    }
+    print(json.dumps(snapshot, indent=2))
+    if reading.rsi_blocked:
+        print("\nNote: a BUY crossover is active but RSI is outside "
+              f"[{cfg.strategy.rsi_buy_min:.0f}, {cfg.strategy.rsi_buy_max:.0f}], "
+              "so no entry was taken.")
     return 0
 
 
