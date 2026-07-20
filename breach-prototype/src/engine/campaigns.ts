@@ -24,7 +24,7 @@ export const REWARD_POOL: string[] = [
     "parasite", "blight", "incubate", "viralLoad", "necroticTouch",
     "quickHack", "daisyChain", "scriptRunner", "macro", "overflow",
     "heuristicEngine", "bufferOverflow", "portKnock", "sqlmap", "dictionaryAttack",
-    "wafBypass", "icePick", "honeypot",
+    "wafBypass", "icePick", "privEsc", "tokenTheft", "honeypot",
 ];
 
 type Topo = { id: string; col: number; row: number; next: string[] }[];

@@ -218,6 +218,32 @@ body::before {
 }
 .wrap.shaking { animation: shake 0.32s ease-in-out; }
 
+/* --- detection-rise SCREEN GLITCH: chromatic split + jitter on the whole UI --- */
+.wrap.glitching { animation: glitchjit 0.3s steps(2) 1; }
+.wrap.glitching.hard { animation: glitchjit 0.46s steps(2) 2; }
+@keyframes glitchjit {
+    0% { transform: translate(0, 0); text-shadow: none; }
+    20% { transform: translate(-2px, 1px); text-shadow: -2px 0 #ff2d6b66, 2px 0 #35e0d866; }
+    40% { transform: translate(2px, -1px); text-shadow: 2px 0 #ff2d6b66, -2px 0 #35e0d866; }
+    60% { transform: translate(-1px, 0); text-shadow: -1px 0 #ff2d6b44, 1px 0 #35e0d844; }
+    100% { transform: translate(0, 0); text-shadow: none; }
+}
+/* torn scanline band overlay that flickers across the screen on the spike */
+.det-glitch {
+    position: fixed; inset: 0; z-index: 47; pointer-events: none; mix-blend-mode: screen;
+    background:
+        repeating-linear-gradient(0deg, transparent 0 3px, rgba(255, 45, 107, 0.05) 3px 4px),
+        linear-gradient(180deg, transparent 44%, rgba(53, 224, 216, 0.10) 48%, rgba(255, 45, 107, 0.10) 52%, transparent 56%);
+    animation: detglitch 0.3s steps(3) 1;
+}
+.det-glitch.hard { animation: detglitch 0.46s steps(4) 1; }
+@keyframes detglitch {
+    0% { opacity: 0; background-position: 0 -30%; }
+    30% { opacity: 1; }
+    60% { opacity: 0.7; background-position: 0 40%; }
+    100% { opacity: 0; background-position: 0 90%; }
+}
+
 /* --- breach punch: full-screen flash + LAYER DOWN --- */
 .breach-flash {
     position: fixed; inset: 0; z-index: 45; pointer-events: none;
@@ -258,14 +284,23 @@ body::before {
 /* --- floating damage numbers + smoother strength bar --- */
 .dchip { position: relative; }
 .dmg-float {
-    position: absolute; top: -8px; right: 6px; z-index: 6; pointer-events: none;
-    color: #ff6161; font-weight: bold; font-size: 15px; text-shadow: 0 0 9px #ff3b3b;
-    animation: dmgfloat 0.72s ease-out forwards;
+    position: absolute; top: -10px; right: 4px; z-index: 6; pointer-events: none;
+    color: #ff5555; font-weight: bold; font-size: 20px; text-shadow: 0 0 12px #ff3b3b, 0 0 3px #000;
+    animation: dmgfloat 0.78s cubic-bezier(.2,.9,.2,1) forwards;
 }
 @keyframes dmgfloat {
-    0% { opacity: 0; transform: translateY(5px); }
-    22% { opacity: 1; }
-    100% { opacity: 0; transform: translateY(-20px); }
+    0% { opacity: 0; transform: translateY(6px) scale(0.7); }
+    18% { opacity: 1; transform: translateY(0) scale(1.35); }
+    36% { transform: translateY(-4px) scale(1); }
+    100% { opacity: 0; transform: translateY(-26px) scale(1); }
+}
+
+/* buff pulse — draw the eye to a gained buff (e.g. "next exploit +N") */
+.budget-turn .cyan { animation: buffpulse 0.7s ease-out; display: inline-block; }
+@keyframes buffpulse {
+    0% { transform: scale(1); text-shadow: none; }
+    30% { transform: scale(1.25); text-shadow: 0 0 12px #35e0d8; }
+    100% { transform: scale(1); text-shadow: 0 0 4px #35e0d8aa; }
 }
 .dbar .df { transition: width 0.3s ease-out; }
 
@@ -304,7 +339,7 @@ body::before {
 
 /* respect reduced-motion */
 @media (prefers-reduced-motion: reduce) {
-    .wrap.shaking, .breach-flash, .breach-flash .bd, .cascade-flash, .cascade-flash .cd, .dmg-float, .meter.spike, .meter.hot .fill,
+    .wrap.shaking, .wrap.glitching, .det-glitch, .budget-turn .cyan, .breach-flash, .breach-flash .bd, .cascade-flash, .cascade-flash .cd, .dmg-float, .meter.spike, .meter.hot .fill,
     #root::before, body::before, .transmission .tbox, .transmission .ttext, .log .ln:last-child { animation: none; }
 }
 
@@ -526,6 +561,8 @@ html.crt .wrap { padding-top: 24px; }
 .implant-chip { border: 1px solid #8a3a6e; color: #ff9ad4; padding: 2px 8px; font-size: 11px; background: #1a0a14; white-space: nowrap; }
 
 /* build-archetype tags — so synergy families are visible when deckbuilding */
+/* specialist tag: makes typed exploits read AS specialists at a glance */
+.card .typetag { color: #ffb000; font-weight: bold; letter-spacing: 0.5px; }
 .card .synergy { font-weight: bold; letter-spacing: 0.5px; }
 .card .synergy.s-ghost { color: #8fd6ff; }
 .card .synergy.s-overload { color: #ff6a5a; }

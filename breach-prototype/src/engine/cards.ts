@@ -60,7 +60,7 @@ export const CARDS: Record<string, CardDef> = {
         text: "Reduce an AUTH defense's Strength by 8. Against any other type: only 2, and louder.",
     },
     privEsc: {
-        id: "privEsc", name: "Privilege Escalation", kind: "exploit", noise: 4, power: 6, effect: "privEsc", needsTarget: true,
+        id: "privEsc", name: "Privilege Escalation", kind: "exploit", noise: 4, power: 6, effect: "privEsc", matchType: "privilege", needsTarget: true,
         text: "Reduce a PRIVILEGE defense's Strength by 6. On any other type it misfires — no effect, loud.",
     },
     zeroDay: {
@@ -315,6 +315,10 @@ export const CARDS: Record<string, CardDef> = {
     icePick: {
         id: "icePick", name: "ICE Pick", kind: "exploit", noise: 3, power: 4, effect: "typedExploit", matchType: "ids", needsTarget: true,
         text: "Reduce an IDS defense by 6. Against any other type: only 2, and louder.",
+    },
+    tokenTheft: {
+        id: "tokenTheft", name: "Token Theft", kind: "exploit", noise: 3, power: 4, effect: "typedExploit", matchType: "privilege", needsTarget: true,
+        text: "Reduce a PRIVILEGE defense by 6. Against any other type: only 2, and louder.",
     },
     honeypot: {
         id: "honeypot", name: "Honeypot", kind: "stealth", noise: 2, amount: 2, effect: "feint", needsTarget: false,

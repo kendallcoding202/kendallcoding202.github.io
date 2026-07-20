@@ -60,7 +60,7 @@ function noiseBurst(dur: number, gain: number) {
     src.start();
 }
 
-type SfxName = "card" | "select" | "hit" | "breach" | "turn" | "alert" | "win" | "fail" | "reward" | "transmission" | "cascade";
+type SfxName = "card" | "select" | "hit" | "breach" | "turn" | "alert" | "win" | "fail" | "reward" | "transmission" | "cascade" | "alarm";
 
 const SFX: Record<SfxName, () => void> = {
     card: () => tone({ freq: 430, dur: 0.05, type: "square", gain: 0.07 }),
@@ -75,6 +75,8 @@ const SFX: Record<SfxName, () => void> = {
     transmission: () => { noiseBurst(0.16, 0.05); tone({ freq: 130, dur: 0.22, type: "sawtooth", gain: 0.06 }); tone({ freq: 90, dur: 0.22, type: "square", gain: 0.05, delay: 0.05 }); },
     // SYSTEM CASCADE: a bright ascending surge — the "engine coming online" sting
     cascade: () => { [392, 587, 784, 1175, 1568].forEach((f, i) => tone({ freq: f, dur: 0.11, type: "square", gain: 0.075, delay: i * 0.045 })); tone({ freq: 196, dur: 0.3, type: "sawtooth", gain: 0.05 }); },
+    // ALARM: an urgent descending klaxon just before the system strikes back
+    alarm: () => { tone({ freq: 540, dur: 0.14, type: "sawtooth", gain: 0.1, sweepTo: 400 }); tone({ freq: 540, dur: 0.14, type: "sawtooth", gain: 0.1, sweepTo: 400, delay: 0.17 }); },
 };
 
 // Mobile browsers keep the audio engine suspended until a user gesture, and

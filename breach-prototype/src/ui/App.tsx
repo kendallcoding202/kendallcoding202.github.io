@@ -154,11 +154,17 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
     const [breachFx, setBreachFx] = useState(false);
     const [cascadeFx, setCascadeFx] = useState(false);
     const [spike, setSpike] = useState(false);
+    const [glitch, setGlitch] = useState(0); // 0 none · 1 minor · 2 hard — detection-rise screen glitch
     const [hits, setHits] = useState<Record<string, { amt: number; key: number }>>({});
     const fxKey = useRef(0);
 
     const dispatch = (card: string, target?: number) => { setState((s) => applyAction(s, { type: "playCard", card, target })); setArmed(null); };
-    const endTurn = () => { setState((s) => applyAction(s, { type: "endTurn" })); setArmed(null); };
+    const endTurn = () => {
+        // telegraph the system's counter-move: sound the alarm right before it strikes
+        const it = state.systemIntent;
+        if (it && it.kind !== "idle" && state.spoofTurns === 0) sfx.play("alarm");
+        setState((s) => applyAction(s, { type: "endTurn" })); setArmed(null);
+    };
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
@@ -202,6 +208,8 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
             // --- juice triggers ---
             const dDet = state.detection - prev.detection;
             if (dDet >= 6) { setSpike(true); window.setTimeout(() => setSpike(false), 380); }
+            // detection rose → the screen glitches, harder the louder the jump
+            if (dDet >= 3) { const lvl = dDet >= 9 ? 2 : 1; setGlitch(lvl); window.setTimeout(() => setGlitch(0), lvl === 2 ? 480 : 300); }
             // SYSTEM CASCADE fired — celebrate the power spike (banner + surge + shake + bed pulse)
             if (state.cascade && !prev.cascade) {
                 sfx.play("cascade"); sfx.setTension(1);
@@ -251,9 +259,10 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
     };
 
     return (
-        <div className={"wrap" + (shaking ? " shaking" : "")}>
+        <div className={"wrap" + (shaking ? " shaking" : "") + (glitch ? (glitch === 2 ? " glitching hard" : " glitching") : "")}>
             {breachFx && <div className="breach-flash"><div className="bd">LAYER DOWN</div></div>}
             {cascadeFx && <div className="cascade-flash"><div className="cd">⚡ SYSTEM CASCADE</div></div>}
+            {glitch > 0 && <div className={"det-glitch" + (glitch === 2 ? " hard" : "")} />}
             <div className="title">
                 BREACH <span className="sub">// {systemTitle}</span>
                 <button className="term ghost tiny" style={{ marginLeft: 14 }} onClick={() => onComplete({ won: false, detection: state.detectionMax, detectionMax: state.detectionMax })}>abort job</button>
@@ -344,7 +353,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                                 <span className="cname">{i < 9 && !armed ? <span className="kbd">{i + 1}</span> : null}{def.name}{needsT ? <span className="muted"> ◎</span> : null}</span>
                                 <span className="noise" style={{ color: danger ? "#ff4141" : noise === 0 ? "#35e0d8" : "#ffb000" }}>{noise === 0 ? "SILENT" : "◈" + noise}</span>
                             </div>
-                            <div className="kind">{def.kind}{def.tag ? <span className={"synergy s-" + def.tag}> · {def.tag}</span> : null}</div>
+                            <div className="kind">{def.kind}{def.matchType ? <span className="typetag"> ▸ vs {def.matchType.toUpperCase()}</span> : null}{def.tag ? <span className={"synergy s-" + def.tag}> · {def.tag}</span> : null}</div>
                             <div className="ctext">{def.text}</div>
                         </div>
                     );
