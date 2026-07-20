@@ -15,7 +15,7 @@ export const SYSTEMS: Record<string, SystemDef> = {
         flavor: "An under-patched box on a residential line. One defense per layer. A gentle warm-up.",
         difficulty: 1,
         detectionMax: 100,
-        baselineCreep: 4,
+        baselineCreep: 7,
         layers: [
             { name: "Perimeter", defenses: [{ type: "firewall", strength: 8 }] },
             { name: "Internal Network", defenses: [{ type: "ids", strength: 10 }] },
@@ -30,7 +30,7 @@ export const SYSTEMS: Record<string, SystemDef> = {
         flavor: "A real office network. The internal layer runs two defenses — you'll need to juggle targets.",
         difficulty: 2,
         detectionMax: 108,
-        baselineCreep: 4,
+        baselineCreep: 7,
         layers: [
             { name: "Perimeter", defenses: [{ type: "firewall", strength: 9 }] },
             { name: "Internal Network", defenses: [{ type: "ids", strength: 8 }, { type: "auth", strength: 8 }] },
@@ -45,7 +45,7 @@ export const SYSTEMS: Record<string, SystemDef> = {
         flavor: "Five layers, a DMZ, and multi-defense chokepoints. Segmented — each layer you breach exposes the next one's defense types.",
         difficulty: 3,
         detectionMax: 126,
-        baselineCreep: 4,
+        baselineCreep: 7,
         behavior: "segmented",
         layers: [
             { name: "Perimeter", defenses: [{ type: "firewall", strength: 9 }] },
@@ -62,7 +62,7 @@ export const SYSTEMS: Record<string, SystemDef> = {
         flavor: "Hardened everything, and adaptive — every layer you breach makes the rest tougher. It learns. For ghosts only.",
         difficulty: 5,
         detectionMax: 185,
-        baselineCreep: 4,
+        baselineCreep: 7,
         behavior: "adaptive",
         layers: [
             { name: "Perimeter", defenses: [{ type: "firewall", strength: 10 }, { type: "ids", strength: 8 }] },

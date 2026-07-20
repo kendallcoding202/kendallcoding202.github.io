@@ -152,6 +152,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
     // --- juice / game-feel transient state ---
     const [shaking, setShaking] = useState(false);
     const [breachFx, setBreachFx] = useState(false);
+    const [cascadeFx, setCascadeFx] = useState(false);
     const [spike, setSpike] = useState(false);
     const [hits, setHits] = useState<Record<string, { amt: number; key: number }>>({});
     const fxKey = useRef(0);
@@ -201,6 +202,13 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
             // --- juice triggers ---
             const dDet = state.detection - prev.detection;
             if (dDet >= 6) { setSpike(true); window.setTimeout(() => setSpike(false), 380); }
+            // SYSTEM CASCADE fired — celebrate the power spike (banner + surge + shake + bed pulse)
+            if (state.cascade && !prev.cascade) {
+                sfx.play("cascade"); sfx.setTension(1);
+                setCascadeFx(true); setShaking(true);
+                window.setTimeout(() => setCascadeFx(false), 950);
+                window.setTimeout(() => setShaking(false), 340);
+            }
             if (brk(state) > brk(prev)) {
                 setShaking(true); setBreachFx(true);
                 window.setTimeout(() => setShaking(false), 340);
@@ -223,6 +231,11 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
     }, [state]);
 
     const detFrac = state.detection / state.detectionMax;
+    // ambient bed: a breach is where the dread peaks — drone tightens with detection,
+    // maxing out as you near lockout. Fades back to the map's level on the way out.
+    useEffect(() => {
+        if (state.outcome === "playing") sfx.setTension(0.2 + 0.8 * Math.min(1, detFrac));
+    }, [detFrac, state.outcome]);
     const room = state.detectionMax - state.detection;
     const targetOpts = targetableDefenses(state);
     const STAGES = [{ name: "SUSPICIOUS", at: 0.25 }, { name: "ALERTED", at: 0.5 }, { name: "LOCKDOWN", at: 0.8 }];
@@ -240,6 +253,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
     return (
         <div className={"wrap" + (shaking ? " shaking" : "")}>
             {breachFx && <div className="breach-flash"><div className="bd">LAYER DOWN</div></div>}
+            {cascadeFx && <div className="cascade-flash"><div className="cd">⚡ SYSTEM CASCADE</div></div>}
             <div className="title">
                 BREACH <span className="sub">// {systemTitle}</span>
                 <button className="term ghost tiny" style={{ marginLeft: 14 }} onClick={() => onComplete({ won: false, detection: state.detectionMax, detectionMax: state.detectionMax })}>abort job</button>
@@ -863,6 +877,13 @@ export function App() {
     const [booted, setBooted] = useState(() => { try { return sessionStorage.getItem("breach_booted") === "1"; } catch { return false; } });
     const finishBoot = () => { setBooted(true); try { sessionStorage.setItem("breach_booted", "1"); } catch { /* ignore */ } };
     useEffect(() => { applyCrt(crtIsOn()); }, []); // apply CRT screen mode on load
+
+    // ambient bed: hum low on the map (scaled by Heat), let a breach drive its own
+    // dread, and go silent in menus / after the run ends.
+    useEffect(() => {
+        if (mode === "run" && run) sfx.setTension(0.1 + 0.55 * (run.heat / Math.max(1, run.heatMax)));
+        else if (mode !== "breach") sfx.stopBed();
+    }, [mode, run?.heat, run?.heatMax]);
 
     const campaign = run ? getCampaign(run.campaignId) : null;
 

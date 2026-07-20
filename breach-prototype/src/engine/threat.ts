@@ -26,13 +26,13 @@ export interface ThreatEffects {
     and strength. That keeps T0→T10 a smooth climb instead of a wall at T5. */
 export const THREAT_STEPS: string[] = [
     "", // T0 — base game
-    "The trace runs hotter — 6% less Heat headroom.",
+    "The trace runs hotter — 4% less Heat headroom.",
     "Targets are hardened — every defense +1 Strength.",
     "Leaner salvage — one fewer reward option, and the watcher stirs early.",
-    "Less room to breathe — another 5% less Heat headroom.",
+    "Less room to breathe — another 4% less Heat headroom.",
     "You start warm — begin each run already at 5% Heat.",
-    "Tighter breaches — 5% less room before lockout.",
-    "Relentless watcher — its pressure hits 7% sooner.",
+    "Tighter breaches — 4% less room before lockout.",
+    "Relentless watcher — its pressure hits 4% sooner.",
     "Harder targets — every defense +1 (total +2).",
     "The net tightens — less headroom and a warmer start (10% Heat).",
     "The gauntlet — the trace climbs +1 per turn and breaches tighten further.",
@@ -45,17 +45,21 @@ export function threatEffects(level: number): ThreatEffects {
         detectionMaxMul: 1, huntOffset: 0, leanRewards: false,
     };
     const n = Math.max(0, Math.min(MAX_THREAT, Math.floor(level)));
+    // NOTE: the base game now carries real difficulty (tighter detection clock +
+    // a watcher that bites), so the ladder adds a GENTLER incremental squeeze on
+    // top — otherwise it stacked into an unwinnable wall by T4. Kept as a smooth
+    // climb: mostly heat-economy pressure, sparing on flat strength/creep.
     for (let l = 1; l <= n; l++) {
         switch (l) {
-            case 1: eff.heatMaxMul -= 0.06; break;
+            case 1: eff.heatMaxMul -= 0.04; break;
             case 2: eff.strengthDelta += 1; break;
-            case 3: eff.leanRewards = true; eff.huntOffset += 0.06; break;
-            case 4: eff.heatMaxMul -= 0.05; break;
+            case 3: eff.leanRewards = true; eff.huntOffset += 0.04; break;
+            case 4: eff.heatMaxMul -= 0.04; break;
             case 5: eff.startHeatFrac += 0.05; break;
-            case 6: eff.detectionMaxMul -= 0.05; break;
-            case 7: eff.huntOffset += 0.07; break;
+            case 6: eff.detectionMaxMul -= 0.04; break;
+            case 7: eff.huntOffset += 0.04; break;
             case 8: eff.strengthDelta += 1; break;
-            case 9: eff.heatMaxMul -= 0.05; eff.startHeatFrac += 0.05; break;
+            case 9: eff.heatMaxMul -= 0.04; eff.startHeatFrac += 0.05; break;
             case 10: eff.creepDelta += 1; eff.detectionMaxMul -= 0.04; break;
         }
     }

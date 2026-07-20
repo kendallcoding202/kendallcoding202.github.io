@@ -193,6 +193,7 @@ export interface GameState {
     spoofTurns: number; // suppress the system's end-of-turn reaction
     exploitBonus: number; // Overclock: added to your NEXT exploit's damage this turn
     exploitsThisTurn: number; // exploits played this turn (for combo-scaling cards)
+    cascade: boolean; // SYSTEM CASCADE fired this turn (a big-combo overclock moment)
     bombs: LogicBomb[]; // planted logic bombs that tick each end of turn
 
     alert: AlertStage; // derived from detection; drives the system's behaviour

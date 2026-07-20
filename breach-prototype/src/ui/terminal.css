@@ -236,6 +236,25 @@ body::before {
     100% { opacity: 0; transform: scale(1.12); }
 }
 
+/* --- SYSTEM CASCADE: the combo power-spike moment (electric amber) --- */
+.cascade-flash {
+    position: fixed; inset: 0; z-index: 46; pointer-events: none;
+    background: radial-gradient(circle at 50% 46%, rgba(255, 190, 60, 0.26), transparent 60%);
+    animation: cascadeflash 0.9s ease-out forwards;
+}
+@keyframes cascadeflash { 0% { opacity: 0; } 12% { opacity: 1; } 100% { opacity: 0; } }
+.cascade-flash .cd {
+    position: absolute; top: 33%; left: 0; right: 0; text-align: center;
+    color: #ffd870; font-weight: bold; letter-spacing: 6px; font-size: 30px;
+    text-shadow: 0 0 22px #ffb000, 0 0 40px #ff8a00; animation: cascadetext 0.95s cubic-bezier(.2,.8,.2,1) forwards;
+}
+@keyframes cascadetext {
+    0% { opacity: 0; transform: scale(0.82) skewX(-6deg); }
+    22% { opacity: 1; transform: scale(1.12) skewX(0); }
+    46% { transform: scale(1.02); }
+    100% { opacity: 0; transform: scale(1.18); }
+}
+
 /* --- floating damage numbers + smoother strength bar --- */
 .dchip { position: relative; }
 .dmg-float {
@@ -285,7 +304,7 @@ body::before {
 
 /* respect reduced-motion */
 @media (prefers-reduced-motion: reduce) {
-    .wrap.shaking, .breach-flash, .breach-flash .bd, .dmg-float, .meter.spike, .meter.hot .fill,
+    .wrap.shaking, .breach-flash, .breach-flash .bd, .cascade-flash, .cascade-flash .cd, .dmg-float, .meter.spike, .meter.hot .fill,
     #root::before, body::before, .transmission .tbox, .transmission .ttext, .log .ln:last-child { animation: none; }
 }
 

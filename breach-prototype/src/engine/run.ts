@@ -27,9 +27,9 @@ export function getCampaign(id: string): Campaign {
     makes each job tougher — and lying low (safehouses) buys it back. */
 export function huntPressure(heat: number, heatMax: number, offset = 0): HuntPressure {
     const f = heat / Math.max(1, heatMax);
-    if (f >= 0.85 - offset) return { tier: 3, label: "HUNTED · critical", blurb: "The watcher is on top of you — targets start alert, reinforced, and patching fast.", detectionStartFrac: 0.22, creepDelta: 2, strengthDelta: 1 };
-    if (f >= 0.65 - offset) return { tier: 2, label: "HUNTED · hot", blurb: "Live intel is reaching your targets — systems start alert and patch faster.", detectionStartFrac: 0.16, creepDelta: 1 };
-    if (f >= 0.40 - offset) return { tier: 1, label: "HUNTED · warm", blurb: "The watcher warned your targets — you start each breach a little exposed.", detectionStartFrac: 0.10 };
+    if (f >= 0.80 - offset) return { tier: 3, label: "HUNTED · critical", blurb: "The watcher is on top of you — targets start alert, reinforced, and patching fast.", detectionStartFrac: 0.30, creepDelta: 3, strengthDelta: 2 };
+    if (f >= 0.58 - offset) return { tier: 2, label: "HUNTED · hot", blurb: "Live intel is reaching your targets — systems start alert, reinforced, and patch faster.", detectionStartFrac: 0.22, creepDelta: 2, strengthDelta: 1 };
+    if (f >= 0.35 - offset) return { tier: 1, label: "HUNTED · warm", blurb: "The watcher warned your targets — you start each breach exposed and the trace runs faster.", detectionStartFrac: 0.14, creepDelta: 1 };
     return { tier: 0, label: "", blurb: "" };
 }
 
@@ -173,8 +173,8 @@ export function resolveBreach(prev: RunState, node: MapNode, result: BreachResul
         run.stats.breaches += 1;
         run.stats.quietestPct = run.stats.quietestPct == null ? pct : Math.min(run.stats.quietestPct, pct);
         run.stats.loudestPct = run.stats.loudestPct == null ? pct : Math.max(run.stats.loudestPct, pct);
-        const loudness = Math.round((result.detection / Math.max(1, result.detectionMax)) * 12);
-        const gained = 4 + loudness;
+        const loudness = Math.round((result.detection / Math.max(1, result.detectionMax)) * 13);
+        const gained = 9 + loudness;
         run.heat += gained;
         const bonusCredits = aggregateImplants(run.implants).creditsPerBreach;
         run.credits += (node.reward || 20) + bonusCredits;

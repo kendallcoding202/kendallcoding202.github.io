@@ -17,6 +17,8 @@ import { SYSTEMS, DEFAULT_SYSTEM } from "./systems.ts";
 import { shuffle } from "./rng.ts";
 
 const PROXY_REDUCTION = 3;
+const CASCADE_AT = 5; // play this many cards in one turn to trigger SYSTEM CASCADE (a real big-combo turn, not routine)
+const CASCADE_BONUS = 2; // one-shot exploit overclock granted by the cascade
 
 /* ---------- construction ---------- */
 
@@ -53,6 +55,7 @@ export function createInitialState(seed: number, systemKey: string = DEFAULT_SYS
         turnNoise: 0,
         cardsThisTurn: 0,
         silentThisTurn: 0,
+        cascade: false,
         noiseReduction: im?.noiseReduction || 0,
         breachDraw: !!im?.breachDraw,
         reconDraw: !!im?.reconDraw,
@@ -786,6 +789,14 @@ export function applyAction(prev: GameState, action: Action): GameState {
         s.cardsThisTurn += 1;
         if (noise === 0) s.silentThisTurn += 1;
         if (card.kind === "exploit") s.exploitsThisTurn += 1;
+        // SYSTEM CASCADE: chain enough cards in one turn and the intrusion snowballs —
+        // a legible, once-per-turn power spike that overclocks your next exploit. This
+        // is the payoff the combo/momentum archetype builds toward.
+        if (!s.cascade && s.cardsThisTurn >= CASCADE_AT) {
+            s.cascade = true;
+            s.exploitBonus += CASCADE_BONUS;
+            log(s, `⚡ SYSTEM CASCADE — you're moving faster than they can react. Next exploit overclocked (+${CASCADE_BONUS}).`);
+        }
         if (s.reconDraw && card.kind === "recon") draw(s, 1); // Recon Suite implant
 
         if (card.exhausts) log(s, `${card.name} spent (one-time).`);
@@ -807,6 +818,7 @@ export function applyAction(prev: GameState, action: Action): GameState {
         s.exploitsThisTurn = 0;
         s.cardsThisTurn = 0;
         s.silentThisTurn = 0;
+        s.cascade = false;
         if (s.outcome === "playing") {
             draw(s, s.handSize);
             s.turn += 1;

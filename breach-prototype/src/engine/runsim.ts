@@ -455,7 +455,7 @@ for (const id of CAMPAIGN_ORDER) {
     check("Threat 8 tightens the detection ceiling", b8.detectionMax < b0.detectionMax);
 
     // watcher offset: the same Heat reaches a higher pressure tier
-    check("Threat makes the watcher bite sooner", huntPressure(60, 100, 0.12).tier > huntPressure(60, 100, 0).tier);
+    check("Threat makes the watcher bite sooner", huntPressure(50, 100, 0.12).tier > huntPressure(50, 100, 0).tier);
 
     // a Threat run is still completable by playing well
     let run = createRun("ghost", 1, 3);
@@ -547,8 +547,19 @@ for (const id of CAMPAIGN_ORDER) {
     ov.layers[0].defenses.forEach((d) => { d.strength = 20; d.maxStrength = 20; });
     for (let i = 0; i < 4; i++) ov = applyAction(ov, { type: "playCard", card: "passiveRecon" });
     const ovs = ov.layers[0].defenses.map((d) => d.strength);
+    // overflow is the 5th card: its damage resolves (cards/2 = 2) BEFORE the 5th-card
+    // cascade fires, so it lands the base 2 per defense.
     ov = applyAction(ov, { type: "playCard", card: "overflow" });
     check("Overflow hits every defense for cards-played/2", ov.layers[0].defenses.every((d, i) => ovs[i] - d.strength === 2));
+
+    // SYSTEM CASCADE fires on the 5th card of a turn and overclocks the next exploit
+    let cas = createInitialState(35, "blackSite", ["passiveRecon", "passiveRecon", "passiveRecon", "passiveRecon", "passiveRecon"]);
+    for (let i = 0; i < 4; i++) cas = applyAction(cas, { type: "playCard", card: "passiveRecon" });
+    check("Cascade has NOT fired at 4 cards", cas.cascade === false);
+    cas = applyAction(cas, { type: "playCard", card: "passiveRecon" });
+    check("Cascade fires on the 5th card and grants an overclock", cas.cascade === true && cas.exploitBonus === 2);
+    cas = applyAction(cas, { type: "endTurn" });
+    check("Cascade flag resets at end of turn", cas.cascade === false && cas.cardsThisTurn === 0);
 
     // every reward-pool card is a real, defined card
     check("reward pool holds only real cards", REWARD_POOL.every((c) => !!CARDS[c]));
