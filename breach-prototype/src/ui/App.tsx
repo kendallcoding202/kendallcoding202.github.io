@@ -51,6 +51,14 @@ function MuteButton() {
     return <button className="term ghost tiny" onClick={() => setM(sfx.toggleMute())} title={m ? "sound off — click for sound" : "sound on"}>{m ? "🔇" : "🔊"}</button>;
 }
 
+function crtIsOn(): boolean { try { return localStorage.getItem("breach_crt") !== "0"; } catch { return true; } }
+function applyCrt(on: boolean) { document.documentElement.classList.toggle("crt", on); try { localStorage.setItem("breach_crt", on ? "1" : "0"); } catch { /* ignore */ } }
+function CrtButton() {
+    const [on, setOn] = useState(crtIsOn);
+    const toggle = () => { const v = !on; setOn(v); applyCrt(v); };
+    return <button className="term ghost tiny crt-btn" style={{ marginRight: 8 }} onClick={toggle} title="CRT screen effect">{on ? "▣" : "▢"} CRT</button>;
+}
+
 /* ---------- rules briefing (accessible via ?) ---------- */
 function Intro({ onClose }: { onClose: () => void }) {
     return (
@@ -333,7 +341,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
             <div className="controls">
                 <button className="term" onClick={endTurn}>End Turn ▸</button>
                 <button className="term ghost" onClick={() => setShowIntro(true)}>?</button>
-                <MuteButton />
+                <CrtButton /><MuteButton />
                 <span className="piles muted">🂠 draw {state.deck.length} · discard {state.discard.length}</span>
             </div>
             <div className="muted turn-note">Ending a turn <b>discards your hand and draws {state.handSize} fresh</b> (cards recycle), then the system acts and the trace climbs +{state.baselineCreep}.</div>
@@ -365,7 +373,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
 function HackerSelect({ onPick }: { onPick: (id: string) => void }) {
     return (
         <div className="wrap">
-            <div className="title">BREACH{IS_DEMO && <span className="demo-badge">DEMO</span>} <span style={{ float: "right" }}><MuteButton /></span></div>
+            <div className="title">BREACH{IS_DEMO && <span className="demo-badge">DEMO</span>} <span style={{ float: "right" }}><CrtButton /><MuteButton /></span></div>
             <p className="muted">Choose your operator. Each runs a different starting deck and a signature passive — a completely different way to break in.</p>
             <hr />
             <div className="hackers">
@@ -398,7 +406,7 @@ function CampaignSelect({ onPick, onBack, hacker, onShowAchievements, onShowFeed
 
     return (
         <div className="wrap">
-            <div className="title">BREACH{IS_DEMO && <span className="demo-badge">DEMO</span>} <span style={{ float: "right" }}><span className="deck-link" onClick={onShowFeedback} style={{ marginRight: 12 }}>💬 Feedback</span><span className="deck-link" onClick={onShowAchievements} style={{ marginRight: 12 }}>🏆 Achievements {achCount}/{TOTAL_ACHIEVEMENTS}</span><MuteButton /></span></div>
+            <div className="title">BREACH{IS_DEMO && <span className="demo-badge">DEMO</span>} <span style={{ float: "right" }}><span className="deck-link" onClick={onShowFeedback} style={{ marginRight: 12 }}>💬 Feedback</span><span className="deck-link" onClick={onShowAchievements} style={{ marginRight: 12 }}>🏆 Achievements {achCount}/{TOTAL_ACHIEVEMENTS}</span><CrtButton /><MuteButton /></span></div>
             <p className="muted">Operator: <b className="cyan">{h.glyph} {h.name}</b> · {h.passiveName} <span className="deck-link" onClick={onBack} style={{ marginLeft: 6 }}>◂ change</span>{profile.totalWins > 0 ? ` · ${profile.totalWins} contract${profile.totalWins === 1 ? "" : "s"} completed` : ""}</p>
             <hr />
             <div className="systems">
@@ -854,6 +862,7 @@ export function App() {
     const [endAchievements, setEndAchievements] = useState<string[]>([]);
     const [booted, setBooted] = useState(() => { try { return sessionStorage.getItem("breach_booted") === "1"; } catch { return false; } });
     const finishBoot = () => { setBooted(true); try { sessionStorage.setItem("breach_booted", "1"); } catch { /* ignore */ } };
+    useEffect(() => { applyCrt(crtIsOn()); }, []); // apply CRT screen mode on load
 
     const campaign = run ? getCampaign(run.campaignId) : null;
 
