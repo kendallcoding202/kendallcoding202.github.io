@@ -75,6 +75,32 @@ const SFX: Record<SfxName, () => void> = {
     transmission: () => { noiseBurst(0.16, 0.05); tone({ freq: 130, dur: 0.22, type: "sawtooth", gain: 0.06 }); tone({ freq: 90, dur: 0.22, type: "square", gain: 0.05, delay: 0.05 }); },
 };
 
+// Mobile browsers keep the audio engine suspended until a user gesture, and
+// iOS only unlocks it if a sound is armed INSIDE that gesture. Prime it on the
+// very first tap/key anywhere so phone players actually hear the SFX afterward.
+function unlockAudio() {
+    if (muted) return;
+    const c = ac();
+    if (!c) return;
+    if (c.state === "suspended") c.resume().catch(() => { /* ignore */ });
+    try {
+        const g = c.createGain(); g.gain.value = 0.00001;
+        const o = c.createOscillator(); o.connect(g); g.connect(c.destination);
+        o.start(); o.stop(c.currentTime + 0.02);
+    } catch { /* ignore */ }
+}
+if (typeof window !== "undefined") {
+    const onFirst = () => {
+        unlockAudio();
+        window.removeEventListener("pointerdown", onFirst);
+        window.removeEventListener("touchend", onFirst);
+        window.removeEventListener("keydown", onFirst);
+    };
+    window.addEventListener("pointerdown", onFirst);
+    window.addEventListener("touchend", onFirst);
+    window.addEventListener("keydown", onFirst);
+}
+
 export const sfx = {
     play(name: SfxName) {
         if (muted) return;
