@@ -463,10 +463,16 @@ html.crt .wrap { padding-top: 24px; }
     gap: 12px;
     opacity: 0.6;
 }
-.layer.current { opacity: 1; border-color: var(--fg); box-shadow: 0 0 10px #4af62633; }
+.layer.current { opacity: 1; border-color: var(--fg); box-shadow: 0 0 10px #4af62633; flex-wrap: wrap; }
 .layer.breached { opacity: 0.4; border-color: var(--dim); }
+/* the objective layer is the win condition — tint it gold so the goal is legible */
+.layer.objective .lname { color: #ffd24a; }
+.layer.objective:not(.current):not(.breached) { border-color: #4a3a12; }
 .layer .lname { font-weight: bold; white-space: nowrap; }
 .layer .defs { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+/* in-context reminder that recon reveals hidden defenses (only while any are unscanned) */
+.layer .scan-hint { flex-basis: 100%; text-align: right; font-size: 10.5px; color: var(--amber); opacity: 0.75; margin-top: 3px; }
+.layer .scan-hint b { color: var(--cyan); }
 .dchip {
     font-size: 12px; border: 1px solid var(--line); padding: 3px 8px; background: #0006;
     display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;

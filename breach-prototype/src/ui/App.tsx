@@ -309,14 +309,18 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
             <div className="layers">
                 {state.layers.map((l, i) => {
                     const isCurrent = i === state.current && !l.breached;
+                    const isObjective = i === state.layers.length - 1;
                     return (
-                        <div key={i} className={"layer" + (isCurrent ? " current" : "") + (l.breached ? " breached" : "")}>
-                            <span className="lname">{l.breached ? "✓ " : isCurrent ? "▶ " : "  "}{l.name}</span>
+                        <div key={i} className={"layer" + (isCurrent ? " current" : "") + (l.breached ? " breached" : "") + (isObjective ? " objective" : "")}>
+                            <span className="lname">{l.breached ? "✓ " : isCurrent ? "▶ " : isObjective ? "🎯 " : "  "}{l.name}</span>
                             <span className="defs">
                                 {l.breached ? <span className="muted">BREACHED</span> : l.defenses.map((d, di) => (
                                     <DefenseChip key={di} d={d} targetable={isCurrent && !!armed && d.strength > 0} preview={isCurrent && armed && d.strength > 0 ? previewOnTarget(state, armed, di) : null} kbdNum={isCurrent && armed ? targetOpts.indexOf(di) + 1 : undefined} hit={hits[`${i}-${di}`]} onClick={() => dispatch(armed!, di)} />
                                 ))}
                             </span>
+                            {isCurrent && l.defenses.some((d) => !d.typeRevealed && d.strength > 0) && (
+                                <span className="scan-hint">🔍 unscanned — play a <b>recon</b> card to reveal type &amp; Strength, then hit each with its match</span>
+                            )}
                         </div>
                     );
                 })}
