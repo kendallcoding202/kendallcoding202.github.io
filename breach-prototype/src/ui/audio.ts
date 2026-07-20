@@ -105,14 +105,18 @@ if (typeof window !== "undefined") {
 
 /* ============================================================
    ADAPTIVE AMBIENT BED — the "sound of dread"
-   A continuous low drone + a slow heartbeat that tighten as tension
-   rises (Heat on the map, detection inside a breach). All synthesized,
-   no assets. Silence between actions read as sterile; this gives the
-   terminal a pulse you feel in your chest as the trace closes in.
+   A continuous dark PAD (a low minor chord) + a slow heartbeat that
+   tighten as tension rises (Heat on the map, detection inside a breach).
+   All synthesized, no assets.
+
+   IMPORTANT: the fundamentals sit at ~110-165 Hz with harmonic-rich
+   sawtooths and an open filter, so the tone actually carries on tiny
+   phone/laptop speakers. (An earlier ~46 Hz sub-bass version was
+   inaudible on phones — those speakers roll off hard below ~200 Hz.)
    ============================================================ */
 interface Bed {
-    master: GainNode; filt: BiquadFilterNode;
-    sub1: OscillatorNode; sub2: OscillatorNode;
+    master: GainNode; filt: BiquadFilterNode; padGain: GainNode;
+    voices: OscillatorNode[];
     heart: OscillatorNode; heartGain: GainNode;
     tension: OscillatorNode; tensionGain: GainNode;
 }
@@ -121,31 +125,35 @@ let bed: Bed | null = null;
 function startBed() {
     const c = ac(); if (!c || bed) return;
     const master = c.createGain(); master.gain.value = 0.0001; master.connect(c.destination);
-    const filt = c.createBiquadFilter(); filt.type = "lowpass"; filt.frequency.value = 200; filt.Q.value = 5; filt.connect(master);
-    // the drone: two near-detuned low oscillators that beat slowly against each other
-    const sub1 = c.createOscillator(); sub1.type = "triangle"; sub1.frequency.value = 46; sub1.connect(filt);
-    const sub2 = c.createOscillator(); sub2.type = "sine"; sub2.frequency.value = 46.6; sub2.connect(filt);
+    const filt = c.createBiquadFilter(); filt.type = "lowpass"; filt.frequency.value = 700; filt.Q.value = 0.7; filt.connect(master);
+    const padGain = c.createGain(); padGain.gain.value = 0.34; padGain.connect(filt);
+    // the pad: an A-minor triad (A2 / C3 / E3), sawtooth so its harmonics reach the
+    // audible band on small speakers; slight detune per voice for a warm, moving chord
+    const chord = [110, 130.81, 164.81];
+    const detune = [0, -5, 6];
+    const voices = chord.map((hz, i) => {
+        const o = c.createOscillator(); o.type = "sawtooth"; o.frequency.value = hz; o.detune.value = detune[i];
+        o.connect(padGain); o.start(); return o;
+    });
     // the heartbeat: a sub-audio LFO adding a pulsing swell to the master gain
     const heartGain = c.createGain(); heartGain.gain.value = 0.0; heartGain.connect(master.gain);
-    const heart = c.createOscillator(); heart.type = "sine"; heart.frequency.value = 0.85; heart.connect(heartGain);
-    // the tension layer: an uneasy higher tone that only surfaces when things get hot
+    const heart = c.createOscillator(); heart.type = "sine"; heart.frequency.value = 0.85; heart.connect(heartGain); heart.start();
+    // the tension layer: an uneasy minor-6th tone (F3) that surfaces when things get hot
     const tensionGain = c.createGain(); tensionGain.gain.value = 0.0; tensionGain.connect(filt);
-    const tension = c.createOscillator(); tension.type = "sawtooth"; tension.frequency.value = 98; tension.connect(tensionGain);
-    sub1.start(); sub2.start(); heart.start(); tension.start();
-    bed = { master, filt, sub1, sub2, heart, heartGain, tension, tensionGain };
+    const tension = c.createOscillator(); tension.type = "sawtooth"; tension.frequency.value = 174.6; tension.connect(tensionGain); tension.start();
+    bed = { master, filt, padGain, voices, heart, heartGain, tension, tensionGain };
     applyBed(0);
 }
 
 function applyBed(f: number) {
     const c = ac(); if (!c || !bed) return;
     const t = c.currentTime, k = 0.5; // smooth glide toward each target
-    bed.master.gain.setTargetAtTime(0.03 + 0.06 * f, t, k);
-    bed.filt.frequency.setTargetAtTime(180 + 1100 * f, t, k);
+    bed.master.gain.setTargetAtTime(0.085 + 0.075 * f, t, k);    // audible floor, swells with tension
+    bed.filt.frequency.setTargetAtTime(700 + 1700 * f, t, k);    // brightens/harshens as it heats up
     bed.heart.frequency.setTargetAtTime(0.85 + 1.7 * f, t, k);   // pulse quickens as it closes in
-    bed.heartGain.gain.setTargetAtTime(0.004 + 0.02 * f, t, k);  // and swells deeper
+    bed.heartGain.gain.setTargetAtTime(0.006 + 0.03 * f, t, k);  // and swells deeper
     const tens = f < 0.4 ? 0 : (f - 0.4) / 0.6;                  // the dread layer fades in past 40%
-    bed.tensionGain.gain.setTargetAtTime(0.05 * tens * tens, t, k);
-    bed.tension.frequency.setTargetAtTime(96 + 34 * tens, t, k);
+    bed.tensionGain.gain.setTargetAtTime(0.06 * tens * tens, t, k);
 }
 
 function stopBed() {
@@ -154,7 +162,7 @@ function stopBed() {
     const t = c.currentTime;
     b.master.gain.setTargetAtTime(0.0001, t, 0.35);
     const stopAt = t + 1.4;
-    [b.sub1, b.sub2, b.heart, b.tension].forEach((o) => { try { o.stop(stopAt); } catch { /* ignore */ } });
+    [...b.voices, b.heart, b.tension].forEach((o) => { try { o.stop(stopAt); } catch { /* ignore */ } });
 }
 
 export const sfx = {
