@@ -101,10 +101,22 @@ live web page (default <http://127.0.0.1:8787>). Open it in any browser to watch
 - an RSI panel with the buy-confirmation band drawn in;
 - the running trade log.
 
-It auto-refreshes every few seconds. The page is self-contained (no external
-libraries or internet needed to render) and the server is read-only — it only
-displays the bot's state, it can't place trades. Change the address with
-`--host` / `--port`.
+It auto-refreshes every few seconds and is responsive (works on a phone). The
+page is self-contained (no external libraries or internet needed to render) and
+the server is read-only — it only displays the bot's state, it can't place
+trades. Change the address with `--host` / `--port`.
+
+**Viewing on your phone (same Wi-Fi):** bind to your machine's network
+interface instead of just localhost —
+
+```bash
+python run.py dashboard --host 0.0.0.0
+```
+
+It prints a `http://<your-ip>:8787` URL; open that on your phone. Only do this
+on a trusted network (home Wi-Fi): the dashboard has no password, so anyone on
+the same network could view it. It's read-only and paper-only, but don't expose
+it to the public internet.
 
 At 15-minute candles (`granularity: 900`), **672 bars ≈ one week** of history.
 

@@ -26,6 +26,19 @@ from bot.portfolio import PaperPortfolio
 from bot.strategy import MACrossoverStrategy
 
 
+def _lan_ip():
+    """Best-effort local network IP for building a phone-reachable URL."""
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))  # no packets sent; just picks the route's iface
+        return s.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        s.close()
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     cfg = load_config(args.config)
     TradingEngine(cfg).run()
@@ -41,8 +54,14 @@ def cmd_dashboard(args: argparse.Namespace) -> int:
     # its Ctrl-C / SIGTERM handlers work.
     t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()
-    url = f"http://{args.host}:{args.port}"
-    print(f"\n  Dashboard live at  {url}\n  (paper trading — Ctrl-C to stop)\n")
+    print("\n  Dashboard live (paper trading — Ctrl-C to stop):")
+    print(f"    on this computer:  http://127.0.0.1:{args.port}")
+    if args.host not in ("127.0.0.1", "localhost"):
+        lan_ip = _lan_ip()
+        if lan_ip:
+            print(f"    on your phone*:    http://{lan_ip}:{args.port}")
+            print("    * phone must be on the same Wi-Fi network")
+    print()
     try:
         engine.run()
     finally:
