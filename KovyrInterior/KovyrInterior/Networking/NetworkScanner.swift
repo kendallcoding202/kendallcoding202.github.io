@@ -17,6 +17,11 @@ final class NetworkScanner: ObservableObject {
     @Published private(set) var statusText = "Ready to scan"
     @Published private(set) var localNetwork: LocalNetwork?
 
+    /// The device's public / WAN IP + ISP + rough location, looked up over the
+    /// internet. Refreshed at the start of each scan; nil until then (or if
+    /// offline).
+    @Published private(set) var publicNetwork: PublicNetwork?
+
     /// IP address of a device the user asked to open — e.g. by tapping a
     /// "new device" notification. The Overview tab observes this, navigates to the
     /// device, and clears it. Nil when there is nothing pending.
@@ -34,7 +39,14 @@ final class NetworkScanner: ObservableObject {
 
     func startScan() {
         guard !isScanning else { return }
+        refreshPublicIP()
         scanTask = Task { await runScan() }
+    }
+
+    /// Looks up the public / WAN IP over the internet and publishes it. Runs
+    /// independently of the LAN scan (it only needs an internet connection).
+    func refreshPublicIP() {
+        Task { publicNetwork = await PublicNetworkInfo.fetch() }
     }
 
     /// Ask the Overview tab to open a specific device (by IP). If that device is

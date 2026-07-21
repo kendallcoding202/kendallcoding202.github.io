@@ -31,6 +31,10 @@ struct NetworkHeaderView: View {
                     metric("Subnet", net.cidr)
                     metric("Gateway", net.gatewayGuess)
                 }
+                if let pub = scanner.publicNetwork {
+                    Divider().overlay(Color.white.opacity(0.18))
+                    publicRow(pub)
+                }
             } else {
                 Text("Tap Scan to read your network details.")
                     .font(.subheadline)
@@ -52,6 +56,32 @@ struct NetworkHeaderView: View {
         )
         .padding(.horizontal)
         .padding(.top, 8)
+    }
+
+    private func publicRow(_ pub: PublicNetwork) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "globe")
+                .font(.footnote)
+                .foregroundStyle(Color.kovyrGold)
+            Text("Public IP")
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.75))
+            Text(pub.ipAddress)
+                .font(.footnote.monospacedDigit().weight(.semibold))
+                .foregroundStyle(.white)
+                .textSelection(.enabled)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            if let country = pub.countryCode {
+                Text(country)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.white.opacity(0.15), in: Capsule())
+            }
+            Spacer(minLength: 0)
+        }
     }
 
     private func metric(_ label: String, _ value: String) -> some View {
