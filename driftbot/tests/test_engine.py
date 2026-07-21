@@ -65,6 +65,25 @@ def test_equity_curve_survives_restart():
     assert e2._equity_curve[-1] == [1049, 1049.0]
 
 
+def test_benchmark_anchors_and_persists():
+    tmp = tempfile.mkdtemp()
+    eng = _engine(tmp)
+    # SOL doubled since the (auto-anchored) start; buy-and-hold ~doubles too.
+    candles = [Candle(1_700_000_000 + i * 900, 100.0, 100.0, 100.0, 100.0, 5.0)
+               for i in range(40)]
+    reading = eng.strategy.evaluate([c.close for c in candles])
+    eng._update_snapshot(candles, 100.0, reading, halted=False)   # anchor at 100
+    eng._update_snapshot(candles, 200.0, reading, halted=False)   # price doubled
+    snap = eng.get_snapshot()
+    # ~2000 minus one entry fee; clearly ahead of the $1000 start.
+    assert 1950 < snap["benchmark_value"] <= 2000
+    assert snap["vs_benchmark"] == round(snap["equity"] - snap["benchmark_value"], 2)
+
+    # Anchor persists across a restart (doesn't re-anchor to the new price).
+    eng2 = _engine(tmp)
+    assert eng2._bench.get("entry_price") == 100.0
+
+
 def test_downsample_bounds_and_keeps_last():
     pts = [[i, i * 1.0] for i in range(1000)]
     out = _downsample(pts, 100)

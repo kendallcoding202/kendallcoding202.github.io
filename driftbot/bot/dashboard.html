@@ -82,7 +82,7 @@
   <div class="grid" id="tiles"></div>
 
   <div class="panel">
-    <h2>Equity curve — account value over time (dashed = starting balance)</h2>
+    <h2>Equity curve — bot (green) vs buy &amp; hold SOL (amber) · dashed = starting balance</h2>
     <canvas id="equityChart" height="150"></canvas>
   </div>
 
@@ -138,6 +138,10 @@ function renderTiles(s) {
     tile("Realized P&L", (s.realized_pnl >= 0 ? "+" : "") + "$" + fmt(s.realized_pnl), pnlClass(s.realized_pnl)),
     tile("Fees paid", "$" + fmt(s.fees_paid ?? 0), s.fees_paid > 0 ? "neg" : ""),
     tile("Trades", s.num_trades ?? 0),
+    tile("Buy &amp; hold SOL", s.benchmark_value == null ? "—" :
+      "$" + fmt(s.benchmark_value) + `  (${s.benchmark_pct >= 0 ? "+" : ""}${fmt(s.benchmark_pct)}%)`),
+    tile("Bot vs hold", s.vs_benchmark == null ? "—" :
+      (s.vs_benchmark >= 0 ? "+" : "") + "$" + fmt(s.vs_benchmark), pnlClass(s.vs_benchmark)),
   ].join("");
 }
 
@@ -191,7 +195,8 @@ function renderEquityChart(s) {
   const { ctx, w, h } = prepCanvas($("equityChart"));
   const padL = 56, padR = 8, padT = 10, padB = 16;
   const n = c.equity.length, start = s.starting_cash;
-  const [lo, hi] = extent([c.equity, [start]]);
+  const bench = c.benchmark || [];
+  const [lo, hi] = extent([c.equity, bench, [start]]);
   const xOf = (i) => padL + (w - padL - padR) * (n <= 1 ? 0 : i / (n - 1));
   const yOf = (v) => padT + (h - padT - padB) * (1 - (v - lo) / (hi - lo));
 
@@ -208,6 +213,10 @@ function renderEquityChart(s) {
   ctx.beginPath(); ctx.moveTo(padL, ys); ctx.lineTo(w - padR, ys); ctx.stroke();
   ctx.setLineDash([]);
 
+  // buy-and-hold benchmark (amber), then the bot's equity on top
+  if (bench.some((v) => v != null)) {
+    drawLine(ctx, bench, xOf, yOf, css("--amber"), 1.6);
+  }
   const last = c.equity[n - 1];
   drawLine(ctx, c.equity, xOf, yOf, last >= start ? css("--green") : css("--red"), 1.8);
 }
