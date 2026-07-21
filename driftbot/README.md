@@ -30,6 +30,8 @@ intentionally not included here.
 ## What it does
 
 - Polls Coinbase public candles + ticker on an interval (no API key needed).
+  Trade decisions happen once per candle (`granularity`), while the dashboard
+  can refresh faster (`refresh_interval`) without adding trades or fees.
 - Computes a fast and slow moving average (EMA or SMA) and trades the crossover:
   - **Buy** when the fast MA crosses above the slow MA **and** RSI confirms
     (RSI inside a configurable band — bullish, but not already overbought).
@@ -136,7 +138,8 @@ commented list). The knobs you'll touch most:
 | Setting | Meaning |
 | --- | --- |
 | `trading.product_id` | Market to trade, e.g. `SOL-USD`, `BTC-USD`, `ETH-USD` |
-| `trading.granularity` | Candle size in seconds (60 / 300 / 900 / 3600 / 21600 / 86400) |
+| `trading.granularity` | Candle size in seconds AND trade-decision cadence (60 / 300 / 900 / 3600 / 21600 / 86400) |
+| `trading.refresh_interval` | How often the dashboard/equity refreshes (seconds); does not affect trade frequency or fees |
 | `strategy.fast_period` / `slow_period` | The two moving-average lengths |
 | `strategy.ma_type` | `ema` or `sma` |
 | `strategy.use_rsi_filter` | Require RSI to confirm a buy crossover (default `true`) |

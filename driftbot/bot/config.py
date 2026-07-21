@@ -17,8 +17,8 @@ class ExchangeConfig:
 @dataclass
 class TradingConfig:
     product_id: str = "BTC-USD"
-    granularity: int = 300
-    poll_interval: int = 60
+    granularity: int = 300      # candle size AND the trade-decision cadence
+    refresh_interval: int = 60  # how often the loop refreshes the view/equity
 
 
 @dataclass

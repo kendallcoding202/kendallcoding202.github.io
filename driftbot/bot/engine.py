@@ -69,6 +69,9 @@ class TradingEngine:
         self._snapshot: Optional[dict] = None
         # In-memory equity curve: [bar_time, equity] appended each step.
         self._equity_curve: List[list] = []
+        # Start time of the most recent bar we evaluated for a trade, so trade
+        # decisions happen once per completed candle even if we refresh faster.
+        self._last_bar: Optional[int] = None
 
     # -- one iteration -----------------------------------------------------
     def step(self) -> None:
@@ -79,21 +82,42 @@ class TradingEngine:
         price = self.client.get_price(self.cfg.trading.product_id)
         ts = _utc_now_iso()
 
+        # Live reading (includes the still-forming bar) for the dashboard.
         reading = self.strategy.evaluate(closes)
         equity = self.portfolio.equity(price)
         self.guard.update_day(_utc_date(), equity)
         halted = self.guard.is_halted(equity)
-        rsi_txt = "n/a" if reading.rsi is None else f"{reading.rsi:.1f}"
 
         if len(candles) < self.strategy.min_bars:
             self.logger.info(
                 "warming up: %d/%d bars", len(candles), self.strategy.min_bars
             )
         else:
-            self._trade(reading, price, ts, equity, halted, rsi_txt)
+            self._maybe_trade(candles, ts, equity, halted, price)
 
+        # Always refresh the view/equity, however often we poll.
         self._update_snapshot(candles, price, reading, halted)
         self._persist()
+
+    def _maybe_trade(self, candles, ts, equity, halted, live_price) -> None:
+        """Evaluate a trade at most once per completed candle.
+
+        The last candle is still forming, so we act only when a *new* bar has
+        appeared, and we decide on the bar that just closed (candles[-2]).
+        """
+        current_bar = candles[-1].time
+        if self._last_bar is None:
+            self._last_bar = current_bar   # baseline; don't trade mid-bar
+            return
+        if current_bar == self._last_bar:
+            return                         # same bar as last check — no new decision
+        self._last_bar = current_bar
+
+        completed = [c.close for c in candles[:-1]]
+        closed_price = candles[-2].close
+        reading = self.strategy.evaluate(completed)
+        rsi_txt = "n/a" if reading.rsi is None else f"{reading.rsi:.1f}"
+        self._trade(reading, closed_price, ts, equity, halted, rsi_txt)
 
     def _trade(self, reading, price, ts, equity, halted, rsi_txt) -> None:
         # Protective exits take priority; if we stop/take out this bar, do not
@@ -225,11 +249,12 @@ class TradingEngine:
         signal.signal(signal.SIGTERM, _stop)
 
         self.logger.info(
-            "PAPER trading started | product=%s granularity=%ds strategy=%s(%d/%d) "
-            "cash=%.2f",
+            "PAPER trading started | product=%s trade-every=%ds refresh-every=%ds "
+            "strategy=%s(%d/%d) cash=%.2f",
             self.cfg.trading.product_id, self.cfg.trading.granularity,
-            self.cfg.strategy.ma_type, self.cfg.strategy.fast_period,
-            self.cfg.strategy.slow_period, self.portfolio.cash,
+            self.cfg.trading.refresh_interval, self.cfg.strategy.ma_type,
+            self.cfg.strategy.fast_period, self.cfg.strategy.slow_period,
+            self.portfolio.cash,
         )
         while self._running:
             try:
@@ -237,7 +262,7 @@ class TradingEngine:
             except Exception as exc:  # keep the loop alive through transient errors
                 self.logger.error("iteration failed: %s", exc)
             # Sleep in short slices so shutdown is responsive.
-            for _ in range(self.cfg.trading.poll_interval):
+            for _ in range(self.cfg.trading.refresh_interval):
                 if not self._running:
                     break
                 time.sleep(1)
