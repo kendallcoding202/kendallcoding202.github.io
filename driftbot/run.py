@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Command-line entry point for the paper-trading crypto bot.
+"""Command-line entry point for driftbot, a paper-trading crypto bot.
 
 Usage:
     python run.py run       [--config config.yaml]   # live paper-trading loop
@@ -172,7 +172,7 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Paper-trading crypto bot")
+    parser = argparse.ArgumentParser(description="driftbot — paper-trading crypto bot")
     parser.add_argument("--config", default="config.yaml",
                         help="path to config YAML (default: config.yaml)")
     sub = parser.add_subparsers(dest="command", required=True)

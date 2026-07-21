@@ -31,7 +31,7 @@ class CoinbaseClient:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.session = requests.Session()
-        self.session.headers.update({"User-Agent": "paper-crypto-bot/0.1"})
+        self.session.headers.update({"User-Agent": "driftbot/0.1"})
 
     def _get(self, path: str, params: dict | None = None, retries: int = 3) -> object:
         url = f"{self.base_url}{path}"

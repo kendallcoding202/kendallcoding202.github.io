@@ -1,4 +1,4 @@
-# Paper-Trading Crypto Bot
+# driftbot — Paper-Trading Crypto Bot
 
 An autonomous crypto trading bot that runs a **momentum / moving-average-crossover**
 strategy against **live Coinbase market data** — and executes every trade in a
@@ -48,7 +48,7 @@ intentionally not included here.
 ## Project layout
 
 ```
-crypto-bot/
+driftbot/
 ├── run.py              # CLI: run / dashboard / backtest / feescan / status
 ├── config.example.yaml # copy to config.yaml and tune
 ├── bot/
@@ -67,7 +67,7 @@ crypto-bot/
 ## Quick start
 
 ```bash
-cd crypto-bot
+cd driftbot
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 

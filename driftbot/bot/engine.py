@@ -22,7 +22,7 @@ from .strategy import MACrossoverStrategy, Signal
 
 
 def _setup_logger(log_file: str) -> logging.Logger:
-    logger = logging.getLogger("crypto-bot")
+    logger = logging.getLogger("driftbot")
     logger.setLevel(logging.INFO)
     logger.handlers.clear()
     fmt = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
