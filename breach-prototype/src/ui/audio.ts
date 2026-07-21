@@ -117,38 +117,89 @@ if (typeof window !== "undefined") {
    inaudible on phones — those speakers roll off hard below ~200 Hz.)
    ============================================================ */
 interface Bed {
-    master: GainNode; filt: BiquadFilterNode; padGain: GainNode;
+    master: GainNode; filt: BiquadFilterNode; padGain: GainNode; melodyGain: GainNode;
     voices: OscillatorNode[];
     heart: OscillatorNode; heartGain: GainNode;
     tension: OscillatorNode; tensionGain: GainNode;
 }
 let bed: Bed | null = null;
+let bedTimer: number | null = null;
+let bedStep = 0;
+let chordIdx = 0;
+let bedTension = 0; // last-applied tension (the scheduler reads this to shape the music)
+
+// A slow, dark chord progression (A-minor: i - VI - III - VII) as [root, 3rd, 5th]
+// frequencies. The pad GLIDES between these so the harmony keeps moving instead of
+// droning on one chord forever. Low fundamentals, but sawtooth harmonics carry.
+const CHORDS: number[][] = [
+    [110.00, 130.81, 164.81], // Am  (A2 C3 E3)
+    [87.31, 130.81, 174.61],  // F   (F2 C3 F3)
+    [130.81, 164.81, 196.00], // C   (C3 E3 G3)
+    [98.00, 146.83, 196.00],  // G   (G2 D3 G3)
+];
+// Melody notes: A-minor pentatonic up high, so any note sits consonant over any chord.
+const MELODY = [220.00, 261.63, 293.66, 329.63, 392.00, 440.00, 523.25];
 
 function startBed() {
     const c = ac(); if (!c || bed) return;
     const master = c.createGain(); master.gain.value = 0.0001; master.connect(c.destination);
     const filt = c.createBiquadFilter(); filt.type = "lowpass"; filt.frequency.value = 700; filt.Q.value = 0.7; filt.connect(master);
-    const padGain = c.createGain(); padGain.gain.value = 0.34; padGain.connect(filt);
-    // the pad: an A-minor triad (A2 / C3 / E3), sawtooth so its harmonics reach the
-    // audible band on small speakers; slight detune per voice for a warm, moving chord
-    const chord = [110, 130.81, 164.81];
+    const padGain = c.createGain(); padGain.gain.value = 0.32; padGain.connect(filt);
+    // the pad: three sawtooth voices holding the current chord, gently detuned for warmth
+    chordIdx = 0; bedStep = 0;
     const detune = [0, -5, 6];
-    const voices = chord.map((hz, i) => {
+    const voices = CHORDS[0].map((hz, i) => {
         const o = c.createOscillator(); o.type = "sawtooth"; o.frequency.value = hz; o.detune.value = detune[i];
         o.connect(padGain); o.start(); return o;
     });
+    // sparse melody layer — soft notes plucked over the pad, routed through the filter
+    const melodyGain = c.createGain(); melodyGain.gain.value = 0.5; melodyGain.connect(filt);
     // the heartbeat: a sub-audio LFO adding a pulsing swell to the master gain
     const heartGain = c.createGain(); heartGain.gain.value = 0.0; heartGain.connect(master.gain);
     const heart = c.createOscillator(); heart.type = "sine"; heart.frequency.value = 0.85; heart.connect(heartGain); heart.start();
     // the tension layer: an uneasy minor-6th tone (F3) that surfaces when things get hot
     const tensionGain = c.createGain(); tensionGain.gain.value = 0.0; tensionGain.connect(filt);
     const tension = c.createOscillator(); tension.type = "sawtooth"; tension.frequency.value = 174.6; tension.connect(tensionGain); tension.start();
-    bed = { master, filt, padGain, voices, heart, heartGain, tension, tensionGain };
+    bed = { master, filt, padGain, melodyGain, voices, heart, heartGain, tension, tensionGain };
     applyBed(0);
+    // drive the evolving progression + melody on a slow beat (~1.9s)
+    bedTimer = window.setInterval(bedTick, 1900);
+}
+
+/** Play one soft melody note (through the filter, for cohesion with the pad). */
+function playBedNote(freq: number) {
+    const c = ac(); if (!c || !bed) return;
+    const t = c.currentTime;
+    const g = c.createGain(); g.gain.value = 0.0001; g.connect(bed.melodyGain);
+    const o = c.createOscillator(); o.type = "triangle"; o.frequency.value = freq; o.connect(g);
+    g.gain.exponentialRampToValueAtTime(0.06, t + 0.08); // gentle attack
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.1); // slow decay
+    o.start(t); o.stop(t + 1.2);
+}
+
+/** One beat of the ambient bed: advance the chord every 4 beats, sprinkle melody. */
+function bedTick() {
+    const c = ac(); if (!c || !bed) return;
+    bedStep++;
+    if (bedStep % 4 === 0) {
+        // move to the next chord — glide each pad voice for a smooth harmony change
+        chordIdx = (chordIdx + 1) % CHORDS.length;
+        const t = c.currentTime;
+        bed.voices.forEach((o, i) => o.frequency.setTargetAtTime(CHORDS[chordIdx][i], t, 0.5));
+    }
+    // melody density rises with tension: gentle when calm, busier as the trace climbs
+    const chance = 0.42 + 0.45 * bedTension;
+    if (Math.random() < chance) {
+        // higher, brighter picks when things are hot
+        const hi = Math.random() < 0.3 + 0.4 * bedTension;
+        const pool = hi ? MELODY.slice(3) : MELODY.slice(0, 5);
+        playBedNote(pool[Math.floor(Math.random() * pool.length)]);
+    }
 }
 
 function applyBed(f: number) {
     const c = ac(); if (!c || !bed) return;
+    bedTension = Math.max(0, Math.min(1, f));
     const t = c.currentTime, k = 0.5; // smooth glide toward each target
     bed.master.gain.setTargetAtTime(0.085 + 0.075 * f, t, k);    // audible floor, swells with tension
     bed.filt.frequency.setTargetAtTime(700 + 1700 * f, t, k);    // brightens/harshens as it heats up
@@ -160,6 +211,7 @@ function applyBed(f: number) {
 
 function stopBed() {
     const b = bed; if (!b) return; bed = null;
+    if (bedTimer !== null) { window.clearInterval(bedTimer); bedTimer = null; }
     const c = ac(); if (!c) return;
     const t = c.currentTime;
     b.master.gain.setTargetAtTime(0.0001, t, 0.35);
