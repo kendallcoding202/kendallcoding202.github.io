@@ -71,5 +71,7 @@ def test_dashboard_serves_html_and_state():
         assert snap["starting_cash"] == 1000.0
         assert "chart" in snap and len(snap["chart"]["price"]) == len(candles)
         assert "signal" in snap
+        assert "fees_paid" in snap
+        assert "equity_curve" in snap and len(snap["equity_curve"]["equity"]) >= 1
     finally:
         server.shutdown()

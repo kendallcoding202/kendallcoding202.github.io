@@ -77,6 +77,11 @@
   <div class="grid" id="tiles"></div>
 
   <div class="panel">
+    <h2>Equity curve — account value over time (dashed = starting balance)</h2>
+    <canvas id="equityChart" height="150"></canvas>
+  </div>
+
+  <div class="panel">
     <h2>Price · EMA fast (blue) / slow (gray) · trades (▲ buy ▼ sell)</h2>
     <canvas id="priceChart" height="260"></canvas>
   </div>
@@ -126,6 +131,7 @@ function renderTiles(s) {
     tile("EMA slow", fmt(s.ema_slow)),
     tile("RSI", s.rsi === null ? "—" : fmt(s.rsi, 1)),
     tile("Realized P&L", (s.realized_pnl >= 0 ? "+" : "") + "$" + fmt(s.realized_pnl), pnlClass(s.realized_pnl)),
+    tile("Fees paid", "$" + fmt(s.fees_paid ?? 0), s.fees_paid > 0 ? "neg" : ""),
     tile("Trades", s.num_trades ?? 0),
   ].join("");
 }
@@ -171,6 +177,32 @@ function drawLine(ctx, data, xOf, yOf, color, width = 1.5) {
     if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
   }
   ctx.stroke();
+}
+
+function renderEquityChart(s) {
+  const c = s.equity_curve; if (!c || !c.equity || c.equity.length < 2) return;
+  const { ctx, w, h } = prepCanvas($("equityChart"));
+  const padL = 56, padR = 8, padT = 10, padB = 16;
+  const n = c.equity.length, start = s.starting_cash;
+  const [lo, hi] = extent([c.equity, [start]]);
+  const xOf = (i) => padL + (w - padL - padR) * (n <= 1 ? 0 : i / (n - 1));
+  const yOf = (v) => padT + (h - padT - padB) * (1 - (v - lo) / (hi - lo));
+
+  ctx.fillStyle = css("--muted"); ctx.font = "10px sans-serif";
+  ctx.strokeStyle = css("--border"); ctx.lineWidth = 1;
+  for (let g = 0; g <= 3; g++) {
+    const val = lo + (hi - lo) * g / 3, y = yOf(val);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke();
+    ctx.fillText("$" + fmt(val, 0), 6, y + 3);
+  }
+  // starting-balance reference line
+  const ys = yOf(start);
+  ctx.strokeStyle = css("--gray"); ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(padL, ys); ctx.lineTo(w - padR, ys); ctx.stroke();
+  ctx.setLineDash([]);
+
+  const last = c.equity[n - 1];
+  drawLine(ctx, c.equity, xOf, yOf, last >= start ? css("--green") : css("--red"), 1.8);
 }
 
 function renderPriceChart(s) {
@@ -262,14 +294,16 @@ async function poll() {
     } else note.style.display = "none";
 
     renderTiles(s); renderTrades(s.trades);
-    renderPriceChart(s); renderRsiChart(s);
+    renderEquityChart(s); renderPriceChart(s); renderRsiChart(s);
   } catch (e) {
     $("updated").textContent = "render error: " + e.message;
   }
 }
 
 window.addEventListener("resize", () => {
-  if (last && last.chart) { renderPriceChart(last); renderRsiChart(last); }
+  if (last && last.chart) {
+    renderEquityChart(last); renderPriceChart(last); renderRsiChart(last);
+  }
 });
 
 poll();

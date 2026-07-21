@@ -67,6 +67,8 @@ class TradingEngine:
         # the HTTP server thread reads a consistent snapshot.
         self._snap_lock = threading.Lock()
         self._snapshot: Optional[dict] = None
+        # In-memory equity curve: [bar_time, equity] appended each step.
+        self._equity_curve: List[list] = []
 
     # -- one iteration -----------------------------------------------------
     def step(self) -> None:
@@ -156,6 +158,13 @@ class TradingEngine:
             return [None] * (len(closes) - len(series)) + list(series)
 
         pf = self.portfolio
+
+        # Append this bar's marked-to-market equity to the curve (capped).
+        bar_t = candles[-1].time if len(candles) else 0
+        self._equity_curve.append([bar_t, round(pf.equity(price), 2)])
+        if len(self._equity_curve) > 2000:
+            self._equity_curve = self._equity_curve[-2000:]
+
         snapshot = {
             "product": self.cfg.trading.product_id,
             "granularity": self.cfg.trading.granularity,
@@ -176,8 +185,13 @@ class TradingEngine:
             "equity": round(pf.equity(price), 2),
             "unrealized_pnl": round(pf.unrealized_pnl(price), 2),
             "realized_pnl": round(pf.realized_pnl, 2),
+            "fees_paid": round(sum(t.fee for t in pf.trades), 2),
             "num_trades": len(pf.trades),
             "updated": _utc_now_iso(),
+            "equity_curve": {
+                "t": [p[0] for p in self._equity_curve[-limit:]],
+                "equity": [p[1] for p in self._equity_curve[-limit:]],
+            },
             "chart": {
                 "t": [c.time for c in candles][-limit:],
                 "price": closes[-limit:],
