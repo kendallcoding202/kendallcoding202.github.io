@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import logging
 import signal
+import threading
 import time
 from datetime import datetime, timezone
-from typing import List, Sequence
+from typing import List, Optional, Sequence
 
 from .config import Config
 from .exchange import Candle, CoinbaseClient
+from .indicators import moving_average, rsi
 from .portfolio import PaperPortfolio
 from .risk import DailyLossGuard, ExitReason, RiskManager
 from .strategy import MACrossoverStrategy, Signal
@@ -61,25 +63,39 @@ class TradingEngine:
         )
         self._running = False
 
+        # Latest state for the dashboard, published each step under a lock so
+        # the HTTP server thread reads a consistent snapshot.
+        self._snap_lock = threading.Lock()
+        self._snapshot: Optional[dict] = None
+
     # -- one iteration -----------------------------------------------------
     def step(self) -> None:
         candles = self.client.get_candles(
             self.cfg.trading.product_id, self.cfg.trading.granularity
         )
-        if len(candles) < self.strategy.min_bars:
-            self.logger.info(
-                "warming up: %d/%d bars", len(candles), self.strategy.min_bars
-            )
-            return
-
         closes = [c.close for c in candles]
         price = self.client.get_price(self.cfg.trading.product_id)
         ts = _utc_now_iso()
 
+        reading = self.strategy.evaluate(closes)
         equity = self.portfolio.equity(price)
         self.guard.update_day(_utc_date(), equity)
+        halted = self.guard.is_halted(equity)
+        rsi_txt = "n/a" if reading.rsi is None else f"{reading.rsi:.1f}"
 
-        # 1) Protective exits take priority over any strategy signal.
+        if len(candles) < self.strategy.min_bars:
+            self.logger.info(
+                "warming up: %d/%d bars", len(candles), self.strategy.min_bars
+            )
+        else:
+            self._trade(reading, price, ts, equity, halted, rsi_txt)
+
+        self._update_snapshot(candles, price, reading, halted)
+        self._persist()
+
+    def _trade(self, reading, price, ts, equity, halted, rsi_txt) -> None:
+        # Protective exits take priority; if we stop/take out this bar, do not
+        # also act on the strategy signal in the same bar.
         if self.portfolio.has_position:
             exit_reason = self.risk.protective_exit(self.portfolio.entry_price, price)
             if exit_reason is not ExitReason.NONE:
@@ -89,14 +105,7 @@ class TradingEngine:
                     exit_reason.value, trade.price, self.portfolio.equity(price),
                     self.portfolio.realized_pnl,
                 )
-                self._persist()
                 return
-
-        # 2) Strategy signal.
-        reading = self.strategy.evaluate(closes)
-        halted = self.guard.is_halted(equity)
-
-        rsi_txt = "n/a" if reading.rsi is None else f"{reading.rsi:.1f}"
 
         if reading.signal is Signal.BUY and not self.portfolio.has_position:
             if halted:
@@ -130,10 +139,65 @@ class TradingEngine:
                 " [HALTED]" if halted else "",
             )
 
-        self._persist()
-
     def _persist(self) -> None:
         self.portfolio.save(self.cfg.state.file)
+
+    # -- dashboard snapshot ------------------------------------------------
+    def _update_snapshot(self, candles: Sequence[Candle], price: float,
+                         reading, halted: bool, limit: int = 200) -> None:
+        closes = [c.close for c in candles]
+        s = self.cfg.strategy
+        fast = moving_average(closes, s.fast_period, s.ma_type)
+        slow = moving_average(closes, s.slow_period, s.ma_type)
+        rsi_series = rsi(closes, s.rsi_period) if s.use_rsi_filter else []
+
+        def pad(series):
+            # Left-pad shorter indicator series with None so they align to closes.
+            return [None] * (len(closes) - len(series)) + list(series)
+
+        pf = self.portfolio
+        snapshot = {
+            "product": self.cfg.trading.product_id,
+            "granularity": self.cfg.trading.granularity,
+            "signal": reading.signal.value,
+            "halted": halted,
+            "warming_up": len(candles) < self.strategy.min_bars,
+            "price": price,
+            "ema_fast": reading.fast,
+            "ema_slow": reading.slow,
+            "rsi": reading.rsi,
+            "rsi_blocked": reading.rsi_blocked,
+            "rsi_buy_min": s.rsi_buy_min,
+            "rsi_buy_max": s.rsi_buy_max,
+            "starting_cash": self.cfg.portfolio.starting_cash,
+            "cash": round(pf.cash, 2),
+            "position_base": pf.base_amount,
+            "entry_price": pf.entry_price,
+            "equity": round(pf.equity(price), 2),
+            "unrealized_pnl": round(pf.unrealized_pnl(price), 2),
+            "realized_pnl": round(pf.realized_pnl, 2),
+            "num_trades": len(pf.trades),
+            "updated": _utc_now_iso(),
+            "chart": {
+                "t": [c.time for c in candles][-limit:],
+                "price": closes[-limit:],
+                "ema_fast": pad(fast)[-limit:],
+                "ema_slow": pad(slow)[-limit:],
+                "rsi": pad(rsi_series)[-limit:] if rsi_series else [],
+            },
+            "trades": [
+                {"time": t.timestamp, "side": t.side, "price": round(t.price, 4),
+                 "usd": round(t.usd_value, 2), "fee": round(t.fee, 2),
+                 "reason": t.reason}
+                for t in pf.trades[-50:]
+            ],
+        }
+        with self._snap_lock:
+            self._snapshot = snapshot
+
+    def get_snapshot(self) -> Optional[dict]:
+        with self._snap_lock:
+            return self._snapshot
 
     # -- loop --------------------------------------------------------------
     def run(self) -> None:

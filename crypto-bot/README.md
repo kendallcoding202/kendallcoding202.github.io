@@ -49,16 +49,18 @@ intentionally not included here.
 
 ```
 crypto-bot/
-├── run.py              # CLI: run / backtest / status
+├── run.py              # CLI: run / dashboard / backtest / feescan / status
 ├── config.example.yaml # copy to config.yaml and tune
 ├── bot/
 │   ├── config.py       # typed, validated config
 │   ├── exchange.py     # Coinbase public market-data client (read-only)
-│   ├── indicators.py   # SMA / EMA
-│   ├── strategy.py     # MA-crossover signal logic
+│   ├── indicators.py   # SMA / EMA / RSI
+│   ├── strategy.py     # MA-crossover signal logic + RSI filter
 │   ├── portfolio.py    # paper fills, fees, slippage, PnL, persistence
 │   ├── risk.py         # sizing, stop/take, daily-loss halt
-│   └── engine.py       # autonomous loop + backtester
+│   ├── engine.py       # autonomous loop + backtester + dashboard snapshot
+│   ├── dashboard.py    # read-only web server (stdlib only)
+│   └── dashboard.html  # self-contained dashboard page
 └── tests/              # unit tests
 ```
 
@@ -77,12 +79,30 @@ python run.py backtest --bars 672
 # 2) See how much of the result is eaten by fees, across platforms:
 python run.py feescan --bars 672
 
-# 3) If you like what you see, run the live paper loop (Ctrl-C to stop):
+# 3) Run the live paper loop with a web dashboard, then open the URL it prints:
+python run.py dashboard          # -> http://127.0.0.1:8787
+
+# ...or run the loop headless (logs only, Ctrl-C to stop):
 python run.py run
 
 # 4) Check the simulated portfolio / live signal at any time:
 python run.py status
 ```
+
+### Web dashboard
+
+`python run.py dashboard` runs the same autonomous paper loop **and** serves a
+live web page (default <http://127.0.0.1:8787>). Open it in any browser to watch:
+
+- current price, signal, equity, cash, position, EMA fast/slow, RSI, and P&L;
+- a price chart with the two EMAs overlaid and ▲ buy / ▼ sell markers;
+- an RSI panel with the buy-confirmation band drawn in;
+- the running trade log.
+
+It auto-refreshes every few seconds. The page is self-contained (no external
+libraries or internet needed to render) and the server is read-only — it only
+displays the bot's state, it can't place trades. Change the address with
+`--host` / `--port`.
 
 At 15-minute candles (`granularity: 900`), **672 bars ≈ one week** of history.
 

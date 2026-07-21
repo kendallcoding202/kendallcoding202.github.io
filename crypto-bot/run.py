@@ -16,7 +16,10 @@ import argparse
 import json
 import sys
 
+import threading
+
 from bot.config import load_config
+from bot.dashboard import serve as serve_dashboard
 from bot.engine import TradingEngine, run_backtest
 from bot.exchange import CoinbaseClient
 from bot.portfolio import PaperPortfolio
@@ -26,6 +29,24 @@ from bot.strategy import MACrossoverStrategy
 def cmd_run(args: argparse.Namespace) -> int:
     cfg = load_config(args.config)
     TradingEngine(cfg).run()
+    return 0
+
+
+def cmd_dashboard(args: argparse.Namespace) -> int:
+    cfg = load_config(args.config)
+    engine = TradingEngine(cfg)
+    server = serve_dashboard(engine, args.host, args.port)
+
+    # HTTP server in a daemon thread; the engine loop owns the main thread so
+    # its Ctrl-C / SIGTERM handlers work.
+    t = threading.Thread(target=server.serve_forever, daemon=True)
+    t.start()
+    url = f"http://{args.host}:{args.port}"
+    print(f"\n  Dashboard live at  {url}\n  (paper trading — Ctrl-C to stop)\n")
+    try:
+        engine.run()
+    finally:
+        server.shutdown()
     return 0
 
 
@@ -158,6 +179,11 @@ def main() -> int:
 
     sub.add_parser("run", help="run the live paper-trading loop")
 
+    db = sub.add_parser("dashboard",
+                        help="run the paper loop with a live web dashboard")
+    db.add_argument("--host", default="127.0.0.1", help="bind host (default: 127.0.0.1)")
+    db.add_argument("--port", type=int, default=8787, help="bind port (default: 8787)")
+
     bt = sub.add_parser("backtest", help="backtest the strategy on recent history")
     bt.add_argument("--bars", type=int, default=672,
                     help="historical candles to test on (default: 672 = ~1 week at 15m)")
@@ -172,7 +198,7 @@ def main() -> int:
     sub.add_parser("status", help="print current paper-portfolio state")
 
     args = parser.parse_args()
-    dispatch = {"run": cmd_run, "backtest": cmd_backtest,
+    dispatch = {"run": cmd_run, "dashboard": cmd_dashboard, "backtest": cmd_backtest,
                 "feescan": cmd_feescan, "status": cmd_status}
     return dispatch[args.command](args)
 
