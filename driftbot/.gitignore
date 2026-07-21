@@ -3,6 +3,7 @@ config.yaml
 
 # Paper-trading state and logs
 state.json
+equity.json
 *.log
 
 # Python
