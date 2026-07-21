@@ -11,6 +11,9 @@ import signal
 import threading
 import time
 from datetime import datetime, timezone
+import json
+import sys
+from pathlib import Path
 from typing import List, Optional, Sequence
 
 from .config import Config
@@ -31,10 +34,25 @@ def _setup_logger(log_file: str) -> logging.Logger:
     fh.setFormatter(fmt)
     logger.addHandler(fh)
 
-    sh = logging.StreamHandler()
+    # Log to stdout so hosts like Railway don't render normal INFO lines as
+    # red "error" output (the default StreamHandler writes to stderr).
+    sh = logging.StreamHandler(sys.stdout)
     sh.setFormatter(fmt)
     logger.addHandler(sh)
     return logger
+
+
+def _downsample(points: List[list], target: int) -> List[list]:
+    """Reduce a long series to at most ``target`` points, evenly spaced, always
+    keeping the final point so the latest value is exact."""
+    n = len(points)
+    if n <= target:
+        return points
+    step = n / target
+    out = [points[int(i * step)] for i in range(target)]
+    if out[-1] is not points[-1]:
+        out.append(points[-1])
+    return out
 
 
 def _utc_now_iso() -> str:
@@ -67,8 +85,10 @@ class TradingEngine:
         # the HTTP server thread reads a consistent snapshot.
         self._snap_lock = threading.Lock()
         self._snapshot: Optional[dict] = None
-        # In-memory equity curve: [bar_time, equity] appended each step.
-        self._equity_curve: List[list] = []
+        # Equity curve: [bar_time, equity]. Persisted next to the state file so
+        # a restart/redeploy doesn't wipe the account's history.
+        self._equity_file = str(Path(cfg.state.file).with_name("equity.json"))
+        self._equity_curve: List[list] = self._load_equity()
         # Start time of the most recent bar we evaluated for a trade, so trade
         # decisions happen once per completed candle even if we refresh faster.
         self._last_bar: Optional[int] = None
@@ -167,6 +187,23 @@ class TradingEngine:
 
     def _persist(self) -> None:
         self.portfolio.save(self.cfg.state.file)
+        self._save_equity()
+
+    # -- equity curve persistence -----------------------------------------
+    def _load_equity(self) -> List[list]:
+        try:
+            data = json.loads(Path(self._equity_file).read_text())
+            if isinstance(data, list):
+                return data
+        except (OSError, ValueError):
+            pass
+        return []
+
+    def _save_equity(self) -> None:
+        try:
+            Path(self._equity_file).write_text(json.dumps(self._equity_curve))
+        except OSError:
+            pass
 
     # -- dashboard snapshot ------------------------------------------------
     def _update_snapshot(self, candles: Sequence[Candle], price: float,
@@ -183,11 +220,14 @@ class TradingEngine:
 
         pf = self.portfolio
 
-        # Append this bar's marked-to-market equity to the curve (capped).
+        # Append this bar's marked-to-market equity to the curve. Retain a long
+        # rolling history (about two weeks at a 60s refresh) and downsample for
+        # the browser, so an always-on run shows its whole recent trajectory.
         bar_t = candles[-1].time if len(candles) else 0
         self._equity_curve.append([bar_t, round(pf.equity(price), 2)])
-        if len(self._equity_curve) > 2000:
-            self._equity_curve = self._equity_curve[-2000:]
+        if len(self._equity_curve) > 20000:
+            self._equity_curve = self._equity_curve[-20000:]
+        eq_curve = _downsample(self._equity_curve, 400)
 
         snapshot = {
             "product": self.cfg.trading.product_id,
@@ -213,8 +253,8 @@ class TradingEngine:
             "num_trades": len(pf.trades),
             "updated": _utc_now_iso(),
             "equity_curve": {
-                "t": [p[0] for p in self._equity_curve[-limit:]],
-                "equity": [p[1] for p in self._equity_curve[-limit:]],
+                "t": [p[0] for p in eq_curve],
+                "equity": [p[1] for p in eq_curve],
             },
             "chart": {
                 "t": [c.time for c in candles][-limit:],
