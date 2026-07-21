@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -100,6 +101,26 @@ class Config:
                 raise ValueError(f"risk.{name} must be in (0, 1]")
 
 
+# Old config keys mapped to their current names, so existing config.yaml files
+# keep working after a rename instead of crashing on load.
+_ALIASES = {"trading": {"poll_interval": "refresh_interval"}}
+
+
+def _build(cls, data, aliases=None):
+    """Construct a config dataclass, applying key aliases and ignoring unknown
+    keys (with a warning) rather than raising on them."""
+    data = dict(data or {})
+    for old, new in (aliases or {}).items():
+        if old in data:
+            val = data.pop(old)
+            data.setdefault(new, val)
+    valid = {f.name for f in dataclasses.fields(cls)}
+    unknown = sorted(set(data) - valid)
+    if unknown:
+        print(f"config: ignoring unknown {cls.__name__} key(s): {', '.join(unknown)}")
+    return cls(**{k: v for k, v in data.items() if k in valid})
+
+
 def load_config(path: str | Path) -> Config:
     """Load and validate configuration from a YAML file."""
     path = Path(path)
@@ -110,12 +131,12 @@ def load_config(path: str | Path) -> Config:
     raw = yaml.safe_load(path.read_text()) or {}
 
     cfg = Config(
-        exchange=ExchangeConfig(**raw.get("exchange", {})),
-        trading=TradingConfig(**raw.get("trading", {})),
-        portfolio=PortfolioConfig(**raw.get("portfolio", {})),
-        strategy=StrategyConfig(**raw.get("strategy", {})),
-        risk=RiskConfig(**raw.get("risk", {})),
-        state=StateConfig(**raw.get("state", {})),
+        exchange=_build(ExchangeConfig, raw.get("exchange")),
+        trading=_build(TradingConfig, raw.get("trading"), _ALIASES["trading"]),
+        portfolio=_build(PortfolioConfig, raw.get("portfolio")),
+        strategy=_build(StrategyConfig, raw.get("strategy")),
+        risk=_build(RiskConfig, raw.get("risk")),
+        state=_build(StateConfig, raw.get("state")),
     )
     cfg.validate()
     return cfg
