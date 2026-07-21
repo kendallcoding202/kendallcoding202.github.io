@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
-
 import threading
 
 from bot.config import load_config
@@ -55,12 +55,16 @@ def cmd_dashboard(args: argparse.Namespace) -> int:
     t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()
     print("\n  Dashboard live (paper trading — Ctrl-C to stop):")
-    print(f"    on this computer:  http://127.0.0.1:{args.port}")
-    if args.host not in ("127.0.0.1", "localhost"):
-        lan_ip = _lan_ip()
-        if lan_ip:
-            print(f"    on your phone*:    http://{lan_ip}:{args.port}")
-            print("    * phone must be on the same Wi-Fi network")
+    railway_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
+    if railway_domain:
+        print(f"    public URL:  https://{railway_domain}")
+    else:
+        print(f"    on this computer:  http://127.0.0.1:{args.port}")
+        if args.host not in ("127.0.0.1", "localhost"):
+            lan_ip = _lan_ip()
+            if lan_ip:
+                print(f"    on your phone*:    http://{lan_ip}:{args.port}")
+                print("    * phone must be on the same Wi-Fi network")
     print()
     try:
         engine.run()
@@ -200,8 +204,12 @@ def main() -> int:
 
     db = sub.add_parser("dashboard",
                         help="run the paper loop with a live web dashboard")
-    db.add_argument("--host", default="127.0.0.1", help="bind host (default: 127.0.0.1)")
-    db.add_argument("--port", type=int, default=8787, help="bind port (default: 8787)")
+    # On a host like Railway, PORT is injected and the app must bind 0.0.0.0.
+    default_host = "0.0.0.0" if os.environ.get("PORT") else "127.0.0.1"
+    db.add_argument("--host", default=default_host,
+                    help="bind host (default: 127.0.0.1 locally, 0.0.0.0 when $PORT is set)")
+    db.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8787)),
+                    help="bind port (default: $PORT or 8787)")
 
     bt = sub.add_parser("backtest", help="backtest the strategy on recent history")
     bt.add_argument("--bars", type=int, default=672,

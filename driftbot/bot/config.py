@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -125,9 +126,16 @@ def load_config(path: str | Path) -> Config:
     """Load and validate configuration from a YAML file."""
     path = Path(path)
     if not path.exists():
-        raise FileNotFoundError(
-            f"Config file not found: {path}. Copy config.example.yaml to config.yaml first."
-        )
+        # Fall back to the committed example so fresh deploys (e.g. Railway,
+        # where config.yaml is gitignored) run with sensible defaults.
+        example = path.parent / "config.example.yaml"
+        if example.exists():
+            print(f"config: {path.name} not found, using {example.name} defaults")
+            path = example
+        else:
+            raise FileNotFoundError(
+                f"Config file not found: {path}. Copy config.example.yaml to config.yaml first."
+            )
     raw = yaml.safe_load(path.read_text()) or {}
 
     cfg = Config(
@@ -138,5 +146,15 @@ def load_config(path: str | Path) -> Config:
         risk=_build(RiskConfig, raw.get("risk")),
         state=_build(StateConfig, raw.get("state")),
     )
+
+    # Persist state/logs to a mounted volume when DRIFTBOT_DATA_DIR is set
+    # (e.g. a Railway volume at /data), so a redeploy doesn't wipe the paper
+    # portfolio. Unset locally -> use the paths from config.
+    data_dir = os.environ.get("DRIFTBOT_DATA_DIR")
+    if data_dir:
+        Path(data_dir).mkdir(parents=True, exist_ok=True)
+        cfg.state.file = str(Path(data_dir) / "state.json")
+        cfg.state.log_file = str(Path(data_dir) / "bot.log")
+
     cfg.validate()
     return cfg

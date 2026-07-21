@@ -37,3 +37,23 @@ def test_new_key_takes_precedence_over_alias():
         "trading:\n  refresh_interval: 30\n  poll_interval: 900\n"
     ))
     assert cfg.trading.refresh_interval == 30
+
+
+def test_missing_config_falls_back_to_example():
+    # A fresh deploy has no config.yaml; loading should use config.example.yaml.
+    d = tempfile.mkdtemp()
+    with open(os.path.join(d, "config.example.yaml"), "w") as f:
+        f.write("portfolio:\n  starting_cash: 1234.0\n")
+    cfg = load_config(os.path.join(d, "config.yaml"))  # does not exist
+    assert cfg.portfolio.starting_cash == 1234.0
+
+
+def test_data_dir_env_redirects_state_paths():
+    d = tempfile.mkdtemp()
+    os.environ["DRIFTBOT_DATA_DIR"] = d
+    try:
+        cfg = load_config(_write("portfolio:\n  starting_cash: 1000.0\n"))
+    finally:
+        del os.environ["DRIFTBOT_DATA_DIR"]
+    assert cfg.state.file == os.path.join(d, "state.json")
+    assert cfg.state.log_file == os.path.join(d, "bot.log")
