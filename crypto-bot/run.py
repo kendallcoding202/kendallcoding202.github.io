@@ -66,6 +66,50 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     return 0
 
 
+# Representative base taker fees by platform (fraction per fill).
+FEE_PRESETS = [
+    (0.0000, "none (gross edge)"),
+    (0.0010, "Binance ~0.10%"),
+    (0.0026, "Kraken Pro ~0.26%"),
+    (0.0060, "Coinbase Adv ~0.60%"),
+]
+
+
+def cmd_feescan(args: argparse.Namespace) -> int:
+    cfg = load_config(args.config)
+    client = CoinbaseClient(cfg.exchange.base_url, cfg.exchange.timeout)
+    print(f"Fetching {args.bars} candles for {cfg.trading.product_id} "
+          f"@ {cfg.trading.granularity}s ...")
+    candles = client.get_candles_history(
+        cfg.trading.product_id, cfg.trading.granularity, args.bars
+    )
+    if len(candles) < 2:
+        print("Not enough historical data returned.", file=sys.stderr)
+        return 1
+
+    presets = FEE_PRESETS
+    if args.rates:
+        presets = [(r, f"{r * 100:.3g}%") for r in args.rates]
+
+    days = len(candles) * cfg.trading.granularity / 86400
+    print(f"\nFee sensitivity over {len(candles)} bars (~{days:.1f} days), "
+          f"start ${cfg.portfolio.starting_cash:,.0f}, {cfg.trading.product_id}:")
+    print("\n  fee / platform          trades   return %   final $    win %   maxDD %")
+    print("  " + "-" * 68)
+    for rate, label in presets:
+        cfg.portfolio.fee_rate = rate
+        res = run_backtest(cfg, candles)
+        res.pop("trades", None)
+        print(f"  {label:<22}  {res['num_trades']:>5}   {res['total_return_pct']:>7}   "
+              f"{res['final_equity']:>8}   {res['win_rate_pct']:>5}   "
+              f"{res['max_drawdown_pct']:>6}")
+    print("  " + "-" * 68)
+    print("\nThe gap between the 'none' row and the rest is pure fee drag — the "
+          "cost the strategy has to overcome before it earns anything.")
+    print("Past performance does not predict future results.")
+    return 0
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     cfg = load_config(args.config)
     client = CoinbaseClient(cfg.exchange.base_url, cfg.exchange.timeout)
@@ -115,13 +159,21 @@ def main() -> int:
     sub.add_parser("run", help="run the live paper-trading loop")
 
     bt = sub.add_parser("backtest", help="backtest the strategy on recent history")
-    bt.add_argument("--bars", type=int, default=1000,
-                    help="number of historical candles to test on (default: 1000)")
+    bt.add_argument("--bars", type=int, default=672,
+                    help="historical candles to test on (default: 672 = ~1 week at 15m)")
+
+    fs = sub.add_parser("feescan",
+                        help="backtest the same history at several fee rates side-by-side")
+    fs.add_argument("--bars", type=int, default=672,
+                    help="historical candles to test on (default: 672 = ~1 week at 15m)")
+    fs.add_argument("--rates", type=float, nargs="+", default=None,
+                    help="custom fee rates as fractions, e.g. --rates 0 0.001 0.0026 0.006")
 
     sub.add_parser("status", help="print current paper-portfolio state")
 
     args = parser.parse_args()
-    dispatch = {"run": cmd_run, "backtest": cmd_backtest, "status": cmd_status}
+    dispatch = {"run": cmd_run, "backtest": cmd_backtest,
+                "feescan": cmd_feescan, "status": cmd_status}
     return dispatch[args.command](args)
 
 

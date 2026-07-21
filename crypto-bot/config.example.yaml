@@ -15,12 +15,12 @@ exchange:
 
 trading:
   product_id: "SOL-USD"   # market to trade (e.g. SOL-USD, BTC-USD, ETH-USD)
-  granularity: 300        # candle size in seconds: 60, 300, 900, 3600, 21600, 86400
-  poll_interval: 60       # seconds the bot sleeps between iterations
+  granularity: 900        # candle size in seconds: 900 = 15-minute levels
+  poll_interval: 900      # check every 15 minutes in live paper mode
 
 portfolio:
-  starting_cash: 10000.0  # simulated USD you start with
-  fee_rate: 0.006         # per-fill fee (0.6%, roughly Coinbase taker)
+  starting_cash: 1000.0   # simulated USD you start with
+  fee_rate: 0.006         # per-fill fee (0.6%, roughly Coinbase taker; see `feescan`)
   slippage: 0.0005        # simulated slippage against you (0.05%)
 
 strategy:

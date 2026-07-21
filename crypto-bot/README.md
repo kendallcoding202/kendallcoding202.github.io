@@ -71,15 +71,39 @@ pip install -r requirements.txt
 
 cp config.example.yaml config.yaml    # then edit to taste
 
-# 1) Backtest the strategy on recent history first:
-python run.py backtest --bars 1000
+# 1) Backtest the strategy on recent history (default ~1 week of 15m candles):
+python run.py backtest --bars 672
 
-# 2) If you like what you see, run the live paper loop (Ctrl-C to stop):
+# 2) See how much of the result is eaten by fees, across platforms:
+python run.py feescan --bars 672
+
+# 3) If you like what you see, run the live paper loop (Ctrl-C to stop):
 python run.py run
 
-# 3) Check the simulated portfolio at any time:
+# 4) Check the simulated portfolio / live signal at any time:
 python run.py status
 ```
+
+At 15-minute candles (`granularity: 900`), **672 bars ≈ one week** of history.
+
+### The `feescan` command
+
+`feescan` replays the *same* week of history at several fee rates and prints
+them side by side, so you can see fee drag directly:
+
+```
+  fee / platform          trades   return %   final $    win %   maxDD %
+  --------------------------------------------------------------------
+  none (gross edge)          10     10.36     1103.6   100.0     0.61
+  Binance ~0.10%             10     10.07    1100.68   100.0     0.64
+  Kraken Pro ~0.26%          10       9.6    1096.03   100.0     0.68
+  Coinbase Adv ~0.60%        10      8.62    1086.23   100.0     0.76
+  --------------------------------------------------------------------
+```
+
+The gap between the `none` row and the others is the pure cost of fees — what
+the strategy must overcome before it earns anything. (Numbers above are from
+idealized sample data; run it on live history for the real picture.)
 
 The bot logs to stdout and to `bot.log`, and saves state to `state.json`.
 Delete `state.json` to reset the paper account.
