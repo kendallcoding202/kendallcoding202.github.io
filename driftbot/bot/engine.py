@@ -85,10 +85,15 @@ class TradingEngine:
         # the HTTP server thread reads a consistent snapshot.
         self._snap_lock = threading.Lock()
         self._snapshot: Optional[dict] = None
-        # Equity curve: [bar_time, equity]. Persisted next to the state file so
-        # a restart/redeploy doesn't wipe the account's history.
+        # Equity curve: [bar_time, equity, price]. Persisted next to the state
+        # file so a restart/redeploy doesn't wipe the account's history.
         self._equity_file = str(Path(cfg.state.file).with_name("equity.json"))
         self._equity_curve: List[list] = self._load_equity()
+        # Buy-and-hold benchmark anchor (price when tracking first started),
+        # persisted separately so it stays fixed across restarts and history
+        # rolloff — the honest yardstick over long runs.
+        self._bench_file = str(Path(cfg.state.file).with_name("benchmark.json"))
+        self._bench: dict = self._load_bench()
         # Start time of the most recent bar we evaluated for a trade, so trade
         # decisions happen once per completed candle even if we refresh faster.
         self._last_bar: Optional[int] = None
@@ -189,7 +194,7 @@ class TradingEngine:
         self.portfolio.save(self.cfg.state.file)
         self._save_equity()
 
-    # -- equity curve persistence -----------------------------------------
+    # -- equity curve + benchmark persistence -----------------------------
     def _load_equity(self) -> List[list]:
         try:
             data = json.loads(Path(self._equity_file).read_text())
@@ -204,6 +209,31 @@ class TradingEngine:
             Path(self._equity_file).write_text(json.dumps(self._equity_curve))
         except OSError:
             pass
+
+    def _load_bench(self) -> dict:
+        try:
+            data = json.loads(Path(self._bench_file).read_text())
+            if isinstance(data, dict):
+                return data
+        except (OSError, ValueError):
+            pass
+        return {}
+
+    def _save_bench(self) -> None:
+        try:
+            Path(self._bench_file).write_text(json.dumps(self._bench))
+        except OSError:
+            pass
+
+    def _benchmark_value(self, price: float):
+        """Value of a buy-and-hold: starting cash put into the asset at the
+        tracking-start price (paying one entry fee), marked at ``price``."""
+        entry = self._bench.get("entry_price")
+        if not entry or price is None:
+            return None
+        start = self.cfg.portfolio.starting_cash
+        units = start * (1 - self.cfg.portfolio.fee_rate) / entry
+        return round(units * price, 2)
 
     # -- dashboard snapshot ------------------------------------------------
     def _update_snapshot(self, candles: Sequence[Candle], price: float,
@@ -220,14 +250,27 @@ class TradingEngine:
 
         pf = self.portfolio
 
-        # Append this bar's marked-to-market equity to the curve. Retain a long
-        # rolling history (about two weeks at a 60s refresh) and downsample for
-        # the browser, so an always-on run shows its whole recent trajectory.
         bar_t = candles[-1].time if len(candles) else 0
-        self._equity_curve.append([bar_t, round(pf.equity(price), 2)])
+
+        # Anchor the buy-and-hold benchmark the first time we see a price.
+        if not self._bench.get("entry_price") and price and price > 0:
+            self._bench = {"entry_price": price, "entry_time": bar_t}
+            self._save_bench()
+
+        # Append this bar's marked-to-market equity (and price, for the
+        # benchmark overlay) to the curve. Retain a long rolling history (about
+        # two weeks at a 60s refresh) and downsample for the browser, so an
+        # always-on run shows its whole recent trajectory.
+        self._equity_curve.append([bar_t, round(pf.equity(price), 2), round(price, 6)])
         if len(self._equity_curve) > 20000:
             self._equity_curve = self._equity_curve[-20000:]
         eq_curve = _downsample(self._equity_curve, 400)
+
+        def _bench_at(point):
+            return self._benchmark_value(point[2] if len(point) > 2 else None)
+
+        bench_now = self._benchmark_value(price)
+        start_cash = self.cfg.portfolio.starting_cash
 
         snapshot = {
             "product": self.cfg.trading.product_id,
@@ -251,10 +294,16 @@ class TradingEngine:
             "realized_pnl": round(pf.realized_pnl, 2),
             "fees_paid": round(sum(t.fee for t in pf.trades), 2),
             "num_trades": len(pf.trades),
+            "benchmark_value": bench_now,
+            "benchmark_pct": (None if not bench_now else
+                              round((bench_now / start_cash - 1) * 100, 2)),
+            "vs_benchmark": (None if bench_now is None else
+                             round(pf.equity(price) - bench_now, 2)),
             "updated": _utc_now_iso(),
             "equity_curve": {
                 "t": [p[0] for p in eq_curve],
                 "equity": [p[1] for p in eq_curve],
+                "benchmark": [_bench_at(p) for p in eq_curve],
             },
             "chart": {
                 "t": [c.time for c in candles][-limit:],
