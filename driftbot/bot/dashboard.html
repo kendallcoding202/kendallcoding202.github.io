@@ -49,6 +49,11 @@
   .panel h2 { font-size: 12px; text-transform: uppercase; color: var(--muted);
     letter-spacing: .5px; margin: 0 0 10px; }
   canvas { width: 100%; display: block; }
+  /* Fixed CSS heights so the bitmap size is derived from a stable layout size
+     (prevents the canvas from growing on every refresh on Retina displays). */
+  #equityChart { height: 150px; }
+  #priceChart { height: 260px; }
+  #rsiChart { height: 120px; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--border); }
   th:first-child, td:first-child { text-align: left; }
@@ -148,8 +153,10 @@ function renderTrades(trades) {
 // Simple responsive line-chart drawing on a canvas.
 function prepCanvas(cv) {
   const dpr = window.devicePixelRatio || 1;
-  const w = cv.clientWidth, h = cv.height;
-  cv.width = w * dpr; cv.height = h * dpr;
+  // Read the CSS-laid-out size (stable), NOT the bitmap size (which we mutate).
+  const w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = Math.round(w * dpr);
+  cv.height = Math.round(h * dpr);
   const ctx = cv.getContext("2d");
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
