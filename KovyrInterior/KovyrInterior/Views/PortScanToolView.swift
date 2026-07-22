@@ -49,6 +49,20 @@ struct PortScanToolView: View {
                 }
             }
 
+            if !portScanner.findings.isEmpty && !portScanner.isScanning {
+                Section {
+                    NavigationLink {
+                        AssistantView(
+                            context: scanContext,
+                            openingPrompt: "Explain these open ports in plain English. For each, say what the service is, whether it's normal to see on a private network, and whether any of them are a security concern I should act on."
+                        )
+                    } label: {
+                        Label("Explain these results with Kovyr AI", systemImage: "sparkles")
+                            .foregroundStyle(Color.kovyrGold)
+                    }
+                }
+            }
+
             if !portScanner.findings.isEmpty {
                 Section("Open Ports") {
                     ForEach(portScanner.findings) { finding in
@@ -77,5 +91,17 @@ struct PortScanToolView: View {
         .kovyrScreen()
         .navigationTitle("Find Open Ports")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// Plain-text summary of the scan results fed to the assistant as context.
+    private var scanContext: String {
+        let target = host.trimmingCharacters(in: .whitespaces)
+        var lines = ["Port scan of host \(target.isEmpty ? "(unknown)" : target):"]
+        for finding in portScanner.findings {
+            var line = "- Port \(finding.port) (\(finding.serviceName))"
+            if let detail = finding.detail { line += " — \(detail)" }
+            lines.append(line)
+        }
+        return lines.joined(separator: "\n")
     }
 }

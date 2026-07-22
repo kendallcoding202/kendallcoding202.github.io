@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 /// "Ask Kovyr" chat screen. Streams answers from Claude Opus 4.8 using the user's
 /// on-device API key. Can be opened blank (general help) or seeded with scan
@@ -11,6 +12,8 @@ struct AssistantView: View {
 
     @StateObject private var assistant = KovyrAssistant()
     @State private var draft = ""
+    @State private var pickerItem: PhotosPickerItem?
+    @State private var attachedImage: Data?
     @FocusState private var inputFocused: Bool
 
     var body: some View {
@@ -69,7 +72,7 @@ struct AssistantView: View {
             Label("Ask Kovyr", systemImage: "sparkles")
                 .font(.headline)
                 .foregroundStyle(Color.kovyrGold)
-            Text("Ask about anything Kovyr Interior found — an unfamiliar device, an open port, a service name, or what a result means for your network's security. Answers come from Claude and can be detailed.")
+            Text("Ask about anything Kovyr Interior found — an unfamiliar device, an open port, a service name, or what a result means for your network's security. You can also attach a screenshot and have Kovyr read it. Answers come from Claude Opus 4.8 with extended thinking, so they can be detailed.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -87,9 +90,19 @@ struct AssistantView: View {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(Color.kovyrGold)
                 }
+                if let data = message.imageData, let ui = UIImage(data: data) {
+                    Image(uiImage: ui)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 220, maxHeight: 260)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
                 if message.text.isEmpty && !isUser {
-                    ProgressView().controlSize(.small)
-                } else {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text("Thinking…").font(.caption).foregroundStyle(.secondary)
+                    }
+                } else if !message.text.isEmpty {
                     Text(message.text)
                         .font(.callout)
                         .textSelection(.enabled)
@@ -107,36 +120,71 @@ struct AssistantView: View {
     }
 
     private var inputBar: some View {
-        HStack(spacing: 10) {
-            TextField("Ask about your network…", text: $draft, axis: .vertical)
-                .lineLimit(1...5)
-                .textFieldStyle(.plain)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
-                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .focused($inputFocused)
-                .disabled(!assistant.hasKey)
-
-            Button {
-                let text = draft
-                draft = ""
-                inputFocused = false
-                assistant.send(text)
-            } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 30))
-                    .foregroundStyle(canSend ? Color.kovyrGold : Color.gray)
+        VStack(spacing: 8) {
+            if let attachedImage, let ui = UIImage(data: attachedImage) {
+                HStack(spacing: 10) {
+                    Image(uiImage: ui)
+                        .resizable().scaledToFill()
+                        .frame(width: 40, height: 40)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    Text("Screenshot attached").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button { self.attachedImage = nil } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                    }
+                }
             }
-            .disabled(!canSend)
+
+            HStack(spacing: 10) {
+                PhotosPicker(selection: $pickerItem, matching: .images) {
+                    Image(systemName: "photo.on.rectangle")
+                        .font(.system(size: 24))
+                        .foregroundStyle(assistant.hasKey ? Color.kovyrGold : Color.gray)
+                }
+                .disabled(!assistant.hasKey || assistant.isSending)
+
+                TextField("Ask, or attach a screenshot…", text: $draft, axis: .vertical)
+                    .lineLimit(1...5)
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .focused($inputFocused)
+                    .disabled(!assistant.hasKey)
+
+                Button {
+                    let text = draft
+                    let image = attachedImage
+                    draft = ""
+                    attachedImage = nil
+                    inputFocused = false
+                    assistant.send(text, imageData: image)
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 30))
+                        .foregroundStyle(canSend ? Color.kovyrGold : Color.gray)
+                }
+                .disabled(!canSend)
+            }
         }
         .padding(.horizontal)
         .padding(.vertical, 10)
         .background(.ultraThinMaterial)
+        .onChange(of: pickerItem) { _, item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self) {
+                    attachedImage = data
+                }
+                pickerItem = nil
+            }
+        }
     }
 
     private var canSend: Bool {
-        assistant.hasKey && !assistant.isSending &&
-        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard assistant.hasKey, !assistant.isSending else { return false }
+        return attachedImage != nil ||
+            !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var noKeyBanner: some View {
