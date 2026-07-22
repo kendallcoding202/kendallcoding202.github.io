@@ -1,0 +1,4 @@
+
+# Xcode per-user state
+*.xcuserstate
+xcuserdata/

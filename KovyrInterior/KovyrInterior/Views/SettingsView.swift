@@ -3,11 +3,7 @@ import UIKit
 
 /// The "Settings" tab: background auto-scan toggle and app information.
 struct SettingsView: View {
-    @EnvironmentObject private var auth: AuthManager
     @AppStorage(BackgroundScan.enabledKey) private var backgroundEnabled = false
-    @State private var isTestingConnection = false
-    @State private var connectionStatus: String?
-    @State private var showLogin = false
 
     var body: some View {
         NavigationStack {
@@ -61,49 +57,6 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    if auth.isSignedIn {
-                        LabeledContent {
-                            Text(auth.email ?? "—").foregroundStyle(.secondary)
-                        } label: {
-                            Label("Signed in", systemImage: "person.crop.circle.fill.badge.checkmark")
-                        }
-                        Button(role: .destructive) {
-                            Task { await auth.signOut() }
-                        } label: {
-                            Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right")
-                        }
-                    } else {
-                        Button {
-                            showLogin = true
-                        } label: {
-                            Label("Sign in to Kovyr", systemImage: "person.crop.circle.badge.plus")
-                        }
-                    }
-
-                    Button {
-                        Task { await runConnectionTest() }
-                    } label: {
-                        HStack {
-                            Label("Test Kovyr connection", systemImage: "antenna.radiowaves.left.and.right")
-                            Spacer()
-                            if isTestingConnection { ProgressView() }
-                        }
-                    }
-                    .disabled(isTestingConnection)
-
-                    if let connectionStatus {
-                        Text(connectionStatus)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                    }
-                } header: {
-                    Text("Kovyr Account")
-                } footer: {
-                    Text("Sign in with your Kovyr email to link this device to your account — the same login you use on the Kovyr website.")
-                }
-
-                Section {
                     LabeledContent("Version", value: appVersion)
                     LabeledContent("Discovery", value: "TCP + Bonjour")
                 } header: {
@@ -114,17 +67,7 @@ struct SettingsView: View {
             }
             .kovyrScreen()
             .navigationTitle("Settings")
-            .sheet(isPresented: $showLogin) {
-                LoginView()
-            }
         }
-    }
-
-    private func runConnectionTest() async {
-        isTestingConnection = true
-        connectionStatus = "Testing…"
-        connectionStatus = await SupabaseManager.shared.testConnection()
-        isTestingConnection = false
     }
 
     private var appVersion: String {
