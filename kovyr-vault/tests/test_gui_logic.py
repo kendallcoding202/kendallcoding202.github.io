@@ -70,6 +70,29 @@ def test_status_flags_drift():
     assert summary["new_groups"] == 1
 
 
+def test_restore_single_file_lands_flat(tmp_path):
+    targets = gui.plan_restore_targets(["/data/reports/customers.csv"],
+                                       tmp_path)
+    assert targets == {"/data/reports/customers.csv":
+                       tmp_path / "customers.csv"}
+
+
+def test_restore_single_file_collision_mirrors(tmp_path):
+    (tmp_path / "customers.csv").write_text("already here")
+    targets = gui.plan_restore_targets(["/data/reports/customers.csv"],
+                                       tmp_path)
+    assert targets["/data/reports/customers.csv"] == \
+        tmp_path / "data" / "reports" / "customers.csv"
+
+
+def test_restore_multiple_files_mirror_paths(tmp_path):
+    names = ["/a/invoice.pdf", "/b/invoice.pdf"]
+    targets = gui.plan_restore_targets(names, tmp_path)
+    assert targets["/a/invoice.pdf"] == tmp_path / "a" / "invoice.pdf"
+    assert targets["/b/invoice.pdf"] == tmp_path / "b" / "invoice.pdf"
+    assert len(set(targets.values())) == 2  # never collide
+
+
 def test_status_existing_dupes_not_drift():
     g = {"sha256": "ab" * 32, "size": 100, "count": 2, "paths": ["/a", "/b"]}
     history = [snapshot(dupes=1, wasted=100, groups=[g]),
