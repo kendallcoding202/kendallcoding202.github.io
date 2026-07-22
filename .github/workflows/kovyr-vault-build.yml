@@ -1,0 +1,58 @@
+# Builds the standalone kovyr-vault.exe for Windows so clients don't need
+# Python installed. Run manually from the Actions tab, or push a
+# kovyr-vault-v* tag (e.g. kovyr-vault-v0.1.0) to cut a build.
+name: Kovyr Vault Windows build
+
+on:
+  workflow_dispatch: {}
+  push:
+    tags: ["kovyr-vault-v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kovyr-vault-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: kovyr-vault
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package and build tools
+        run: pip install . pyinstaller pytest
+
+      - name: Run test suite
+        run: python -m pytest tests/ -q
+
+      - name: Build standalone exe
+        run: pyinstaller --onefile --console --name kovyr-vault packaging/entry.py
+
+      # A real end-to-end check of the frozen binary: version, duplicate
+      # scan, and drift monitoring must all work outside a Python install.
+      - name: Smoke test exe
+        shell: pwsh
+        run: |
+          .\dist\kovyr-vault.exe --version
+          New-Item -ItemType Directory demo | Out-Null
+          Set-Content demo\a.txt "duplicate content"
+          Set-Content demo\b.txt "duplicate content"
+          .\dist\kovyr-vault.exe scan demo
+          .\dist\kovyr-vault.exe monitor demo --state demo\state.json --html demo\monitor.html
+          if (-not (Test-Path demo\monitor.html)) { exit 1 }
+
+      - name: Upload exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: kovyr-vault-windows
+          if-no-files-found: error
+          path: kovyr-vault/dist/kovyr-vault.exe

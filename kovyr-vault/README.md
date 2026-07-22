@@ -18,6 +18,8 @@ Kovyr Vault shrinks that exposure surface, then locks down what's left.
 | `restore` | Decrypt files back out of the vault. |
 | `list` | Show vault contents and how many unique encrypted blobs back them. |
 | `verify` | Decrypt every entry and check it against its recorded hash — proof for the client that the data is intact. |
+| `report` | Generate a branded, self-contained HTML engagement report from before/after scan data and vault stats (with a live integrity check). |
+| `monitor` | Recurring scan that records a snapshot and reports drift — new duplicate content appearing since the last run. Exits non-zero on drift so schedulers can alert. `--html` writes a branded monitoring report. |
 
 ## Typical engagement workflow
 
@@ -32,12 +34,48 @@ kovyr-vault dedupe "C:\ClientData" --apply --quarantine "C:\KovyrQuarantine"
 kovyr-vault init "C:\KovyrVault"
 kovyr-vault protect "C:\KovyrVault" "C:\ClientData" --remove-originals
 
-# 4. Prove: integrity check, before/after report
-kovyr-vault verify "C:\KovyrVault"
+# 4. Prove: verify integrity and hand the client a branded report
+kovyr-vault scan "C:\ClientData" --json > after.json
+kovyr-vault report engagement-report.html --client "Acme Dental" \
+    --before assessment.json --after after.json --vault "C:\KovyrVault"
 
 # When the client needs a file back:
 kovyr-vault restore "C:\KovyrVault" "C:\Restored" --name "C:\ClientData\report.pdf"
 ```
+
+## Ongoing monitoring (the monthly-fee part)
+
+`monitor` re-scans on a schedule, compares against the previous snapshot,
+and flags *drift* — duplicate copies creeping back after a cleanup. It
+exits with code 1 when new duplication appears, so a scheduled task can
+alert on it, and `--html` produces a client-ready report with an
+exposure-over-time history.
+
+```bash
+kovyr-vault monitor "C:\ClientData" --state "C:\Kovyr\state.json" \
+    --html "C:\Kovyr\latest-report.html" --client "Acme Dental"
+```
+
+Schedule it weekly on the client's machine:
+
+```powershell
+# Windows Task Scheduler (run as the user who owns the data)
+schtasks /Create /SC WEEKLY /D MON /ST 07:00 /TN "Kovyr Monitor" /TR ^
+  "C:\Kovyr\kovyr-vault.exe monitor C:\ClientData --state C:\Kovyr\state.json --html C:\Kovyr\latest-report.html --client \"Acme Dental\""
+```
+
+```bash
+# macOS / Linux cron
+0 7 * * 1  kovyr-vault monitor /srv/clientdata --state /var/kovyr/state.json --html /var/kovyr/latest-report.html --client "Acme Dental"
+```
+
+## Standalone Windows executable
+
+Clients don't need Python: the `Kovyr Vault Windows build` GitHub Actions
+workflow (Actions tab → run manually, or push a `kovyr-vault-v*` tag)
+runs the test suite, bundles the CLI into a single `kovyr-vault.exe`
+with PyInstaller, smoke-tests the frozen binary, and uploads it as a
+build artifact.
 
 ## Security design
 

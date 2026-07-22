@@ -6,18 +6,12 @@ import argparse
 import getpass
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
-from . import __version__, crypto, dedupe as dedupe_mod, scanner
+from . import __version__, crypto, dedupe as dedupe_mod, monitor as monitor_mod, report as report_mod, scanner
+from .util import human_size
 from .vault import Vault, VaultError
-
-
-def human_size(n: float) -> str:
-    for unit in ("B", "KB", "MB", "GB", "TB"):
-        if n < 1024 or unit == "TB":
-            return f"{n:.1f} {unit}" if unit != "B" else f"{int(n)} B"
-        n /= 1024
-    return f"{n:.1f} TB"
 
 
 def _prompt_passphrase(confirm: bool = False) -> str:
@@ -182,6 +176,96 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0
 
 
+def _load_scan_json(path: str) -> dict:
+    try:
+        data = json.loads(Path(path).read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        sys.exit(f"error: cannot read scan data from {path}: {exc}")
+    for key in ("files_scanned", "bytes_scanned", "duplicate_files",
+                "wasted_bytes", "groups"):
+        if key not in data:
+            sys.exit(f"error: {path} is not output from 'scan --json' "
+                     f"(missing {key!r})")
+    return data
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+
+def cmd_report(args: argparse.Namespace) -> int:
+    ctx: dict = {
+        "client": args.client,
+        "prepared_by": args.prepared_by,
+        "generated": _now(),
+        "version": __version__,
+        "before": _load_scan_json(args.before) if args.before else None,
+        "after": _load_scan_json(args.after) if args.after else None,
+    }
+    if not (ctx["before"] or ctx["after"] or args.vault):
+        sys.exit("error: nothing to report — give --before/--after scan "
+                 "JSON and/or --vault")
+    if args.vault:
+        vault = _open_vault(Path(args.vault))
+        entries = vault.list_files()
+        print("Verifying vault integrity…")
+        problems = vault.verify()
+        ctx["vault"] = {
+            "files": len(entries),
+            "total_bytes": sum(e.size for e in entries.values()),
+            "unique_blobs": vault.unique_blobs(),
+            "verify_problems": problems,
+        }
+    out = Path(args.output)
+    out.write_text(report_mod.render_report(ctx), encoding="utf-8")
+    print(f"Report written to {out}")
+    return 0
+
+
+def cmd_monitor(args: argparse.Namespace) -> int:
+    result = scanner.scan([Path(p) for p in args.paths])
+    snapshot, drift, history = monitor_mod.record_run(
+        Path(args.state), result, _now()
+    )
+    print(f"Scanned {snapshot['files_scanned']} files: "
+          f"{snapshot['duplicate_files']} redundant copies, "
+          f"{human_size(snapshot['wasted_bytes'])} excess exposure.")
+    if len(history) == 1:
+        print("Baseline recorded — future runs will report drift "
+              "against it.")
+    else:
+        if drift.new_groups:
+            print(f"NEW since last run: {len(drift.new_groups)} "
+                  f"duplicate groups appeared:")
+            for g in drift.new_groups:
+                print(f"  {g['count']} copies of "
+                      f"{human_size(g['size'])}:")
+                for p in g["paths"]:
+                    print(f"    {p}")
+        if drift.resolved_groups:
+            print(f"Resolved since last run: "
+                  f"{len(drift.resolved_groups)} groups cleaned up.")
+        if not drift.new_groups and not drift.resolved_groups:
+            print("No duplication drift since last run.")
+    if args.html:
+        ctx = {
+            "client": args.client,
+            "generated": _now(),
+            "version": __version__,
+            "history": history,
+            "new_groups": drift.new_groups,
+            "resolved_groups": drift.resolved_groups,
+        }
+        Path(args.html).write_text(
+            report_mod.render_monitor_report(ctx), encoding="utf-8"
+        )
+        print(f"Monitoring report written to {args.html}")
+    for err in result.errors:
+        print(f"warning: {err}", file=sys.stderr)
+    # Non-zero exit signals new drift, so schedulers/scripts can alert.
+    return 1 if drift.has_new else 0
+
+
 # ---------- parser ----------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -237,6 +321,29 @@ def build_parser() -> argparse.ArgumentParser:
                                       "and matches its hash")
     p.add_argument("vault")
     p.set_defaults(func=cmd_verify)
+
+    p = sub.add_parser("report", help="generate a branded HTML engagement "
+                                      "report")
+    p.add_argument("output", help="path for the HTML report")
+    p.add_argument("--client", help="client name shown on the report")
+    p.add_argument("--prepared-by", help="assessor name for the footer")
+    p.add_argument("--before", metavar="JSON",
+                   help="'scan --json' output from before remediation")
+    p.add_argument("--after", metavar="JSON",
+                   help="'scan --json' output from after remediation")
+    p.add_argument("--vault", help="include vault stats + integrity check "
+                                   "(prompts for passphrase)")
+    p.set_defaults(func=cmd_report)
+
+    p = sub.add_parser("monitor", help="recurring scan: record a snapshot "
+                                       "and report drift since last run")
+    p.add_argument("paths", nargs="+")
+    p.add_argument("--state", required=True, metavar="JSON",
+                   help="state file that accumulates snapshot history")
+    p.add_argument("--html", metavar="OUT",
+                   help="also write a branded monitoring report")
+    p.add_argument("--client", help="client name for the HTML report")
+    p.set_defaults(func=cmd_monitor)
 
     return parser
 
