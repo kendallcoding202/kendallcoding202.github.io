@@ -72,6 +72,15 @@ jobs:
     defaults:
       run:
         working-directory: kovyr-vault
+    # Signing/notarization activates automatically once these repo secrets
+    # exist (Settings → Secrets and variables → Actions); without them the
+    # job still builds unsigned binaries. See kovyr-vault/README.md.
+    env:
+      MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+      MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -93,6 +102,27 @@ jobs:
       - name: Build client desktop app (.app bundle)
         run: pyinstaller --windowed --name "Kovyr Vault" packaging/gui_entry.py
 
+      - name: Import signing certificate
+        if: env.MACOS_CERT_P12 != ''
+        run: |
+          echo "$MACOS_CERT_P12" | base64 -d > cert.p12
+          security create-keychain -p ci-build build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p ci-build build.keychain
+          security import cert.p12 -k build.keychain -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci-build build.keychain
+          rm cert.p12
+          IDENTITY=$(security find-identity -v -p codesigning build.keychain | awk -F'"' '/Developer ID Application/{print $2; exit}')
+          if [ -z "$IDENTITY" ]; then echo "No Developer ID Application identity found in cert"; exit 1; fi
+          echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+
+      - name: Sign binaries
+        if: env.MACOS_CERT_P12 != ''
+        run: |
+          codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" dist/kovyr-vault
+          codesign --deep --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "dist/Kovyr Vault.app"
+          codesign --verify --strict "dist/Kovyr Vault.app"
+
       - name: Smoke test CLI binary
         run: |
           ./dist/kovyr-vault --version
@@ -109,6 +139,17 @@ jobs:
         continue-on-error: true
         run: |
           "./dist/Kovyr Vault.app/Contents/MacOS/Kovyr Vault" --selftest
+
+      # Notarize with Apple so Gatekeeper opens the app without warnings,
+      # then staple the ticket so it verifies offline too.
+      - name: Notarize and staple
+        if: env.MACOS_CERT_P12 != ''
+        run: |
+          ditto -c -k --keepParent "dist/Kovyr Vault.app" notarize-app.zip
+          xcrun notarytool submit notarize-app.zip --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple "dist/Kovyr Vault.app"
+          ditto -c -k --keepParent dist/kovyr-vault notarize-cli.zip
+          xcrun notarytool submit notarize-cli.zip --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
 
       # Zip the .app ourselves to preserve the executable bits that a raw
       # artifact upload would strip from the bundle.

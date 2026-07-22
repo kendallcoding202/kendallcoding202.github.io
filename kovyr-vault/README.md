@@ -108,10 +108,33 @@ runs the test suite on both platforms and uploads two artifacts:
 Binaries only run on the platform they were built for — hand Windows
 clients the exes and Mac clients the zip.
 
-**macOS notes:** the binaries are unsigned, so Gatekeeper will block the
-first launch — right-click → Open → Open (once per machine), or sign
-them with an Apple Developer ID to remove the friction. For scheduled
-monitoring use the cron line above (`crontab -e`) or a launchd agent.
+**macOS scheduling:** use the cron line above (`crontab -e`) or a
+launchd agent.
+
+### macOS code signing & notarization
+
+The macOS job signs and notarizes automatically when five repository
+secrets exist (Settings → Secrets and variables → Actions → New
+repository secret). Without them it still builds, but unsigned —
+Gatekeeper then requires right-click → Open on first launch.
+
+| Secret | Value |
+|---|---|
+| `MACOS_CERT_P12` | Your **Developer ID Application** certificate exported as .p12, base64-encoded (`base64 -i cert.p12 \| pbcopy`) |
+| `MACOS_CERT_PASSWORD` | The password you set when exporting the .p12 |
+| `APPLE_ID` | The Apple ID email on the developer account |
+| `APPLE_TEAM_ID` | 10-character Team ID (developer.apple.com → Membership) |
+| `APPLE_APP_PASSWORD` | An app-specific password from appleid.apple.com → Sign-In and Security → App-Specific Passwords |
+
+To get the certificate: developer.apple.com → Certificates → create a
+**Developer ID Application** certificate (Keychain Access → Certificate
+Assistant → Request a Certificate From a Certificate Authority to make
+the CSR), download and open it into Keychain Access, then right-click
+the certificate → Export → .p12 with a password.
+
+With the secrets in place, builds come out signed with the hardened
+runtime, notarized by Apple, and stapled — clients double-click and it
+just opens.
 
 ## Security design
 
