@@ -39,7 +39,16 @@ BAD = "#b3261e"
 
 def default_config_path() -> Path:
     if getattr(sys, "frozen", False):  # PyInstaller bundle
-        return Path(sys.executable).parent / "config.json"
+        exe_dir = Path(sys.executable).parent
+        # In a macOS .app the executable is buried in Contents/MacOS —
+        # prefer a config sitting next to the .app bundle itself.
+        for ancestor in exe_dir.parents:
+            if ancestor.suffix == ".app":
+                beside_app = ancestor.parent / "config.json"
+                if beside_app.exists() or not (exe_dir / "config.json").exists():
+                    return beside_app
+                break
+        return exe_dir / "config.json"
     return Path.cwd() / "config.json"
 
 
