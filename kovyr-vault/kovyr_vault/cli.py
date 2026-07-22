@@ -6,11 +6,10 @@ import argparse
 import getpass
 import json
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 from . import __version__, crypto, dedupe as dedupe_mod, monitor as monitor_mod, report as report_mod, scanner
-from .util import human_size
+from .util import human_size, mirror_path, now_stamp
 from .vault import Vault, VaultError
 
 
@@ -142,10 +141,7 @@ def cmd_restore(args: argparse.Namespace) -> int:
         if not entries:
             sys.exit(f"error: no such file in vault: {args.name}")
     for name in entries:
-        # Rebuild the original absolute path underneath dest.
-        parts = [p.replace(":", "") for p in Path(name).parts
-                 if p not in ("/", "\\")]
-        target = dest.joinpath(*parts)
+        target = mirror_path(dest, name)
         vault.restore_file(name, target)
         print(f"Restored: {target}")
     print(f"\n{len(entries)} files restored to {dest}")
@@ -189,15 +185,11 @@ def _load_scan_json(path: str) -> dict:
     return data
 
 
-def _now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-
-
 def cmd_report(args: argparse.Namespace) -> int:
     ctx: dict = {
         "client": args.client,
         "prepared_by": args.prepared_by,
-        "generated": _now(),
+        "generated": now_stamp(),
         "version": __version__,
         "before": _load_scan_json(args.before) if args.before else None,
         "after": _load_scan_json(args.after) if args.after else None,
@@ -225,7 +217,7 @@ def cmd_report(args: argparse.Namespace) -> int:
 def cmd_monitor(args: argparse.Namespace) -> int:
     result = scanner.scan([Path(p) for p in args.paths])
     snapshot, drift, history = monitor_mod.record_run(
-        Path(args.state), result, _now()
+        Path(args.state), result, now_stamp()
     )
     print(f"Scanned {snapshot['files_scanned']} files: "
           f"{snapshot['duplicate_files']} redundant copies, "
@@ -250,7 +242,7 @@ def cmd_monitor(args: argparse.Namespace) -> int:
     if args.html:
         ctx = {
             "client": args.client,
-            "generated": _now(),
+            "generated": now_stamp(),
             "version": __version__,
             "history": history,
             "new_groups": drift.new_groups,
@@ -345,7 +337,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--client", help="client name for the HTML report")
     p.set_defaults(func=cmd_monitor)
 
+    p = sub.add_parser("gui", help="open the client-side desktop app")
+    p.add_argument("--config", help="path to config.json (default: next "
+                                    "to the executable)")
+    p.add_argument("--selftest", action="store_true",
+                   help=argparse.SUPPRESS)
+    p.set_defaults(func=cmd_gui)
+
     return parser
+
+
+def cmd_gui(args: argparse.Namespace) -> int:
+    from .gui import run_app  # deferred: tkinter may be absent on servers
+    return run_app(Path(args.config) if args.config else None,
+                   selftest=args.selftest)
 
 
 def main(argv: list[str] | None = None) -> int:

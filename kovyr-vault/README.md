@@ -20,6 +20,7 @@ Kovyr Vault shrinks that exposure surface, then locks down what's left.
 | `verify` | Decrypt every entry and check it against its recorded hash — proof for the client that the data is intact. |
 | `report` | Generate a branded, self-contained HTML engagement report from before/after scan data and vault stats (with a live integrity check). |
 | `monitor` | Recurring scan that records a snapshot and reports drift — new duplicate content appearing since the last run. Exits non-zero on drift so schedulers can alert. `--html` writes a branded monitoring report. |
+| `gui` | Open the client-side desktop app (also shipped as its own windowed `kovyr-vault-app.exe`). |
 
 ## Typical engagement workflow
 
@@ -69,13 +70,37 @@ schtasks /Create /SC WEEKLY /D MON /ST 07:00 /TN "Kovyr Monitor" /TR ^
 0 7 * * 1  kovyr-vault monitor /srv/clientdata --state /var/kovyr/state.json --html /var/kovyr/latest-report.html --client "Acme Dental"
 ```
 
+## Client desktop app
+
+`kovyr-vault-app.exe` stays on the client's machine so they can see
+their protection without Kovyr present:
+
+- **Protection status tab** — last check time, files watched, redundant
+  copies, excess exposure, and a green ✓ / red ⚠ headline; buttons to
+  run a check on demand and open the full HTML report.
+- **My encrypted files tab** — the client enters *their* passphrase to
+  unlock the vault, browse their encrypted files, and restore any of
+  them to a folder of their choice. Locking clears the key from memory.
+
+Setup during the engagement is one `config.json` next to the exe:
+
+```json
+{
+  "client": "Acme Dental",
+  "paths": ["C:\\ClientData"],
+  "state": "C:\\Kovyr\\state.json",
+  "html": "C:\\Kovyr\\latest-report.html",
+  "vault": "C:\\KovyrVault"
+}
+```
+
 ## Standalone Windows executable
 
 Clients don't need Python: the `Kovyr Vault Windows build` GitHub Actions
 workflow (Actions tab → run manually, or push a `kovyr-vault-v*` tag)
-runs the test suite, bundles the CLI into a single `kovyr-vault.exe`
-with PyInstaller, smoke-tests the frozen binary, and uploads it as a
-build artifact.
+runs the test suite, bundles the CLI into `kovyr-vault.exe` and the
+desktop app into `kovyr-vault-app.exe` with PyInstaller, smoke-tests
+both frozen binaries, and uploads them as a build artifact.
 
 ## Security design
 
@@ -96,9 +121,19 @@ build artifact.
 - Built entirely on the audited [`cryptography`](https://cryptography.io)
   library — no hand-rolled primitives.
 
-**Important:** there is no passphrase recovery. A lost passphrase means
-the vault contents are unrecoverable — that's the point. Record the
-passphrase in a password manager as part of the engagement.
+### Key custody: the client holds the key
+
+Kovyr provides the tool; **the client owns the passphrase.** It is typed
+at unlock time, held only in memory, and never written to disk by any
+part of this software — and there is deliberately no recovery. A lost
+passphrase means the vault contents are unrecoverable; a subpoenaed or
+breached Kovyr has nothing to hand over. Have the client set the
+passphrase themselves during the engagement and store it in *their*
+password manager.
+
+The scheduled `monitor` runs need no key at all — they only scan for
+duplicates — so ongoing monitoring never requires the client to share
+anything.
 
 ## Install & run
 

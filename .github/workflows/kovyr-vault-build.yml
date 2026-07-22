@@ -34,12 +34,16 @@ jobs:
       - name: Run test suite
         run: python -m pytest tests/ -q
 
-      - name: Build standalone exe
+      - name: Build standalone CLI exe
         run: pyinstaller --onefile --console --name kovyr-vault packaging/entry.py
 
-      # A real end-to-end check of the frozen binary: version, duplicate
-      # scan, and drift monitoring must all work outside a Python install.
-      - name: Smoke test exe
+      - name: Build client desktop app (windowed)
+        run: pyinstaller --onefile --noconsole --name kovyr-vault-app packaging/gui_entry.py
+
+      # A real end-to-end check of the frozen binaries: version, duplicate
+      # scan, drift monitoring, and GUI construction must all work outside
+      # a Python install.
+      - name: Smoke test exes
         shell: pwsh
         run: |
           .\dist\kovyr-vault.exe --version
@@ -49,10 +53,14 @@ jobs:
           .\dist\kovyr-vault.exe scan demo
           .\dist\kovyr-vault.exe monitor demo --state demo\state.json --html demo\monitor.html
           if (-not (Test-Path demo\monitor.html)) { exit 1 }
+          $gui = Start-Process -FilePath .\dist\kovyr-vault-app.exe -ArgumentList "--selftest" -Wait -PassThru
+          if ($gui.ExitCode -ne 0) { exit 1 }
 
-      - name: Upload exe
+      - name: Upload exes
         uses: actions/upload-artifact@v4
         with:
           name: kovyr-vault-windows
           if-no-files-found: error
-          path: kovyr-vault/dist/kovyr-vault.exe
+          path: |
+            kovyr-vault/dist/kovyr-vault.exe
+            kovyr-vault/dist/kovyr-vault-app.exe
