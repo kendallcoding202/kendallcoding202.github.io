@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import subprocess
 import sys
 import threading
 import webbrowser
@@ -59,6 +61,36 @@ def load_config(path: Path) -> dict:
     if not config.get("state"):
         raise ValueError("config must set 'state'")
     return config
+
+
+def plan_restore_targets(names: list[str], dest: Path) -> dict[str, Path]:
+    """Decide where each restored file lands.
+
+    A single file goes straight into the chosen folder under its own
+    name. If that would collide with an existing file — or when several
+    files are restored at once (which can carry same-named files from
+    different folders) — the original path is mirrored underneath dest
+    so nothing ever overwrites anything.
+    """
+    if len(names) == 1:
+        flat = dest / Path(names[0]).name
+        if not flat.exists():
+            return {names[0]: flat}
+    return {name: mirror_path(dest, name) for name in names}
+
+
+def reveal_in_file_manager(path: Path) -> None:
+    """Open the platform file manager with the restored file selected."""
+    try:
+        if sys.platform == "darwin":
+            subprocess.Popen(["open", "-R", str(path)])
+        elif os.name == "nt":
+            subprocess.Popen(["explorer", f"/select,{path}"])
+        else:
+            target = path if path.is_dir() else path.parent
+            webbrowser.open(target.as_uri())
+    except OSError:
+        pass  # a failed reveal should never break the restore itself
 
 
 def status_summary(history: list[dict]) -> dict:
@@ -362,7 +394,7 @@ class App:
 
         if self.vault is None:
             return
-        names = self.tree.selection()
+        names = list(self.tree.selection())
         if not names:
             messagebox.showinfo("Kovyr Vault",
                                 "Select one or more files first.")
@@ -370,17 +402,36 @@ class App:
         dest = filedialog.askdirectory(title="Restore into folder")
         if not dest:
             return
-        restored, failed = 0, []
-        for name in names:
+        targets = plan_restore_targets(names, Path(dest))
+        restored: list[Path] = []
+        failed: list[str] = []
+        for name, target in targets.items():
             try:
-                self.vault.restore_file(name, mirror_path(Path(dest), name))
-                restored += 1
+                self.vault.restore_file(name, target)
+                restored.append(target)
             except Exception as exc:
                 failed.append(f"{name}: {exc}")
-        message = f"Restored {restored} file(s) to {dest}."
+
+        lines = [f"{t.name}  →  {t}" for t in restored[:8]]
+        if len(restored) > 8:
+            lines.append(f"…and {len(restored) - 8} more")
+        if restored:
+            message = "Restored a copy of:\n" + "\n".join(lines)
+            message += ("\n\nThe encrypted originals remain safe in "
+                        "the vault.")
+        else:
+            message = "Nothing was restored."
         if failed:
             message += "\n\nProblems:\n" + "\n".join(failed)
-        messagebox.showinfo("Kovyr Vault", message)
+
+        if restored:
+            if messagebox.askyesno(
+                    "Kovyr Vault",
+                    message + "\n\nShow the restored file in "
+                    "Finder / File Explorer?"):
+                reveal_in_file_manager(restored[0])
+        else:
+            messagebox.showinfo("Kovyr Vault", message)
 
 
 def run_app(config_path: Path | None = None, selftest: bool = False) -> int:
