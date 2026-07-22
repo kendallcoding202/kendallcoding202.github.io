@@ -24,6 +24,18 @@ struct DeviceDetailView: View {
                 .padding(.vertical, 6)
             }
 
+            Section {
+                NavigationLink {
+                    AssistantView(
+                        context: deviceContext,
+                        openingPrompt: "What is this device, and is anything about it a security concern on my network?"
+                    )
+                } label: {
+                    Label("Explain this device with Kovyr AI", systemImage: "sparkles")
+                        .foregroundStyle(Color.kovyrGold)
+                }
+            }
+
             Section("Details") {
                 detailRow("Type", device.deviceType.label)
                 detailRow("IP Address", device.ipAddress)
@@ -100,6 +112,29 @@ struct DeviceDetailView: View {
         .kovyrScreen()
         .navigationTitle(device.displayName)
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// A plain-text summary of this device fed to the assistant as context.
+    private var deviceContext: String {
+        var lines: [String] = []
+        lines.append("Device name: \(device.displayName)")
+        lines.append("IP address: \(device.ipAddress)")
+        lines.append("Inferred type: \(device.deviceType.label)")
+        if let hostname = device.hostname { lines.append("Hostname: \(hostname)") }
+        if let bonjour = device.bonjourName { lines.append("Bonjour name: \(bonjour)") }
+        lines.append("Role: \(roleText)")
+        let ports = portScanner.findings.isEmpty
+            ? device.openPorts.map { "\($0.port) (\($0.serviceName))" }
+            : portScanner.findings.map { f in
+                "\(f.port) (\(f.serviceName))" + (f.detail.map { " — \($0)" } ?? "")
+              }
+        if !ports.isEmpty { lines.append("Open ports: " + ports.joined(separator: ", ")) }
+        if !device.services.isEmpty {
+            lines.append("Advertised services: " + device.services
+                .map { "\($0.category.label) [\($0.type)]" }
+                .joined(separator: ", "))
+        }
+        return lines.joined(separator: "\n")
     }
 
     private var roleText: String {

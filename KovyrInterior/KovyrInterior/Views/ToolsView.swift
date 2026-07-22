@@ -6,6 +6,14 @@ struct ToolsView: View {
     var body: some View {
         NavigationStack {
             List {
+                Section("Assistant") {
+                    ToolRow(
+                        title: "Ask Kovyr AI",
+                        subtitle: "Explain devices, ports and findings in plain English.",
+                        icon: "sparkles", color: Color.kovyrGold
+                    ) { AssistantView() }
+                }
+
                 Section("Network Security") {
                     ToolRow(
                         title: "Find open ports",

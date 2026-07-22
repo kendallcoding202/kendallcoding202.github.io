@@ -4,6 +4,8 @@ import UIKit
 /// The "Settings" tab: background auto-scan toggle and app information.
 struct SettingsView: View {
     @AppStorage(BackgroundScan.enabledKey) private var backgroundEnabled = false
+    @State private var apiKeyDraft = ""
+    @State private var hasKey = KeychainStore.hasAPIKey
 
     var body: some View {
         NavigationStack {
@@ -54,6 +56,39 @@ struct SettingsView: View {
                     Text("Kovyr").foregroundStyle(Color.kovyrGold)
                 } footer: {
                     Text("Kovyr is a security-posture service for small businesses. Kovyr Interior is its on-site, internal-network companion.")
+                }
+
+                Section {
+                    if hasKey {
+                        LabeledContent {
+                            Text("Key saved").foregroundStyle(.secondary)
+                        } label: {
+                            Label("Anthropic API key", systemImage: "key.fill")
+                        }
+                        Button(role: .destructive) {
+                            KeychainStore.deleteAPIKey()
+                            hasKey = false
+                            apiKeyDraft = ""
+                        } label: {
+                            Label("Remove key", systemImage: "trash")
+                        }
+                    } else {
+                        SecureField("sk-ant-…", text: $apiKeyDraft)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        Button {
+                            KeychainStore.saveAPIKey(apiKeyDraft)
+                            hasKey = KeychainStore.hasAPIKey
+                            apiKeyDraft = ""
+                        } label: {
+                            Label("Save key", systemImage: "checkmark.circle")
+                        }
+                        .disabled(apiKeyDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                } header: {
+                    Text("AI Assistant")
+                } footer: {
+                    Text("Paste your own Anthropic API key to enable “Ask Kovyr.” It is stored only in this device's Keychain — never uploaded, shared, or included in exports — and is sent solely to Anthropic when you ask a question. Answers use Claude Opus 4.8. Get a key at console.anthropic.com.")
                 }
 
                 Section {
