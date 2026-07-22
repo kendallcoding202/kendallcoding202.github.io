@@ -1,7 +1,9 @@
-# Builds the standalone kovyr-vault.exe for Windows so clients don't need
-# Python installed. Run manually from the Actions tab, or push a
-# kovyr-vault-v* tag (e.g. kovyr-vault-v0.1.0) to cut a build.
-name: Kovyr Vault Windows build
+# Builds standalone Kovyr Vault binaries so clients don't need Python
+# installed: kovyr-vault.exe + kovyr-vault-app.exe on Windows, and a
+# kovyr-vault CLI binary + Kovyr Vault.app on macOS. Run manually from
+# the Actions tab, or push a kovyr-vault-v* tag (e.g. kovyr-vault-v0.1.0)
+# to cut builds.
+name: Kovyr Vault build
 
 on:
   workflow_dispatch: {}
@@ -16,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
     defaults:
       run:
@@ -64,3 +66,60 @@ jobs:
           path: |
             kovyr-vault/dist/kovyr-vault.exe
             kovyr-vault/dist/kovyr-vault-app.exe
+
+  build-macos:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: kovyr-vault
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package and build tools
+        run: pip install . pyinstaller pytest
+
+      - name: Run test suite
+        run: python -m pytest tests/ -q
+
+      - name: Build standalone CLI binary
+        run: pyinstaller --onefile --console --name kovyr-vault packaging/entry.py
+
+      # --windowed on macOS produces a double-clickable "Kovyr Vault.app"
+      # bundle for the client desktop app.
+      - name: Build client desktop app (.app bundle)
+        run: pyinstaller --windowed --name "Kovyr Vault" packaging/gui_entry.py
+
+      - name: Smoke test CLI binary
+        run: |
+          ./dist/kovyr-vault --version
+          mkdir demo
+          echo "duplicate content" > demo/a.txt
+          echo "duplicate content" > demo/b.txt
+          ./dist/kovyr-vault scan demo
+          ./dist/kovyr-vault monitor demo --state demo/state.json --html demo/monitor.html
+          test -f demo/monitor.html
+
+      # GUI needs a window server; macOS runners have one, but if this
+      # ever flakes headlessly it should not block the CLI artifact.
+      - name: Smoke test app (GUI selftest)
+        continue-on-error: true
+        run: |
+          "./dist/Kovyr Vault.app/Contents/MacOS/Kovyr Vault" --selftest
+
+      # Zip the .app ourselves to preserve the executable bits that a raw
+      # artifact upload would strip from the bundle.
+      - name: Package artifacts
+        run: |
+          cd dist
+          zip -qry kovyr-vault-macos.zip kovyr-vault "Kovyr Vault.app"
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: kovyr-vault-macos
+          if-no-files-found: error
+          path: kovyr-vault/dist/kovyr-vault-macos.zip

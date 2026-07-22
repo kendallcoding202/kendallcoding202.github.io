@@ -94,13 +94,24 @@ Setup during the engagement is one `config.json` next to the exe:
 }
 ```
 
-## Standalone Windows executable
+## Standalone executables (Windows and macOS)
 
-Clients don't need Python: the `Kovyr Vault Windows build` GitHub Actions
+Clients don't need Python: the `Kovyr Vault build` GitHub Actions
 workflow (Actions tab → run manually, or push a `kovyr-vault-v*` tag)
-runs the test suite, bundles the CLI into `kovyr-vault.exe` and the
-desktop app into `kovyr-vault-app.exe` with PyInstaller, smoke-tests
-both frozen binaries, and uploads them as a build artifact.
+runs the test suite on both platforms and uploads two artifacts:
+
+- **kovyr-vault-windows** — `kovyr-vault.exe` (CLI) and
+  `kovyr-vault-app.exe` (client desktop app)
+- **kovyr-vault-macos** — a zip containing the `kovyr-vault` CLI binary
+  and the double-clickable `Kovyr Vault.app`
+
+Binaries only run on the platform they were built for — hand Windows
+clients the exes and Mac clients the zip.
+
+**macOS notes:** the binaries are unsigned, so Gatekeeper will block the
+first launch — right-click → Open → Open (once per machine), or sign
+them with an Apple Developer ID to remove the friction. For scheduled
+monitoring use the cron line above (`crontab -e`) or a launchd agent.
 
 ## Security design
 
