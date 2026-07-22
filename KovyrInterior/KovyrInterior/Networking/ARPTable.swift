@@ -57,7 +57,12 @@ enum ARPTable {
                     if macStart + alen <= needed {
                         var bytes = [UInt8](repeating: 0, count: alen)
                         for i in 0..<alen { bytes[i] = raw[macStart + i] }
-                        if bytes.contains(where: { $0 != 0 }) {
+                        // iOS 26 redacts real MACs to the sentinel 02:00:00:00:00:00
+                        // (and returns all-zero for incomplete entries); skip both so
+                        // we never surface a fake address.
+                        let isRedacted = bytes == [0x02, 0, 0, 0, 0, 0]
+                        let isZero = !bytes.contains { $0 != 0 }
+                        if !isRedacted && !isZero {
                             var addr = sin.pointee.sin_addr
                             var ipBuf = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
                             inet_ntop(AF_INET, &addr, &ipBuf, socklen_t(INET_ADDRSTRLEN))
