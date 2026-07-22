@@ -213,12 +213,12 @@ def main() -> int:
 
     bt = sub.add_parser("backtest", help="backtest the strategy on recent history")
     bt.add_argument("--bars", type=int, default=672,
-                    help="historical candles to test on (default: 672 = ~1 week at 15m)")
+                    help="historical candles to test on (default: 672 candles)")
 
     fs = sub.add_parser("feescan",
                         help="backtest the same history at several fee rates side-by-side")
     fs.add_argument("--bars", type=int, default=672,
-                    help="historical candles to test on (default: 672 = ~1 week at 15m)")
+                    help="historical candles to test on (default: 672 candles)")
     fs.add_argument("--rates", type=float, nargs="+", default=None,
                     help="custom fee rates as fractions, e.g. --rates 0 0.001 0.0026 0.006")
 

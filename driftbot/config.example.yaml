@@ -15,9 +15,9 @@ exchange:
 
 trading:
   product_id: "SOL-USD"   # market to trade (e.g. SOL-USD, BTC-USD, ETH-USD)
-  granularity: 900        # candle size = trade-decision cadence (900 = 15-min bars)
+  granularity: 3600       # candle size = trade-decision cadence (3600 = 1-hour bars)
   refresh_interval: 60    # how often the dashboard/equity refreshes (seconds).
-                          # Trades still happen only once per 15-min bar above,
+                          # Trades still happen only once per 1-hour bar above,
                           # so a faster refresh does NOT add trades or fees.
 
 portfolio:

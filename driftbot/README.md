@@ -75,7 +75,7 @@ pip install -r requirements.txt
 
 cp config.example.yaml config.yaml    # then edit to taste
 
-# 1) Backtest the strategy on recent history (default ~1 week of 15m candles):
+# 1) Backtest the strategy on recent history (672 candles; ~28 days at 1h):
 python run.py backtest --bars 672
 
 # 2) See how much of the result is eaten by fees, across platforms:
@@ -118,7 +118,8 @@ on a trusted network (home Wi-Fi): the dashboard has no password, so anyone on
 the same network could view it. It's read-only and paper-only, but don't expose
 it to the public internet.
 
-At 15-minute candles (`granularity: 900`), **672 bars ≈ one week** of history.
+Bars cover different spans by timeframe: at 1-hour candles (`granularity: 3600`)
+**168 bars ≈ one week**; at 15-minute candles (`900`) 672 bars ≈ one week.
 
 ### The `feescan` command
 
