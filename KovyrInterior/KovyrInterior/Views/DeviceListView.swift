@@ -5,6 +5,8 @@ import SwiftUI
 struct DeviceListView: View {
     @EnvironmentObject private var scanner: NetworkScanner
     @State private var path: [String] = []
+    @State private var shareURL: URL?
+    @State private var showShare = false
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -52,6 +54,15 @@ struct DeviceListView: View {
                 }
             }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu {
+                        Button { export(.csv) } label: { Label("Export CSV", systemImage: "tablecells") }
+                        Button { export(.json) } label: { Label("Export JSON", systemImage: "curlybraces") }
+                    } label: {
+                        Label("Export", systemImage: "square.and.arrow.up")
+                    }
+                    .disabled(scanner.devices.isEmpty)
+                }
                 ToolbarItem(placement: .principal) {
                     KovyrWordmark()
                 }
@@ -68,6 +79,9 @@ struct DeviceListView: View {
                 }
             }
             .refreshable { scanner.startScan() }
+            .sheet(isPresented: $showShare) {
+                if let url = shareURL { ShareSheet(items: [url]) }
+            }
         }
         // Deep-link from a "new device" notification tap. The target may not be in
         // the list yet (a background scan found it), so also retry whenever the
@@ -75,6 +89,20 @@ struct DeviceListView: View {
         .onAppear { openPendingDeviceIfPossible() }
         .onChange(of: scanner.pendingOpenIP) { _, _ in openPendingDeviceIfPossible() }
         .onChange(of: scanner.devices) { _, _ in openPendingDeviceIfPossible() }
+    }
+
+    /// Builds a CSV/JSON export of the current scan and presents the share sheet.
+    private func export(_ format: ScanExport.Format) {
+        let ctx = ScanExport.Context(
+            date: Date(),
+            local: scanner.localNetwork,
+            publicNet: scanner.publicNetwork,
+            wifi: scanner.wifi,
+            devices: scanner.devices
+        )
+        guard let url = ScanExport.writeTempFile(ctx, format: format) else { return }
+        shareURL = url
+        showShare = true
     }
 
     /// Pushes the device the user asked to open (via a notification tap) once it
