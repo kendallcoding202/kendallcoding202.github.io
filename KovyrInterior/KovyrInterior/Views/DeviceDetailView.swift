@@ -58,18 +58,36 @@ struct DeviceDetailView: View {
                     }
                 } else {
                     Button {
-                        portScanner.scan(host: device.ipAddress)
+                        portScanner.scan(host: device.ipAddress, depth: .common)
                     } label: {
                         Label("Scan for open ports", systemImage: "lock.open")
                     }
                 }
 
-                let ports = portScanner.openPorts.isEmpty ? device.openPorts : portScanner.openPorts
-                ForEach(ports) { port in
-                    HStack {
-                        Text("\(port.port)").font(.body.monospacedDigit().weight(.semibold))
-                        Spacer()
-                        Text(port.serviceName).foregroundStyle(.secondary)
+                if !portScanner.findings.isEmpty {
+                    ForEach(portScanner.findings) { finding in
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack {
+                                Text("\(finding.port)").font(.body.monospacedDigit().weight(.semibold))
+                                Spacer()
+                                Text(finding.serviceName).foregroundStyle(.secondary)
+                            }
+                            if let detail = finding.detail {
+                                Text(detail)
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(.tertiary)
+                                    .textSelection(.enabled)
+                                    .lineLimit(3)
+                            }
+                        }
+                    }
+                } else {
+                    ForEach(device.openPorts) { port in
+                        HStack {
+                            Text("\(port.port)").font(.body.monospacedDigit().weight(.semibold))
+                            Spacer()
+                            Text(port.serviceName).foregroundStyle(.secondary)
+                        }
                     }
                 }
                 if !portScanner.isScanning && !portScanner.statusText.isEmpty {

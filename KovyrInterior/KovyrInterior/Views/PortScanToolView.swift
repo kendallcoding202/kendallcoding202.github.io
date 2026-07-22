@@ -4,6 +4,7 @@ struct PortScanToolView: View {
     @EnvironmentObject private var scanner: NetworkScanner
     @StateObject private var portScanner = PortScanner()
     @State private var host: String = ""
+    @State private var depth: ScanDepth = .common
 
     var body: some View {
         Form {
@@ -18,26 +19,55 @@ struct PortScanToolView: View {
             }
 
             Section {
-                Button {
-                    portScanner.scan(host: host.trimmingCharacters(in: .whitespaces))
-                } label: {
-                    Label(portScanner.isScanning ? "Scanning…" : "Scan ports", systemImage: "lock.open")
+                Picker("Depth", selection: $depth) {
+                    ForEach(ScanDepth.allCases) { Text($0.rawValue).tag($0) }
                 }
-                .disabled(host.trimmingCharacters(in: .whitespaces).isEmpty || portScanner.isScanning)
+                .pickerStyle(.segmented)
+                .disabled(portScanner.isScanning)
+                Text(depth.subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Scan depth")
+            }
 
+            Section {
                 if portScanner.isScanning {
-                    ProgressView(value: portScanner.progress)
+                    Button(role: .destructive) { portScanner.cancel() } label: {
+                        Label("Stop", systemImage: "stop.fill")
+                    }
+                    ProgressView(value: portScanner.progress) {
+                        Text(portScanner.statusText).font(.caption)
+                    }
+                } else {
+                    Button {
+                        portScanner.scan(host: host.trimmingCharacters(in: .whitespaces), depth: depth)
+                    } label: {
+                        Label("Scan ports", systemImage: "lock.open")
+                    }
+                    .disabled(host.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
 
-            if !portScanner.openPorts.isEmpty {
+            if !portScanner.findings.isEmpty {
                 Section("Open Ports") {
-                    ForEach(portScanner.openPorts) { port in
-                        HStack {
-                            Text("\(port.port)").font(.body.monospacedDigit().weight(.semibold))
-                            Spacer()
-                            Text(port.serviceName).foregroundStyle(.secondary)
+                    ForEach(portScanner.findings) { finding in
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack {
+                                Text("\(finding.port)")
+                                    .font(.body.monospacedDigit().weight(.semibold))
+                                Spacer()
+                                Text(finding.serviceName).foregroundStyle(.secondary)
+                            }
+                            if let detail = finding.detail {
+                                Text(detail)
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(.tertiary)
+                                    .textSelection(.enabled)
+                                    .lineLimit(3)
+                            }
                         }
+                        .padding(.vertical, 1)
                     }
                 }
             } else if !portScanner.isScanning && !portScanner.statusText.isEmpty {
