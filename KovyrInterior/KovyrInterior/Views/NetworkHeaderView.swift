@@ -31,6 +31,10 @@ struct NetworkHeaderView: View {
                     metric("Subnet", net.cidr)
                     metric("Gateway", net.gatewayGuess)
                 }
+                if let wifi = scanner.wifi {
+                    Divider().overlay(Color.white.opacity(0.18))
+                    wifiRow(wifi)
+                }
                 if let pub = scanner.publicNetwork {
                     Divider().overlay(Color.white.opacity(0.18))
                     publicRow(pub)
@@ -56,6 +60,41 @@ struct NetworkHeaderView: View {
         )
         .padding(.horizontal)
         .padding(.top, 8)
+    }
+
+    private func wifiRow(_ wifi: WiFiNetwork) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: wifiSymbol(wifi.signalStrength))
+                .font(.footnote)
+                .foregroundStyle(Color.kovyrGold)
+            Text("Wi-Fi")
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.75))
+            Text(wifi.ssid)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            if let bssid = wifi.bssid {
+                Text(bssid)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.white.opacity(0.7))
+                    .textSelection(.enabled)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            Spacer(minLength: 0)
+            Text("\(Int((wifi.signalStrength * 100).rounded()))%")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.85))
+        }
+    }
+
+    private func wifiSymbol(_ strength: Double) -> String {
+        switch strength {
+        case ..<0.34: return "wifi.exclamationmark"
+        default:      return "wifi"
+        }
     }
 
     private func publicRow(_ pub: PublicNetwork) -> some View {

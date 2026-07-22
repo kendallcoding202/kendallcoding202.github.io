@@ -12,6 +12,8 @@
 	<array>
 		<string>com.kovyr.interior.backgroundRefresh</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Kovyr Interior uses your location only to read the name (SSID) and details of the Wi-Fi network you are connected to. iOS requires location access to reveal the current Wi-Fi network. Your location is never stored or shared.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Kovyr Interior discovers devices on your local network by probing the addresses on your Wi-Fi and reading Bonjour service advertisements.</string>
 	<key>NSBonjourServices</key>

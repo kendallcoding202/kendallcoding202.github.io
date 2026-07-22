@@ -22,6 +22,12 @@ final class NetworkScanner: ObservableObject {
     /// offline).
     @Published private(set) var publicNetwork: PublicNetwork?
 
+    /// The Wi-Fi network this device is joined to (SSID / BSSID / signal).
+    /// Personal build only — needs the wifi-info entitlement + Location permission.
+    /// Refreshed at the start of each scan; nil until then (or if not on Wi-Fi /
+    /// permission not granted).
+    @Published private(set) var wifi: WiFiNetwork?
+
     /// IP address of a device the user asked to open — e.g. by tapping a
     /// "new device" notification. The Overview tab observes this, navigates to the
     /// device, and clears it. Nil when there is nothing pending.
@@ -34,12 +40,20 @@ final class NetworkScanner: ObservableObject {
     private var bonjour: BonjourBrowser?
     private let probeTimeout: TimeInterval = 1.2
     private let concurrency = 48
+    private let wifiProbe = WiFiProbe()
 
     var deviceCount: Int { devices.count }
+
+    init() {
+        wifiProbe.onUpdate = { [weak self] net in
+            Task { @MainActor in self?.wifi = net }
+        }
+    }
 
     func startScan() {
         guard !isScanning else { return }
         refreshPublicIP()
+        refreshWiFi()
         scanTask = Task { await runScan() }
     }
 
@@ -47,6 +61,12 @@ final class NetworkScanner: ObservableObject {
     /// independently of the LAN scan (it only needs an internet connection).
     func refreshPublicIP() {
         Task { publicNetwork = await PublicNetworkInfo.fetch() }
+    }
+
+    /// Reads the current Wi-Fi network (SSID / BSSID / signal), prompting for
+    /// Location permission the first time. Publishes into `wifi`.
+    func refreshWiFi() {
+        wifiProbe.refresh()
     }
 
     /// Ask the Overview tab to open a specific device (by IP). If that device is
