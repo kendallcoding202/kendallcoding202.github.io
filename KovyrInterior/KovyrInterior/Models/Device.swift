@@ -15,6 +15,8 @@ struct DiscoveredDevice: Identifiable, Equatable {
     var firstSeen: Date
     /// Set during reconciliation when this device was not in the known store.
     var isNew: Bool
+    /// MAC address from the ARP cache (personal build); nil if unavailable.
+    var macAddress: String?
 
     init(
         ipAddress: String,
@@ -25,7 +27,8 @@ struct DiscoveredDevice: Identifiable, Equatable {
         isRouter: Bool = false,
         isSelf: Bool = false,
         firstSeen: Date = Date(),
-        isNew: Bool = false
+        isNew: Bool = false,
+        macAddress: String? = nil
     ) {
         self.ipAddress = ipAddress
         self.hostname = hostname
@@ -36,6 +39,7 @@ struct DiscoveredDevice: Identifiable, Equatable {
         self.isSelf = isSelf
         self.firstSeen = firstSeen
         self.isNew = isNew
+        self.macAddress = macAddress
     }
 
     /// A best-effort stable identity across scans. IPs churn with DHCP, so we

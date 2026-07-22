@@ -123,6 +123,10 @@ final class NetworkScanner: ObservableObject {
         try? await Task.sleep(nanoseconds: 1_500_000_000)
         bonjour?.stop()
 
+        // Personal build: enrich devices with MAC addresses from the ARP cache
+        // (the sweep above has populated it by talking to each host).
+        mergeMACAddresses()
+
         if !Task.isCancelled {
             let newCount = reconcileAndNotify()
             SharedState.save(deviceCount: devices.count, newCount: newCount, date: Date())
@@ -168,6 +172,17 @@ final class NetworkScanner: ObservableObject {
             openPorts: openPorts,
             isRouter: ip == gateway
         )
+    }
+
+    /// Reads the ARP cache and attaches a MAC address to each matching device.
+    private func mergeMACAddresses() {
+        let arp = ARPTable.snapshot()
+        guard !arp.isEmpty else { return }
+        for index in devices.indices {
+            if let mac = arp[devices[index].ipAddress] {
+                devices[index].macAddress = mac
+            }
+        }
     }
 
     /// Inserts or merges a device, keeping the list sorted by numeric IP.
