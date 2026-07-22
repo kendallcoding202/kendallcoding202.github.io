@@ -37,10 +37,10 @@ jobs:
         run: python -m pytest tests/ -q
 
       - name: Build standalone CLI exe
-        run: pyinstaller --onefile --console --name kovyr-vault packaging/entry.py
+        run: pyinstaller --onefile --console --name kovyr-vault --icon packaging/kovyr.ico packaging/entry.py
 
       - name: Build client desktop app (windowed)
-        run: pyinstaller --onefile --noconsole --name kovyr-vault-app packaging/gui_entry.py
+        run: pyinstaller --onefile --noconsole --name kovyr-vault-app --icon packaging/kovyr.ico packaging/gui_entry.py
 
       # A real end-to-end check of the frozen binaries: version, duplicate
       # scan, drift monitoring, and GUI construction must all work outside
@@ -100,7 +100,7 @@ jobs:
       # --windowed on macOS produces a double-clickable "Kovyr Vault.app"
       # bundle for the client desktop app.
       - name: Build client desktop app (.app bundle)
-        run: pyinstaller --windowed --name "Kovyr Vault" packaging/gui_entry.py
+        run: pyinstaller --windowed --name "Kovyr Vault" --icon packaging/kovyr.icns packaging/gui_entry.py
 
       - name: Import signing certificate
         if: env.MACOS_CERT_P12 != ''
