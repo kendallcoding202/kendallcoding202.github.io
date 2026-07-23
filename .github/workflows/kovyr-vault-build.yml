@@ -58,6 +58,16 @@ jobs:
           $gui = Start-Process -FilePath .\dist\kovyr-vault-app.exe -ArgumentList "--selftest" -Wait -PassThru
           if ($gui.ExitCode -ne 0) { exit 1 }
 
+      # Setup wizard: installs both exes to Program Files\Kovyr with
+      # Start-menu + optional desktop shortcuts. No manual file moves.
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress | Out-Null
+          $ver = python -c "import kovyr_vault; print(kovyr_vault.__version__)"
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=$ver packaging\windows-installer.iss
+          if (-not (Test-Path dist\KovyrVaultSetup.exe)) { exit 1 }
+
       - name: Upload exes
         uses: actions/upload-artifact@v4
         with:
@@ -66,6 +76,7 @@ jobs:
           path: |
             kovyr-vault/dist/kovyr-vault.exe
             kovyr-vault/dist/kovyr-vault-app.exe
+            kovyr-vault/dist/KovyrVaultSetup.exe
 
   build-macos:
     runs-on: macos-latest
@@ -171,6 +182,21 @@ jobs:
           notary submit notarize-cli.zip --output-format json > cli-result.json || true
           cat cli-result.json
 
+      # DMG installer: open, drag the app to Applications — the standard
+      # Mac install ritual, no Terminal involved. Signed when possible;
+      # the app inside carries its own notarization either way.
+      - name: Build DMG installer
+        run: |
+          mkdir dmg-staging
+          cp -R "dist/Kovyr Vault.app" dmg-staging/
+          ln -s /Applications dmg-staging/Applications
+          hdiutil create -volname "Kovyr Vault" -srcfolder dmg-staging -ov -format UDZO "dist/KovyrVault.dmg"
+          if [ -n "${SIGN_IDENTITY:-}" ]; then
+            codesign --force --sign "$SIGN_IDENTITY" "dist/KovyrVault.dmg"
+            notary() { xcrun notarytool "$@" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"; }
+            notary submit "dist/KovyrVault.dmg" --output-format json || true
+          fi
+
       # Zip the .app ourselves to preserve the executable bits that a raw
       # artifact upload would strip from the bundle.
       - name: Package artifacts
@@ -183,4 +209,6 @@ jobs:
         with:
           name: kovyr-vault-macos
           if-no-files-found: error
-          path: kovyr-vault/dist/kovyr-vault-macos.zip
+          path: |
+            kovyr-vault/dist/kovyr-vault-macos.zip
+            kovyr-vault/dist/KovyrVault.dmg

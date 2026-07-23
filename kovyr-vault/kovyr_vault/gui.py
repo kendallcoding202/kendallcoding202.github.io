@@ -39,19 +39,47 @@ GOOD = "#1a7f4e"
 BAD = "#b3261e"
 
 
+def app_support_config_path() -> Path:
+    """The per-user config location that works regardless of where the
+    app itself was installed (DMG drag-install, setup wizard, etc.)."""
+    if sys.platform == "darwin":
+        return (Path.home() / "Library" / "Application Support" / "Kovyr"
+                / "config.json")
+    if os.name == "nt":
+        base = os.environ.get("APPDATA")
+        if base:
+            return Path(base) / "Kovyr" / "config.json"
+    return Path.home() / ".config" / "kovyr" / "config.json"
+
+
+def _beside_executable_config() -> Path:
+    exe_dir = Path(sys.executable).parent
+    # In a macOS .app the executable is buried in Contents/MacOS —
+    # prefer a config sitting next to the .app bundle itself.
+    for ancestor in exe_dir.parents:
+        if ancestor.suffix == ".app":
+            beside_app = ancestor.parent / "config.json"
+            if beside_app.exists() or not (exe_dir / "config.json").exists():
+                return beside_app
+            break
+    return exe_dir / "config.json"
+
+
 def default_config_path() -> Path:
+    """First existing config wins: beside the app, then the per-user
+    app-data folder, then the working directory. With none present,
+    keep the historical default (beside the app) so the error message
+    points somewhere sensible."""
+    candidates = []
     if getattr(sys, "frozen", False):  # PyInstaller bundle
-        exe_dir = Path(sys.executable).parent
-        # In a macOS .app the executable is buried in Contents/MacOS —
-        # prefer a config sitting next to the .app bundle itself.
-        for ancestor in exe_dir.parents:
-            if ancestor.suffix == ".app":
-                beside_app = ancestor.parent / "config.json"
-                if beside_app.exists() or not (exe_dir / "config.json").exists():
-                    return beside_app
-                break
-        return exe_dir / "config.json"
-    return Path.cwd() / "config.json"
+        candidates.append(_beside_executable_config())
+    candidates.append(app_support_config_path())
+    if not getattr(sys, "frozen", False):
+        candidates.append(Path.cwd() / "config.json")
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
 
 
 def load_config(path: Path) -> dict:
@@ -453,7 +481,8 @@ def run_app(config_path: Path | None = None, selftest: bool = False) -> int:
     try:
         config = load_config(path)
     except FileNotFoundError:
-        error = f"No configuration found at {path}."
+        error = (f"No configuration found at {path} "
+                 f"(also looked in {app_support_config_path().parent}).")
     except (ValueError, json.JSONDecodeError, OSError) as exc:
         error = f"Configuration problem in {path}: {exc}"
 
