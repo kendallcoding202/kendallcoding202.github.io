@@ -205,8 +205,41 @@ class App:
         self.save_path = (config_path if (config_path and config)
                           else app_support_config_path())
         self.vault: Vault | None = None
+        self._pending_receipt: str | None = None
         self._build()
         self.refresh_status()
+        # macOS delivers double-clicked documents via an Apple Event.
+        try:
+            self.root.createcommand("::tk::mac::OpenDocument",
+                                    self._open_documents)
+        except Exception:
+            pass  # non-mac platforms pass the path via argv instead
+
+    def _open_documents(self, *paths) -> None:
+        for path in paths:
+            self.handle_receipt(str(path))
+            break
+
+    def handle_receipt(self, receipt: str) -> None:
+        """A .kovyr receipt was opened: jump to the vault and target
+        the file it stands for."""
+        original = str(protect_mod.original_from_receipt(Path(receipt)))
+        self._pending_receipt = original
+        self.notebook.select(self.vault_tab)
+        if self.vault is None:
+            self.unlock_msg.config(
+                text=f"Unlock to retrieve: {Path(original).name}",
+                fg=MUTED)
+        else:
+            self._select_pending_receipt()
+
+    def _select_pending_receipt(self) -> None:
+        if not self._pending_receipt:
+            return
+        if self.tree.exists(self._pending_receipt):
+            self.tree.selection_set([self._pending_receipt])
+            self.tree.see(self._pending_receipt)
+        self._pending_receipt = None
 
     # ---------- layout ----------
 
@@ -983,6 +1016,7 @@ class App:
         self.files_frame.pack(fill="both", expand=True)
         self.vault_buttons.pack(anchor="w", pady=(10, 0))
         self._refresh_vault_list()
+        self._select_pending_receipt()
         # Anything sitting in the Protected folders? Offer the sweep now.
         waiting = self._waiting_protected()
         if waiting:
@@ -1135,7 +1169,8 @@ class App:
             messagebox.showinfo("Kovyr Vault", message)
 
 
-def run_app(config_path: Path | None = None, selftest: bool = False) -> int:
+def run_app(config_path: Path | None = None, selftest: bool = False,
+            receipt: str | None = None) -> int:
     import tkinter as tk
 
     path = config_path or default_config_path()
@@ -1150,6 +1185,8 @@ def run_app(config_path: Path | None = None, selftest: bool = False) -> int:
 
     root = tk.Tk()
     app = App(root, config, error, config_path=path)
+    if receipt:
+        app.handle_receipt(receipt)
     if selftest:
         root.update_idletasks()
         root.update()
@@ -1166,9 +1203,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", help="path to config.json")
     parser.add_argument("--selftest", action="store_true",
                         help=argparse.SUPPRESS)
+    parser.add_argument("receipt", nargs="?",
+                        help="a .kovyr receipt to retrieve (Windows "
+                             "passes double-clicked files this way)")
     args = parser.parse_args(argv)
     return run_app(Path(args.config) if args.config else None,
-                   selftest=args.selftest)
+                   selftest=args.selftest, receipt=args.receipt)
 
 
 if __name__ == "__main__":

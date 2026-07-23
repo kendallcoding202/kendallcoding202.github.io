@@ -111,6 +111,18 @@ jobs:
       - name: Build client desktop app (.app bundle)
         run: pyinstaller --windowed --name "Kovyr Vault" --icon packaging/kovyr.icns packaging/gui_entry.py
 
+      # Claim the .kovyr receipt file type so double-clicking a receipt
+      # opens the app (must happen before signing seals the bundle).
+      - name: Register .kovyr document type
+        run: |
+          PLIST="dist/Kovyr Vault.app/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Add :CFBundleDocumentTypes array' "$PLIST"
+          /usr/libexec/PlistBuddy -c 'Add :CFBundleDocumentTypes:0 dict' "$PLIST"
+          /usr/libexec/PlistBuddy -c 'Add :CFBundleDocumentTypes:0:CFBundleTypeName string "Kovyr Vault Receipt"' "$PLIST"
+          /usr/libexec/PlistBuddy -c 'Add :CFBundleDocumentTypes:0:CFBundleTypeRole string Viewer' "$PLIST"
+          /usr/libexec/PlistBuddy -c 'Add :CFBundleDocumentTypes:0:CFBundleTypeExtensions array' "$PLIST"
+          /usr/libexec/PlistBuddy -c 'Add :CFBundleDocumentTypes:0:CFBundleTypeExtensions:0 string kovyr' "$PLIST"
+
       - name: Import signing certificate
         if: env.MACOS_CERT_P12 != ''
         run: |
