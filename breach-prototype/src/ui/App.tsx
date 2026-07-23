@@ -45,6 +45,8 @@ function ImplantCard({ id, onClick, num }: { id: string; onClick?: () => void; n
     );
 }
 const nodeIcon = (n: MapNode) => (n.type === "breach" ? (isTerminal(n) ? "★" : "◈") : n.type === "safehouse" ? "☂" : "❋");
+// per-archetype card glyph, so the hand reads visually at a glance (colour comes from --k)
+const KIND_ICON: Record<string, string> = { exploit: "↯", recon: "⊙", stealth: "◐", utility: "❖" };
 
 function MuteButton() {
     const [m, setM] = useState(sfx.isMuted());
@@ -103,7 +105,7 @@ function CardMini({ id, onClick, dim, num }: { id: string; onClick?: () => void;
     return (
         <div className={"card mini kind-" + def.kind + (onClick ? " playable" : "") + (dim ? " disabled" : "")} onClick={onClick} title={def.text}>
             <div className="chead">
-                <span className="cname">{num ? <span className="kbd">{num}</span> : null}{def.name}{def.needsTarget ? <span className="muted"> ◎</span> : null}</span>
+                <span className="cname">{num ? <span className="kbd">{num}</span> : null}<span className="cicon" aria-hidden>{KIND_ICON[def.kind] || "◈"}</span>{def.name}{def.needsTarget ? <span className="muted"> ◎</span> : null}</span>
                 <span className="noise" style={{ color: def.noise === 0 ? "#35e0d8" : "#ffb000" }}>{def.noise === 0 ? "SILENT" : "◈" + def.noise}</span>
             </div>
             <div className="kind">{def.kind}{def.tag ? <span className={"synergy s-" + def.tag}> · {def.tag}</span> : null}</div>
@@ -306,13 +308,16 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                 </span>
             </div>
 
-            <div className="layers">
+            <div className="schematic-head">▼ INTRUSION PATH · <b>depth {Math.min(state.current + 1, state.layers.length)}/{state.layers.length}</b> — punch inward to the core</div>
+            <div className="layers schematic">
                 {state.layers.map((l, i) => {
                     const isCurrent = i === state.current && !l.breached;
                     const isObjective = i === state.layers.length - 1;
+                    const nodeGlyph = l.breached ? "✓" : isCurrent ? "◉" : isObjective ? "◎" : "○";
                     return (
                         <div key={i} className={"layer" + (isCurrent ? " current" : "") + (l.breached ? " breached" : "") + (isObjective ? " objective" : "")}>
-                            <span className="lname">{l.breached ? "✓ " : isCurrent ? "▶ " : isObjective ? "🎯 " : "  "}{l.name}</span>
+                            <span className="lnode" aria-hidden>{nodeGlyph}</span>
+                            <span className="lname">{l.name}</span>
                             <span className="defs">
                                 {l.breached ? <span className="muted">BREACHED</span> : l.defenses.map((d, di) => (
                                     <DefenseChip key={di} d={d} targetable={isCurrent && !!armed && d.strength > 0} preview={isCurrent && armed && d.strength > 0 ? previewOnTarget(state, armed, di) : null} kbdNum={isCurrent && armed ? targetOpts.indexOf(di) + 1 : undefined} hit={hits[`${i}-${di}`]} onClick={() => dispatch(armed!, di)} />
@@ -354,7 +359,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                     return (
                         <div key={i} className={"card kind-" + def.kind + (playable && !blocked ? "" : " disabled") + (danger ? " danger" : "") + (armed === id ? " armed" : "")} onClick={() => !blocked && onCardClick(id)} title={def.text}>
                             <div className="chead">
-                                <span className="cname">{i < 9 && !armed ? <span className="kbd">{i + 1}</span> : null}{def.name}{needsT ? <span className="muted"> ◎</span> : null}</span>
+                                <span className="cname">{i < 9 && !armed ? <span className="kbd">{i + 1}</span> : null}<span className="cicon" aria-hidden>{KIND_ICON[def.kind] || "◈"}</span>{def.name}{needsT ? <span className="muted"> ◎</span> : null}</span>
                                 <span className="noise" style={{ color: danger ? "#ff4141" : noise === 0 ? "#35e0d8" : "#ffb000" }}>{noise === 0 ? "SILENT" : "◈" + noise}</span>
                             </div>
                             <div className="kind">{def.kind}{def.matchType ? <span className="typetag"> ▸ vs {def.matchType.toUpperCase()}</span> : null}{def.tag ? <span className={"synergy s-" + def.tag}> · {def.tag}</span> : null}</div>

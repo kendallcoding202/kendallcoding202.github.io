@@ -340,7 +340,7 @@ body::before {
 /* respect reduced-motion */
 @media (prefers-reduced-motion: reduce) {
     .wrap.shaking, .wrap.glitching, .det-glitch, .budget-turn .cyan, .breach-flash, .breach-flash .bd, .cascade-flash, .cascade-flash .cd, .dmg-float, .meter.spike, .meter.hot .fill,
-    #root::before, body::before, .transmission .tbox, .transmission .ttext, .log .ln:last-child { animation: none; }
+    #root::before, body::before, .transmission .tbox, .transmission .ttext, .log .ln:last-child, .layers.schematic .layer.current .lnode { animation: none; }
 }
 
 /* ============================================================
@@ -469,6 +469,29 @@ html.crt .wrap { padding-top: 24px; }
 .layer.objective .lname { color: #ffd24a; }
 .layer.objective:not(.current):not(.breached) { border-color: #4a3a12; }
 .layer .lname { font-weight: bold; white-space: nowrap; }
+
+/* ---- SYSTEM SCHEMATIC: the breach as a vertical intrusion path you punch through ---- */
+.schematic-head { font-size: 11px; color: var(--dim); letter-spacing: 1px; margin: 8px 2px 2px; }
+.schematic-head b { color: var(--cyan); }
+.layers.schematic { position: relative; padding-left: 46px; }
+/* the conduit backbone running down the left gutter, behind the nodes */
+.layers.schematic::before {
+    content: ""; position: absolute; left: 16px; top: 18px; bottom: 18px; width: 2px;
+    background: linear-gradient(180deg, #2a5a40, #0e2417);
+}
+.layers.schematic .layer { position: relative; }
+/* each layer's node sits out in the gutter, ON the conduit, colour-coded by state */
+.layers.schematic .lnode {
+    position: absolute; left: -39px; top: 50%; transform: translateY(-50%);
+    width: 28px; text-align: center; font-size: 16px; line-height: 1;
+    background: var(--bg); color: var(--dim);
+}
+.layers.schematic .layer.breached .lnode { color: var(--fg); text-shadow: 0 0 6px #4af62688; }
+.layers.schematic .layer.current .lnode { color: var(--cyan); font-size: 18px; text-shadow: 0 0 10px #35e0d8; animation: nodethrob 1.6s ease-in-out infinite; }
+.layers.schematic .layer.objective .lnode { color: #ffd24a; text-shadow: 0 0 8px #ffb00088; }
+.layers.schematic .layer.objective.current .lnode { color: #ffe58a; }
+@keyframes nodethrob { 0%, 100% { text-shadow: 0 0 8px #35e0d8aa; } 50% { text-shadow: 0 0 16px #35e0d8, 0 0 4px #fff; } }
+@media (max-width: 620px) { .layers.schematic { padding-left: 40px; } .layers.schematic .lnode { left: -34px; width: 24px; font-size: 14px; } }
 .layer .defs { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 /* in-context reminder that recon reveals hidden defenses (only while any are unscanned) */
 .layer .scan-hint { flex-basis: 100%; text-align: right; font-size: 10.5px; color: var(--amber); opacity: 0.75; margin-top: 3px; }
@@ -545,6 +568,7 @@ html.crt .wrap { padding-top: 24px; }
 .card.danger { border-color: var(--red); }
 .card .chead { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
 .card .cname { font-weight: bold; color: var(--k, var(--fg)); line-height: 1.15; }
+.card .cicon { display: inline-block; margin-right: 4px; color: var(--k, var(--fg)); font-weight: normal; }
 .card .kind { font-size: 10px; color: var(--k, var(--dim)); opacity: 0.85; text-transform: uppercase; letter-spacing: 1px; }
 .card .noise { font-size: 12px; white-space: nowrap; flex-shrink: 0; }
 .card .ctext { font-size: 11px; color: #a7c1b1; margin-top: 4px; line-height: 1.25; }
