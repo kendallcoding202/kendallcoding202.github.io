@@ -856,8 +856,12 @@ class App:
                         cafile=certifi.where())
                 except ImportError:
                     context = ssl.create_default_context()
-                with urllib.request.urlopen(UPDATE_API, timeout=10,
-                                            context=context) as resp:
+                # Constant, https-only endpoint — never user-controlled.
+                if not UPDATE_API.startswith("https://"):
+                    raise ValueError("update endpoint must be https")
+                req = urllib.request.Request(UPDATE_API)
+                with urllib.request.urlopen(  # noqa: S310 (constant https URL)
+                        req, timeout=10, context=context) as resp:
                     data = json.load(resp)
                 tag = data.get("tag_name", "")
                 url = data.get("html_url", "")

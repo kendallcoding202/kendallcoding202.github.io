@@ -38,3 +38,15 @@ def test_standing_conditions_do_not_nag():
     quiet = snap(awaiting_encryption=7)
     quiet["duplicate_files"] = 40
     assert notify.compose_alert(quiet, 0) is None
+
+
+def test_sanitize_strips_shell_dangerous_chars():
+    dirty = 'evil"; rm -rf ~ #`$(whoami)\\'
+    clean = notify._sanitize(dirty)
+    for ch in '"\'`\\':
+        assert ch not in clean
+
+
+def test_sanitize_drops_control_chars_and_caps_length():
+    assert "\n" not in notify._sanitize("line1\nline2")
+    assert len(notify._sanitize("x" * 5000)) <= 240
