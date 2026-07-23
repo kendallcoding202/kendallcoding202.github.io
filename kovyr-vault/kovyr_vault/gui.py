@@ -26,7 +26,7 @@ import threading
 import webbrowser
 from pathlib import Path
 
-from . import __version__, crypto, monitor as monitor_mod, protect_folder as protect_mod, quarantine as quarantine_mod, report as report_mod, scanner
+from . import __version__, crypto, monitor as monitor_mod, notify as notify_mod, protect_folder as protect_mod, quarantine as quarantine_mod, report as report_mod, scanner
 from .util import human_size, mirror_path, now_stamp
 from .vault import Vault, VaultError
 
@@ -984,6 +984,9 @@ class App:
                 vault=Path(vault_path) if vault_path else None,
                 protected=self._protected_dirs() or None,
                 hash_cache=cache)
+            alert = notify_mod.compose_alert(_snap, len(drift.new_groups))
+            if alert:
+                notify_mod.send(alert)
             if self.config.get("html"):
                 ctx = {
                     "client": self.config.get("client"),

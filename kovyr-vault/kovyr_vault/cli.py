@@ -266,6 +266,11 @@ def cmd_monitor(args: argparse.Namespace) -> int:
         print(f"Monitoring report written to {args.html}")
     for err in result.errors:
         print(f"warning: {err}", file=sys.stderr)
+    if not args.no_notify:
+        from . import notify as notify_mod
+        alert = notify_mod.compose_alert(snapshot, len(drift.new_groups))
+        if alert:
+            notify_mod.send(alert)
     # Exit codes for schedulers/scripts: 2 = canary alert (mass change /
     # vault tamper / failed unlocks), 1 = new duplication drift, 0 = quiet.
     if snapshot.get("canary_alerts") or snapshot.get("new_failed_unlocks"):
@@ -358,6 +363,8 @@ def build_parser() -> argparse.ArgumentParser:
                    default=[],
                    help="protected folder to check for files awaiting "
                         "encryption (repeatable)")
+    p.add_argument("--no-notify", action="store_true",
+                   help="suppress the desktop notification on alerts")
     p.set_defaults(func=cmd_monitor)
 
     p = sub.add_parser("gui", help="open the client-side desktop app")
