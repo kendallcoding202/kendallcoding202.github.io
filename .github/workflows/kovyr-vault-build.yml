@@ -149,7 +149,7 @@ jobs:
         run: |
           notary() { xcrun notarytool "$@" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"; }
           ditto -c -k --keepParent "dist/Kovyr Vault.app" notarize-app.zip
-          notary submit notarize-app.zip --wait --timeout 25m --output-format json > app-result.json || true
+          notary submit notarize-app.zip --wait --timeout 75m --output-format json > app-result.json || true
           cat app-result.json
           APP_STATUS=$(python3 -c "import json;print(json.load(open('app-result.json')).get('status',''))" 2>/dev/null || echo "")
           APP_SUB_ID=$(python3 -c "import json;print(json.load(open('app-result.json')).get('id',''))" 2>/dev/null || echo "")

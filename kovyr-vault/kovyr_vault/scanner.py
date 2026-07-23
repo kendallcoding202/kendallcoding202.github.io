@@ -30,6 +30,7 @@ class ScanResult:
     bytes_scanned: int
     groups: list[DuplicateGroup]
     errors: list[str] = field(default_factory=list)
+    inventory: dict[str, int] = field(default_factory=dict)  # path -> size
 
     @property
     def duplicate_files(self) -> int:
@@ -73,6 +74,7 @@ def scan(roots: list[Path]) -> ScanResult:
     errors: list[str] = []
 
     by_size: dict[int, list[Path]] = defaultdict(list)
+    inventory: dict[str, int] = {}
     total_bytes = 0
     for path in files:
         try:
@@ -81,6 +83,7 @@ def scan(roots: list[Path]) -> ScanResult:
             errors.append(f"{path}: {exc}")
             continue
         total_bytes += size
+        inventory[str(path)] = size
         by_size[size].append(path)
 
     groups: list[DuplicateGroup] = []
@@ -105,4 +108,5 @@ def scan(roots: list[Path]) -> ScanResult:
         bytes_scanned=total_bytes,
         groups=groups,
         errors=errors,
+        inventory=inventory,
     )

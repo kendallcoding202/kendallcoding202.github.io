@@ -77,6 +77,11 @@ td.num, th.num { text-align: right; white-space: nowrap; }
 .note { background: var(--surface); border: 1px solid var(--border);
   border-radius: 12px; padding: 14px 18px; font-size: 13px;
   color: var(--muted); }
+.alert-banner { border: 2px solid var(--bad); border-radius: 12px;
+  padding: 16px 20px; margin: 18px 0 6px; }
+.alert-banner .alert-title { color: var(--bad); font-weight: 700;
+  font-size: 16px; margin-bottom: 6px; }
+.alert-banner p { margin: 4px 0; font-size: 14px; }
 footer { max-width: 860px; margin: 0 auto; padding: 0 24px 40px;
   font-size: 12px; color: var(--muted); }
 @media print { .hero { -webkit-print-color-adjust: exact; } }
@@ -235,6 +240,23 @@ def render_monitor_report(ctx: dict) -> str:
     resolved = ctx.get("resolved_groups", [])
 
     sections: list[str] = []
+    canary = (current or {}).get("canary_alerts") or []
+    new_failed = (current or {}).get("new_failed_unlocks") or 0
+    if canary or new_failed:
+        items = [f"<p>&#9888; {_esc(a)}</p>" for a in canary]
+        if new_failed:
+            items.append(f"<p>&#9888; {new_failed} failed vault unlock "
+                         f"attempt(s) since the last check.</p>")
+        sections.append(
+            '<div class="alert-banner"><div class="alert-title">'
+            "Attention needed — contact Kovyr</div>"
+            + "".join(items) +
+            "<p>These patterns can indicate ransomware activity, "
+            "tampering, or someone guessing at the vault passphrase. "
+            "They can also have benign explanations — a large planned "
+            "reorganization, or mistyped passphrases. Reviewing "
+            "promptly is the safe move.</p></div>"
+        )
     if current:
         drift_cls = "status-bad" if new_groups else "status-good"
         drift_val = (f"&#9888; {len(new_groups)} new"
@@ -249,6 +271,14 @@ def render_monitor_report(ctx: dict) -> str:
                   f"{len(resolved)} groups resolved" if resolved else "",
                   drift_cls),
         ]
+        if current.get("failed_unlocks") is not None:
+            if new_failed:
+                tiles.append(_tile("Failed vault unlocks",
+                                   f"&#9888; {new_failed} new",
+                                   "since last check", "status-bad"))
+            else:
+                tiles.append(_tile("Failed vault unlocks",
+                                   "&#10003; none new", "", "status-good"))
         sections.append(f'<h2>Current status</h2><div class="tiles">'
                         f'{"".join(tiles)}</div>')
 

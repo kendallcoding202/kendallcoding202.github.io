@@ -217,11 +217,17 @@ def cmd_report(args: argparse.Namespace) -> int:
 def cmd_monitor(args: argparse.Namespace) -> int:
     result = scanner.scan([Path(p) for p in args.paths])
     snapshot, drift, history = monitor_mod.record_run(
-        Path(args.state), result, now_stamp()
+        Path(args.state), result, now_stamp(),
+        vault=Path(args.vault) if args.vault else None,
     )
     print(f"Scanned {snapshot['files_scanned']} files: "
           f"{snapshot['duplicate_files']} redundant copies, "
           f"{human_size(snapshot['wasted_bytes'])} excess exposure.")
+    for alert in snapshot.get("canary_alerts", []):
+        print(f"ALERT: {alert}")
+    if snapshot.get("new_failed_unlocks"):
+        print(f"ALERT: {snapshot['new_failed_unlocks']} failed vault "
+              f"unlock attempts since last check.")
     if len(history) == 1:
         print("Baseline recorded — future runs will report drift "
               "against it.")
@@ -254,7 +260,10 @@ def cmd_monitor(args: argparse.Namespace) -> int:
         print(f"Monitoring report written to {args.html}")
     for err in result.errors:
         print(f"warning: {err}", file=sys.stderr)
-    # Non-zero exit signals new drift, so schedulers/scripts can alert.
+    # Exit codes for schedulers/scripts: 2 = canary alert (mass change /
+    # vault tamper / failed unlocks), 1 = new duplication drift, 0 = quiet.
+    if snapshot.get("canary_alerts") or snapshot.get("new_failed_unlocks"):
+        return 2
     return 1 if drift.has_new else 0
 
 
@@ -335,6 +344,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--html", metavar="OUT",
                    help="also write a branded monitoring report")
     p.add_argument("--client", help="client name for the HTML report")
+    p.add_argument("--vault", metavar="PATH",
+                   help="also watch this vault: failed unlock attempts "
+                        "and tamper evidence on its encrypted blobs "
+                        "(no passphrase needed)")
     p.set_defaults(func=cmd_monitor)
 
     p = sub.add_parser("gui", help="open the client-side desktop app")
