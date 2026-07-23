@@ -12,6 +12,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .protect_folder import waiting_files
 from .scanner import ScanResult
 from .vault import ACCESS_LOG_NAME, BLOB_DIR
 
@@ -158,7 +159,9 @@ def diff(previous: dict | None, current: dict) -> Drift:
 
 
 def record_run(state_path: Path, result: ScanResult, timestamp: str,
-               vault: Path | None = None) -> tuple[dict, Drift, list[dict]]:
+               vault: Path | None = None,
+               protected: list[Path] | None = None,
+               ) -> tuple[dict, Drift, list[dict]]:
     """Scan already done — compare, append, persist.
 
     With a vault path, also tracks failed unlock attempts and the
@@ -181,6 +184,10 @@ def record_run(state_path: Path, result: ScanResult, timestamp: str,
     prev_failed = (previous or {}).get("failed_unlocks", 0) or 0
     snapshot["failed_unlocks"] = failed_total
     snapshot["new_failed_unlocks"] = max(failed_total - prev_failed, 0)
+
+    if protected:
+        snapshot["awaiting_encryption"] = len(
+            waiting_files(protected, exclude=vault))
 
     drift = diff(previous, snapshot)
     history.append(snapshot)

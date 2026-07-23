@@ -271,6 +271,18 @@ def render_monitor_report(ctx: dict) -> str:
                   f"{len(resolved)} groups resolved" if resolved else "",
                   drift_cls),
         ]
+        if current.get("awaiting_encryption") is not None:
+            waiting = current["awaiting_encryption"]
+            if waiting:
+                tiles.append(_tile("Awaiting encryption",
+                                   f"&#9888; {waiting}",
+                                   "files in Protected folders not yet "
+                                   "encrypted", "status-bad"))
+            else:
+                tiles.append(_tile("Awaiting encryption",
+                                   "&#10003; none",
+                                   "Protected folders fully encrypted",
+                                   "status-good"))
         if current.get("failed_unlocks") is not None:
             if new_failed:
                 tiles.append(_tile("Failed vault unlocks",
