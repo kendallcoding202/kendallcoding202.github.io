@@ -968,8 +968,16 @@ class App:
         try:
             state_path = Path(self.config["state"])
             cache = monitor_mod.load_hash_cache(state_path)
+
+            def scan_progress(reads: int, current: str) -> None:
+                name = Path(current).name
+                self.root.after(0, lambda: self.activity.config(
+                    text=f"Checking… {reads:,} files read · "
+                         f"currently: {name}"))
+
             result = scanner.scan(
-                [Path(p) for p in self.config["paths"]], cache=cache)
+                [Path(p) for p in self.config["paths"]], cache=cache,
+                on_progress=scan_progress)
             vault_path = self.config.get("vault")
             _snap, drift, history = monitor_mod.record_run(
                 state_path, result, now_stamp(),

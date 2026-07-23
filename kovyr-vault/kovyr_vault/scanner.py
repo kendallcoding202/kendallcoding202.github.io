@@ -64,8 +64,19 @@ def iter_files(roots: list[Path]) -> list[Path]:
     return files
 
 
+# macOS marks cloud-only placeholders (iCloud "Optimize Storage",
+# online-only sync files) dataless: reading one silently blocks on a
+# network download. Skip them rather than stall.
+DATALESS_FLAG = 0x40000000
+
+
+def _is_dataless(stat_result) -> bool:
+    return bool(getattr(stat_result, "st_flags", 0) & DATALESS_FLAG)
+
+
 def scan(roots: list[Path],
-         cache: dict[str, dict] | None = None) -> ScanResult:
+         cache: dict[str, dict] | None = None,
+         on_progress=None) -> ScanResult:
     """Find duplicate files under the given roots by content hash.
 
     Files are first grouped by size (cheap) and only same-size files are
@@ -74,6 +85,9 @@ def scan(roots: list[Path],
     With a cache (path -> {size, mtime, sha256}, mutated in place),
     unchanged files reuse their remembered fingerprint instead of being
     re-read — later checks only pay disk time for new or edited files.
+
+    on_progress(files_read, current_path) is called before each content
+    read, so a stall is attributable to a specific file.
     """
     files = iter_files(roots)
     errors: list[str] = []
@@ -88,12 +102,17 @@ def scan(roots: list[Path],
         except OSError as exc:
             errors.append(f"{path}: {exc}")
             continue
+        if _is_dataless(stat):
+            errors.append(f"{path}: skipped (cloud-only placeholder — "
+                          f"not downloaded to this Mac)")
+            continue
         total_bytes += stat.st_size
         inventory[str(path)] = stat.st_size
         mtimes[str(path)] = stat.st_mtime
         by_size[stat.st_size].append(path)
 
     groups: list[DuplicateGroup] = []
+    reads = 0
     for size, candidates in by_size.items():
         if len(candidates) < 2:
             continue
@@ -105,6 +124,9 @@ def scan(roots: list[Path],
                     and cached.get("mtime") == mtimes[key]):
                 by_hash[cached["sha256"]].append(path)
                 continue
+            reads += 1
+            if on_progress:
+                on_progress(reads, key)
             try:
                 digest = hash_file(path)
             except OSError as exc:

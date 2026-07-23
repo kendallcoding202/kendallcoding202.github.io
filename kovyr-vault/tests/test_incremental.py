@@ -80,3 +80,19 @@ def test_record_run_persists_and_prunes_cache(tmp_path):
     monitor.record_run(state, result, "t2", hash_cache=cache)
     persisted = monitor.load_hash_cache(state)
     assert str(data / "b.txt") not in persisted
+
+
+def test_on_progress_reports_reads(tmp_path):
+    data = tmp_path / "data"
+    make_dupes(data)
+    seen = []
+    scanner.scan([data], on_progress=lambda n, p: seen.append((n, p)))
+    assert len(seen) == 3  # three same-size candidates read
+    assert [n for n, _ in seen] == [1, 2, 3]
+    # Cached second pass: no reads, no progress calls.
+    cache: dict = {}
+    scanner.scan([data], cache=cache)
+    seen.clear()
+    scanner.scan([data], cache=cache,
+                 on_progress=lambda n, p: seen.append((n, p)))
+    assert seen == []
