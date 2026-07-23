@@ -64,7 +64,7 @@ struct NetworkHeaderView: View {
 
     private func wifiRow(_ wifi: WiFiNetwork) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: wifiSymbol(wifi.signalStrength))
+            Image(systemName: "wifi")
                 .font(.footnote)
                 .foregroundStyle(Color.kovyrGold)
             Text("Wi-Fi")
@@ -84,16 +84,6 @@ struct NetworkHeaderView: View {
                     .minimumScaleFactor(0.7)
             }
             Spacer(minLength: 0)
-            Text("\(Int((wifi.signalStrength * 100).rounded()))%")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.85))
-        }
-    }
-
-    private func wifiSymbol(_ strength: Double) -> String {
-        switch strength {
-        case ..<0.34: return "wifi.exclamationmark"
-        default:      return "wifi"
         }
     }
 
