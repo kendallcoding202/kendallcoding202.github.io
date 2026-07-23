@@ -215,11 +215,13 @@ def cmd_report(args: argparse.Namespace) -> int:
 
 
 def cmd_monitor(args: argparse.Namespace) -> int:
-    result = scanner.scan([Path(p) for p in args.paths])
+    cache = monitor_mod.load_hash_cache(Path(args.state))
+    result = scanner.scan([Path(p) for p in args.paths], cache=cache)
     snapshot, drift, history = monitor_mod.record_run(
         Path(args.state), result, now_stamp(),
         vault=Path(args.vault) if args.vault else None,
         protected=[Path(p) for p in args.protected] or None,
+        hash_cache=cache,
     )
     if snapshot.get("awaiting_encryption"):
         print(f"ALERT: {snapshot['awaiting_encryption']} files in "

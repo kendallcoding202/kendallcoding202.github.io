@@ -137,6 +137,15 @@ def load_history(state_path: Path) -> list[dict]:
     return load_state(state_path)["history"]
 
 
+def load_hash_cache(state_path: Path) -> dict[str, dict]:
+    """The persisted fingerprint cache for incremental scanning. Pass it
+    to scanner.scan(cache=...), then back into record_run."""
+    try:
+        return load_state(state_path).get("hash_cache") or {}
+    except (OSError, ValueError):
+        return {}
+
+
 def save_state(state_path: Path, state: dict) -> None:
     state_path.parent.mkdir(parents=True, exist_ok=True)
     state["version"] = STATE_VERSION
@@ -161,6 +170,7 @@ def diff(previous: dict | None, current: dict) -> Drift:
 def record_run(state_path: Path, result: ScanResult, timestamp: str,
                vault: Path | None = None,
                protected: list[Path] | None = None,
+               hash_cache: dict[str, dict] | None = None,
                ) -> tuple[dict, Drift, list[dict]]:
     """Scan already done — compare, append, persist.
 
@@ -194,5 +204,11 @@ def record_run(state_path: Path, result: ScanResult, timestamp: str,
     state["inventory"] = result.inventory
     if curr_blobs is not None:
         state["vault_blobs"] = curr_blobs
+    if hash_cache is not None:
+        # Keep only files that still exist so the cache can't grow forever.
+        state["hash_cache"] = {
+            path: entry for path, entry in hash_cache.items()
+            if path in result.inventory
+        }
     save_state(state_path, state)
     return snapshot, drift, history
