@@ -219,7 +219,11 @@ def cmd_monitor(args: argparse.Namespace) -> int:
     snapshot, drift, history = monitor_mod.record_run(
         Path(args.state), result, now_stamp(),
         vault=Path(args.vault) if args.vault else None,
+        protected=[Path(p) for p in args.protected] or None,
     )
+    if snapshot.get("awaiting_encryption"):
+        print(f"ALERT: {snapshot['awaiting_encryption']} files in "
+              f"protected folders are not encrypted yet.")
     print(f"Scanned {snapshot['files_scanned']} files: "
           f"{snapshot['duplicate_files']} redundant copies, "
           f"{human_size(snapshot['wasted_bytes'])} excess exposure.")
@@ -348,6 +352,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help="also watch this vault: failed unlock attempts "
                         "and tamper evidence on its encrypted blobs "
                         "(no passphrase needed)")
+    p.add_argument("--protected", metavar="PATH", action="append",
+                   default=[],
+                   help="protected folder to check for files awaiting "
+                        "encryption (repeatable)")
     p.set_defaults(func=cmd_monitor)
 
     p = sub.add_parser("gui", help="open the client-side desktop app")

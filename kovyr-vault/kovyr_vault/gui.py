@@ -26,7 +26,7 @@ import threading
 import webbrowser
 from pathlib import Path
 
-from . import __version__, crypto, monitor as monitor_mod, quarantine as quarantine_mod, report as report_mod, scanner
+from . import __version__, crypto, monitor as monitor_mod, protect_folder as protect_mod, quarantine as quarantine_mod, report as report_mod, scanner
 from .util import human_size, mirror_path, now_stamp
 from .vault import Vault, VaultError
 
@@ -106,6 +106,7 @@ def build_default_config(client: str, paths: list[str],
         "html": str(base / "latest-report.html"),
         "vault": str(base / "vault"),
         "quarantine": str(base / "quarantine"),
+        "protected": [],
     }
 
 
@@ -163,6 +164,7 @@ def status_summary(history: list[dict]) -> dict:
     if current.get("new_failed_unlocks"):
         alerts.append(f"{current['new_failed_unlocks']} failed vault "
                       f"unlock attempts since last check")
+    awaiting = current.get("awaiting_encryption") or 0
     return {
         "configured": True,
         "last_run": current.get("timestamp", "unknown"),
@@ -172,8 +174,9 @@ def status_summary(history: list[dict]) -> dict:
         "exposure": current["wasted_bytes"],
         "new_groups": len(drift.new_groups),
         "alerts": alerts,
+        "awaiting": awaiting,
         "clean": (current["duplicate_files"] == 0 and not drift.has_new
-                  and not alerts),
+                  and not alerts and not awaiting),
     }
 
 
@@ -338,6 +341,10 @@ class App:
                   padx=14, pady=5, font=("Segoe UI", 10, "bold"),
                   relief="flat", cursor="hand2").pack(side="left",
                                                       padx=(0, 10))
+        tk.Button(self.vault_buttons, text="Encrypt waiting files…",
+                  command=self.sweep_protected, padx=14, pady=5,
+                  font=("Segoe UI", 10), relief="groove",
+                  cursor="hand2").pack(side="left", padx=(0, 10))
         tk.Button(self.vault_buttons, text="Lock", command=self.lock,
                   padx=14, pady=5, font=("Segoe UI", 10),
                   relief="groove", cursor="hand2").pack(side="left")
@@ -560,15 +567,16 @@ class App:
         tk = self.tk
         tab = self.settings_tab
 
-        tk.Label(tab, text="Watched folders", bg="white",
+        tk.Label(tab, text="Monitored folders", bg="white",
                  font=("Segoe UI", 11, "bold")).pack(anchor="w")
-        tk.Label(tab, text="Kovyr scans and protects these folders, "
-                 "including everything inside them.", fg=MUTED, bg="white",
+        tk.Label(tab, text="Scanned for duplicates and drift, including "
+                 "all subfolders. Files here stay normal — monitoring "
+                 "is NOT encryption.", fg=MUTED, bg="white",
                  font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 6))
 
         folders = tk.Frame(tab, bg="white")
         folders.pack(fill="x")
-        self.folders_list = tk.Listbox(folders, height=6,
+        self.folders_list = tk.Listbox(folders, height=4,
                                        font=("Segoe UI", 10),
                                        selectmode="extended")
         self.folders_list.pack(side="left", fill="x", expand=True)
@@ -580,6 +588,30 @@ class App:
         tk.Button(btns, text="Remove selected", command=self.remove_folder,
                   padx=10, pady=3, relief="groove",
                   cursor="hand2").pack(fill="x")
+
+        tk.Label(tab, text="Protected folders", bg="white",
+                 font=("Segoe UI", 11, "bold")).pack(anchor="w",
+                                                     pady=(14, 0))
+        tk.Label(tab, text="Files saved here (any subfolder) get "
+                 "ENCRYPTED into the vault when you unlock and sweep — "
+                 "each is replaced by a small .kovyr receipt.",
+                 fg=MUTED, bg="white",
+                 font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 6))
+        pfolders = tk.Frame(tab, bg="white")
+        pfolders.pack(fill="x")
+        self.protected_list = tk.Listbox(pfolders, height=3,
+                                         font=("Segoe UI", 10),
+                                         selectmode="extended")
+        self.protected_list.pack(side="left", fill="x", expand=True)
+        pbtns = tk.Frame(pfolders, bg="white")
+        pbtns.pack(side="left", padx=(10, 0), anchor="n")
+        tk.Button(pbtns, text="Add folder…",
+                  command=self.add_protected_folder, padx=10, pady=3,
+                  relief="groove", cursor="hand2").pack(fill="x",
+                                                        pady=(0, 6))
+        tk.Button(pbtns, text="Remove selected",
+                  command=self.remove_protected_folder, padx=10, pady=3,
+                  relief="groove", cursor="hand2").pack(fill="x")
 
         row = tk.Frame(tab, bg="white")
         row.pack(anchor="w", pady=(14, 0))
@@ -609,9 +641,23 @@ class App:
         self.folders_list.delete(0, "end")
         for p in (self.config or {}).get("paths", []):
             self.folders_list.insert("end", p)
+        self.protected_list.delete(0, "end")
+        for p in (self.config or {}).get("protected", []):
+            self.protected_list.insert("end", p)
         self.client_entry.delete(0, "end")
         self.client_entry.insert(0, (self.config or {}).get("client", ""))
         self._refresh_vault_status()
+
+    def add_protected_folder(self) -> None:
+        from tkinter import filedialog
+        folder = filedialog.askdirectory(
+            title="Choose a folder whose contents get encrypted")
+        if folder and folder not in self.protected_list.get(0, "end"):
+            self.protected_list.insert("end", folder)
+
+    def remove_protected_folder(self) -> None:
+        for index in reversed(self.protected_list.curselection()):
+            self.protected_list.delete(index)
 
     def _vault_path(self) -> Path:
         return Path((self.config or {}).get("vault")
@@ -643,14 +689,17 @@ class App:
         paths = list(self.folders_list.get(0, "end"))
         if not paths:
             self.settings_msg.config(
-                text="Add at least one folder to watch.", fg=BAD)
+                text="Add at least one monitored folder.", fg=BAD)
             return
+        protected = list(self.protected_list.get(0, "end"))
         client = self.client_entry.get().strip()
         if self.config:
             self.config["paths"] = paths
+            self.config["protected"] = protected
             self.config["client"] = client or self.config.get("client")
         else:
             self.config = build_default_config(client, paths)
+            self.config["protected"] = protected
         try:
             save_config(self.save_path, self.config)
         except OSError as exc:
@@ -747,6 +796,10 @@ class App:
         elif summary["alerts"]:
             self.headline.config(
                 text="⚠ Attention needed — contact Kovyr", fg=BAD)
+        elif summary["awaiting"]:
+            self.headline.config(
+                text=f"⚠ {summary['awaiting']} file(s) awaiting "
+                "encryption — unlock the vault to sweep them", fg=BAD)
         elif summary["new_groups"]:
             self.headline.config(
                 text=f"⚠ {summary['new_groups']} new duplicate "
@@ -774,7 +827,8 @@ class App:
             vault_path = self.config.get("vault")
             _snap, drift, history = monitor_mod.record_run(
                 Path(self.config["state"]), result, now_stamp(),
-                vault=Path(vault_path) if vault_path else None)
+                vault=Path(vault_path) if vault_path else None,
+                protected=self._protected_dirs() or None)
             if self.config.get("html"):
                 ctx = {
                     "client": self.config.get("client"),
@@ -842,10 +896,72 @@ class App:
         self.unlock_frame.pack_forget()
         self.files_frame.pack(fill="both", expand=True)
         self.vault_buttons.pack(anchor="w", pady=(10, 0))
+        self._refresh_vault_list()
+        # Anything sitting in the Protected folders? Offer the sweep now.
+        waiting = self._waiting_protected()
+        if waiting:
+            from tkinter import messagebox
+            if messagebox.askyesno(
+                    "Kovyr Vault",
+                    f"{len(waiting)} file(s) in your Protected folders "
+                    "are not encrypted yet.\n\nEncrypt them into the "
+                    "vault now? Each is replaced by a .kovyr receipt."):
+                self._do_sweep()
+
+    def _refresh_vault_list(self) -> None:
         self.tree.delete(*self.tree.get_children())
-        for name, entry in sorted(vault.list_files().items()):
+        if self.vault is None:
+            return
+        for name, entry in sorted(self.vault.list_files().items()):
             self.tree.insert("", "end", iid=name, text=name,
                              values=(human_size(entry.size),))
+
+    def _protected_dirs(self) -> list[Path]:
+        return [Path(p) for p in (self.config or {}).get("protected", [])]
+
+    def _waiting_protected(self) -> list[Path]:
+        dirs = self._protected_dirs()
+        if not dirs:
+            return []
+        exclude = Path(self.config["vault"]) if (
+            self.config and self.config.get("vault")) else None
+        return protect_mod.waiting_files(dirs, exclude=exclude)
+
+    def sweep_protected(self) -> None:
+        from tkinter import messagebox
+        if self.vault is None:
+            return
+        if not self._protected_dirs():
+            messagebox.showinfo(
+                "Kovyr Vault",
+                "No Protected folders are set up — add one on the "
+                "Settings tab first.")
+            return
+        waiting = self._waiting_protected()
+        if not waiting:
+            messagebox.showinfo(
+                "Kovyr Vault",
+                "Nothing is waiting — every file in your Protected "
+                "folders is already encrypted.")
+            return
+        if messagebox.askyesno(
+                "Kovyr Vault",
+                f"Encrypt {len(waiting)} file(s) into the vault?\n\n"
+                "Each original is replaced by a .kovyr receipt; the "
+                "content will only be readable through this app."):
+            self._do_sweep()
+
+    def _do_sweep(self) -> None:
+        from tkinter import messagebox
+        encrypted, errors = protect_mod.sweep(self.vault,
+                                              self._protected_dirs())
+        self._refresh_vault_list()
+        message = (f"Encrypted {encrypted} file(s) into the vault. "
+                   "Receipts mark where each one came from.")
+        if errors:
+            message += f"\n\n{len(errors)} could not be encrypted:\n"
+            message += "\n".join(errors[:5])
+        messagebox.showinfo("Kovyr Vault", message)
 
     def lock(self) -> None:
         self.vault = None
