@@ -162,11 +162,14 @@ class Vault:
     def _blob_path(self, sha256: str) -> Path:
         return self.root / BLOB_DIR / sha256[:2] / f"{sha256}.kvb"
 
-    def add_file(self, source: Path, name: str) -> tuple[FileEntry, bool]:
+    def add_file(self, source: Path, name: str,
+                 save_index: bool = True) -> tuple[FileEntry, bool]:
         """Encrypt a file into the vault under the given logical name.
 
         Returns (entry, stored) where stored is False when identical
-        content was already in the vault (deduplicated).
+        content was already in the vault (deduplicated). Bulk callers
+        pass save_index=False and call flush_index() at checkpoints —
+        rewriting the encrypted index per file is O(n²) over big sweeps.
         """
         plaintext = source.read_bytes()
         sha256 = hash_bytes(plaintext)
@@ -183,8 +186,13 @@ class Vault:
             stored = True
 
         self._index[name] = entry
-        self._save_index()
+        if save_index:
+            self._save_index()
         return entry, stored
+
+    def flush_index(self) -> None:
+        """Persist the index now (pairs with add_file(save_index=False))."""
+        self._save_index()
 
     def read_file(self, name: str) -> bytes:
         entry = self._index.get(name)

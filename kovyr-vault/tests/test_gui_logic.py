@@ -138,3 +138,11 @@ def test_status_existing_dupes_not_drift():
     summary = gui.status_summary(history)
     assert summary["clean"] is False
     assert summary["new_groups"] == 0
+
+
+def test_version_comparison():
+    assert gui.is_newer_version("kovyr-vault-v0.6.0", "0.5.2")
+    assert gui.is_newer_version("v1.0.0", "0.9.9")
+    assert not gui.is_newer_version("kovyr-vault-v0.5.2", "0.5.2")
+    assert not gui.is_newer_version("v0.5.1", "0.5.2")
+    assert not gui.is_newer_version("", "0.5.2")

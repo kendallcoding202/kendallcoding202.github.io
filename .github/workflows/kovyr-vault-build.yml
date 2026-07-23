@@ -7,8 +7,6 @@ name: Kovyr Vault build
 
 on:
   workflow_dispatch: {}
-  push:
-    tags: ["kovyr-vault-v*"]
 
 permissions:
   contents: read
@@ -212,3 +210,38 @@ jobs:
           path: |
             kovyr-vault/dist/kovyr-vault-macos.zip
             kovyr-vault/dist/KovyrVault.dmg
+
+  # Publish installers to a public GitHub Release so downloads are one
+  # stable link (releases/latest) and the app's Check-for-updates can
+  # see new versions — no Actions-tab digging, no GitHub login needed.
+  release:
+    runs-on: ubuntu-latest
+    needs: [build-windows, build-macos]
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: v
+        run: echo "version=$(grep -oP '(?<=__version__ = \")[^\"]+' kovyr-vault/kovyr_vault/__init__.py)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: kovyr-vault-v${{ steps.v.outputs.version }}
+          name: Kovyr Vault ${{ steps.v.outputs.version }}
+          make_latest: true
+          body: |
+            Kovyr Vault ${{ steps.v.outputs.version }} — installers for both platforms.
+            - **Mac**: download `KovyrVault.dmg`, open it, drag to Applications. (`kovyr-vault-macos.zip` holds the CLI tool.)
+            - **Windows**: download and run `KovyrVaultSetup.exe`.
+          files: |
+            artifacts/kovyr-vault-macos/KovyrVault.dmg
+            artifacts/kovyr-vault-macos/kovyr-vault-macos.zip
+            artifacts/kovyr-vault-windows/KovyrVaultSetup.exe
