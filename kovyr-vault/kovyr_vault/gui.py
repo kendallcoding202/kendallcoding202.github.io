@@ -100,6 +100,10 @@ def status_summary(history: list[dict]) -> dict:
     current = history[-1]
     drift = monitor_mod.diff(history[-2] if len(history) > 1 else None,
                              current)
+    alerts = list(current.get("canary_alerts") or [])
+    if current.get("new_failed_unlocks"):
+        alerts.append(f"{current['new_failed_unlocks']} failed vault "
+                      f"unlock attempts since last check")
     return {
         "configured": True,
         "last_run": current.get("timestamp", "unknown"),
@@ -108,7 +112,9 @@ def status_summary(history: list[dict]) -> dict:
         "duplicates": current["duplicate_files"],
         "exposure": current["wasted_bytes"],
         "new_groups": len(drift.new_groups),
-        "clean": current["duplicate_files"] == 0 and not drift.has_new,
+        "alerts": alerts,
+        "clean": (current["duplicate_files"] == 0 and not drift.has_new
+                  and not alerts),
     }
 
 
@@ -285,6 +291,9 @@ class App:
             return
         if summary["clean"]:
             self.headline.config(text="✓ Protected", fg=GOOD)
+        elif summary["alerts"]:
+            self.headline.config(
+                text="⚠ Attention needed — contact Kovyr", fg=BAD)
         elif summary["new_groups"]:
             self.headline.config(
                 text=f"⚠ {summary['new_groups']} new duplicate "
@@ -309,8 +318,10 @@ class App:
         try:
             result = scanner.scan(
                 [Path(p) for p in self.config["paths"]])
+            vault_path = self.config.get("vault")
             _snap, drift, history = monitor_mod.record_run(
-                Path(self.config["state"]), result, now_stamp())
+                Path(self.config["state"]), result, now_stamp(),
+                vault=Path(vault_path) if vault_path else None)
             if self.config.get("html"):
                 ctx = {
                     "client": self.config.get("client"),

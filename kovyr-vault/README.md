@@ -19,7 +19,7 @@ Kovyr Vault shrinks that exposure surface, then locks down what's left.
 | `list` | Show vault contents and how many unique encrypted blobs back them. |
 | `verify` | Decrypt every entry and check it against its recorded hash — proof for the client that the data is intact. |
 | `report` | Generate a branded, self-contained HTML engagement report from before/after scan data and vault stats (with a live integrity check). |
-| `monitor` | Recurring scan that records a snapshot and reports drift — new duplicate content appearing since the last run. Exits non-zero on drift so schedulers can alert. `--html` writes a branded monitoring report. |
+| `monitor` | Recurring scan that records a snapshot and reports drift — new duplicate content appearing since the last run. With `--vault PATH` it also counts failed unlock attempts and checks the vault's immutable blobs for tamper evidence (no passphrase needed), and a conservative canary flags the mass-change footprint of ransomware. Exit codes: 2 = alert (canary/failed unlocks), 1 = new drift, 0 = quiet. `--html` writes a branded monitoring report with an alert banner when attention is needed. |
 | `gui` | Open the client-side desktop app (also shipped as its own windowed `kovyr-vault-app.exe`). |
 
 ## Typical engagement workflow

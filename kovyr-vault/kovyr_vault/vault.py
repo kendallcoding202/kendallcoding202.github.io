@@ -15,6 +15,7 @@ from __future__ import annotations
 import base64
 import json
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from . import crypto
@@ -23,7 +24,22 @@ from .hashing import hash_bytes
 HEADER_NAME = "vault.json"
 INDEX_NAME = "index.kvi"
 BLOB_DIR = "blobs"
+ACCESS_LOG_NAME = "access.log"
 FORMAT_VERSION = 1
+
+
+def _log_access(root: Path, event: str) -> None:
+    """Append an access event (best-effort tripwire, never fatal).
+
+    The log is plaintext metadata — timestamps and outcomes only, no
+    content — and feeds the monitoring report's failed-unlock count.
+    """
+    try:
+        stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        with open(root / ACCESS_LOG_NAME, "a", encoding="utf-8") as f:
+            f.write(f"{stamp}\t{event}\n")
+    except OSError:
+        pass
 
 
 def _b64(data: bytes) -> str:
@@ -108,9 +124,11 @@ class Vault:
                 derived, _unb64(header["wrapped_key"]), crypto.AAD_KEY_WRAP
             )
         except crypto.IntegrityError as exc:
+            _log_access(root, "FAILED_UNLOCK")
             raise crypto.WrongPassphrase(
                 "incorrect passphrase for this vault"
             ) from exc
+        _log_access(root, "UNLOCK_OK")
         return cls(root, master_key)
 
     # ---------- index ----------
