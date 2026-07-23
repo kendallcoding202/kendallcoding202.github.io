@@ -42,12 +42,14 @@ def test_load_config_requires_state(tmp_path):
 
 
 def test_build_default_config_derives_paths():
-    config = gui.build_default_config("Acme", ["/data"], base=gui.Path("/base"))
+    base = gui.Path("/base")
+    config = gui.build_default_config("Acme", ["/data"], base=base)
     assert config["client"] == "Acme"
     assert config["paths"] == ["/data"]
-    assert config["state"] == "/base/state.json"
-    assert config["vault"] == "/base/vault"
-    assert config["html"] == "/base/latest-report.html"
+    # Compare via Path so separators match on every platform.
+    assert config["state"] == str(base / "state.json")
+    assert config["vault"] == str(base / "vault")
+    assert config["html"] == str(base / "latest-report.html")
 
 
 def test_save_config_roundtrip(tmp_path):
