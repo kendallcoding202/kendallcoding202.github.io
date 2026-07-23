@@ -371,6 +371,14 @@ class App:
 
         row = tk.Frame(tab, bg="white")
         row.pack(anchor="w", pady=(8, 0), fill="x")
+        tk.Button(row, text="Select all copies",
+                  command=self.select_all_dupes, padx=10, pady=4,
+                  relief="groove", cursor="hand2").pack(side="left",
+                                                        padx=(0, 8))
+        tk.Button(row, text="Clear selection",
+                  command=self.clear_dupe_selection, padx=10, pady=4,
+                  relief="groove", cursor="hand2").pack(side="left",
+                                                        padx=(0, 8))
         tk.Button(row, text="Quarantine selected…",
                   command=self.quarantine_selected, bg=NAVY, fg="white",
                   padx=12, pady=4, font=("Segoe UI", 10, "bold"),
@@ -439,6 +447,23 @@ class App:
         else:
             self.dupes_msg.config(text="")
         self.refresh_quarantine()
+
+    def select_all_dupes(self) -> None:
+        copies = [iid
+                  for parent in self.dupes_tree.get_children("")
+                  for iid in self.dupes_tree.get_children(parent)]
+        self.dupes_tree.selection_set(copies)
+        if copies:
+            self.dupes_msg.config(
+                text=f"Selected all {len(copies)} redundant copies — "
+                "one copy of each file is kept and cannot be selected.")
+        else:
+            self.dupes_msg.config(
+                text="No duplicates to select — run a check first.")
+
+    def clear_dupe_selection(self) -> None:
+        self.dupes_tree.selection_set([])
+        self.dupes_msg.config(text="")
 
     def quarantine_selected(self) -> None:
         from tkinter import messagebox
