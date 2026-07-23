@@ -140,33 +140,36 @@ jobs:
         run: |
           "./dist/Kovyr Vault.app/Contents/MacOS/Kovyr Vault" --selftest
 
-      # Notarize with Apple so Gatekeeper opens the app without warnings,
-      # then staple the ticket so it verifies offline too. Bounded waits:
-      # a submission Apple sits on fails the step with Apple's own log
-      # printed instead of hanging the job indefinitely.
-      - name: Notarize and staple
+      # Notarize with Apple. The ticket attaches to the submission on
+      # Apple's servers whenever they finish, and Gatekeeper verifies
+      # online — so a slow queue must never block the artifact:
+      #   Accepted in time  -> staple (offline verification too)
+      #   still In Progress -> upload anyway; the app becomes
+      #                        Gatekeeper-clean retroactively on acceptance
+      #   Invalid           -> the only real failure; print Apple's log
+      - name: Notarize (staple when Apple answers in time)
         if: env.MACOS_CERT_P12 != ''
         run: |
           notary() { xcrun notarytool "$@" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"; }
           ditto -c -k --keepParent "dist/Kovyr Vault.app" notarize-app.zip
-          notary submit notarize-app.zip --wait --timeout 75m --output-format json > app-result.json || true
+          notary submit notarize-app.zip --wait --timeout 20m --output-format json > app-result.json || true
           cat app-result.json
           APP_STATUS=$(python3 -c "import json;print(json.load(open('app-result.json')).get('status',''))" 2>/dev/null || echo "")
           APP_SUB_ID=$(python3 -c "import json;print(json.load(open('app-result.json')).get('id',''))" 2>/dev/null || echo "")
-          if [ "$APP_STATUS" != "Accepted" ]; then
-            echo "::error::App notarization did not complete (status='$APP_STATUS', submission='$APP_SUB_ID')"
+          if [ "$APP_STATUS" = "Accepted" ]; then
+            xcrun stapler staple "dist/Kovyr Vault.app"
+            echo "App notarized and stapled."
+          elif [ "$APP_STATUS" = "Invalid" ]; then
+            echo "::error::Apple rejected the app (submission '$APP_SUB_ID') — log follows"
             [ -n "$APP_SUB_ID" ] && notary log "$APP_SUB_ID" || true
-            notary history || true
             exit 1
+          else
+            echo "::warning::Notarization still pending (submission '$APP_SUB_ID') — uploading the signed app anyway. Apple's ticket attaches server-side on acceptance and Gatekeeper verifies online, so the app opens cleanly once accepted (no rebuild needed)."
           fi
-          xcrun stapler staple "dist/Kovyr Vault.app"
+          # CLI binary: fire-and-forget submission; ticket attaches when done.
           ditto -c -k --keepParent dist/kovyr-vault notarize-cli.zip
-          notary submit notarize-cli.zip --wait --timeout 15m --output-format json > cli-result.json || true
+          notary submit notarize-cli.zip --output-format json > cli-result.json || true
           cat cli-result.json
-          CLI_STATUS=$(python3 -c "import json;print(json.load(open('cli-result.json')).get('status',''))" 2>/dev/null || echo "")
-          if [ "$CLI_STATUS" != "Accepted" ]; then
-            echo "::warning::CLI notarization not accepted (status='$CLI_STATUS'); the CLI is still signed, and the app is notarized."
-          fi
 
       # Zip the .app ourselves to preserve the executable bits that a raw
       # artifact upload would strip from the bundle.
