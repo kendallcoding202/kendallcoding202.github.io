@@ -956,13 +956,16 @@ class App:
 
     def _run_check_worker(self) -> None:
         try:
+            state_path = Path(self.config["state"])
+            cache = monitor_mod.load_hash_cache(state_path)
             result = scanner.scan(
-                [Path(p) for p in self.config["paths"]])
+                [Path(p) for p in self.config["paths"]], cache=cache)
             vault_path = self.config.get("vault")
             _snap, drift, history = monitor_mod.record_run(
-                Path(self.config["state"]), result, now_stamp(),
+                state_path, result, now_stamp(),
                 vault=Path(vault_path) if vault_path else None,
-                protected=self._protected_dirs() or None)
+                protected=self._protected_dirs() or None,
+                hash_cache=cache)
             if self.config.get("html"):
                 ctx = {
                     "client": self.config.get("client"),

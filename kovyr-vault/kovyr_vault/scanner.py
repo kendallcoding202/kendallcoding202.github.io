@@ -64,27 +64,34 @@ def iter_files(roots: list[Path]) -> list[Path]:
     return files
 
 
-def scan(roots: list[Path]) -> ScanResult:
+def scan(roots: list[Path],
+         cache: dict[str, dict] | None = None) -> ScanResult:
     """Find duplicate files under the given roots by content hash.
 
     Files are first grouped by size (cheap) and only same-size files are
     hashed, so unique-size files never need a full read.
+
+    With a cache (path -> {size, mtime, sha256}, mutated in place),
+    unchanged files reuse their remembered fingerprint instead of being
+    re-read — later checks only pay disk time for new or edited files.
     """
     files = iter_files(roots)
     errors: list[str] = []
 
     by_size: dict[int, list[Path]] = defaultdict(list)
     inventory: dict[str, int] = {}
+    mtimes: dict[str, float] = {}
     total_bytes = 0
     for path in files:
         try:
-            size = path.stat().st_size
+            stat = path.stat()
         except OSError as exc:
             errors.append(f"{path}: {exc}")
             continue
-        total_bytes += size
-        inventory[str(path)] = size
-        by_size[size].append(path)
+        total_bytes += stat.st_size
+        inventory[str(path)] = stat.st_size
+        mtimes[str(path)] = stat.st_mtime
+        by_size[stat.st_size].append(path)
 
     groups: list[DuplicateGroup] = []
     for size, candidates in by_size.items():
@@ -92,10 +99,21 @@ def scan(roots: list[Path]) -> ScanResult:
             continue
         by_hash: dict[str, list[Path]] = defaultdict(list)
         for path in candidates:
+            key = str(path)
+            cached = cache.get(key) if cache is not None else None
+            if (cached and cached.get("size") == size
+                    and cached.get("mtime") == mtimes[key]):
+                by_hash[cached["sha256"]].append(path)
+                continue
             try:
-                by_hash[hash_file(path)].append(path)
+                digest = hash_file(path)
             except OSError as exc:
                 errors.append(f"{path}: {exc}")
+                continue
+            if cache is not None:
+                cache[key] = {"size": size, "mtime": mtimes[key],
+                              "sha256": digest}
+            by_hash[digest].append(path)
         for sha, paths in by_hash.items():
             if len(paths) > 1:
                 groups.append(
