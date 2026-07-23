@@ -190,7 +190,7 @@ hr { border: none; border-top: 1px solid var(--line); margin: 7px 0; }
    ============================================================ */
 
 /* --- living background: streaming data behind the whole app (canvas on <body>) --- */
-.coderain { position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 0.5; }
+.coderain { position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 0.3; }
 
 /* --- atmosphere: a slow-drifting grid + a scanline sweep behind everything --- */
 #root::before {

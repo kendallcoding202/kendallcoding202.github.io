@@ -921,31 +921,31 @@ export function App() {
         document.body.insertBefore(canvas, document.body.firstChild);
         const ctx = canvas.getContext("2d");
         if (!ctx) { canvas.remove(); return; }
-        const FONT = 14;
+        const FONT = 14, COLW = 26; // COLW > FONT spaces the streams out so it reads calm, not busy
         const GLYPHS = "0101ABCDEF0123456789<>[]{}/\\|=+*#%$?".split("");
         let w = 0, h = 0, cols = 0, drops: number[] = [], sp: number[] = [], raf = 0, last = 0;
         const resize = () => {
             w = canvas.width = window.innerWidth; h = canvas.height = window.innerHeight;
-            cols = Math.ceil(w / FONT);
+            cols = Math.ceil(w / COLW);
             drops = Array.from({ length: cols }, () => Math.random() * -60);
-            sp = Array.from({ length: cols }, () => 0.28 + Math.random() * 0.5);
+            sp = Array.from({ length: cols }, () => 0.16 + Math.random() * 0.28);
             ctx.font = FONT + "px ui-monospace, monospace";
         };
         resize();
         window.addEventListener("resize", resize);
         const frame = (t: number) => {
             raf = requestAnimationFrame(frame);
-            if (t - last < 55) return; // ~18fps — alive but light
+            if (t - last < 60) return; // ~16fps — alive but light
             last = t;
-            ctx.fillStyle = "rgba(5,8,10,0.32)"; ctx.fillRect(0, 0, w, h); // fade the trails
+            ctx.fillStyle = "rgba(5,8,10,0.42)"; ctx.fillRect(0, 0, w, h); // shorter trails
             for (let i = 0; i < cols; i++) {
                 const y = drops[i] * FONT;
                 if (y > 0) {
-                    ctx.fillStyle = Math.random() > 0.94 ? "rgba(130,255,195,0.55)" : "rgba(46,196,124,0.32)";
-                    ctx.fillText(GLYPHS[(Math.random() * GLYPHS.length) | 0], i * FONT, y);
+                    ctx.fillStyle = Math.random() > 0.97 ? "rgba(120,255,190,0.38)" : "rgba(46,196,124,0.20)";
+                    ctx.fillText(GLYPHS[(Math.random() * GLYPHS.length) | 0], i * COLW, y);
                 }
                 drops[i] += sp[i];
-                if (y > h && Math.random() > 0.97) drops[i] = Math.random() * -20;
+                if (y > h && Math.random() > 0.975) drops[i] = Math.random() * -20;
             }
         };
         raf = requestAnimationFrame(frame);
