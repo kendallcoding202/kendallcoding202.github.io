@@ -108,6 +108,21 @@ runs the test suite on both platforms and uploads two artifacts:
 Binaries only run on the platform they were built for — hand Windows
 clients the exes and Mac clients the zip.
 
+### Installers (preferred for client machines)
+
+Each artifact now also carries a proper installer:
+
+- **KovyrVault.dmg** (macOS) — open it, drag Kovyr Vault into
+  Applications. Done.
+- **KovyrVaultSetup.exe** (Windows) — Next → Next → Finish, with an
+  optional desktop icon. Installs to Program Files\Kovyr.
+
+With an installer the app no longer sits next to its config: put
+`config.json` in the per-user location instead —
+`~/Library/Application Support/Kovyr/config.json` on macOS,
+`%APPDATA%\Kovyr\config.json` on Windows. (A config beside the app
+still wins if both exist, so old installs keep working.)
+
 **macOS scheduling:** use the cron line above (`crontab -e`) or a
 launchd agent.
 

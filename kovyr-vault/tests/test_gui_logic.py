@@ -41,6 +41,26 @@ def test_load_config_requires_state(tmp_path):
         gui.load_config(tmp_path / "config.json")
 
 
+def test_config_falls_back_to_app_support(tmp_path, monkeypatch):
+    support = tmp_path / "support" / "config.json"
+    support.parent.mkdir(parents=True)
+    write_config(support)
+    monkeypatch.setattr(gui, "app_support_config_path", lambda: support)
+    monkeypatch.chdir(tmp_path)  # no config.json in cwd
+    assert gui.default_config_path() == support
+
+
+def test_config_prefers_cwd_when_present(tmp_path, monkeypatch):
+    support = tmp_path / "support" / "config.json"
+    monkeypatch.setattr(gui, "app_support_config_path", lambda: support)
+    monkeypatch.chdir(tmp_path)
+    # Neither exists: default stays the first candidate (app support here,
+    # since we're not frozen and it comes before cwd in the search).
+    assert gui.default_config_path() == support
+    write_config(tmp_path / "config.json")
+    assert gui.default_config_path() == tmp_path / "config.json"
+
+
 def snapshot(dupes=0, wasted=0, groups=(), ts="2026-07-22 00:00 UTC"):
     return {
         "timestamp": ts,
