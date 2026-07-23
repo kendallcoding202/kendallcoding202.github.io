@@ -214,6 +214,21 @@ class App:
                                     self._open_documents)
         except Exception:
             pass  # non-mac platforms pass the path via argv instead
+        # A Dock-icon click sends Reopen; without this handler Tk won't
+        # restore a minimized/hidden window on macOS.
+        try:
+            self.root.createcommand("::tk::mac::ReopenApplication",
+                                    self._reopen)
+        except Exception:
+            pass
+
+    def _reopen(self) -> None:
+        try:
+            self.root.deiconify()
+            self.root.lift()
+            self.root.focus_force()
+        except Exception:
+            pass
 
     def _open_documents(self, *paths) -> None:
         for path in paths:
