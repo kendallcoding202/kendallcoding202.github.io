@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kovyr-vault"
-version = "0.6.0"
+version = "0.6.1"
 description = "Kovyr Vault — duplicate elimination and encryption at rest for client data"
 requires-python = ">=3.10"
-dependencies = ["cryptography>=41"]
+dependencies = ["cryptography>=41", "certifi"]
 
 [project.scripts]
 kovyr-vault = "kovyr_vault.cli:main"

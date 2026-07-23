@@ -806,12 +806,22 @@ class App:
         self.refresh_status()
 
     def check_updates(self) -> None:
+        import ssl
         import urllib.request
         self.settings_msg.config(text="Checking for updates…", fg=MUTED)
 
         def worker() -> None:
             try:
-                with urllib.request.urlopen(UPDATE_API, timeout=10) as resp:
+                # Frozen apps ship without the OS trust store; certifi
+                # provides the CA bundle so TLS verification works.
+                try:
+                    import certifi
+                    context = ssl.create_default_context(
+                        cafile=certifi.where())
+                except ImportError:
+                    context = ssl.create_default_context()
+                with urllib.request.urlopen(UPDATE_API, timeout=10,
+                                            context=context) as resp:
                     data = json.load(resp)
                 tag = data.get("tag_name", "")
                 url = data.get("html_url", "")
