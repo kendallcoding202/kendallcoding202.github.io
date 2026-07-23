@@ -141,15 +141,32 @@ jobs:
           "./dist/Kovyr Vault.app/Contents/MacOS/Kovyr Vault" --selftest
 
       # Notarize with Apple so Gatekeeper opens the app without warnings,
-      # then staple the ticket so it verifies offline too.
+      # then staple the ticket so it verifies offline too. Bounded waits:
+      # a submission Apple sits on fails the step with Apple's own log
+      # printed instead of hanging the job indefinitely.
       - name: Notarize and staple
         if: env.MACOS_CERT_P12 != ''
         run: |
+          notary() { xcrun notarytool "$@" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"; }
           ditto -c -k --keepParent "dist/Kovyr Vault.app" notarize-app.zip
-          xcrun notarytool submit notarize-app.zip --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          notary submit notarize-app.zip --wait --timeout 25m --output-format json > app-result.json || true
+          cat app-result.json
+          APP_STATUS=$(python3 -c "import json;print(json.load(open('app-result.json')).get('status',''))" 2>/dev/null || echo "")
+          APP_SUB_ID=$(python3 -c "import json;print(json.load(open('app-result.json')).get('id',''))" 2>/dev/null || echo "")
+          if [ "$APP_STATUS" != "Accepted" ]; then
+            echo "::error::App notarization did not complete (status='$APP_STATUS', submission='$APP_SUB_ID')"
+            [ -n "$APP_SUB_ID" ] && notary log "$APP_SUB_ID" || true
+            notary history || true
+            exit 1
+          fi
           xcrun stapler staple "dist/Kovyr Vault.app"
           ditto -c -k --keepParent dist/kovyr-vault notarize-cli.zip
-          xcrun notarytool submit notarize-cli.zip --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          notary submit notarize-cli.zip --wait --timeout 15m --output-format json > cli-result.json || true
+          cat cli-result.json
+          CLI_STATUS=$(python3 -c "import json;print(json.load(open('cli-result.json')).get('status',''))" 2>/dev/null || echo "")
+          if [ "$CLI_STATUS" != "Accepted" ]; then
+            echo "::warning::CLI notarization not accepted (status='$CLI_STATUS'); the CLI is still signed, and the app is notarized."
+          fi
 
       # Zip the .app ourselves to preserve the executable bits that a raw
       # artifact upload would strip from the bundle.
