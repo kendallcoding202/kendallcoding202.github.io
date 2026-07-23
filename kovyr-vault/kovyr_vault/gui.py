@@ -26,7 +26,7 @@ import threading
 import webbrowser
 from pathlib import Path
 
-from . import __version__, crypto, monitor as monitor_mod, report as report_mod, scanner
+from . import __version__, crypto, monitor as monitor_mod, quarantine as quarantine_mod, report as report_mod, scanner
 from .util import human_size, mirror_path, now_stamp
 from .vault import Vault, VaultError
 
@@ -105,7 +105,16 @@ def build_default_config(client: str, paths: list[str],
         "state": str(base / "state.json"),
         "html": str(base / "latest-report.html"),
         "vault": str(base / "vault"),
+        "quarantine": str(base / "quarantine"),
     }
+
+
+def keeper_and_redundant(paths: list[str]) -> tuple[str, list[str]]:
+    """Which copy survives a duplicate group (shortest path wins,
+    alphabetical tie-break — matches the CLI's 'first' policy) and
+    which copies are redundant."""
+    keeper = min(paths, key=lambda p: (len(p), p))
+    return keeper, [p for p in paths if p != keeper]
 
 
 def save_config(path: Path, config: dict) -> None:
@@ -216,13 +225,16 @@ class App:
         self.notebook = notebook
         self.status_tab = tk.Frame(notebook, bg="white", padx=16, pady=16)
         self.vault_tab = tk.Frame(notebook, bg="white", padx=16, pady=16)
+        self.dupes_tab = tk.Frame(notebook, bg="white", padx=16, pady=16)
         self.settings_tab = tk.Frame(notebook, bg="white", padx=16, pady=16)
         notebook.add(self.status_tab, text="  Protection status  ")
         notebook.add(self.vault_tab, text="  My encrypted files  ")
+        notebook.add(self.dupes_tab, text="  Duplicates  ")
         notebook.add(self.settings_tab, text="  Settings  ")
 
         self._build_status_tab()
         self._build_vault_tab()
+        self._build_dupes_tab()
         self._build_settings_tab()
         if self.config is None:
             notebook.select(self.settings_tab)  # first run lands on setup
@@ -329,6 +341,195 @@ class App:
         tk.Button(self.vault_buttons, text="Lock", command=self.lock,
                   padx=14, pady=5, font=("Segoe UI", 10),
                   relief="groove", cursor="hand2").pack(side="left")
+
+    # ---------- duplicates tab ----------
+
+    def _qdir(self) -> Path:
+        return Path((self.config or {}).get("quarantine")
+                    or (DEFAULT_BASE / "quarantine"))
+
+    def _build_dupes_tab(self) -> None:
+        tk = self.tk
+        ttk = self.ttk
+        tab = self.dupes_tab
+
+        header = tk.Frame(tab, bg="white")
+        header.pack(fill="x")
+        tk.Label(header, text="Duplicate copies from the last check",
+                 bg="white", font=("Segoe UI", 11, "bold")).pack(side="left")
+        tk.Button(header, text="Refresh", command=self.refresh_dupes,
+                  padx=10, pady=2, relief="groove",
+                  cursor="hand2").pack(side="right")
+
+        self.dupes_tree = ttk.Treeview(tab, columns=("size",),
+                                       selectmode="extended", height=8)
+        self.dupes_tree.heading("#0", text="File")
+        self.dupes_tree.heading("size", text="Size")
+        self.dupes_tree.column("#0", width=540)
+        self.dupes_tree.column("size", width=80, anchor="e")
+        self.dupes_tree.pack(fill="both", expand=True, pady=(6, 0))
+
+        row = tk.Frame(tab, bg="white")
+        row.pack(anchor="w", pady=(8, 0), fill="x")
+        tk.Button(row, text="Quarantine selected…",
+                  command=self.quarantine_selected, bg=NAVY, fg="white",
+                  padx=12, pady=4, font=("Segoe UI", 10, "bold"),
+                  relief="flat", cursor="hand2").pack(side="left")
+        tk.Label(row, text="Nothing is deleted — quarantined files can "
+                 "be restored below.", fg=MUTED, bg="white",
+                 font=("Segoe UI", 8)).pack(side="left", padx=10)
+
+        tk.Label(tab, text="Quarantine", bg="white",
+                 font=("Segoe UI", 11, "bold")).pack(anchor="w",
+                                                     pady=(14, 0))
+        self.quarantine_tree = ttk.Treeview(tab, columns=("age",),
+                                            selectmode="extended", height=5)
+        self.quarantine_tree.heading("#0", text="Original location")
+        self.quarantine_tree.heading("age", text="Days held")
+        self.quarantine_tree.column("#0", width=540)
+        self.quarantine_tree.column("age", width=80, anchor="e")
+        self.quarantine_tree.pack(fill="x", pady=(6, 0))
+
+        qrow = tk.Frame(tab, bg="white")
+        qrow.pack(anchor="w", pady=(8, 0))
+        tk.Button(qrow, text="Restore selected",
+                  command=self.restore_quarantined, padx=10, pady=3,
+                  relief="groove", cursor="hand2").pack(side="left",
+                                                        padx=(0, 8))
+        tk.Button(qrow, text="Empty quarantine…",
+                  command=self.empty_quarantine, padx=10, pady=3,
+                  relief="groove", cursor="hand2").pack(side="left")
+        self.dupes_msg = tk.Label(tab, text="", bg="white", fg=MUTED,
+                                  font=("Segoe UI", 9))
+        self.dupes_msg.pack(anchor="w", pady=(8, 0))
+
+        self.refresh_dupes()
+
+    def _latest_groups(self) -> list[dict]:
+        if not self.config:
+            return []
+        try:
+            history = monitor_mod.load_history(Path(self.config["state"]))
+        except (OSError, ValueError, KeyError):
+            return []
+        if not history:
+            return []
+        return history[-1].get("groups") or []
+
+    def refresh_dupes(self) -> None:
+        self.dupes_tree.delete(*self.dupes_tree.get_children())
+        groups = self._latest_groups()
+        for index, group in enumerate(groups):
+            paths = group.get("paths") or []
+            if len(paths) < 2:
+                continue
+            keeper, redundant = keeper_and_redundant(paths)
+            parent = self.dupes_tree.insert(
+                "", "end", iid=f"group::{index}",
+                text=f"{len(paths)} copies — keeping: {keeper}",
+                values=(human_size(group.get("size", 0)),), open=True)
+            for path in redundant:
+                self.dupes_tree.insert(
+                    parent, "end", iid=f"copy::{path}", text=path,
+                    values=(human_size(group.get("size", 0)),))
+        if not groups:
+            self.dupes_msg.config(
+                text="No duplicates in the last check — run a check "
+                "from the Protection status tab to refresh.")
+        else:
+            self.dupes_msg.config(text="")
+        self.refresh_quarantine()
+
+    def quarantine_selected(self) -> None:
+        from tkinter import messagebox
+        paths = [iid[len("copy::"):] for iid in self.dupes_tree.selection()
+                 if iid.startswith("copy::")]
+        if not paths:
+            self.dupes_msg.config(
+                text="Select one or more copies first (the indented "
+                "rows — the kept copy can't be quarantined).")
+            return
+        if not messagebox.askyesno(
+                "Kovyr Vault",
+                f"Move {len(paths)} redundant cop"
+                f"{'y' if len(paths) == 1 else 'ies'} to quarantine?\n\n"
+                "Nothing is deleted. Each file can be restored to its "
+                "original location from the Quarantine list."):
+            return
+        qdir = self._qdir()
+        moved, failed = 0, []
+        for path in paths:
+            try:
+                quarantine_mod.add(qdir, Path(path))
+                moved += 1
+            except OSError as exc:
+                failed.append(f"{path}: {exc}")
+        message = (f"Quarantined {moved} cop"
+                   f"{'y' if moved == 1 else 'ies'}. "
+                   "Run a check to update the status tiles.")
+        if failed:
+            message += f"  ({len(failed)} could not be moved.)"
+        self.dupes_msg.config(text=message)
+        self.refresh_dupes()
+
+    def refresh_quarantine(self) -> None:
+        self.quarantine_tree.delete(*self.quarantine_tree.get_children())
+        self._quarantine_items = {
+            item.stored: item for item in quarantine_mod.items(self._qdir())
+        }
+        for item in self._quarantine_items.values():
+            self.quarantine_tree.insert(
+                "", "end", iid=item.stored, text=item.original,
+                values=(f"{int(item.age_days())}",))
+
+    def restore_quarantined(self) -> None:
+        selected = self.quarantine_tree.selection()
+        if not selected:
+            self.dupes_msg.config(
+                text="Select quarantined files to restore first.")
+            return
+        restored, failed = 0, []
+        for stored in selected:
+            item = self._quarantine_items.get(stored)
+            if item is None:
+                continue
+            try:
+                quarantine_mod.restore(self._qdir(), item)
+                restored += 1
+            except (OSError, FileExistsError) as exc:
+                failed.append(f"{item.original}: {exc}")
+        message = f"Restored {restored} file(s) to their original location."
+        if failed:
+            message += "  Problems: " + "; ".join(failed)
+        self.dupes_msg.config(text=message)
+        self.refresh_quarantine()
+
+    def empty_quarantine(self) -> None:
+        from tkinter import messagebox
+        entries = quarantine_mod.items(self._qdir())
+        if not entries:
+            self.dupes_msg.config(text="Quarantine is empty.")
+            return
+        eligible = quarantine_mod.eligible_for_purge(entries)
+        if not eligible:
+            oldest = max(int(entry.age_days()) for entry in entries)
+            messagebox.showinfo(
+                "Kovyr Vault",
+                f"Nothing can be deleted yet. Files stay restorable for "
+                f"{quarantine_mod.RETENTION_DAYS} days — the oldest has "
+                f"been held {oldest} day(s).")
+            return
+        if not messagebox.askyesno(
+                "Kovyr Vault",
+                f"Permanently delete {len(eligible)} file(s) held longer "
+                f"than {quarantine_mod.RETENTION_DAYS} days?\n\n"
+                "THIS CANNOT BE UNDONE."):
+            return
+        removed = quarantine_mod.purge_eligible(self._qdir())
+        self.dupes_msg.config(
+            text=f"Permanently deleted {len(removed)} file(s); "
+            f"{len(entries) - len(removed)} newer file(s) remain held.")
+        self.refresh_quarantine()
 
     def _build_settings_tab(self) -> None:
         tk = self.tk
