@@ -31,6 +31,15 @@ def receipt_path(path: Path) -> Path:
     return path.with_name(path.name + RECEIPT_SUFFIX)
 
 
+def original_from_receipt(receipt: Path) -> Path:
+    """The vault name a receipt stands in for (its own path minus the
+    .kovyr suffix)."""
+    name = receipt.name
+    if name.endswith(RECEIPT_SUFFIX):
+        name = name[: -len(RECEIPT_SUFFIX)]
+    return receipt.with_name(name)
+
+
 def waiting_files(folders: list[Path],
                  exclude: Path | None = None) -> list[Path]:
     """Files (any depth) not yet encrypted: everything except receipts,

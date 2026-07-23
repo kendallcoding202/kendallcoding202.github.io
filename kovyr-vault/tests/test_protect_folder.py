@@ -96,3 +96,11 @@ def test_report_shows_awaiting_tile():
     ctx["history"] = [dict(base, awaiting_encryption=0)]
     html = report.render_monitor_report(ctx)
     assert "fully encrypted" in html
+
+
+def test_original_from_receipt():
+    receipt = Path("/data/Smith/w2.pdf.kovyr")
+    assert protect_folder.original_from_receipt(receipt) == \
+        Path("/data/Smith/w2.pdf")
+    plain = Path("/data/Smith/w2.pdf")
+    assert protect_folder.original_from_receipt(plain) == plain
