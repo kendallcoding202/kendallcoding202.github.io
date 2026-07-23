@@ -189,6 +189,9 @@ hr { border: none; border-top: 1px solid var(--line); margin: 7px 0; }
    JUICE / GAME FEEL — motion + feedback, all CSS, no assets
    ============================================================ */
 
+/* --- living background: streaming data behind the whole app (canvas on <body>) --- */
+.coderain { position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 0.5; }
+
 /* --- atmosphere: a slow-drifting grid + a scanline sweep behind everything --- */
 #root::before {
     content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0.4;
@@ -474,6 +477,19 @@ html.crt .wrap { padding-top: 24px; }
 .schematic-head b { color: var(--cyan); }
 .layers.schematic { position: relative; padding-left: 46px; }
 /* the conduit backbone running down the left gutter, behind the nodes */
+/* a data packet flowing down the intrusion conduit — the system reads as LIVE */
+.layers.schematic::after {
+    content: ""; position: absolute; left: 15px; width: 4px; height: 15px; border-radius: 2px;
+    background: linear-gradient(180deg, transparent, #5cf0d0, transparent);
+    box-shadow: 0 0 7px #35e0d8; opacity: 0; pointer-events: none;
+    animation: conduitflow 3s linear infinite;
+}
+@keyframes conduitflow {
+    0% { top: 12px; opacity: 0; }
+    14% { opacity: 0.95; }
+    86% { opacity: 0.95; }
+    100% { top: calc(100% - 24px); opacity: 0; }
+}
 .layers.schematic::before {
     content: ""; position: absolute; left: 16px; top: 18px; bottom: 18px; width: 2px;
     background: linear-gradient(180deg, #2a5a40, #0e2417);

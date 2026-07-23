@@ -909,6 +909,49 @@ export function App() {
     const finishBoot = () => { setBooted(true); try { sessionStorage.setItem("breach_booted", "1"); } catch { /* ignore */ } };
     useEffect(() => { applyCrt(crtIsOn()); }, []); // apply CRT screen mode on load
 
+    // LIVING BACKGROUND: a faint stream of data drifting behind the whole app, so the
+    // screen always reads as a running system rather than a static board. Canvas is
+    // pinned to <body> (behind #root) so it persists across every screen. Respects
+    // reduced-motion, and throttles to ~18fps to stay cheap on phones.
+    useEffect(() => {
+        if (typeof window === "undefined" || !document.body) return;
+        if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+        const canvas = document.createElement("canvas");
+        canvas.className = "coderain"; canvas.setAttribute("aria-hidden", "true");
+        document.body.insertBefore(canvas, document.body.firstChild);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { canvas.remove(); return; }
+        const FONT = 14;
+        const GLYPHS = "0101ABCDEF0123456789<>[]{}/\\|=+*#%$?".split("");
+        let w = 0, h = 0, cols = 0, drops: number[] = [], sp: number[] = [], raf = 0, last = 0;
+        const resize = () => {
+            w = canvas.width = window.innerWidth; h = canvas.height = window.innerHeight;
+            cols = Math.ceil(w / FONT);
+            drops = Array.from({ length: cols }, () => Math.random() * -60);
+            sp = Array.from({ length: cols }, () => 0.28 + Math.random() * 0.5);
+            ctx.font = FONT + "px ui-monospace, monospace";
+        };
+        resize();
+        window.addEventListener("resize", resize);
+        const frame = (t: number) => {
+            raf = requestAnimationFrame(frame);
+            if (t - last < 55) return; // ~18fps — alive but light
+            last = t;
+            ctx.fillStyle = "rgba(5,8,10,0.32)"; ctx.fillRect(0, 0, w, h); // fade the trails
+            for (let i = 0; i < cols; i++) {
+                const y = drops[i] * FONT;
+                if (y > 0) {
+                    ctx.fillStyle = Math.random() > 0.94 ? "rgba(130,255,195,0.55)" : "rgba(46,196,124,0.32)";
+                    ctx.fillText(GLYPHS[(Math.random() * GLYPHS.length) | 0], i * FONT, y);
+                }
+                drops[i] += sp[i];
+                if (y > h && Math.random() > 0.97) drops[i] = Math.random() * -20;
+            }
+        };
+        raf = requestAnimationFrame(frame);
+        return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", resize); canvas.remove(); };
+    }, []);
+
     // ambient bed: hum low on the map (scaled by Heat), let a breach drive its own
     // dread, and go silent in menus / after the run ends.
     useEffect(() => {
