@@ -222,6 +222,11 @@ class App:
         style.configure("TNotebook", background="white", borderwidth=0)
         style.configure("TNotebook.Tab", padding=(16, 8),
                         font=("Segoe UI", 10))
+        # Explicit colors so macOS/Windows dark mode can't invert the
+        # app's white surfaces out from under the text.
+        style.configure("Treeview", background="white",
+                        fieldbackground="white", foreground=TEXT)
+        style.configure("Treeview.Heading", foreground=TEXT)
 
         notebook = ttk.Notebook(root)
         notebook.pack(fill="both", expand=True, padx=12, pady=12)
@@ -251,7 +256,7 @@ class App:
         tk = self.tk
         tab = self.status_tab
 
-        self.headline = tk.Label(tab, text="", bg="white",
+        self.headline = tk.Label(tab, text="", bg="white", fg=TEXT,
                                  font=("Segoe UI", 14, "bold"))
         self.headline.pack(anchor="w")
         self.subline = tk.Label(tab, text="", fg=MUTED, bg="white",
@@ -301,7 +306,7 @@ class App:
         self.unlock_frame.pack(anchor="w", fill="x")
         tk.Label(self.unlock_frame, text="Enter your passphrase to view "
                  "and restore your encrypted files.", bg="white",
-                 font=("Segoe UI", 10)).pack(anchor="w")
+                 fg=TEXT, font=("Segoe UI", 10)).pack(anchor="w")
         tk.Label(self.unlock_frame, text="Only you know this passphrase. "
                  "It is never stored, and Kovyr cannot recover it for you.",
                  fg=MUTED, bg="white",
@@ -309,7 +314,9 @@ class App:
         row = tk.Frame(self.unlock_frame, bg="white")
         row.pack(anchor="w")
         self.pass_entry = tk.Entry(row, show="•", width=32,
-                                   font=("Segoe UI", 11))
+                                   font=("Segoe UI", 11), bg="white",
+                                   fg=TEXT, insertbackground=TEXT,
+                                   highlightbackground="#e2e8f0")
         self.pass_entry.pack(side="left", padx=(0, 10))
         self.pass_entry.bind("<Return>", lambda _e: self.unlock())
         self.unlock_btn = tk.Button(row, text="Unlock", command=self.unlock,
@@ -363,7 +370,7 @@ class App:
         header = tk.Frame(tab, bg="white")
         header.pack(fill="x")
         tk.Label(header, text="Duplicate copies from the last check",
-                 bg="white", font=("Segoe UI", 11, "bold")).pack(side="left")
+                 bg="white", fg=TEXT, font=("Segoe UI", 11, "bold")).pack(side="left")
         tk.Button(header, text="Refresh", command=self.refresh_dupes,
                   padx=10, pady=2, relief="groove",
                   cursor="hand2").pack(side="right")
@@ -394,7 +401,7 @@ class App:
                  "be restored below.", fg=MUTED, bg="white",
                  font=("Segoe UI", 8)).pack(side="left", padx=10)
 
-        tk.Label(tab, text="Quarantine", bg="white",
+        tk.Label(tab, text="Quarantine", bg="white", fg=TEXT,
                  font=("Segoe UI", 11, "bold")).pack(anchor="w",
                                                      pady=(14, 0))
         self.quarantine_tree = ttk.Treeview(tab, columns=("age",),
@@ -567,17 +574,26 @@ class App:
         tk = self.tk
         tab = self.settings_tab
 
-        tk.Label(tab, text="Monitored folders", bg="white",
+        tk.Label(tab, text="Two kinds of folders: everyday folders we "
+                 "watch, locked folders we encrypt. Move a file into a "
+                 "locked folder to archive it securely.", fg=MUTED,
+                 bg="white", font=("Segoe UI", 9),
+                 justify="left").pack(anchor="w", pady=(0, 10))
+
+        tk.Label(tab, text="Everyday folders — watched, not encrypted",
+                 fg=TEXT, bg="white",
                  font=("Segoe UI", 11, "bold")).pack(anchor="w")
-        tk.Label(tab, text="Scanned for duplicates and drift, including "
-                 "all subfolders. Files here stay normal — monitoring "
-                 "is NOT encryption.", fg=MUTED, bg="white",
+        tk.Label(tab, text="For files in active use. Scanned for "
+                 "duplicates and unusual changes (all subfolders); "
+                 "files stay normal and editable.", fg=MUTED, bg="white",
                  font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 6))
 
         folders = tk.Frame(tab, bg="white")
         folders.pack(fill="x")
         self.folders_list = tk.Listbox(folders, height=4,
                                        font=("Segoe UI", 10),
+                                       bg="white", fg=TEXT,
+                                       highlightbackground="#e2e8f0",
                                        selectmode="extended")
         self.folders_list.pack(side="left", fill="x", expand=True)
         btns = tk.Frame(folders, bg="white")
@@ -589,18 +605,21 @@ class App:
                   padx=10, pady=3, relief="groove",
                   cursor="hand2").pack(fill="x")
 
-        tk.Label(tab, text="Protected folders", bg="white",
+        tk.Label(tab, text="Locked folders — encrypted into the vault",
+                 fg=TEXT, bg="white",
                  font=("Segoe UI", 11, "bold")).pack(anchor="w",
                                                      pady=(14, 0))
-        tk.Label(tab, text="Files saved here (any subfolder) get "
-                 "ENCRYPTED into the vault when you unlock and sweep — "
-                 "each is replaced by a small .kovyr receipt.",
-                 fg=MUTED, bg="white",
+        tk.Label(tab, text="For files you're storing, not using. Files "
+                 "saved here (any subfolder) are encrypted when you "
+                 "unlock and sweep — each is replaced by a small "
+                 ".kovyr receipt.", fg=MUTED, bg="white",
                  font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 6))
         pfolders = tk.Frame(tab, bg="white")
         pfolders.pack(fill="x")
         self.protected_list = tk.Listbox(pfolders, height=3,
                                          font=("Segoe UI", 10),
+                                         bg="white", fg=TEXT,
+                                         highlightbackground="#e2e8f0",
                                          selectmode="extended")
         self.protected_list.pack(side="left", fill="x", expand=True)
         pbtns = tk.Frame(pfolders, bg="white")
@@ -615,9 +634,12 @@ class App:
 
         row = tk.Frame(tab, bg="white")
         row.pack(anchor="w", pady=(14, 0))
-        tk.Label(row, text="Name on reports:", bg="white",
+        tk.Label(row, text="Name on reports:", bg="white", fg=TEXT,
                  font=("Segoe UI", 10)).pack(side="left")
-        self.client_entry = tk.Entry(row, width=28, font=("Segoe UI", 10))
+        self.client_entry = tk.Entry(row, width=28, font=("Segoe UI", 10),
+                                     bg="white", fg=TEXT,
+                                     insertbackground=TEXT,
+                                     highlightbackground="#e2e8f0")
         self.client_entry.pack(side="left", padx=8)
 
         self.vault_status = tk.Label(tab, text="", bg="white", fg=MUTED,
@@ -726,19 +748,23 @@ class App:
         dlg.transient(self.root)
         dlg.grab_set()
         tk.Label(dlg, text="Choose the vault passphrase", bg="white",
-                 font=("Segoe UI", 12, "bold")).pack(anchor="w")
+                 fg=TEXT, font=("Segoe UI", 12, "bold")).pack(anchor="w")
         tk.Label(dlg, text="Only you will know it. It is never stored, "
                  "and there is NO way to recover it —\na lost passphrase "
                  "means the encrypted files are gone forever.\nSave it in "
                  "a password manager now.", bg="white", fg=MUTED,
                  justify="left", font=("Segoe UI", 9)).pack(
                      anchor="w", pady=(4, 10))
-        p1 = tk.Entry(dlg, show="•", width=30, font=("Segoe UI", 11))
-        p2 = tk.Entry(dlg, show="•", width=30, font=("Segoe UI", 11))
-        tk.Label(dlg, text="Passphrase:", bg="white",
+        p1 = tk.Entry(dlg, show="•", width=30, font=("Segoe UI", 11),
+                      bg="white", fg=TEXT, insertbackground=TEXT,
+                      highlightbackground="#e2e8f0")
+        p2 = tk.Entry(dlg, show="•", width=30, font=("Segoe UI", 11),
+                      bg="white", fg=TEXT, insertbackground=TEXT,
+                      highlightbackground="#e2e8f0")
+        tk.Label(dlg, text="Passphrase:", bg="white", fg=TEXT,
                  font=("Segoe UI", 9)).pack(anchor="w")
         p1.pack(anchor="w", pady=(0, 6))
-        tk.Label(dlg, text="Confirm:", bg="white",
+        tk.Label(dlg, text="Confirm:", bg="white", fg=TEXT,
                  font=("Segoe UI", 9)).pack(anchor="w")
         p2.pack(anchor="w", pady=(0, 10))
         msg = tk.Label(dlg, text="", bg="white", fg=BAD,
