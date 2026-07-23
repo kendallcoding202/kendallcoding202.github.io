@@ -47,6 +47,11 @@ function ImplantCard({ id, onClick, num }: { id: string; onClick?: () => void; n
 const nodeIcon = (n: MapNode) => (n.type === "breach" ? (isTerminal(n) ? "★" : "◈") : n.type === "safehouse" ? "☂" : "❋");
 // per-archetype card glyph, so the hand reads visually at a glance (colour comes from --k)
 const KIND_ICON: Record<string, string> = { exploit: "↯", recon: "⊙", stealth: "◐", utility: "❖" };
+// a distinct "gate" emblem per breach layer so each reads as its own barrier
+const LAYER_EMBLEMS = ["▦", "⊞", "⬢", "◈", "⟠", "⊠"];
+const layerEmblem = (i: number, total: number) => (i === total - 1 ? "⊛" : LAYER_EMBLEMS[i % LAYER_EMBLEMS.length]);
+// escalating danger colour by depth: cool green at the perimeter → hot red at the core
+const dangerColor = (i: number, total: number) => `hsl(${Math.round(150 - 150 * (total > 1 ? i / (total - 1) : 0))}, 78%, 58%)`;
 
 function MuteButton() {
     const [m, setM] = useState(sfx.isMuted());
@@ -315,9 +320,9 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                     const isObjective = i === state.layers.length - 1;
                     const nodeGlyph = l.breached ? "✓" : isCurrent ? "◉" : isObjective ? "◎" : "○";
                     return (
-                        <div key={i} className={"layer" + (isCurrent ? " current" : "") + (l.breached ? " breached" : "") + (isObjective ? " objective" : "")}>
+                        <div key={i} className={"layer" + (isCurrent ? " current" : "") + (l.breached ? " breached" : "") + (isObjective ? " objective" : "")} style={{ ["--danger" as string]: dangerColor(i, state.layers.length) }}>
                             <span className="lnode" aria-hidden>{nodeGlyph}</span>
-                            <span className="lname">{l.name}</span>
+                            <span className="lgate"><span className="lemblem" aria-hidden>{layerEmblem(i, state.layers.length)}</span><span className="lname">{l.name}</span></span>
                             <span className="defs">
                                 {l.breached ? <span className="muted">BREACHED</span> : l.defenses.map((d, di) => (
                                     <DefenseChip key={di} d={d} targetable={isCurrent && !!armed && d.strength > 0} preview={isCurrent && armed && d.strength > 0 ? previewOnTarget(state, armed, di) : null} kbdNum={isCurrent && armed ? targetOpts.indexOf(di) + 1 : undefined} hit={hits[`${i}-${di}`]} onClick={() => dispatch(armed!, di)} />

@@ -467,7 +467,6 @@ html.crt .wrap { padding-top: 24px; }
 .layer.breached { opacity: 0.4; border-color: var(--dim); }
 /* the objective layer is the win condition — tint it gold so the goal is legible */
 .layer.objective .lname { color: #ffd24a; }
-.layer.objective:not(.current):not(.breached) { border-color: #4a3a12; }
 .layer .lname { font-weight: bold; white-space: nowrap; }
 
 /* ---- SYSTEM SCHEMATIC: the breach as a vertical intrusion path you punch through ---- */
@@ -479,7 +478,29 @@ html.crt .wrap { padding-top: 24px; }
     content: ""; position: absolute; left: 16px; top: 18px; bottom: 18px; width: 2px;
     background: linear-gradient(180deg, #2a5a40, #0e2417);
 }
-.layers.schematic .layer { position: relative; }
+/* each layer is a distinct, danger-tinted GATE — cooler at the edge, hotter at the core */
+.layers.schematic .layer { position: relative; border-left: 4px solid var(--danger, var(--line)); }
+.layers.schematic .lgate { display: flex; align-items: center; min-width: 0; }
+.layers.schematic .lemblem {
+    font-size: 19px; line-height: 1; margin-right: 10px; flex-shrink: 0;
+    color: var(--danger, var(--fg)); text-shadow: 0 0 9px var(--danger);
+}
+.layers.schematic .layer.objective .lemblem { font-size: 23px; }
+/* the ACTIVE gate reads as a live threat: danger glow + targeting brackets on the corners */
+.layers.schematic .layer.current {
+    border-color: var(--danger);
+    box-shadow: 0 0 18px -3px var(--danger), inset 0 0 24px -16px var(--danger);
+}
+.layers.schematic .layer.current::before,
+.layers.schematic .layer.current::after {
+    content: ""; position: absolute; right: -2px; width: 13px; height: 13px;
+    border: 2px solid var(--danger); pointer-events: none;
+}
+.layers.schematic .layer.current::before { top: -2px; border-left: 0; border-bottom: 0; }
+.layers.schematic .layer.current::after { bottom: -2px; border-left: 0; border-top: 0; }
+/* the deeper gates loom darker/redder even while locked — dread of what's ahead */
+.layers.schematic .layer:not(.current):not(.breached) { background: linear-gradient(90deg, color-mix(in srgb, var(--danger) 9%, var(--panel)), var(--panel) 60%); }
+
 /* each layer's node sits out in the gutter, ON the conduit, colour-coded by state */
 .layers.schematic .lnode {
     position: absolute; left: -39px; top: 50%; transform: translateY(-50%);
