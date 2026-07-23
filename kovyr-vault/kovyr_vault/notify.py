@@ -33,21 +33,31 @@ def compose_alert(snapshot: dict, new_groups: int) -> str | None:
     return None
 
 
+def _sanitize(text: str, limit: int = 240) -> str:
+    """Strip control/quote characters and cap length before the text
+    reaches a shell interpreter. Defense in depth: alert text is
+    app-generated today, but future callers could pass filenames, so
+    the transport must not depend on the caller being trusted."""
+    cleaned = "".join(c for c in text
+                      if c.isprintable() and c not in '"\'`\\')
+    return cleaned[:limit]
+
+
 def send(message: str, title: str = TITLE) -> bool:
     """Show a native notification; returns False when it couldn't."""
     try:
+        message = _sanitize(message)
+        title = _sanitize(title)
         if sys.platform == "darwin":
-            safe_msg = message.replace('"', "'")
-            safe_title = title.replace('"', "'")
-            script = (f'display notification "{safe_msg}" '
-                      f'with title "{safe_title}"')
+            script = (f'display notification "{message}" '
+                      f'with title "{title}"')
             subprocess.run(["osascript", "-e", script],
                            timeout=10, check=True,
                            capture_output=True)
             return True
         if sys.platform.startswith("win"):
-            safe_msg = message.replace("'", "''")
-            safe_title = title.replace("'", "''")
+            safe_msg = message
+            safe_title = title
             ps = (
                 "Add-Type -AssemblyName System.Windows.Forms;"
                 "Add-Type -AssemblyName System.Drawing;"
