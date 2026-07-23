@@ -41,6 +41,22 @@ def test_load_config_requires_state(tmp_path):
         gui.load_config(tmp_path / "config.json")
 
 
+def test_build_default_config_derives_paths():
+    config = gui.build_default_config("Acme", ["/data"], base=gui.Path("/base"))
+    assert config["client"] == "Acme"
+    assert config["paths"] == ["/data"]
+    assert config["state"] == "/base/state.json"
+    assert config["vault"] == "/base/vault"
+    assert config["html"] == "/base/latest-report.html"
+
+
+def test_save_config_roundtrip(tmp_path):
+    config = gui.build_default_config("Acme", ["/data"], base=tmp_path)
+    target = tmp_path / "nested" / "config.json"
+    gui.save_config(target, config)
+    assert gui.load_config(target) == config
+
+
 def test_config_falls_back_to_app_support(tmp_path, monkeypatch):
     support = tmp_path / "support" / "config.json"
     support.parent.mkdir(parents=True)

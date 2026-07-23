@@ -91,6 +91,28 @@ def load_config(path: Path) -> dict:
     return config
 
 
+DEFAULT_BASE = Path.home() / "Kovyr"
+
+
+def build_default_config(client: str, paths: list[str],
+                         base: Path | None = None) -> dict:
+    """A complete config from just a client name and folder list —
+    state, report, and vault locations get sensible per-user defaults."""
+    base = base or DEFAULT_BASE
+    return {
+        "client": client or "Client",
+        "paths": list(paths),
+        "state": str(base / "state.json"),
+        "html": str(base / "latest-report.html"),
+        "vault": str(base / "vault"),
+    }
+
+
+def save_config(path: Path, config: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(config, indent=2))
+
+
 def plan_restore_targets(names: list[str], dest: Path) -> dict[str, Path]:
     """Decide where each restored file lands.
 
@@ -147,10 +169,15 @@ def status_summary(history: list[dict]) -> dict:
 
 
 class App:
-    def __init__(self, root, config: dict | None, config_error: str | None):
+    def __init__(self, root, config: dict | None, config_error: str | None,
+                 config_path: Path | None = None):
         self.root = root
         self.config = config
         self.config_error = config_error
+        # Where Save writes: the file we loaded from, else the per-user
+        # app-data location (works for DMG/installer installs).
+        self.save_path = (config_path if (config_path and config)
+                          else app_support_config_path())
         self.vault: Vault | None = None
         self._build()
         self.refresh_status()
@@ -186,13 +213,19 @@ class App:
 
         notebook = ttk.Notebook(root)
         notebook.pack(fill="both", expand=True, padx=12, pady=12)
+        self.notebook = notebook
         self.status_tab = tk.Frame(notebook, bg="white", padx=16, pady=16)
         self.vault_tab = tk.Frame(notebook, bg="white", padx=16, pady=16)
+        self.settings_tab = tk.Frame(notebook, bg="white", padx=16, pady=16)
         notebook.add(self.status_tab, text="  Protection status  ")
         notebook.add(self.vault_tab, text="  My encrypted files  ")
+        notebook.add(self.settings_tab, text="  Settings  ")
 
         self._build_status_tab()
         self._build_vault_tab()
+        self._build_settings_tab()
+        if self.config is None:
+            notebook.select(self.settings_tab)  # first run lands on setup
 
         footer = tk.Label(root, text=f"Kovyr Vault v{__version__} — your "
                           "passphrase is never stored by this app",
@@ -297,14 +330,180 @@ class App:
                   padx=14, pady=5, font=("Segoe UI", 10),
                   relief="groove", cursor="hand2").pack(side="left")
 
+    def _build_settings_tab(self) -> None:
+        tk = self.tk
+        tab = self.settings_tab
+
+        tk.Label(tab, text="Watched folders", bg="white",
+                 font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        tk.Label(tab, text="Kovyr scans and protects these folders, "
+                 "including everything inside them.", fg=MUTED, bg="white",
+                 font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 6))
+
+        folders = tk.Frame(tab, bg="white")
+        folders.pack(fill="x")
+        self.folders_list = tk.Listbox(folders, height=6,
+                                       font=("Segoe UI", 10),
+                                       selectmode="extended")
+        self.folders_list.pack(side="left", fill="x", expand=True)
+        btns = tk.Frame(folders, bg="white")
+        btns.pack(side="left", padx=(10, 0), anchor="n")
+        tk.Button(btns, text="Add folder…", command=self.add_folder,
+                  padx=10, pady=3, relief="groove",
+                  cursor="hand2").pack(fill="x", pady=(0, 6))
+        tk.Button(btns, text="Remove selected", command=self.remove_folder,
+                  padx=10, pady=3, relief="groove",
+                  cursor="hand2").pack(fill="x")
+
+        row = tk.Frame(tab, bg="white")
+        row.pack(anchor="w", pady=(14, 0))
+        tk.Label(row, text="Name on reports:", bg="white",
+                 font=("Segoe UI", 10)).pack(side="left")
+        self.client_entry = tk.Entry(row, width=28, font=("Segoe UI", 10))
+        self.client_entry.pack(side="left", padx=8)
+
+        self.vault_status = tk.Label(tab, text="", bg="white", fg=MUTED,
+                                     font=("Segoe UI", 9), justify="left")
+        self.vault_status.pack(anchor="w", pady=(14, 0))
+        self.create_vault_btn = tk.Button(
+            tab, text="Create vault…", command=self.create_vault_dialog,
+            padx=10, pady=3, relief="groove", cursor="hand2")
+
+        tk.Button(tab, text="Save settings", command=self.save_settings,
+                  bg=NAVY, fg="white", padx=14, pady=6,
+                  font=("Segoe UI", 10, "bold"), relief="flat",
+                  cursor="hand2").pack(anchor="w", pady=(18, 0))
+        self.settings_msg = tk.Label(tab, text="", bg="white", fg=MUTED,
+                                     font=("Segoe UI", 9))
+        self.settings_msg.pack(anchor="w", pady=(6, 0))
+
+        self._load_settings_fields()
+
+    def _load_settings_fields(self) -> None:
+        self.folders_list.delete(0, "end")
+        for p in (self.config or {}).get("paths", []):
+            self.folders_list.insert("end", p)
+        self.client_entry.delete(0, "end")
+        self.client_entry.insert(0, (self.config or {}).get("client", ""))
+        self._refresh_vault_status()
+
+    def _vault_path(self) -> Path:
+        return Path((self.config or {}).get("vault")
+                    or (DEFAULT_BASE / "vault"))
+
+    def _refresh_vault_status(self) -> None:
+        vault_path = self._vault_path()
+        if (vault_path / "vault.json").exists():
+            self.vault_status.config(
+                text=f"✓ Encrypted vault ready at {vault_path}", fg=GOOD)
+            self.create_vault_btn.pack_forget()
+        else:
+            self.vault_status.config(
+                text=f"No vault yet (will be created at {vault_path}). "
+                "The vault is where files are encrypted.", fg=MUTED)
+            self.create_vault_btn.pack(anchor="w", pady=(6, 0))
+
+    def add_folder(self) -> None:
+        from tkinter import filedialog
+        folder = filedialog.askdirectory(title="Choose a folder to watch")
+        if folder and folder not in self.folders_list.get(0, "end"):
+            self.folders_list.insert("end", folder)
+
+    def remove_folder(self) -> None:
+        for index in reversed(self.folders_list.curselection()):
+            self.folders_list.delete(index)
+
+    def save_settings(self) -> None:
+        paths = list(self.folders_list.get(0, "end"))
+        if not paths:
+            self.settings_msg.config(
+                text="Add at least one folder to watch.", fg=BAD)
+            return
+        client = self.client_entry.get().strip()
+        if self.config:
+            self.config["paths"] = paths
+            self.config["client"] = client or self.config.get("client")
+        else:
+            self.config = build_default_config(client, paths)
+        try:
+            save_config(self.save_path, self.config)
+        except OSError as exc:
+            self.settings_msg.config(text=f"Could not save: {exc}", fg=BAD)
+            return
+        self.config_error = None
+        self.settings_msg.config(
+            text=f"Saved to {self.save_path}", fg=GOOD)
+        self._refresh_vault_status()
+        self.refresh_status()
+
+    def create_vault_dialog(self) -> None:
+        tk = self.tk
+        from tkinter import messagebox
+
+        vault_path = self._vault_path()
+        if (vault_path / "vault.json").exists():
+            self._refresh_vault_status()
+            return
+
+        dlg = tk.Toplevel(self.root)
+        dlg.title("Create vault")
+        dlg.configure(bg="white", padx=18, pady=16)
+        dlg.transient(self.root)
+        dlg.grab_set()
+        tk.Label(dlg, text="Choose the vault passphrase", bg="white",
+                 font=("Segoe UI", 12, "bold")).pack(anchor="w")
+        tk.Label(dlg, text="Only you will know it. It is never stored, "
+                 "and there is NO way to recover it —\na lost passphrase "
+                 "means the encrypted files are gone forever.\nSave it in "
+                 "a password manager now.", bg="white", fg=MUTED,
+                 justify="left", font=("Segoe UI", 9)).pack(
+                     anchor="w", pady=(4, 10))
+        p1 = tk.Entry(dlg, show="•", width=30, font=("Segoe UI", 11))
+        p2 = tk.Entry(dlg, show="•", width=30, font=("Segoe UI", 11))
+        tk.Label(dlg, text="Passphrase:", bg="white",
+                 font=("Segoe UI", 9)).pack(anchor="w")
+        p1.pack(anchor="w", pady=(0, 6))
+        tk.Label(dlg, text="Confirm:", bg="white",
+                 font=("Segoe UI", 9)).pack(anchor="w")
+        p2.pack(anchor="w", pady=(0, 10))
+        msg = tk.Label(dlg, text="", bg="white", fg=BAD,
+                       font=("Segoe UI", 9))
+        msg.pack(anchor="w")
+
+        def do_create() -> None:
+            phrase, confirm = p1.get(), p2.get()
+            if not phrase:
+                msg.config(text="Passphrase must not be empty.")
+                return
+            if phrase != confirm:
+                msg.config(text="Passphrases do not match.")
+                return
+            try:
+                Vault.create(vault_path, phrase)
+            except (VaultError, OSError) as exc:
+                msg.config(text=str(exc))
+                return
+            dlg.destroy()
+            self._refresh_vault_status()
+            messagebox.showinfo(
+                "Kovyr Vault",
+                "Vault created. Write the passphrase into a password "
+                "manager now — it cannot be recovered.")
+
+        tk.Button(dlg, text="Create vault", command=do_create, bg=NAVY,
+                  fg="white", padx=14, pady=5,
+                  font=("Segoe UI", 10, "bold"), relief="flat",
+                  cursor="hand2").pack(anchor="w", pady=(8, 0))
+        p1.focus_set()
+
     # ---------- status tab behavior ----------
 
     def refresh_status(self) -> None:
         if self.config is None:
-            self.headline.config(text="Not configured yet", fg=MUTED)
+            self.headline.config(text="Not set up yet", fg=MUTED)
             self.subline.config(
-                text=(self.config_error or "config.json not found") +
-                "\nAsk Kovyr to complete setup on this machine.")
+                text="Open the Settings tab to choose the folders to "
+                "protect and create your vault.")
             return
         try:
             history = monitor_mod.load_history(Path(self.config["state"]))
@@ -487,7 +686,7 @@ def run_app(config_path: Path | None = None, selftest: bool = False) -> int:
         error = f"Configuration problem in {path}: {exc}"
 
     root = tk.Tk()
-    app = App(root, config, error)
+    app = App(root, config, error, config_path=path)
     if selftest:
         root.update_idletasks()
         root.update()
