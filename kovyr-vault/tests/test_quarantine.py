@@ -89,3 +89,33 @@ def test_keeper_is_shortest_path():
     assert keeper == "/data/report.pdf"
     assert len(redundant) == 2
     assert keeper not in redundant
+
+
+def test_add_many_batches_and_reports_progress(tmp_path):
+    qdir = tmp_path / "q"
+    paths = [make_file(tmp_path / "data", f"f{i}.txt", str(i).encode())
+             for i in range(25)]
+    seen = []
+    added, errors = quarantine.add_many(
+        qdir, paths, now=1000.0,
+        on_progress=lambda d, t: seen.append((d, t)), checkpoint=10)
+    assert len(added) == 25
+    assert errors == []
+    assert len(quarantine.items(qdir)) == 25
+    assert seen[-1] == (25, 25)
+    assert all(not p.exists() for p in paths)
+
+
+def test_restore_many_roundtrip_with_conflict(tmp_path):
+    qdir = tmp_path / "q"
+    paths = [make_file(tmp_path / "data", f"f{i}.txt", str(i).encode())
+             for i in range(5)]
+    quarantine.add_many(qdir, paths, now=1000.0)
+    # Recreate one original: restore must refuse to overwrite it.
+    make_file(tmp_path / "data", "f2.txt", b"newer")
+    entries = quarantine.items(qdir)
+    restored, errors = quarantine.restore_many(qdir, entries)
+    assert restored == 4
+    assert len(errors) == 1 and "f2.txt" in errors[0]
+    assert (tmp_path / "data" / "f2.txt").read_bytes() == b"newer"
+    assert len(quarantine.items(qdir)) == 1  # the conflicted one stays held
