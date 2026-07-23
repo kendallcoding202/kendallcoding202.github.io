@@ -50,36 +50,100 @@ def items(qdir: Path) -> list[Item]:
     return _load(qdir)
 
 
-def add(qdir: Path, path: Path, now: float | None = None) -> Item:
-    """Move a file into quarantine (reversible; nothing is deleted)."""
+def add_many(qdir: Path, paths: list[Path], now: float | None = None,
+             on_progress=None,
+             checkpoint: int = 500) -> tuple[list[Item], list[str]]:
+    """Move files into quarantine (reversible; nothing is deleted).
+
+    The manifest is loaded once and written per batch — per-file
+    rewrites are O(n²) and froze the UI at four-digit selections. The
+    ledger is checkpointed so an interruption loses at most one batch
+    of *entries* (the files themselves are already safely moved and
+    recoverable by path).
+    """
     now = time.time() if now is None else now
-    stored_abs = mirror_path(qdir, str(path))
-    stored_abs.parent.mkdir(parents=True, exist_ok=True)
-    base = stored_abs
-    counter = 1
-    while stored_abs.exists():  # same original quarantined more than once
-        stored_abs = base.with_name(f"{base.name}.{counter}")
-        counter += 1
-    shutil.move(str(path), str(stored_abs))
-    item = Item(original=str(path),
-                stored=str(stored_abs.relative_to(qdir)),
-                quarantined_at=now)
     entries = _load(qdir)
-    entries.append(item)
+    added: list[Item] = []
+    errors: list[str] = []
+    total = len(paths)
+    for index, path in enumerate(paths, 1):
+        try:
+            stored_abs = mirror_path(qdir, str(path))
+            stored_abs.parent.mkdir(parents=True, exist_ok=True)
+            base = stored_abs
+            counter = 1
+            while stored_abs.exists():  # same original quarantined again
+                stored_abs = base.with_name(f"{base.name}.{counter}")
+                counter += 1
+            shutil.move(str(path), str(stored_abs))
+            item = Item(original=str(path),
+                        stored=str(stored_abs.relative_to(qdir)),
+                        quarantined_at=now)
+            entries.append(item)
+            added.append(item)
+        except OSError as exc:
+            errors.append(f"{path}: {exc}")
+        if index % checkpoint == 0:
+            _save(qdir, entries)
+        if on_progress and (index % 100 == 0 or index == total):
+            on_progress(index, total)
     _save(qdir, entries)
-    return item
+    return added, errors
+
+
+def add(qdir: Path, path: Path, now: float | None = None) -> Item:
+    """Move one file into quarantine (reversible; nothing is deleted)."""
+    added, errors = add_many(qdir, [path], now=now)
+    if errors:
+        raise OSError(errors[0])
+    return added[0]
+
+
+def restore_many(qdir: Path, to_restore: list[Item],
+                 on_progress=None,
+                 checkpoint: int = 500) -> tuple[int, list[str]]:
+    """Put quarantined files back exactly where they came from.
+    Batched like add_many; conflicts (a new file now at the original
+    location) are reported, never overwritten."""
+    entries = _load(qdir)
+    by_stored = {e.stored: e for e in entries}
+    restored = 0
+    errors: list[str] = []
+    total = len(to_restore)
+    for index, item in enumerate(to_restore, 1):
+        entry = by_stored.get(item.stored)
+        if entry is None:
+            errors.append(f"{item.original}: not in quarantine")
+            continue
+        source = qdir / entry.stored
+        dest = Path(entry.original)
+        try:
+            if dest.exists():
+                raise FileExistsError(f"{dest} already exists")
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(source), str(dest))
+            entries.remove(entry)
+            del by_stored[entry.stored]
+            restored += 1
+        except (OSError, FileExistsError) as exc:
+            errors.append(f"{entry.original}: {exc}")
+        if index % checkpoint == 0:
+            _save(qdir, entries)
+        if on_progress and (index % 100 == 0 or index == total):
+            on_progress(index, total)
+    _save(qdir, entries)
+    return restored, errors
 
 
 def restore(qdir: Path, item: Item) -> Path:
-    """Put a quarantined file back exactly where it came from."""
-    source = qdir / item.stored
-    dest = Path(item.original)
-    if dest.exists():
-        raise FileExistsError(f"{dest} already exists")
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.move(str(source), str(dest))
-    _save(qdir, [e for e in _load(qdir) if e.stored != item.stored])
-    return dest
+    """Put one quarantined file back where it came from."""
+    restored, errors = restore_many(qdir, [item])
+    if errors:
+        message = errors[0]
+        if "already exists" in message:
+            raise FileExistsError(message)
+        raise OSError(message)
+    return Path(item.original)
 
 
 def eligible_for_purge(entries: list[Item], now: float | None = None,

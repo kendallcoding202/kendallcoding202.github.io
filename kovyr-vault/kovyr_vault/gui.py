@@ -504,13 +504,25 @@ class App:
             return []
         return history[-1].get("groups") or []
 
+    DUPES_ROW_CAP = 6000
+
     def refresh_dupes(self) -> None:
         self.dupes_tree.delete(*self.dupes_tree.get_children())
         groups = self._latest_groups()
+        rows = 0
+        shown_groups = 0
         for index, group in enumerate(groups):
             paths = group.get("paths") or []
             if len(paths) < 2:
                 continue
+            if rows >= self.DUPES_ROW_CAP:
+                self.dupes_tree.insert(
+                    "", "end", iid="::dupes-overflow::",
+                    text=f"… more groups not shown (list capped at "
+                    f"{self.DUPES_ROW_CAP:,} rows to stay responsive — "
+                    "quarantine these first, then Refresh)",
+                    values=("",))
+                break
             keeper, redundant = keeper_and_redundant(paths)
             parent = self.dupes_tree.insert(
                 "", "end", iid=f"group::{index}",
@@ -520,6 +532,8 @@ class App:
                 self.dupes_tree.insert(
                     parent, "end", iid=f"copy::{path}", text=path,
                     values=(human_size(group.get("size", 0)),))
+            rows += 1 + len(redundant)
+            shown_groups += 1
         if not groups:
             self.dupes_msg.config(
                 text="No duplicates in the last check — run a check "
@@ -547,6 +561,8 @@ class App:
 
     def quarantine_selected(self) -> None:
         from tkinter import messagebox
+        if getattr(self, "_dupes_busy", False):
+            return
         paths = [iid[len("copy::"):] for iid in self.dupes_tree.selection()
                  if iid.startswith("copy::")]
         if not paths:
@@ -556,26 +572,34 @@ class App:
             return
         if not messagebox.askyesno(
                 "Kovyr Vault",
-                f"Move {len(paths)} redundant cop"
+                f"Move {len(paths):,} redundant cop"
                 f"{'y' if len(paths) == 1 else 'ies'} to quarantine?\n\n"
                 "Nothing is deleted. Each file can be restored to its "
                 "original location from the Quarantine list."):
             return
         qdir = self._qdir()
-        moved, failed = 0, []
-        for path in paths:
-            try:
-                quarantine_mod.add(qdir, Path(path))
-                moved += 1
-            except OSError as exc:
-                failed.append(f"{path}: {exc}")
-        message = (f"Quarantined {moved} cop"
-                   f"{'y' if moved == 1 else 'ies'}. "
-                   "Run a check to update the status tiles.")
-        if failed:
-            message += f"  ({len(failed)} could not be moved.)"
-        self.dupes_msg.config(text=message)
-        self.refresh_dupes()
+        self._dupes_busy = True
+
+        def progress(done: int, total: int) -> None:
+            self.root.after(0, lambda: self.dupes_msg.config(
+                text=f"Quarantining {done:,} of {total:,}…"))
+
+        def worker() -> None:
+            added, errors = quarantine_mod.add_many(
+                qdir, [Path(p) for p in paths], on_progress=progress)
+            self.root.after(0, finish, len(added), errors)
+
+        def finish(moved: int, failed: list[str]) -> None:
+            self._dupes_busy = False
+            message = (f"Quarantined {moved:,} cop"
+                       f"{'y' if moved == 1 else 'ies'}. "
+                       "Run a check to update the status tiles.")
+            if failed:
+                message += f"  ({len(failed)} could not be moved.)"
+            self.dupes_msg.config(text=message)
+            self.refresh_dupes()
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def refresh_quarantine(self) -> None:
         self.quarantine_tree.delete(*self.quarantine_tree.get_children())
@@ -588,26 +612,38 @@ class App:
                 values=(f"{int(item.age_days())}",))
 
     def restore_quarantined(self) -> None:
+        if getattr(self, "_dupes_busy", False):
+            return
         selected = self.quarantine_tree.selection()
-        if not selected:
+        items = [self._quarantine_items[s] for s in selected
+                 if s in self._quarantine_items]
+        if not items:
             self.dupes_msg.config(
                 text="Select quarantined files to restore first.")
             return
-        restored, failed = 0, []
-        for stored in selected:
-            item = self._quarantine_items.get(stored)
-            if item is None:
-                continue
-            try:
-                quarantine_mod.restore(self._qdir(), item)
-                restored += 1
-            except (OSError, FileExistsError) as exc:
-                failed.append(f"{item.original}: {exc}")
-        message = f"Restored {restored} file(s) to their original location."
-        if failed:
-            message += "  Problems: " + "; ".join(failed)
-        self.dupes_msg.config(text=message)
-        self.refresh_quarantine()
+        qdir = self._qdir()
+        self._dupes_busy = True
+
+        def progress(done: int, total: int) -> None:
+            self.root.after(0, lambda: self.dupes_msg.config(
+                text=f"Restoring {done:,} of {total:,}…"))
+
+        def worker() -> None:
+            restored, errors = quarantine_mod.restore_many(
+                qdir, items, on_progress=progress)
+            self.root.after(0, finish, restored, errors)
+
+        def finish(restored: int, failed: list[str]) -> None:
+            self._dupes_busy = False
+            message = (f"Restored {restored:,} file(s) to their "
+                       "original location.")
+            if failed:
+                message += (f"  {len(failed)} problem(s): "
+                            + "; ".join(failed[:3]))
+            self.dupes_msg.config(text=message)
+            self.refresh_quarantine()
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def empty_quarantine(self) -> None:
         from tkinter import messagebox
