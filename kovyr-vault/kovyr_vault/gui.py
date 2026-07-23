@@ -110,6 +110,20 @@ def build_default_config(client: str, paths: list[str],
     }
 
 
+UPDATE_API = ("https://api.github.com/repos/kendallcoding202/"
+              "kendallcoding202.github.io/releases/latest")
+
+
+def version_tuple(text: str) -> tuple[int, ...]:
+    import re
+    numbers = re.findall(r"\d+", text)
+    return tuple(int(n) for n in numbers) if numbers else (0,)
+
+
+def is_newer_version(remote: str, local: str) -> bool:
+    return version_tuple(remote) > version_tuple(local)
+
+
 def keeper_and_redundant(paths: list[str]) -> tuple[str, list[str]]:
     """Which copy survives a duplicate group (shortest path wins,
     alphabetical tie-break — matches the CLI's 'first' policy) and
@@ -355,6 +369,10 @@ class App:
         tk.Button(self.vault_buttons, text="Lock", command=self.lock,
                   padx=14, pady=5, font=("Segoe UI", 10),
                   relief="groove", cursor="hand2").pack(side="left")
+        self.vault_msg = tk.Label(self.vault_buttons, text="", fg=MUTED,
+                                  bg="white", font=("Segoe UI", 9))
+        self.vault_msg.pack(side="left", padx=(12, 0))
+        self._sweeping = False
 
     # ---------- duplicates tab ----------
 
@@ -649,10 +667,16 @@ class App:
             tab, text="Create vault…", command=self.create_vault_dialog,
             padx=10, pady=3, relief="groove", cursor="hand2")
 
-        tk.Button(tab, text="Save settings", command=self.save_settings,
+        actions = tk.Frame(tab, bg="white")
+        actions.pack(anchor="w", pady=(18, 0))
+        tk.Button(actions, text="Save settings", command=self.save_settings,
                   bg=NAVY, fg="white", padx=14, pady=6,
                   font=("Segoe UI", 10, "bold"), relief="flat",
-                  cursor="hand2").pack(anchor="w", pady=(18, 0))
+                  cursor="hand2").pack(side="left", padx=(0, 10))
+        tk.Button(actions, text="Check for updates",
+                  command=self.check_updates, padx=12, pady=5,
+                  font=("Segoe UI", 10), relief="groove",
+                  cursor="hand2").pack(side="left")
         self.settings_msg = tk.Label(tab, text="", bg="white", fg=MUTED,
                                      font=("Segoe UI", 9))
         self.settings_msg.pack(anchor="w", pady=(6, 0))
@@ -732,6 +756,42 @@ class App:
             text=f"Saved to {self.save_path}", fg=GOOD)
         self._refresh_vault_status()
         self.refresh_status()
+
+    def check_updates(self) -> None:
+        import urllib.request
+        self.settings_msg.config(text="Checking for updates…", fg=MUTED)
+
+        def worker() -> None:
+            try:
+                with urllib.request.urlopen(UPDATE_API, timeout=10) as resp:
+                    data = json.load(resp)
+                tag = data.get("tag_name", "")
+                url = data.get("html_url", "")
+                self.root.after(0, self._updates_done, tag, url,
+                                is_newer_version(tag, __version__), None)
+            except Exception as exc:
+                self.root.after(0, self._updates_done, "", "", False,
+                                str(exc))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _updates_done(self, tag: str, url: str, newer: bool,
+                      error: str | None) -> None:
+        from tkinter import messagebox
+        if error:
+            self.settings_msg.config(
+                text=f"Could not check for updates: {error}", fg=BAD)
+            return
+        if newer:
+            self.settings_msg.config(text="", fg=MUTED)
+            if messagebox.askyesno(
+                    "Kovyr Vault",
+                    f"A newer version is available ({tag}).\n\n"
+                    "Open the download page?"):
+                webbrowser.open(url)
+        else:
+            self.settings_msg.config(
+                text=f"You're up to date (v{__version__}).", fg=GOOD)
 
     def create_vault_dialog(self) -> None:
         tk = self.tk
@@ -934,13 +994,22 @@ class App:
                     "vault now? Each is replaced by a .kovyr receipt."):
                 self._do_sweep()
 
+    VAULT_LIST_CAP = 5000
+
     def _refresh_vault_list(self) -> None:
         self.tree.delete(*self.tree.get_children())
         if self.vault is None:
             return
-        for name, entry in sorted(self.vault.list_files().items()):
+        entries = sorted(self.vault.list_files().items())
+        for name, entry in entries[:self.VAULT_LIST_CAP]:
             self.tree.insert("", "end", iid=name, text=name,
                              values=(human_size(entry.size),))
+        if len(entries) > self.VAULT_LIST_CAP:
+            self.tree.insert(
+                "", "end", iid="::overflow::",
+                text=f"… and {len(entries) - self.VAULT_LIST_CAP:,} more "
+                "files (list capped to keep the app responsive)",
+                values=("",))
 
     def _protected_dirs(self) -> list[Path]:
         return [Path(p) for p in (self.config or {}).get("protected", [])]
@@ -978,11 +1047,33 @@ class App:
             self._do_sweep()
 
     def _do_sweep(self) -> None:
+        if self._sweeping or self.vault is None:
+            return
+        self._sweeping = True
+        self.vault_msg.config(text="Encrypting…")
+        vault = self.vault
+        dirs = self._protected_dirs()
+
+        def progress(done: int, total: int) -> None:
+            self.root.after(0, lambda: self.vault_msg.config(
+                text=f"Encrypting {done:,} of {total:,} files…"))
+
+        def worker() -> None:
+            try:
+                encrypted, errors = protect_mod.sweep(
+                    vault, dirs, on_progress=progress)
+            except Exception as exc:
+                encrypted, errors = 0, [str(exc)]
+            self.root.after(0, self._sweep_done, encrypted, errors)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _sweep_done(self, encrypted: int, errors: list[str]) -> None:
         from tkinter import messagebox
-        encrypted, errors = protect_mod.sweep(self.vault,
-                                              self._protected_dirs())
+        self._sweeping = False
+        self.vault_msg.config(text="")
         self._refresh_vault_list()
-        message = (f"Encrypted {encrypted} file(s) into the vault. "
+        message = (f"Encrypted {encrypted:,} file(s) into the vault. "
                    "Receipts mark where each one came from.")
         if errors:
             message += f"\n\n{len(errors)} could not be encrypted:\n"
@@ -990,6 +1081,10 @@ class App:
         messagebox.showinfo("Kovyr Vault", message)
 
     def lock(self) -> None:
+        if self._sweeping:
+            self.vault_msg.config(
+                text="Encrypting — the vault locks when the sweep finishes.")
+            return
         self.vault = None
         self.files_frame.pack_forget()
         self.vault_buttons.pack_forget()

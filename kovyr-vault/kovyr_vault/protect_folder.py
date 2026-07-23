@@ -52,26 +52,55 @@ def waiting_files(folders: list[Path],
     return waiting
 
 
-def sweep(vault: Vault, folders: list[Path]) -> tuple[int, list[str]]:
+def sweep(vault: Vault, folders: list[Path],
+          on_progress=None, checkpoint: int = 200) -> tuple[int, list[str]]:
     """Encrypt every waiting file into the vault, replace it with a
     receipt, and remove the plaintext original. Returns
-    (encrypted_count, errors)."""
+    (encrypted_count, errors).
+
+    Batched for crash safety and speed: originals are only removed
+    AFTER the batch's index entries are persisted, so an interruption
+    at any point leaves every file either safely retrievable from the
+    vault or still present in plaintext — never neither. The encrypted
+    index is written once per batch instead of once per file (O(n²)
+    otherwise). on_progress(done, total) is called periodically.
+    """
     encrypted = 0
     errors: list[str] = []
-    for path in waiting_files(folders, exclude=vault.root):
+    waiting = waiting_files(folders, exclude=vault.root)
+    total = len(waiting)
+    pending: list[Path] = []
+
+    def commit_batch() -> None:
+        nonlocal encrypted
+        if not pending:
+            return
+        vault.flush_index()  # entries persisted BEFORE originals go
+        stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        for done_path in pending:
+            try:
+                receipt_path(done_path).write_text(
+                    f"This file is encrypted in your Kovyr vault "
+                    f"(since {stamp}).\n"
+                    f"Open the Kovyr Vault app and unlock with your "
+                    f"passphrase to retrieve it.\n"
+                    f"Original name: {done_path.name}\n",
+                    encoding="utf-8")
+                done_path.unlink()
+                encrypted += 1
+            except OSError as exc:
+                errors.append(f"{done_path}: {exc}")
+        pending.clear()
+
+    for index, path in enumerate(waiting, 1):
         try:
-            vault.add_file(path, str(path))
-            stamp = datetime.now(timezone.utc).strftime(
-                "%Y-%m-%d %H:%M UTC")
-            receipt_path(path).write_text(
-                f"This file is encrypted in your Kovyr vault "
-                f"(since {stamp}).\n"
-                f"Open the Kovyr Vault app and unlock with your "
-                f"passphrase to retrieve it.\n"
-                f"Original name: {path.name}\n",
-                encoding="utf-8")
-            path.unlink()
-            encrypted += 1
+            vault.add_file(path, str(path), save_index=False)
+            pending.append(path)
         except OSError as exc:
             errors.append(f"{path}: {exc}")
+        if len(pending) >= checkpoint:
+            commit_batch()
+        if on_progress and (index % 25 == 0 or index == total):
+            on_progress(index, total)
+    commit_batch()
     return encrypted, errors
