@@ -423,7 +423,13 @@ function HackerSelect({ onPick }: { onPick: (id: string) => void }) {
     return (
         <div className="wrap">
             <div className="title">BREACH{IS_DEMO && <span className="demo-badge">DEMO</span>} <span style={{ float: "right" }}><CrtButton /><MuteButton /></span></div>
-            <p className="muted">Choose your operator. Each runs a different starting deck and a signature passive — a completely different way to break in.</p>
+            <div className="hero-banner">
+                <HeroFace state="calm" className="banner-face" />
+                <div className="hb-text">
+                    <p className="muted">Choose your operator. Each runs a different starting deck and a signature passive — a completely different way to break in.</p>
+                    <div className="hb-tag cyan">SLIP IN · STAY A GHOST · TAKE THE DATA · GET GONE</div>
+                </div>
+            </div>
             <hr />
             <div className="hackers">
                 {HACKER_ORDER.map((id) => {
@@ -833,6 +839,7 @@ function Ending({ run, campaign, newlyUnlocked, onRestart, onFeedback }: { run: 
         <div className="wrap">
             <div className="overlay">
                 <div className={"box " + (won ? "won" : "lost")} style={{ textAlign: "left", maxWidth: 620 }}>
+                    <div className="end-face">{won ? <HeroFace state="calm" /> : <WatcherFace state="alarmed" />}</div>
                     <h2 className={won ? "cyan" : "red"} style={{ textAlign: "center" }}>{won ? "CONTRACT COMPLETE" : "BUSTED"}</h2>
                     <p className="brief">{won ? campaign.winText : campaign.bustedText}</p>
                     <div className="runsummary">

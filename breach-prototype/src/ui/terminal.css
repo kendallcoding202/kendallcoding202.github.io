@@ -791,6 +791,17 @@ button.term.ghost:hover { background: var(--dim); color: #000; }
 
 /* the talking portrait beside a transmission */
 .txface { width: 92px; height: 116px; flex-shrink: 0; }
+
+/* the masked operator as the game's identity on the character-select screen */
+.hero-banner { display: flex; gap: 20px; align-items: center; margin: 10px 0 6px; }
+.hero-banner .banner-face { width: 84px; height: 106px; flex-shrink: 0; }
+.hero-banner .hb-text { flex: 1; min-width: 0; }
+.hero-banner .hb-text p { margin: 0; }
+.hero-banner .hb-tag { margin-top: 8px; letter-spacing: 2px; font-size: 12px; font-weight: bold; }
+@media (max-width: 560px) { .hero-banner { gap: 12px; } .hero-banner .banner-face { width: 60px; height: 76px; } .hero-banner .hb-tag { letter-spacing: 1px; font-size: 10.5px; } }
+
+/* the face that bookends a run on the ending screen */
+.end-face { width: 92px; height: 116px; margin: 0 auto 4px; }
 .transmission .trow { display: flex; gap: 16px; align-items: flex-start; }
 .transmission .tside { flex: 1; min-width: 0; }
 @media (max-width: 560px) { .txface { width: 66px; height: 84px; } .transmission .trow { gap: 10px; } }
