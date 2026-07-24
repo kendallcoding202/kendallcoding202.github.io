@@ -757,6 +757,44 @@ button.term.ghost:hover { background: var(--dim); color: #000; }
 .mapdetail .md-blurb { font-size: 12px; color: #9fd18f; line-height: 1.35; }
 .mapdetail .md-foot { font-size: 11px; margin-top: 2px; }
 
+/* ============================================================
+   THE CAST — masked SVG faces (hero operator + watcher villain)
+   ============================================================ */
+.face { display: block; overflow: visible; animation: faceglitch 3.8s steps(1) infinite; }
+@keyframes faceglitch {
+    0%, 92%, 100% { transform: translate(0, 0); filter: none; }
+    93% { transform: translate(-1.5px, 1px); filter: drop-shadow(1.5px 0 #ff2d6b77) drop-shadow(-1.5px 0 #35e0d877); }
+    95% { transform: translate(1.5px, -1px); }
+    97% { transform: translate(-1px, 0); }
+}
+.face.fx-tense { animation-duration: 2.2s; }
+.face.fx-alarmed { animation-duration: 1.05s; }
+.face.talking { animation-duration: 0.85s; }
+.watcherface .scandot { animation: scandot 2.4s ease-in-out infinite; }
+@keyframes scandot { 0%, 100% { transform: translateX(-13px); } 50% { transform: translateX(13px); } }
+.watcherface .visor { animation: visorpulse 1.9s ease-in-out infinite; }
+@keyframes visorpulse { 0%, 100% { opacity: 0.82; } 50% { opacity: 1; } }
+.heroface .eye { animation: eyeglow 3s ease-in-out infinite; }
+@keyframes eyeglow { 0%, 100% { opacity: 0.82; } 50% { opacity: 1; } }
+.heroface.fx-tense .eye { fill: #ffcf5a; }
+.heroface.fx-alarmed .eye { fill: #ff5a5a; }
+.watcherface.fx-alarmed .visor { fill: #ff1222; }
+@media (prefers-reduced-motion: reduce) { .face, .watcherface .scandot, .watcherface .visor, .heroface .eye { animation: none; } }
+
+/* live avatar tucked in the breach corner — the operator reacting to the trace */
+.hud-avatar { position: absolute; top: 8px; right: 10px; width: 62px; height: 78px; z-index: 3; pointer-events: none; opacity: 0.96; }
+.hud-avatar .face { width: 100%; height: 100%; }
+.hud-avatar .av-label { position: absolute; bottom: -13px; left: 0; right: 0; text-align: center; font-size: 8.5px; letter-spacing: 1px; color: var(--dim); }
+.hud-avatar.fx-tense .av-label { color: var(--amber); }
+.hud-avatar.fx-alarmed .av-label { color: var(--red); }
+@media (max-width: 620px) { .hud-avatar { width: 48px; height: 60px; top: 6px; right: 6px; } }
+
+/* the talking portrait beside a transmission */
+.txface { width: 92px; height: 116px; flex-shrink: 0; }
+.transmission .trow { display: flex; gap: 16px; align-items: flex-start; }
+.transmission .tside { flex: 1; min-width: 0; }
+@media (max-width: 560px) { .txface { width: 66px; height: 84px; } .transmission .trow { gap: 10px; } }
+
 /* ---- the watcher's transmission ---- */
 .overlay.transmission { z-index: 80; background: #000000c0; cursor: pointer; }
 .tbox { border-color: var(--red) !important; max-width: 620px; background: #0c0404 !important; box-shadow: 0 0 30px #ff414144; text-align: left; animation: glitchin 0.18s steps(2) 2; }

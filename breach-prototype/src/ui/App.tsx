@@ -17,6 +17,7 @@ import { HACKERS, HACKER_ORDER, getHacker } from "../engine/hackers.ts";
 import { threatEffects, threatLabel, THREAT_STEPS, MAX_THREAT } from "../engine/threat.ts";
 import { recordWin, syncAchievements, isCampaignUnlocked, availableThreat, maxThreatCleared, campaignRequirement, loadProfile, unlockedAchievements, TOTAL_ACHIEVEMENTS, exportProfile, importProfile } from "./meta.ts";
 import { ACHIEVEMENTS, getAchievement } from "../engine/achievements.ts";
+import { HeroFace, WatcherFace } from "./Faces.tsx";
 import { IS_DEMO, STEAM_URL, FEEDBACK_EMAIL, demoOperatorUnlocked, demoCampaignUnlocked } from "./demo.ts";
 import { sfx } from "./audio.ts";
 import { createInitialState, applyAction, canPlay, projectedNoise, needsTarget, targetableDefenses, previewOnTarget } from "../engine/engine.ts";
@@ -134,14 +135,19 @@ function Transmission({ name, text, onClose }: { name: string; text: string; onC
         <div className="overlay transmission" onClick={() => (done ? onClose() : setShown(text))}>
             <div className="box tbox" onClick={(e) => e.stopPropagation()}>
                 <div className="tbar"><span className="tdot" /> INCOMING TRANSMISSION — SOURCE UNKNOWN</div>
-                <div className="tbody">
-                    <span className="tname">{name} ›</span> <span className="ttext">{shown}</span><span className="tcursor">█</span>
+                <div className="trow">
+                    <WatcherFace talking={!done} state="tense" className="txface" />
+                    <div className="tside">
+                        <div className="tbody">
+                            <span className="tname">{name} ›</span> <span className="ttext">{shown}</span><span className="tcursor">█</span>
+                        </div>
+                        {!done ? (
+                            <button className="term ghost tiny" onClick={() => setShown(text)}>skip ▸</button>
+                        ) : (
+                            <button className="term" onClick={onClose}>◂ sever the connection</button>
+                        )}
+                    </div>
                 </div>
-                {!done ? (
-                    <button className="term ghost tiny" onClick={() => setShown(text)}>skip ▸</button>
-                ) : (
-                    <button className="term" onClick={onClose}>◂ sever the connection</button>
-                )}
             </div>
         </div>
     );
@@ -252,6 +258,8 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
         if (state.outcome === "playing") sfx.setTension(0.2 + 0.8 * Math.min(1, detFrac));
     }, [detFrac, state.outcome]);
     const room = state.detectionMax - state.detection;
+    // the corner avatar reads the danger: you stay a ghost, then get rattled, then made
+    const avatarState: "calm" | "tense" | "alarmed" = detFrac >= 0.62 ? "alarmed" : detFrac >= 0.32 ? "tense" : "calm";
     const targetOpts = targetableDefenses(state);
     const STAGES = [{ name: "SUSPICIOUS", at: 0.25 }, { name: "ALERTED", at: 0.5 }, { name: "LOCKDOWN", at: 0.8 }];
     const nextStage = STAGES.find((st) => st.at * state.detectionMax > state.detection) || null;
@@ -270,6 +278,10 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
             {breachFx && <div className="breach-flash"><div className="bd">LAYER DOWN</div></div>}
             {cascadeFx && <div className="cascade-flash"><div className="cd">⚡ SYSTEM CASCADE</div></div>}
             {glitch > 0 && <div className={"det-glitch" + (glitch === 2 ? " hard" : "")} />}
+            <div className={"hud-avatar fx-" + avatarState}>
+                {avatarState === "alarmed" ? <WatcherFace state="alarmed" /> : <HeroFace state={avatarState} />}
+                <span className="av-label">{avatarState === "alarmed" ? "⌁ MADE YOU" : avatarState === "tense" ? "ON EDGE" : "GHOST"}</span>
+            </div>
             <div className="title">
                 BREACH <span className="sub">// {systemTitle}</span>
                 <button className="term ghost tiny" style={{ marginLeft: 14 }} onClick={() => onComplete({ won: false, detection: state.detectionMax, detectionMax: state.detectionMax })}>abort job</button>
