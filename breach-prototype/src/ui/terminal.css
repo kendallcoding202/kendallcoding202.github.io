@@ -791,8 +791,8 @@ button.term.ghost:hover { background: var(--dim); color: #000; }
 .comms.fx-alarmed { border-left-color: var(--red); background: linear-gradient(90deg, #1a0708, var(--panel) 70%); animation: commsalarm 1.1s steps(2) infinite; }
 @keyframes commsalarm { 0%, 100% { box-shadow: none; } 50% { box-shadow: inset 0 0 26px -12px var(--red); } }
 
-.comms-face { position: relative; width: 74px; flex-shrink: 0; background: none; border: none; padding: 0; cursor: pointer; align-self: center; }
-.comms-face .face { width: 74px; height: 92px; }
+.comms-face { position: relative; width: 94px; flex-shrink: 0; background: none; border: none; padding: 0; cursor: pointer; align-self: center; }
+.comms-face .face { width: 94px; height: 118px; }
 .comms-face:hover .face { filter: brightness(1.18) drop-shadow(0 0 6px #35e0d855); }
 .comms-face:active { transform: translateY(1px); }
 .comms-tag { display: block; text-align: center; font-size: 8.5px; letter-spacing: 1px; color: var(--dim); margin-top: 1px; }
@@ -812,8 +812,8 @@ button.term.ghost:hover { background: var(--dim); color: #000; }
 .comms-lines .cline.watcher b { color: var(--red); }
 @media (prefers-reduced-motion: reduce) { .comms.fx-alarmed { animation: none; } .comms-head .cdot { animation: none; } }
 @media (max-width: 560px) {
-    .comms-face, .comms-face .face { width: 54px; }
-    .comms-face .face { height: 68px; }
+    .comms-face, .comms-face .face { width: 68px; }
+    .comms-face .face { height: 84px; }
     .comms-lines { font-size: 11px; }
     .comms-hint { display: none; }
 }
