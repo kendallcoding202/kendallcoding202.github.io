@@ -50,14 +50,20 @@ const nodeIcon = (n: MapNode) => (n.type === "breach" ? (isTerminal(n) ? "★" :
 const KIND_ICON: Record<string, string> = { exploit: "↯", recon: "⊙", stealth: "◐", utility: "❖" };
 // the operator's voice — short lines fired at key beats (picked at random for variety)
 const HERO_QUIPS: Record<string, string[]> = {
-    start: ["In and out. No trace.", "Let's keep this quiet.", "Clock's running — move.", "Doors are mine."],
-    layer: ["One down.", "Layer's mine.", "Through. Keep moving.", "Next wall.", "Too easy."],
-    cascade: ["Now we're cooking.", "Chain's live — can't stop me.", "Faster than they can log."],
-    hot: ["Too hot, too hot.", "They're onto me.", "Come on, come on…", "Cutting it close."],
-    won: ["Data's mine. Ghost out.", "Clean. Nobody saw a thing.", "Gone before the alarm."],
-    lost: ["Burned. Pulling out.", "They made me — damn.", "Not clean. Bailing."],
+    start: ["In and out. No trace.", "Let's keep this quiet.", "Clock's running — move.", "Doors are mine.", "Nice and slow. No noise.", "Patch me in. I'm going dark."],
+    layer: ["One down.", "Layer's mine.", "Through. Keep moving.", "Next wall.", "Too easy.", "Peeled that one open.", "Deeper we go."],
+    cascade: ["Now we're cooking.", "Chain's live — can't stop me.", "Faster than they can log.", "Everything's falling at once.", "This is the sweet spot."],
+    hot: ["Too hot, too hot.", "They're onto me.", "Come on, come on…", "Cutting it close.", "The trace is breathing down my neck.", "Losing my cover — move it."],
+    quiet: ["Silent as a ghost.", "They don't even know I'm here.", "Not a whisper on the wire.", "Invisible. Good."],
+    suspicious: ["They twitched. Careful now.", "Something pinged. Stay smooth.", "Eyes are opening. Ease off."],
+    won: ["Data's mine. Ghost out.", "Clean. Nobody saw a thing.", "Gone before the alarm.", "Extraction complete. I was never here.", "That's how it's done."],
+    lost: ["Burned. Pulling out.", "They made me — damn.", "Not clean. Bailing.", "Cover's blown. I'm gone.", "Should've stayed quieter."],
+    poke: ["Still here. Still a ghost.", "Working on it. Keep your head down.", "Trace is holding. For now.", "Give me a second — almost through.", "Talk less, hack more.", "I've got this. Probably."],
 };
-const pickQuip = (k: string) => { const a = HERO_QUIPS[k]; return a[(Math.random() * a.length) | 0]; };
+// the watcher breaks into your comms when the trace is closing in
+const WATCHER_LINES = ["I see you moving in there.", "You can't stay quiet forever.", "Getting warmer. I'm coming.", "Every door you open, I hear.", "Run while you still can, ghost.", "I've got your scent now."];
+const pickFrom = (a: string[]) => a[(Math.random() * a.length) | 0];
+const pickQuip = (k: string) => pickFrom(HERO_QUIPS[k]);
 // a distinct "gate" emblem per breach layer so each reads as its own barrier
 const LAYER_EMBLEMS = ["▦", "⊞", "⬢", "◈", "⟠", "⊠"];
 const layerEmblem = (i: number, total: number) => (i === total - 1 ? "⊛" : LAYER_EMBLEMS[i % LAYER_EMBLEMS.length]);
@@ -164,6 +170,29 @@ function Transmission({ name, text, onClose }: { name: string; text: string; onC
 }
 
 /* ============================================================
+   OPERATOR COMMS — the dedicated character panel in a breach
+   ============================================================ */
+function CommsPanel({ opState, feed, onPoke }: { opState: "calm" | "tense" | "alarmed"; feed: { who: "op" | "watcher"; text: string; key: number }[]; onPoke: () => void }) {
+    const compromised = opState === "alarmed";
+    return (
+        <div className={"comms fx-" + opState}>
+            <button className="comms-face" onClick={onPoke} title="ping your operator" aria-label="ping your operator">
+                {compromised ? <WatcherFace state="alarmed" /> : <HeroFace state={opState} />}
+                <span className="comms-tag">{compromised ? "⌁ TRACE LOCK" : opState === "tense" ? "ON EDGE" : "GHOST"}</span>
+            </button>
+            <div className="comms-feed">
+                <div className="comms-head"><span className="cdot" /> SECURE CHANNEL — {compromised ? <span className="red">COMPROMISED</span> : "operator online"}<span className="comms-hint"> · tap the face to ping</span></div>
+                <div className="comms-lines">
+                    {feed.length === 0
+                        ? <div className="cline muted">…patching into the channel…</div>
+                        : feed.map((l) => <div key={l.key} className={"cline " + l.who}><b>{l.who === "watcher" ? "⌁ WATCHER" : "› YOU"}</b> {l.text}</div>)}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/* ============================================================
    BREACH SCREEN (one job)
    ============================================================ */
 function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat, hackerId, onComplete }: { systemKey: string; systemTitle: string; deck: string[]; modifier?: SystemModifier | null; hunt?: HuntPressure | null; implants?: string[]; threat?: number; hackerId?: string; onComplete: (r: BreachResult) => void }) {
@@ -179,16 +208,15 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
     const [spike, setSpike] = useState(false);
     const [glitch, setGlitch] = useState(0); // 0 none · 1 minor · 2 hard — detection-rise screen glitch
     const [hits, setHits] = useState<Record<string, { amt: number; key: number }>>({});
-    const [quip, setQuip] = useState<string | null>(null); // the operator's spoken line by the avatar
+    const [feed, setFeed] = useState<{ who: "op" | "watcher"; text: string; key: number }[]>([]); // the live comms transcript
     const fxKey = useRef(0);
-    const quipTimer = useRef<number | null>(null);
+    const feedKey = useRef(0);
     const wasAlarmed = useRef(false);
+    const wasSusp = useRef(false);
     const opened = useRef(false);
-    const say = (kind: string) => {
-        setQuip(pickQuip(kind));
-        if (quipTimer.current) window.clearTimeout(quipTimer.current);
-        quipTimer.current = window.setTimeout(() => setQuip(null), 2600);
-    };
+    const push = (who: "op" | "watcher", text: string) => setFeed((f) => [...f, { who, text, key: ++feedKey.current }].slice(-5));
+    const say = (kind: string) => push("op", pickQuip(kind));
+    const watcherSays = () => push("watcher", pickFrom(WATCHER_LINES));
 
     const dispatch = (card: string, target?: number) => { setState((s) => applyAction(s, { type: "playCard", card, target })); setArmed(null); };
     const endTurn = () => {
@@ -252,9 +280,14 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
             else if (state.outcome === "lost" && prev.outcome === "playing") q = "lost";
             else if (state.cascade && !prev.cascade) q = "cascade";
             else if (df >= 0.62 && !wasAlarmed.current) q = "hot";
+            else if (rank[state.alert] > rank[prev.alert] && state.alert === "SUSPICIOUS" && !wasSusp.current) q = "suspicious";
             else if (brk(state) > brk(prev)) q = "layer";
+            else if (state.turn > prev.turn && state.turnNoise === 0 && prev.cardsThisTurn >= 2 && df < 0.4 && Math.random() < 0.5) q = "quiet";
+            if (state.alert === "SUSPICIOUS") wasSusp.current = true; else if (state.alert === "IDLE") wasSusp.current = false;
             wasAlarmed.current = df >= 0.55; // reset the "hot" latch once you cool back down
             if (q) say(q);
+            // the watcher breaks into your channel when the trace locks on (ALERTED+ rising)
+            if (rank[state.alert] > rank[prev.alert] && rank[state.alert] >= 2) watcherSays();
 
             // --- juice triggers ---
             const dDet = state.detection - prev.detection;
@@ -316,11 +349,6 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
             {breachFx && <div className="breach-flash"><div className="bd">LAYER DOWN</div></div>}
             {cascadeFx && <div className="cascade-flash"><div className="cd">⚡ SYSTEM CASCADE</div></div>}
             {glitch > 0 && <div className={"det-glitch" + (glitch === 2 ? " hard" : "")} />}
-            <div className={"hud-avatar fx-" + avatarState}>
-                {avatarState === "alarmed" ? <WatcherFace state="alarmed" /> : <HeroFace state={avatarState} />}
-                <span className="av-label">{avatarState === "alarmed" ? "⌁ MADE YOU" : avatarState === "tense" ? "ON EDGE" : "GHOST"}</span>
-                {quip && <span className="av-quip" key={quip}>{quip}</span>}
-            </div>
             <div className="title">
                 BREACH <span className="sub">// {systemTitle}</span>
                 <button className="term ghost tiny" style={{ marginLeft: 14 }} onClick={() => onComplete({ won: false, detection: state.detectionMax, detectionMax: state.detectionMax })}>abort job</button>
@@ -339,6 +367,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                 </div>
             )}
             <div className="implant-strip muted">{hacker.glyph} <b>{hacker.name}</b> · <span className="cyan">{hacker.passiveName}</span>{implants && implants.length > 0 ? " · ◆ " + implants.map((id) => IMPLANTS[id] && IMPLANTS[id].name).filter(Boolean).join(" · ") : ""}</div>
+            <CommsPanel opState={avatarState} feed={feed} onPoke={() => say("poke")} />
             <hr />
 
             <div className="meter-label">
