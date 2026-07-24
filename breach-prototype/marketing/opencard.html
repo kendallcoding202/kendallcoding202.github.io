@@ -1,0 +1,131 @@
+<!doctype html>
+<html><head><meta charset="utf8"><title>BREACH — opening card</title><style>
+  html,body{margin:0;padding:0;background:#03060b;height:100%;}
+  *{box-sizing:border-box;font-family:"DejaVu Sans Mono","Courier New",monospace;}
+  /* 16:9 stage — letterboxed so a screen-cap is clean 1920×1080 */
+  .stage{position:relative;width:100vw;height:56.25vw;max-height:100vh;max-width:177.78vh;margin:auto;
+    top:50%;transform:translateY(-50%);overflow:hidden;
+    background:
+      radial-gradient(120% 140% at 78% 12%, rgba(0,255,140,.14), transparent 55%),
+      radial-gradient(90% 120% at 12% 95%, rgba(0,180,255,.09), transparent 55%),
+      linear-gradient(160deg,#060b0e 0%,#04070a 60%,#03060b 100%);}
+  .stage::before{content:"";position:absolute;inset:0;z-index:4;
+    background-image:repeating-linear-gradient(0deg,rgba(0,255,150,.035) 0 1px,transparent 1px 3px);
+    mix-blend-mode:screen;pointer-events:none;}
+  .stage::after{content:"";position:absolute;inset:0;z-index:1;
+    background-image:linear-gradient(rgba(0,255,150,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,150,.05) 1px,transparent 1px);
+    background-size:3.2vh 3.2vh;opacity:.28;pointer-events:none;
+    -webkit-mask-image:radial-gradient(120% 100% at 50% 45%,#000,transparent 80%);}
+
+  /* ---- Scene 1: the terminal boot ---- */
+  #bootScene{position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;
+    transition:opacity .35s ease;}
+  .term{width:74%;max-width:150vh;font-size:2.9vh;line-height:1.7;color:#bfedd2;
+    text-shadow:0 0 .5vh rgba(0,255,140,.35);}
+  .term .prompt{color:#5ff29a;}
+  .term .host{color:#7fb4d8;}
+  .term .cmd{color:#eafff2;font-weight:bold;}
+  .term .cur{display:inline-block;width:.6ch;background:#28ff9a;color:#28ff9a;margin-left:.05ch;
+    animation:blink 1s steps(2) infinite;}
+  @keyframes blink{50%{opacity:0;}}
+  .term .line{opacity:0;}
+  .term .line.show{opacity:1;}
+  .term .ok{color:#28ff9a;}
+  .term .dim{color:#5f9f7d;}
+  .term .warn{color:#ffd15b;}
+
+  /* ---- Scene 2: ACCESS GRANTED ---- */
+  #grantScene{position:absolute;inset:0;z-index:3;display:flex;align-items:center;justify-content:center;
+    opacity:0;}
+  .granted{font-size:11vh;font-weight:bold;letter-spacing:1.2vh;color:#eafff2;
+    text-shadow:0 0 4vh rgba(0,255,140,.7),0 0 .8vh rgba(0,255,140,1);
+    opacity:0;transform:scale(.96);}
+  .granted b{color:#28ff9a;}
+  #grantScene.go{opacity:1;}
+  #grantScene.go .granted{animation:grantIn .5s cubic-bezier(.2,.8,.2,1) forwards;}
+  @keyframes grantIn{0%{opacity:0;transform:scale(.96);filter:blur(.5vh);}100%{opacity:1;transform:scale(1);filter:blur(0);}}
+
+  /* full-screen green flash on the grant */
+  .flash{position:absolute;inset:0;z-index:5;background:#28ff9a;opacity:0;pointer-events:none;}
+  .flash.go{animation:flashGo .5s ease;}
+  @keyframes flashGo{0%{opacity:0;}12%{opacity:.85;}100%{opacity:0;}}
+
+  .replay{position:fixed;right:2.2vh;bottom:2.2vh;z-index:9;color:#3f7d5c;font-size:1.9vh;
+    letter-spacing:.1vh;cursor:pointer;user-select:none;opacity:.75;}
+  .replay:hover{color:#7fe0a8;}
+</style></head>
+<body>
+  <div class="stage">
+    <div class="scene" id="bootScene">
+      <div class="term" id="term">
+        <div class="cmdline"><span class="prompt">root@</span><span class="host">shadownet</span><span class="prompt">:~$</span> <span class="cmd" id="cmd"></span><span class="cur" id="cur">█</span></div>
+      </div>
+    </div>
+    <div class="scene" id="grantScene">
+      <div class="granted">ACCESS <b>GRANTED</b></div>
+    </div>
+    <div class="flash" id="flash"></div>
+  </div>
+  <div class="replay" id="replay">▸ replay (R)</div>
+
+  <script>
+    const CMD = "./breach";
+    const LINES = [
+      '<span class="ok">[✓]</span> resolving target <span class="dim">… 172.19.4.201</span>',
+      '<span class="ok">[✓]</span> port scan <span class="dim">… 22 · 443 · 8080 open</span>',
+      '<span class="ok">[✓]</span> tls handshake <span class="dim">… downgrade accepted</span>',
+      '<span class="ok">[✓]</span> key exchange <span class="dim">… rsa-2048 factored</span>',
+      '<span class="ok">[✓]</span> payload injected <span class="dim">… staged</span>',
+      '<span class="warn">&gt;</span> bypassing intrusion detection <span class="dim">…</span>',
+    ];
+    const term = document.getElementById('term');
+    const cmd = document.getElementById('cmd');
+    const cur = document.getElementById('cur');
+    const bootScene = document.getElementById('bootScene');
+    const grantScene = document.getElementById('grantScene');
+    const flash = document.getElementById('flash');
+    let timers = [];
+    const at = (ms, fn) => timers.push(setTimeout(fn, ms));
+
+    function reset(){
+      timers.forEach(clearTimeout); timers = [];
+      cmd.textContent = '';
+      cur.style.display = 'inline-block';
+      term.querySelectorAll('.line').forEach(n => n.remove());
+      bootScene.style.opacity = '1';
+      grantScene.className = 'scene'; grantScene.id = 'grantScene';
+      flash.className = 'flash';
+    }
+
+    function play(){
+      reset();
+      // 1) type the command
+      let i = 0;
+      const type = () => { if (i <= CMD.length){ cmd.textContent = CMD.slice(0,i); i++; at(60, type); } };
+      at(400, type);
+      // 2) "enter" → stream the boot lines
+      let t = 400 + CMD.length*60 + 350;
+      LINES.forEach((html, k) => {
+        at(t, () => {
+          const div = document.createElement('div');
+          div.className = 'line'; div.innerHTML = html;
+          term.appendChild(div);
+          // move the caret's line implicitly: hide the command cursor after enter
+          if (k === 0) cur.style.display = 'none';
+          void div.offsetWidth; div.classList.add('show');
+        });
+        t += 170;
+      });
+      // 3) green flash → ACCESS GRANTED
+      at(t + 250, () => {
+        flash.className = 'flash go';
+        bootScene.style.opacity = '0';
+        grantScene.className = 'scene go'; grantScene.id = 'grantScene';
+      });
+    }
+
+    document.getElementById('replay').addEventListener('click', play);
+    window.addEventListener('keydown', e => { if (e.key === 'r' || e.key === 'R') play(); });
+    play();
+  </script>
+</body></html>
