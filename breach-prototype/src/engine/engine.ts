@@ -432,7 +432,10 @@ function applyEffect(s: GameState, card: CardDef, target: number): number {
         /* ---- GHOST archetype: reward staying silent / unseen ---- */
         case "silentScale": {
             if (!d) return 0;
-            const power = (card.power || 2) + 2 * s.silentThisTurn + takeExploitBonus(s);
+            // Scales with silent plays but caps at +6 (3 stacks) so a pure grind
+            // can't snowball into an infinite silent one-shot.
+            const stacks = Math.min(s.silentThisTurn, 3);
+            const power = (card.power || 2) + 2 * stacks + takeExploitBonus(s);
             damageDefense(s, target, power);
             log(s, `${card.name} strikes from the dark — ${power} off (built on ${s.silentThisTurn} silent play${s.silentThisTurn === 1 ? "" : "s"}).`);
             return 0;
@@ -679,7 +682,7 @@ export function previewOnTarget(s: GameState, cardId: string, idx: number): stri
             if (!d.typeRevealed) return "reveal it first";
             return d.type === card.matchType ? `−${Math.round((card.power || 5) * 1.6) + bonus}${plus}` : `−${Math.round((card.power || 5) * 0.4) + bonus} · weak, loud`;
         case "chainExploit": return `−${(card.power || 3) + 2 * s.exploitsThisTurn + bonus} · scales w/ combo`;
-        case "silentScale": return `−${(card.power || 2) + 2 * s.silentThisTurn + bonus} · scales w/ silent plays`;
+        case "silentScale": return `−${(card.power || 2) + 2 * Math.min(s.silentThisTurn, 3) + bonus} · scales w/ silent plays`;
         case "lowDetStrike": return s.detection < s.detectionMax * 0.25 ? `−${(card.power || 8) + bonus} · UNSEEN` : `−${(card.amount || 3) + bonus} · too loud`;
         case "chainReaction": return `−${(card.power || 2) + s.cardsThisTurn + bonus} · scales w/ cards played`;
         case "adaptiveExploit": return `−${(card.power || 5) + bonus}${plus} · any type`;
@@ -716,7 +719,7 @@ export function predictDamage(s: GameState, cardId: string, idx: number): number
         case "overload": return (card.power || 3) + Math.floor(s.detection / 10) + bonus;
         case "momentum": return (card.power || 3) + (card.amount || 2) * s.layers.filter((l) => l.breached).length + bonus;
         case "precisionStrike": return (card.power || 7) + bonus;
-        case "silentScale": return (card.power || 2) + 2 * s.silentThisTurn + bonus;
+        case "silentScale": return (card.power || 2) + 2 * Math.min(s.silentThisTurn, 3) + bonus;
         case "lowDetStrike": return (s.detection < s.detectionMax * 0.25 ? card.power || 8 : card.amount || 3) + bonus;
         case "chainReaction": return (card.power || 2) + s.cardsThisTurn + bonus;
         case "exploitAll": return (card.power || 3) + bonus;

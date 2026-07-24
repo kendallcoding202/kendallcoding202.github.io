@@ -482,12 +482,12 @@ for (const id of CAMPAIGN_ORDER) {
     const r = createRun("ghost", 1, 0, "torch");
     check("run uses the operator's starting deck", JSON.stringify(r.deck) === JSON.stringify(HACKERS.torch.deck) && r.hackerId === "torch");
 
-    // TORCH — Live Wire: every exploit hits +1
+    // TORCH — Live Wire: every exploit hits +2
     let t = createInitialState(1, "smallBusiness", ["knownExploit"], null, null, combineLoadouts(HACKERS.torch.passive));
     t.layers[0].defenses[0].typeRevealed = true; t.layers[0].defenses[0].strength = 30; t.layers[0].defenses[0].maxStrength = 30;
     const ts = t.layers[0].defenses[0].strength;
-    t = applyAction(t, { type: "playCard", card: "knownExploit", target: 0 }); // 4 + 1
-    check("TORCH: exploits hit +1", ts - t.layers[0].defenses[0].strength === 5);
+    t = applyAction(t, { type: "playCard", card: "knownExploit", target: 0 }); // 4 + 2
+    check("TORCH: exploits hit +2", ts - t.layers[0].defenses[0].strength === 6);
 
     // HEX — Necrosis: logic bombs tick +2 (system idle at low detection, so no patch)
     let hx = createInitialState(2, "smallBusiness", ["logicBomb"], null, null, combineLoadouts(HACKERS.hex.passive));
@@ -500,10 +500,10 @@ for (const id of CAMPAIGN_ORDER) {
 
     // WRAITH — Ghostwalk (first card silent); BYTE — Caffeine (+1 hand)
     check("WRAITH: first card is silent", createInitialState(3, "homeServer", undefined, null, null, combineLoadouts(HACKERS.wraith.passive)).firstCardSilent === true);
-    check("BYTE: +1 hand size", createInitialState(3, "homeServer", undefined, null, null, combineLoadouts(HACKERS.byte.passive)).handSize === 7);
+    check("BYTE: +2 hand size", createInitialState(3, "homeServer", undefined, null, null, combineLoadouts(HACKERS.byte.passive)).handSize === 8);
 
     // operator passive stacks with a collected implant
-    check("operator passive stacks with implants", combineLoadouts(HACKERS.byte.passive, aggregateImplants(["cortex"])).handSize === 2);
+    check("operator passive stacks with implants", combineLoadouts(HACKERS.byte.passive, aggregateImplants(["cortex"])).handSize === 3);
 }
 
 /* 17. Expansion set — the new attack mechanics. */
