@@ -172,12 +172,12 @@ function Transmission({ name, text, onClose }: { name: string; text: string; onC
 /* ============================================================
    OPERATOR COMMS — the dedicated character panel in a breach
    ============================================================ */
-function CommsPanel({ opState, feed, onPoke }: { opState: "calm" | "tense" | "alarmed"; feed: { who: "op" | "watcher"; text: string; key: number }[]; onPoke: () => void }) {
+function CommsPanel({ op, opState, feed, onPoke }: { op: string; opState: "calm" | "tense" | "alarmed"; feed: { who: "op" | "watcher"; text: string; key: number }[]; onPoke: () => void }) {
     const compromised = opState === "alarmed";
     return (
         <div className={"comms fx-" + opState}>
             <button className="comms-face" onClick={onPoke} title="ping your operator" aria-label="ping your operator">
-                {compromised ? <WatcherFace state="alarmed" /> : <HeroFace state={opState} />}
+                {compromised ? <WatcherFace state="alarmed" /> : <HeroFace op={op} state={opState} />}
                 <span className="comms-tag">{compromised ? "⌁ TRACE LOCK" : opState === "tense" ? "ON EDGE" : "GHOST"}</span>
             </button>
             <div className="comms-feed">
@@ -367,7 +367,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                 </div>
             )}
             <div className="implant-strip muted">{hacker.glyph} <b>{hacker.name}</b> · <span className="cyan">{hacker.passiveName}</span>{implants && implants.length > 0 ? " · ◆ " + implants.map((id) => IMPLANTS[id] && IMPLANTS[id].name).filter(Boolean).join(" · ") : ""}</div>
-            <CommsPanel opState={avatarState} feed={feed} onPoke={() => say("poke")} />
+            <CommsPanel op={hackerId || "wraith"} opState={avatarState} feed={feed} onPoke={() => say("poke")} />
             <hr />
 
             <div className="meter-label">
@@ -907,7 +907,7 @@ function Ending({ run, campaign, newlyUnlocked, onRestart, onFeedback }: { run: 
         <div className="wrap">
             <div className="overlay">
                 <div className={"box " + (won ? "won" : "lost")} style={{ textAlign: "left", maxWidth: 620 }}>
-                    <div className="end-face">{won ? <HeroFace state="calm" /> : <WatcherFace state="alarmed" />}</div>
+                    <div className="end-face">{won ? <HeroFace op={run.hackerId} state="calm" /> : <WatcherFace state="alarmed" />}</div>
                     <p className={"end-say " + (won ? "cyan" : "red")}>{won ? "“Data’s clean. Nobody saw a ghost.”" : "“I flagged you the moment you knocked.”"}</p>
                     <h2 className={won ? "cyan" : "red"} style={{ textAlign: "center" }}>{won ? "CONTRACT COMPLETE" : "BUSTED"}</h2>
                     <p className="brief">{won ? campaign.winText : campaign.bustedText}</p>
