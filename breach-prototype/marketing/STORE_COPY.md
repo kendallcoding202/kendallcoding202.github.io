@@ -7,6 +7,10 @@
 ## Game name
 **BREACH**
 
+## Tagline
+**Silence is a signature.**
+*(Primary brand line — capsule art, trailer end-card, title screen. The trace can't see noise it expects; it isolates the one thing that goes quiet — you.)*
+
 ## Short description
 *(Steam limit: 300 chars. This is the blurb under the header capsule and in search.)*
 

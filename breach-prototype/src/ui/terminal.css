@@ -842,8 +842,13 @@ button.term.ghost:hover { background: var(--dim); color: #000; }
 .hero-banner .banner-face { width: 84px; height: 106px; flex-shrink: 0; }
 .hero-banner .hb-text { flex: 1; min-width: 0; }
 .hero-banner .hb-text p { margin: 0; }
+.hero-banner .hb-slogan {
+    font-size: 24px; font-weight: bold; letter-spacing: 1px; line-height: 1.1; margin: 0 0 6px;
+    color: var(--amber); text-shadow: 0 0 10px #ffb00055, 0 0 2px #ffb00088;
+    font-style: italic;
+}
 .hero-banner .hb-tag { margin-top: 8px; letter-spacing: 2px; font-size: 12px; font-weight: bold; }
-@media (max-width: 560px) { .hero-banner { gap: 12px; } .hero-banner .banner-face { width: 60px; height: 76px; } .hero-banner .hb-tag { letter-spacing: 1px; font-size: 10.5px; } }
+@media (max-width: 560px) { .hero-banner { gap: 12px; } .hero-banner .banner-face { width: 60px; height: 76px; } .hero-banner .hb-slogan { font-size: 18px; } .hero-banner .hb-tag { letter-spacing: 1px; font-size: 10.5px; } }
 
 /* the face that bookends a run on the ending screen */
 .end-face { width: 92px; height: 116px; margin: 0 auto 4px; }

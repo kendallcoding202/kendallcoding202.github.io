@@ -510,6 +510,7 @@ function HackerSelect({ onPick }: { onPick: (id: string) => void }) {
             <div className="hero-banner">
                 <HeroFace state="calm" className="banner-face" />
                 <div className="hb-text">
+                    <div className="hb-slogan">Silence is a signature.</div>
                     <p className="muted">Choose your operator. Each runs a different starting deck and a signature passive — a completely different way to break in.</p>
                     <div className="hb-tag cyan">SLIP IN · STAY A GHOST · TAKE THE DATA · GET GONE</div>
                 </div>
