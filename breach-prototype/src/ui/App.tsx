@@ -104,10 +104,18 @@ function Intro({ onClose }: { onClose: () => void }) {
     );
 }
 
-function DefenseChip({ d, targetable, preview, kbdNum, hit, onClick }: { d: Defense; targetable: boolean; preview?: string | null; kbdNum?: number; hit?: { amt: number; key: number }; onClick: () => void }) {
+/** Aggregate the logic bombs planted on one defense: total decay per turn and
+    how long the rot keeps ticking. Lets the chip SHOW that a worm is planted. */
+function wormOn(state: GameState, layer: number, def: number): { amt: number; turns: number; count: number } | null {
+    const on = state.bombs.filter((b) => b.layer === layer && b.def === def);
+    if (!on.length) return null;
+    return { amt: on.reduce((a, b) => a + b.amt, 0), turns: Math.max(...on.map((b) => b.turns)), count: on.length };
+}
+
+function DefenseChip({ d, worm, targetable, preview, kbdNum, hit, onClick }: { d: Defense; worm?: { amt: number; turns: number; count: number } | null; targetable: boolean; preview?: string | null; kbdNum?: number; hit?: { amt: number; key: number }; onClick: () => void }) {
     const down = d.strength <= 0;
     return (
-        <span className={"dchip" + (targetable ? " targetable" : "") + (down ? " down" : "") + (d.typeRevealed && !down ? " t-" + d.type : "")} onClick={targetable ? onClick : undefined}>
+        <span className={"dchip" + (targetable ? " targetable" : "") + (down ? " down" : "") + (worm && !down ? " infected" : "") + (d.typeRevealed && !down ? " t-" + d.type : "")} onClick={targetable ? onClick : undefined}>
             {hit && hit.amt > 0 ? <span className="dmg-float" key={hit.key}>−{hit.amt}</span> : null}
             {targetable && kbdNum ? <span className="kbd">{kbdNum}</span> : null}
             {down ? "✓ down" : d.typeRevealed ? <b className={"dtype t-" + d.type}>{d.type}</b> : <span className="muted">???</span>}
@@ -116,6 +124,11 @@ function DefenseChip({ d, targetable, preview, kbdNum, hit, onClick }: { d: Defe
                     {d.strengthRevealed ? (
                         <><span className="dbar"><span className="df" style={{ width: `${(d.strength / d.maxStrength) * 100}%` }} /></span><span className="snum">STR {d.strength}</span></>
                     ) : (<span className="snum">STR ??</span>)}
+                </span>
+            )}
+            {worm && !down && (
+                <span className="worm-badge" title={`${worm.count > 1 ? worm.count + " worms" : "Worm"} eating this defense: −${worm.amt} strength at end of each turn, ${worm.turns} turn${worm.turns === 1 ? "" : "s"} left.`}>
+                    <span className="worm-ico" aria-hidden>☣</span>−{worm.amt}/t<span className="worm-turns"> · {worm.turns}⟳</span>{worm.count > 1 ? <span className="worm-x"> ×{worm.count}</span> : null}
                 </span>
             )}
             {targetable && preview && <span className="preview">▸ {preview}</span>}
@@ -421,7 +434,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                             <span className="lgate"><span className="lemblem" aria-hidden>{layerEmblem(i, state.layers.length)}</span><span className="lname">{l.name}</span></span>
                             <span className="defs">
                                 {l.breached ? <span className="muted">BREACHED</span> : l.defenses.map((d, di) => (
-                                    <DefenseChip key={di} d={d} targetable={isCurrent && !!armed && d.strength > 0} preview={isCurrent && armed && d.strength > 0 ? previewOnTarget(state, armed, di) : null} kbdNum={isCurrent && armed ? targetOpts.indexOf(di) + 1 : undefined} hit={hits[`${i}-${di}`]} onClick={() => dispatch(armed!, di)} />
+                                    <DefenseChip key={di} d={d} worm={wormOn(state, i, di)} targetable={isCurrent && !!armed && d.strength > 0} preview={isCurrent && armed && d.strength > 0 ? previewOnTarget(state, armed, di) : null} kbdNum={isCurrent && armed ? targetOpts.indexOf(di) + 1 : undefined} hit={hits[`${i}-${di}`]} onClick={() => dispatch(armed!, di)} />
                                 ))}
                             </span>
                             {isCurrent && l.defenses.some((d) => !d.typeRevealed && d.strength > 0) && (

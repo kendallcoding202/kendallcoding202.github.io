@@ -573,6 +573,23 @@ html.crt .wrap { padding-top: 24px; }
     background-blend-mode: normal;
 }
 .dchip.t-firewall .df, .dchip.t-ids .df, .dchip.t-auth .df, .dchip.t-privilege .df, .dchip.t-database .df { background: var(--tc); }
+
+/* WORM / logic-bomb indicator — a planted worm eats this defense each end of
+   turn. Toxic purple so corruption reads clearly against the green UI. The badge
+   pops in when planted (so you SEE it land) then pulses while it ticks. */
+.dchip.infected { box-shadow: inset 0 0 12px #a24bd63a; }
+.dchip .worm-badge {
+    display: inline-flex; align-items: center; gap: 2px;
+    font-size: 10.5px; font-weight: bold; letter-spacing: 0.3px;
+    color: #e0b3ff; border: 1px solid #a24bd6bb; border-radius: 3px;
+    padding: 0 4px; background: #2a0f3a; line-height: 1.55;
+    animation: wormplant 0.4s cubic-bezier(.2,.9,.2,1.2), wormpulse 1.5s ease-in-out 0.4s infinite;
+}
+.dchip .worm-badge .worm-ico { color: #cf7bff; font-size: 11px; }
+.dchip .worm-badge .worm-turns { color: #b48ad0; font-weight: normal; }
+.dchip .worm-badge .worm-x { color: #ff9be0; }
+@keyframes wormplant { 0% { transform: scale(0.5); opacity: 0; box-shadow: 0 0 16px #c86ff0; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes wormpulse { 0%,100% { box-shadow: 0 0 3px #a24bd644; } 50% { box-shadow: 0 0 10px #c86ff0aa; } }
 .dchip.t-firewall .snum, .dchip.t-ids .snum, .dchip.t-auth .snum, .dchip.t-privilege .snum, .dchip.t-database .snum { color: var(--tc); opacity: 0.85; }
 /* targetable still pulses amber on top, so 'hittable now' stays obvious */
 .dchip.targetable { border-color: var(--amber); }
