@@ -48,6 +48,16 @@ function ImplantCard({ id, onClick, num }: { id: string; onClick?: () => void; n
 const nodeIcon = (n: MapNode) => (n.type === "breach" ? (isTerminal(n) ? "★" : "◈") : n.type === "safehouse" ? "☂" : "❋");
 // per-archetype card glyph, so the hand reads visually at a glance (colour comes from --k)
 const KIND_ICON: Record<string, string> = { exploit: "↯", recon: "⊙", stealth: "◐", utility: "❖" };
+// the operator's voice — short lines fired at key beats (picked at random for variety)
+const HERO_QUIPS: Record<string, string[]> = {
+    start: ["In and out. No trace.", "Let's keep this quiet.", "Clock's running — move.", "Doors are mine."],
+    layer: ["One down.", "Layer's mine.", "Through. Keep moving.", "Next wall.", "Too easy."],
+    cascade: ["Now we're cooking.", "Chain's live — can't stop me.", "Faster than they can log."],
+    hot: ["Too hot, too hot.", "They're onto me.", "Come on, come on…", "Cutting it close."],
+    won: ["Data's mine. Ghost out.", "Clean. Nobody saw a thing.", "Gone before the alarm."],
+    lost: ["Burned. Pulling out.", "They made me — damn.", "Not clean. Bailing."],
+};
+const pickQuip = (k: string) => { const a = HERO_QUIPS[k]; return a[(Math.random() * a.length) | 0]; };
 // a distinct "gate" emblem per breach layer so each reads as its own barrier
 const LAYER_EMBLEMS = ["▦", "⊞", "⬢", "◈", "⟠", "⊠"];
 const layerEmblem = (i: number, total: number) => (i === total - 1 ? "⊛" : LAYER_EMBLEMS[i % LAYER_EMBLEMS.length]);
@@ -169,7 +179,16 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
     const [spike, setSpike] = useState(false);
     const [glitch, setGlitch] = useState(0); // 0 none · 1 minor · 2 hard — detection-rise screen glitch
     const [hits, setHits] = useState<Record<string, { amt: number; key: number }>>({});
+    const [quip, setQuip] = useState<string | null>(null); // the operator's spoken line by the avatar
     const fxKey = useRef(0);
+    const quipTimer = useRef<number | null>(null);
+    const wasAlarmed = useRef(false);
+    const opened = useRef(false);
+    const say = (kind: string) => {
+        setQuip(pickQuip(kind));
+        if (quipTimer.current) window.clearTimeout(quipTimer.current);
+        quipTimer.current = window.setTimeout(() => setQuip(null), 2600);
+    };
 
     const dispatch = (card: string, target?: number) => { setState((s) => applyAction(s, { type: "playCard", card, target })); setArmed(null); };
     const endTurn = () => {
@@ -203,6 +222,14 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
         return () => window.removeEventListener("keydown", onKey);
     }, [state, showIntro, armed]);
 
+    // the operator's opening line, once the job is actually in front of you
+    useEffect(() => {
+        if (showIntro || opened.current) return;
+        opened.current = true;
+        const t = window.setTimeout(() => { if (state.outcome === "playing") say("start"); }, 550);
+        return () => window.clearTimeout(t);
+    }, [showIntro]); // eslint-disable-line react-hooks/exhaustive-deps
+
     // sound: derive SFX from state transitions (fires once per commit)
     const prevRef = useRef(state);
     useEffect(() => {
@@ -217,6 +244,17 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
             else if (state.turn > prev.turn) sfx.play("turn");
             else if (state.log.length > prev.log.length) sfx.play(total(state) < total(prev) ? "hit" : "card");
             if (state.outcome === "playing" && rank[state.alert] > rank[prev.alert]) sfx.play("alert");
+
+            // --- the operator talks: one line per commit, by priority ---
+            const df = state.detection / Math.max(1, state.detectionMax);
+            let q: string | null = null;
+            if (state.outcome === "won" && prev.outcome === "playing") q = "won";
+            else if (state.outcome === "lost" && prev.outcome === "playing") q = "lost";
+            else if (state.cascade && !prev.cascade) q = "cascade";
+            else if (df >= 0.62 && !wasAlarmed.current) q = "hot";
+            else if (brk(state) > brk(prev)) q = "layer";
+            wasAlarmed.current = df >= 0.55; // reset the "hot" latch once you cool back down
+            if (q) say(q);
 
             // --- juice triggers ---
             const dDet = state.detection - prev.detection;
@@ -281,6 +319,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
             <div className={"hud-avatar fx-" + avatarState}>
                 {avatarState === "alarmed" ? <WatcherFace state="alarmed" /> : <HeroFace state={avatarState} />}
                 <span className="av-label">{avatarState === "alarmed" ? "⌁ MADE YOU" : avatarState === "tense" ? "ON EDGE" : "GHOST"}</span>
+                {quip && <span className="av-quip" key={quip}>{quip}</span>}
             </div>
             <div className="title">
                 BREACH <span className="sub">// {systemTitle}</span>
@@ -840,6 +879,7 @@ function Ending({ run, campaign, newlyUnlocked, onRestart, onFeedback }: { run: 
             <div className="overlay">
                 <div className={"box " + (won ? "won" : "lost")} style={{ textAlign: "left", maxWidth: 620 }}>
                     <div className="end-face">{won ? <HeroFace state="calm" /> : <WatcherFace state="alarmed" />}</div>
+                    <p className={"end-say " + (won ? "cyan" : "red")}>{won ? "“Data’s clean. Nobody saw a ghost.”" : "“I flagged you the moment you knocked.”"}</p>
                     <h2 className={won ? "cyan" : "red"} style={{ textAlign: "center" }}>{won ? "CONTRACT COMPLETE" : "BUSTED"}</h2>
                     <p className="brief">{won ? campaign.winText : campaign.bustedText}</p>
                     <div className="runsummary">
