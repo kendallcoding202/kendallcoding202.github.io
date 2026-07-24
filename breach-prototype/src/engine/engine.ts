@@ -21,6 +21,21 @@ const CASCADE_AT = 5; // play this many cards in one turn to trigger SYSTEM CASC
 const CASCADE_BONUS = 2; // one-shot exploit overclock granted by the cascade
 const SWEEP_INTERVAL = 3; // the intrusion scan runs a TRACE SWEEP every N turns
 const SWEEP_FRAC = 0.16; // a full (unblunted) sweep costs this fraction of detectionMax
+const GRAB_SPIKE = 0.14; // grabbing the objective trips every alarm: +this fraction of detectionMax (dread depth)
+const GRAB_LETHAL_AT = 0.85; // the grab only CATCHES you if you grab at/above this detection (reckless)
+
+/** Projected detection after the objective-grab alarm, for telegraphing the
+    exfil risk while the player is still fighting the final layer. `caught` is the
+    real lose condition (grabbing while already in LOCKDOWN and overflowing);
+    `critical` flags that you're in the danger zone where the grab can finish you. */
+export function grabForecast(s: GameState): { spike: number; after: number; frac: number; caught: boolean; critical: boolean } {
+    const spike = Math.round(s.detectionMax * GRAB_SPIKE);
+    const critical = s.detection >= Math.round(s.detectionMax * GRAB_LETHAL_AT);
+    const raw = s.detection + spike;
+    const caught = critical && raw >= s.detectionMax;
+    const after = caught ? s.detectionMax : Math.min(raw, s.detectionMax - 1);
+    return { spike, after, frac: after / s.detectionMax, caught, critical };
+}
 
 /** The next sweep's timing and its projected detection hit given noise so far.
     Exposed for the UI so the watcher's sweep is always telegraphed, never a
@@ -320,10 +335,26 @@ function afterBreachCheck(s: GameState) {
         layer.breached = true;
         const isFinal = s.current === s.layers.length - 1;
         if (isFinal) {
-            // Breaching the objective layer IS the win — you're in, grab it, vanish.
+            // THE GRAB GOES LOUD: cracking the objective layer trips every alarm and
+            // slams the trace deep into the red — you FEEL nearly caught every time.
+            // But it only actually catches you if you grabbed while already in
+            // LOCKDOWN (≥80%). Clean, teachable rule: cool below LOCKDOWN before you
+            // grab, or the alarm finishes you with the payload in your hands.
             s.objectiveExposed = true;
-            s.outcome = "won";
-            log(s, `${layer.name} breached — objective exfiltrated. You're a ghost.`);
+            const spike = Math.round(s.detectionMax * GRAB_SPIKE);
+            const wasCritical = s.detection >= Math.round(s.detectionMax * GRAB_LETHAL_AT);
+            log(s, `${layer.name} cracked — you grab the payload and every alarm trips (+${spike} detection).`);
+            s.detection += spike;
+            if (s.detection >= s.detectionMax && wasCritical) {
+                s.detection = s.detectionMax;
+                s.outcome = "lost";
+                s.lossReason = "Caught with the payload — you grabbed it already in LOCKDOWN.";
+                log(s, "🚨 Too hot. They had you the second you took it.");
+            } else {
+                if (s.detection >= s.detectionMax) s.detection = s.detectionMax - 1; // out by a hair
+                s.outcome = "won";
+                log(s, "Payload out ahead of the lockout. You're a ghost.");
+            }
         } else {
             log(s, `${layer.name} breached — moving inward.`);
             s.current += 1;

@@ -5,7 +5,7 @@ import type { BreachResult, MapNode, RunState } from "./types.ts";
 import { CAMPAIGNS, CAMPAIGN_ORDER, REWARD_POOL } from "./campaigns.ts";
 import { satisfiedAchievements } from "./achievements.ts";
 import { createRun, currentOptions, isTerminal, resolveBreach, resolveEvent, resolveSafehouse, addCard, addImplant, getCampaign, huntPressure, HUNT_ACTION_LINES } from "./run.ts";
-import { createInitialState, applyAction, projectedNoise, sweepForecast } from "./engine.ts";
+import { createInitialState, applyAction, projectedNoise, sweepForecast, grabForecast } from "./engine.ts";
 import { SYSTEMS } from "./systems.ts";
 import { MODIFIERS, getModifier } from "./modifiers.ts";
 import { aggregateImplants, combineLoadouts } from "./implants.ts";
@@ -199,6 +199,27 @@ for (const id of CAMPAIGN_ORDER) {
     const h0 = sweepForecast(ns).hit;
     ns = applyAction(ns, { type: "playCard", card: "enumerate" }); // noise 4, no target
     check("noise masks you from the sweep", sweepForecast(ns).hit === Math.max(0, h0 - 4));
+
+    // THE GRAB GOES LOUD: cracking the objective trips a hard alarm. You exfil clean
+    // if you grab with headroom, but grabbing while already in LOCKDOWN gets you caught.
+    const mkFinal = (detFrac: number) => {
+        const g = createInitialState(4, "homeServer", ["knownExploit", "knownExploit"]);
+        g.current = g.layers.length - 1;
+        g.layers[g.current].defenses = [{ type: "firewall", strength: 1, maxStrength: 1, typeRevealed: true, strengthRevealed: true }];
+        g.detection = Math.round(g.detectionMax * detFrac);
+        g.hand = ["knownExploit"];
+        return g;
+    };
+    let coolGrab = mkFinal(0.3);
+    const preGrabDet = coolGrab.detection;
+    coolGrab = applyAction(coolGrab, { type: "playCard", card: "knownExploit", target: 0 });
+    check("grabbing with headroom exfiltrates (win)", coolGrab.outcome === "won");
+    check("the grab still slams detection up", coolGrab.detection > preGrabDet);
+    let hotGrab = mkFinal(0.92);
+    hotGrab = applyAction(hotGrab, { type: "playCard", card: "knownExploit", target: 0 });
+    check("grabbing while in LOCKDOWN gets you caught (loss)", hotGrab.outcome === "lost");
+    check("grabForecast flags the caught risk when critical", grabForecast(mkFinal(0.95)).caught === true);
+    check("grabForecast is clear when you have headroom", grabForecast(mkFinal(0.3)).caught === false);
 }
 
 /* 8. Per-run modifiers: rolled onto every breach, entries stay clean,

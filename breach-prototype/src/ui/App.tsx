@@ -20,7 +20,7 @@ import { ACHIEVEMENTS, getAchievement } from "../engine/achievements.ts";
 import { HeroFace, WatcherFace } from "./Faces.tsx";
 import { IS_DEMO, STEAM_URL, FEEDBACK_EMAIL, demoOperatorUnlocked, demoCampaignUnlocked } from "./demo.ts";
 import { sfx } from "./audio.ts";
-import { createInitialState, applyAction, canPlay, projectedNoise, needsTarget, targetableDefenses, previewOnTarget, sweepForecast } from "../engine/engine.ts";
+import { createInitialState, applyAction, canPlay, projectedNoise, needsTarget, targetableDefenses, previewOnTarget, sweepForecast, grabForecast } from "../engine/engine.ts";
 import { createRun, currentOptions, atFinale, isTerminal, resolveBreach, resolveEvent, resolveSafehouse, addCard, addImplant, removeCard, getCampaign, getNode, clearTransmission, huntPressure } from "../engine/run.ts";
 import type { HuntPressure, SystemModifier } from "../engine/types.ts";
 
@@ -96,7 +96,8 @@ function Intro({ onClose }: { onClose: () => void }) {
                     <p className="muted">Targeted cards (◎): click the card, then the glowing defense. You draw 6 a turn; ending a turn discards your hand and redraws — the deck recycles, nothing is lost. Holding cards is how you stay quiet.</p>
                     <p><span className="amber">THE SYSTEM REACTS</span> and <b>tells you its next move</b> (SYSTEM ALERT). Read it and counter — Spoof its patch, or breach a defense before it hardens.</p>
                     <p><span className="amber">⊚ TRACE SWEEP</span> runs every few turns. Go <b>too quiet</b> and it isolates your position — detection spikes. Recent <b>noise masks you</b>, so silence isn't free: finish fast, or make a little noise before it fires. The countdown &amp; projected hit are always shown.</p>
-                    <p className="muted">Win the job: clear the final objective layer. Enter = end turn · Esc = cancel targeting.</p>
+                    <p><span className="amber">THE GRAB GOES LOUD</span>. Cracking the final <b>objective</b> layer trips every alarm — a hard detection spike. Arrive with headroom and you exfiltrate clean; grab while you're in <span className="red">LOCKDOWN</span> and it catches you with the data in hand. The exfil risk is shown live on the objective.</p>
+                    <p className="muted">Win the job: crack the objective and get out. Enter = end turn · Esc = cancel targeting.</p>
                 </div>
                 <button className="term" onClick={onClose}>Got it ▸</button>
             </div>
@@ -440,6 +441,18 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                             {isCurrent && l.defenses.some((d) => !d.typeRevealed && d.strength > 0) && (
                                 <span className="scan-hint">🔍 unscanned — play a <b>recon</b> card to reveal type &amp; Strength, then hit each with its match</span>
                             )}
+                            {isObjective && !l.breached && (() => {
+                                const g = grabForecast(state);
+                                const cls = g.caught ? " caught" : g.critical ? " danger" : g.frac >= 0.7 ? " warn" : "";
+                                return isCurrent ? (
+                                    <span className={"grab-tell" + cls} title="Grabbing the objective trips every alarm — a hard detection spike. Don't grab while in LOCKDOWN or it catches you.">
+                                        <span className="grab-ico" aria-hidden>⚠</span> THE GRAB TRIPS THE ALARM: +{g.spike} → <b>{g.after}/{state.detectionMax}</b>
+                                        {g.caught ? <b className="grab-verdict"> · CAUGHT — cool down first!</b> : g.critical ? <b className="grab-verdict"> · you're in LOCKDOWN — grabbing catches you</b> : g.frac >= 0.7 ? <span className="grab-verdict"> · cutting it close</span> : <span className="grab-verdict"> · clean exfil</span>}
+                                    </span>
+                                ) : (
+                                    <span className="grab-tell muted-tell"><span className="grab-ico" aria-hidden>⚠</span> the grab here trips the alarm (+{g.spike} detection) — arrive with headroom</span>
+                                );
+                            })()}
                         </div>
                     );
                 })}

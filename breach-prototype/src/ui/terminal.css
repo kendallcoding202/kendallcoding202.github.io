@@ -482,6 +482,7 @@ html.crt .wrap { padding-top: 24px; }
     opacity: 0.6;
 }
 .layer.current { opacity: 1; border-color: var(--fg); box-shadow: 0 0 10px #4af62633; flex-wrap: wrap; }
+.layer.objective { flex-wrap: wrap; } /* let the exfil-risk telegraph wrap to its own line */
 .layer.breached { opacity: 0.4; border-color: var(--dim); }
 /* the objective layer is the win condition — tint it gold so the goal is legible */
 .layer.objective .lname { color: #ffd24a; }
@@ -548,6 +549,20 @@ html.crt .wrap { padding-top: 24px; }
 /* in-context reminder that recon reveals hidden defenses (only while any are unscanned) */
 .layer .scan-hint { flex-basis: 100%; text-align: right; font-size: 10.5px; color: var(--amber); opacity: 0.75; margin-top: 3px; }
 .layer .scan-hint b { color: var(--cyan); }
+/* EXFIL RISK telegraph on the objective layer — grabbing trips a hard alarm.
+   Always shown so the worry builds on the approach; escalates to red near LOCKDOWN. */
+.layer .grab-tell { flex-basis: 100%; font-size: 11px; margin-top: 4px; letter-spacing: 0.3px; color: #ffb000; display: flex; align-items: baseline; gap: 5px; flex-wrap: wrap; }
+.layer .grab-tell .grab-ico { font-size: 12px; }
+.layer .grab-tell b { color: #ffd76a; }
+.layer .grab-tell .grab-verdict { color: #ffb000; font-weight: normal; }
+.layer .grab-tell.muted-tell { color: #7a6a3a; opacity: 0.8; font-size: 10.5px; }
+.layer .grab-tell.warn { color: #ff9b3a; }
+.layer .grab-tell.warn b { color: #ffb56a; }
+.layer .grab-tell.danger { color: #ff6a4a; }
+.layer .grab-tell.danger b, .layer .grab-tell.danger .grab-verdict { color: #ff6a4a; }
+.layer .grab-tell.caught { color: #ff4141; font-weight: bold; animation: grabflash 0.7s steps(2) infinite; }
+.layer .grab-tell.caught b, .layer .grab-tell.caught .grab-verdict { color: #ff4141; }
+@keyframes grabflash { 50% { opacity: 0.45; } }
 .dchip {
     font-size: 12px; border: 1px solid var(--line); padding: 3px 8px; background: #0006;
     display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;

@@ -7,7 +7,7 @@
 
 import type { Action, GameState } from "./types.ts";
 import { CARDS } from "./cards.ts";
-import { currentLayer, projectedNoise, targetableDefenses, predictDamage } from "./engine.ts";
+import { currentLayer, projectedNoise, targetableDefenses, predictDamage, grabForecast } from "./engine.ts";
 
 const play = (card: string): Action => ({ type: "playCard", card });
 const playT = (card: string, target: number): Action => ({ type: "playCard", card, target });
@@ -63,9 +63,13 @@ function chooseClever(s: GameState): Action {
         if (intent.kind === "obscure" && reconInvested) return play(spoofer);
     }
 
-    // 3. Cool down when hot (misdirect also cancels a move, so it leads).
-    if (detFrac >= 0.85 && has("killSwitch")) return play("killSwitch");
-    if (detFrac >= 0.55) {
+    // 3. Cool down when hot (misdirect also cancels a move, so it leads). On the
+    //    final layer, judge "hot" against the post-grab projection so we bank
+    //    headroom for the alarm spike before taking the objective.
+    const onFinal = !!layer && s.current === s.layers.length - 1;
+    const hotFrac = onFinal ? grabForecast(s).frac : detFrac;
+    if (hotFrac >= 0.85 && has("killSwitch")) return play("killSwitch");
+    if (hotFrac >= 0.55) {
         if (has("misdirect")) return play("misdirect");
         if (has("vanish")) return play("vanish");
         if (has("coverTracks")) return play("coverTracks");
@@ -75,6 +79,19 @@ function chooseClever(s: GameState): Action {
     }
 
     if (!opts.length) return end();
+
+    // 3.5 Exfil discipline: grabbing the objective trips a hard alarm. On the final
+    //     layer, don't take the last defense while the grab would catch us — cool
+    //     down first if we have any means. Only take the shot when we'll survive it
+    //     (or when there's nothing left to cool us and it's a hail-mary anyway).
+    if (onFinal && opts.length === 1 && grabForecast(s).caught) {
+        const cooler = ["misdirect", "vanish", "coverTracks", "logWipe", "cloak", "goDark", "killSwitch"].find((c) => has(c));
+        if (cooler) return play(cooler);
+        // no cooler in hand: draw/recon to dig for one while the layer still stands,
+        // rather than immediately busting on the grab.
+        for (const c of ["deadDrop", "automate", "macro", "dataSiphon", "quietScan", "passiveRecon"]) if (has(c) && safe(c)) return play(c);
+        // truly nothing — fall through and take the shot (better than looping).
+    }
 
     const byWeak = opts.slice().sort((a, b) => defs[a].strength - defs[b].strength);
     const weakest = byWeak[0];
