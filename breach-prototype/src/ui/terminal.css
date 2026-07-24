@@ -114,6 +114,21 @@ hr { border: none; border-top: 1px solid var(--line); margin: 7px 0; }
 .sys.kind-idle .intent-label { color: var(--dim); }
 .sys.kind-idle .intent-text { color: var(--dim); font-weight: normal; font-size: 13px; }
 @keyframes sysflash { 50% { border-color: #ff4141; box-shadow: 0 0 14px #ff414166; } }
+/* TRACE SWEEP telegraph — its own row under the intent, always visible so the
+   sweep is never a surprise. Amber = looming, red pulse = fires this turn. */
+.sys .sweep-tell {
+    flex-basis: 100%; margin-top: 2px; padding-top: 5px; border-top: 1px dashed #3a2a08;
+    color: #d8a53a; font-size: 12px; letter-spacing: 0.5px; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+}
+.sys .sweep-tell .sweep-ico { font-size: 13px; }
+.sys .sweep-tell b { color: #ffd76a; }
+.sys .sweep-tell .sweep-hit { color: #ff9b3a; font-weight: bold; }
+.sys .sweep-tell .sweep-clear { color: var(--cyan); }
+.sys .sweep-tell.safe { color: #5a7a6a; border-top-color: #10231b; }
+.sys .sweep-tell.imminent { color: #ff6a4a; }
+.sys .sweep-tell.imminent .sweep-hit { color: #ff4141; }
+.sys .sweep-tell.imminent .sweep-ico { animation: sweeppulse 0.7s steps(2) infinite; }
+@keyframes sweeppulse { 50% { opacity: 0.25; text-shadow: 0 0 8px #ff4141; } }
 .stage { font-weight: bold; letter-spacing: 2px; padding: 1px 8px; border: 1px solid currentColor; }
 .stage.IDLE { color: var(--fg); }
 .stage.SUSPICIOUS { color: var(--amber); }

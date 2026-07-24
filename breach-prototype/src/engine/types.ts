@@ -175,6 +175,8 @@ export interface GameState {
     handSize: number;
     turn: number;
     turnNoise: number; // noise made from cards THIS turn (resets each turn)
+    sweepIn: number; // turns until the next TRACE SWEEP fires (1 = end of this turn)
+    noiseSinceSweep: number; // noise made since the last sweep — blunts the next one
     cardsThisTurn: number; // total cards played this turn (for chain/combo payoffs)
     silentThisTurn: number; // cards played that made ZERO noise this turn (for ghost payoffs)
     // passive effects (installed implants + operator passive, for the whole run)

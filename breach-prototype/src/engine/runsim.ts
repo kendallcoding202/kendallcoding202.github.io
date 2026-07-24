@@ -5,7 +5,7 @@ import type { BreachResult, MapNode, RunState } from "./types.ts";
 import { CAMPAIGNS, CAMPAIGN_ORDER, REWARD_POOL } from "./campaigns.ts";
 import { satisfiedAchievements } from "./achievements.ts";
 import { createRun, currentOptions, isTerminal, resolveBreach, resolveEvent, resolveSafehouse, addCard, addImplant, getCampaign, huntPressure, HUNT_ACTION_LINES } from "./run.ts";
-import { createInitialState, applyAction, projectedNoise } from "./engine.ts";
+import { createInitialState, applyAction, projectedNoise, sweepForecast } from "./engine.ts";
 import { SYSTEMS } from "./systems.ts";
 import { MODIFIERS, getModifier } from "./modifiers.ts";
 import { aggregateImplants, combineLoadouts } from "./implants.ts";
@@ -182,6 +182,23 @@ for (const id of CAMPAIGN_ORDER) {
     const midStr = ch.layers[0].defenses[0].strength;
     ch = applyAction(ch, { type: "playCard", card: "cascade", target: 0 }); // 3 + 2*2 = 7
     check("cascade scales with combo count", midStr - ch.layers[0].defenses[0].strength === 7);
+
+    // TRACE SWEEP: staying silent gets you found; noise masks you.
+    let sw = createInitialState(1, "homeServer", ["quietScan", "quietScan", "quietScan", "quietScan", "quietScan", "quietScan"]);
+    check("sweep is telegraphed from turn 1", sweepForecast(sw).in === 3);
+    const creep = sw.baselineCreep, sweepBase = sweepForecast(sw).base;
+    sw = applyAction(sw, { type: "endTurn" });
+    sw = applyAction(sw, { type: "endTurn" });
+    const detBeforeSweep = sw.detection;
+    sw = applyAction(sw, { type: "endTurn" }); // 3rd end-of-turn → sweep fires on a fully silent run
+    check("silent play eats the full sweep hit", sw.detection - detBeforeSweep === creep + sweepBase);
+    check("the sweep announces itself in the log", sw.log.some((l) => l.includes("isolated your position")));
+    check("the sweep countdown resets after firing", sweepForecast(sw).in === 3);
+    // noise made since the last sweep blunts the next one, point-for-point
+    let ns = createInitialState(2, "homeServer", ["enumerate", "enumerate", "enumerate", "enumerate", "enumerate", "enumerate"]);
+    const h0 = sweepForecast(ns).hit;
+    ns = applyAction(ns, { type: "playCard", card: "enumerate" }); // noise 4, no target
+    check("noise masks you from the sweep", sweepForecast(ns).hit === Math.max(0, h0 - 4));
 }
 
 /* 8. Per-run modifiers: rolled onto every breach, entries stay clean,

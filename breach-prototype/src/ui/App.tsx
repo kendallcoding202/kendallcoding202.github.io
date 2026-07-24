@@ -20,7 +20,7 @@ import { ACHIEVEMENTS, getAchievement } from "../engine/achievements.ts";
 import { HeroFace, WatcherFace } from "./Faces.tsx";
 import { IS_DEMO, STEAM_URL, FEEDBACK_EMAIL, demoOperatorUnlocked, demoCampaignUnlocked } from "./demo.ts";
 import { sfx } from "./audio.ts";
-import { createInitialState, applyAction, canPlay, projectedNoise, needsTarget, targetableDefenses, previewOnTarget } from "../engine/engine.ts";
+import { createInitialState, applyAction, canPlay, projectedNoise, needsTarget, targetableDefenses, previewOnTarget, sweepForecast } from "../engine/engine.ts";
 import { createRun, currentOptions, atFinale, isTerminal, resolveBreach, resolveEvent, resolveSafehouse, addCard, addImplant, removeCard, getCampaign, getNode, clearTransmission, huntPressure } from "../engine/run.ts";
 import type { HuntPressure, SystemModifier } from "../engine/types.ts";
 
@@ -62,6 +62,7 @@ const HERO_QUIPS: Record<string, string[]> = {
 };
 // the watcher breaks into your comms when the trace is closing in
 const WATCHER_LINES = ["I see you moving in there.", "You can't stay quiet forever.", "Getting warmer. I'm coming.", "Every door you open, I hear.", "Run while you still can, ghost.", "I've got your scent now."];
+const SWEEP_LINES = ["Silence is a signature. Found you.", "Nothing on the wire but you. Gotcha.", "Too still. The sweep sees a ghost that forgot to move.", "You went quiet. That's how I knew where to look."];
 const pickFrom = (a: string[]) => a[(Math.random() * a.length) | 0];
 const pickQuip = (k: string) => pickFrom(HERO_QUIPS[k]);
 // a distinct "gate" emblem per breach layer so each reads as its own barrier
@@ -94,6 +95,7 @@ function Intro({ onClose }: { onClose: () => void }) {
                     <p><span className="amber">BREACH INWARD</span> through the layers. Each defense has a <b>Strength</b>; reduce it to 0 with exploits, clear every defense on a layer to move inward. Defenses start <b>UNKNOWN</b> — spend quiet <b>recon</b> to reveal type &amp; Strength, then hit each with its <b>matching exploit</b>.</p>
                     <p className="muted">Targeted cards (◎): click the card, then the glowing defense. You draw 6 a turn; ending a turn discards your hand and redraws — the deck recycles, nothing is lost. Holding cards is how you stay quiet.</p>
                     <p><span className="amber">THE SYSTEM REACTS</span> and <b>tells you its next move</b> (SYSTEM ALERT). Read it and counter — Spoof its patch, or breach a defense before it hardens.</p>
+                    <p><span className="amber">⊚ TRACE SWEEP</span> runs every few turns. Go <b>too quiet</b> and it isolates your position — detection spikes. Recent <b>noise masks you</b>, so silence isn't free: finish fast, or make a little noise before it fires. The countdown &amp; projected hit are always shown.</p>
                     <p className="muted">Win the job: clear the final objective layer. Enter = end turn · Esc = cancel targeting.</p>
                 </div>
                 <button className="term" onClick={onClose}>Got it ▸</button>
@@ -288,6 +290,10 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
             if (q) say(q);
             // the watcher breaks into your channel when the trace locks on (ALERTED+ rising)
             if (rank[state.alert] > rank[prev.alert] && rank[state.alert] >= 2) watcherSays();
+            // ...and taunts specifically when a TRACE SWEEP catches you lurking
+            else if (state.log.length > prev.log.length && state.log.slice(prev.log.length).some((l) => l.includes("isolated your position"))) {
+                push("watcher", pickFrom(SWEEP_LINES));
+            }
 
             // --- juice triggers ---
             const dDet = state.detection - prev.detection;
@@ -323,6 +329,8 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
     }, [state]);
 
     const detFrac = state.detection / state.detectionMax;
+    const sweep = sweepForecast(state); // telegraphed TRACE SWEEP: when, and how hard if you stay quiet
+    const sweepImminent = sweep.in <= 1 && sweep.hit > 0;
     // ambient bed: a breach is where the dread peaks — drone tightens with detection,
     // maxing out as you near lockout. Fades back to the map's level on the way out.
     useEffect(() => {
@@ -390,6 +398,14 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                 <span className="intent">
                     <span className="intent-label">⚠ SYSTEM WILL:</span>{" "}
                     {state.spoofTurns > 0 ? <span className="intent-text cyan">— suppressed (spoofed) —</span> : <span className="intent-text">{state.systemIntent ? state.systemIntent.label : "—"}</span>}
+                </span>
+                <span className={"sweep-tell" + (sweepImminent ? " imminent" : "") + (sweep.hit === 0 ? " safe" : "")} title="The intrusion scan runs every few turns. Stay too quiet and it isolates you — make noise to blend in.">
+                    <span className="sweep-ico" aria-hidden>⊚</span> TRACE SWEEP{" "}
+                    {sweep.in <= 1 ? <b>this turn</b> : <>in <b>{sweep.in}</b></>}
+                    {" · "}
+                    {sweep.hit > 0
+                        ? <span className="sweep-hit">+{sweep.hit} if you stay quiet</span>
+                        : <span className="sweep-clear">masked by your noise</span>}
                 </span>
             </div>
 

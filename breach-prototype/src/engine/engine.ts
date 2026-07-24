@@ -19,6 +19,16 @@ import { shuffle } from "./rng.ts";
 const PROXY_REDUCTION = 3;
 const CASCADE_AT = 5; // play this many cards in one turn to trigger SYSTEM CASCADE (a real big-combo turn, not routine)
 const CASCADE_BONUS = 2; // one-shot exploit overclock granted by the cascade
+const SWEEP_INTERVAL = 3; // the intrusion scan runs a TRACE SWEEP every N turns
+const SWEEP_FRAC = 0.16; // a full (unblunted) sweep costs this fraction of detectionMax
+
+/** The next sweep's timing and its projected detection hit given noise so far.
+    Exposed for the UI so the watcher's sweep is always telegraphed, never a
+    surprise. hit is what it would cost RIGHT NOW; making noise lowers it. */
+export function sweepForecast(s: GameState): { in: number; hit: number; base: number } {
+    const base = Math.round(s.detectionMax * SWEEP_FRAC);
+    return { in: s.sweepIn, hit: Math.max(0, base - s.noiseSinceSweep), base };
+}
 
 /* ---------- construction ---------- */
 
@@ -53,6 +63,8 @@ export function createInitialState(seed: number, systemKey: string = DEFAULT_SYS
         handSize: 6 + (im?.handSize || 0),
         turn: 1,
         turnNoise: 0,
+        sweepIn: SWEEP_INTERVAL,
+        noiseSinceSweep: 0,
         cardsThisTurn: 0,
         silentThisTurn: 0,
         cascade: false,
@@ -193,6 +205,26 @@ function computeIntent(s: GameState): SystemIntent {
 function refreshIntent(s: GameState) {
     s.alert = alertStage(s);
     s.systemIntent = computeIntent(s);
+}
+
+/** TRACE SWEEP — the automated scan sweeps the system every few turns. It can't
+    see a hacker who blends into the traffic, but silence is its own signature: if
+    you've made little noise since the last sweep, it isolates your position and
+    detection spikes. Loud play drowns the sweep out. Punishes lurking without
+    removing stealth — you just can't sit at zero detection forever. */
+function runSweep(s: GameState) {
+    if (s.outcome !== "playing") return;
+    s.sweepIn -= 1;
+    if (s.sweepIn > 0) return;
+    const { hit } = sweepForecast(s);
+    if (hit > 0) {
+        addDetection(s, hit);
+        log(s, `⊚ TRACE SWEEP — you'd gone too quiet; the scan isolated your position (+${hit} detection).`);
+    } else {
+        log(s, "⊚ TRACE SWEEP — you're lost in your own noise. The scan finds nothing.");
+    }
+    s.noiseSinceSweep = 0;
+    s.sweepIn = SWEEP_INTERVAL;
 }
 
 function systemReact(s: GameState) {
@@ -789,6 +821,7 @@ export function applyAction(prev: GameState, action: Action): GameState {
         }
         addDetection(s, noise);
         s.turnNoise += noise;
+        s.noiseSinceSweep += noise; // louder recent play blunts the next TRACE SWEEP
         s.cardsThisTurn += 1;
         if (noise === 0) s.silentThisTurn += 1;
         if (card.kind === "exploit") s.exploitsThisTurn += 1;
@@ -815,6 +848,7 @@ export function applyAction(prev: GameState, action: Action): GameState {
         tickBombs(s); // planted logic bombs resolve as the turn closes
         systemReact(s);
         addDetection(s, s.baselineCreep);
+        runSweep(s); // the intrusion scan periodically hunts for a too-quiet intruder
         s.rootkitReady = false;
         s.turnNoise = 0; // reset the per-turn noise budget
         s.exploitBonus = 0; // Overclock lasts only for the turn it was played
