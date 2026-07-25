@@ -299,6 +299,54 @@ body::before {
     100% { opacity: 0; transform: scale(1.18); }
 }
 
+/* --- KINETIC ATTACK TRACERS: something crosses the screen and penetrates the layer --- */
+.fxfield { position: fixed; inset: 0; z-index: 58; pointer-events: none; overflow: hidden; }
+.fxproj { position: fixed; transform: translate(-50%, -50%); will-change: transform, opacity; font-size: 22px; line-height: 1; }
+/* exploit → a packet fired from your console up into the defense */
+.fx-packet { color: #8dffbe; text-shadow: 0 0 10px #28ff9a, 0 0 3px #eafff2; animation: projFly var(--dur, 300ms) cubic-bezier(.35,.05,.6,1) forwards; }
+@keyframes projFly {
+    0% { transform: translate(-50%, -50%) scale(0.5) rotate(90deg); opacity: 0; }
+    12% { opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.05) rotate(90deg); opacity: 1; }
+}
+/* bug/worm → crawls in from the screen edge and burrows into the wall */
+.fx-worm { color: #e0b3ff; text-shadow: 0 0 10px #b06fe0; animation: wormCrawl var(--dur, 520ms) linear forwards; }
+@keyframes wormCrawl {
+    0% { transform: translate(-50%, -50%) scale(0.6) rotate(-6deg); opacity: 0; }
+    10% { opacity: 1; }
+    35% { transform: translate(calc(-50% + var(--dx) * 0.35), calc(-50% + var(--dy) * 0.35 - 7px)) scale(1) rotate(8deg); }
+    65% { transform: translate(calc(-50% + var(--dx) * 0.65), calc(-50% + var(--dy) * 0.65 + 7px)) scale(1) rotate(-8deg); }
+    100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.85) rotate(4deg); opacity: 1; }
+}
+/* impact burst — a ring that pops on the defense when the tracer lands */
+.fx-burst { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #28ff9a; box-shadow: 0 0 14px #28ff9a; opacity: 0; animation: burstPop 280ms ease-out forwards; }
+.fx-worm-burst { border-color: #c86ff0; box-shadow: 0 0 14px #c86ff0; }
+@keyframes burstPop { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.25); } 35% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -50%) scale(2.5); } }
+
+/* --- LIVING WALLS: an energy scan drifts across the active barrier; it shatters when breached --- */
+.layers.schematic .layer.current .barrier-scan {
+    position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; opacity: 0.5;
+    background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--danger) 55%, transparent) 48%, transparent 52%);
+    background-size: 42% 100%; background-repeat: no-repeat;
+    animation: barrierScan 3.4s linear infinite; mix-blend-mode: screen;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 20%, #000 80%, transparent);
+}
+@keyframes barrierScan { 0% { background-position: -60% 0; } 100% { background-position: 160% 0; } }
+.layer.shatter { animation: layerShatter 0.7s ease-out; z-index: 3; }
+@keyframes layerShatter {
+    0% { box-shadow: 0 0 0 var(--danger); }
+    12% { box-shadow: 0 0 32px -2px #eafff2, inset 0 0 30px -6px #eafff2; transform: translateX(-3px); }
+    26% { transform: translateX(4px); }
+    40% { transform: translateX(-2px); }
+    100% { box-shadow: 0 0 0 transparent; transform: translateX(0); }
+}
+.layer.shatter::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 4;
+    background: repeating-linear-gradient(114deg, transparent 0 7px, rgba(234,255,242,0.55) 7px 8px, transparent 8px 9px);
+    animation: wallCrack 0.7s ease-out forwards;
+}
+@keyframes wallCrack { 0% { opacity: 0; clip-path: inset(0 100% 0 0); } 18% { opacity: 1; } 100% { opacity: 0; clip-path: inset(0 0 0 0); } }
+
 /* --- floating damage numbers + smoother strength bar --- */
 .dchip { position: relative; }
 .dmg-float {
@@ -358,7 +406,9 @@ body::before {
 /* respect reduced-motion */
 @media (prefers-reduced-motion: reduce) {
     .wrap.shaking, .wrap.glitching, .det-glitch, .budget-turn .cyan, .breach-flash, .breach-flash .bd, .cascade-flash, .cascade-flash .cd, .dmg-float, .meter.spike, .meter.hot .fill,
+    .fxproj, .fx-burst, .layer.current .barrier-scan, .layer.shatter, .layer.shatter::after,
     #root::before, body::before, .transmission .tbox, .transmission .ttext, .log .ln:last-child, .layers.schematic .layer.current .lnode { animation: none; }
+    .layer.current .barrier-scan { display: none; }
 }
 
 /* ============================================================

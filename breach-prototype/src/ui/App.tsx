@@ -113,10 +113,10 @@ function wormOn(state: GameState, layer: number, def: number): { amt: number; tu
     return { amt: on.reduce((a, b) => a + b.amt, 0), turns: Math.max(...on.map((b) => b.turns)), count: on.length };
 }
 
-function DefenseChip({ d, worm, targetable, preview, kbdNum, hit, onClick }: { d: Defense; worm?: { amt: number; turns: number; count: number } | null; targetable: boolean; preview?: string | null; kbdNum?: number; hit?: { amt: number; key: number }; onClick: () => void }) {
+function DefenseChip({ d, chipId, worm, targetable, preview, kbdNum, hit, onClick }: { d: Defense; chipId?: string; worm?: { amt: number; turns: number; count: number } | null; targetable: boolean; preview?: string | null; kbdNum?: number; hit?: { amt: number; key: number }; onClick: () => void }) {
     const down = d.strength <= 0;
     return (
-        <span className={"dchip" + (targetable ? " targetable" : "") + (down ? " down" : "") + (worm && !down ? " infected" : "") + (d.typeRevealed && !down ? " t-" + d.type : "")} onClick={targetable ? onClick : undefined}>
+        <span data-chip={chipId} className={"dchip" + (targetable ? " targetable" : "") + (down ? " down" : "") + (worm && !down ? " infected" : "") + (d.typeRevealed && !down ? " t-" + d.type : "")} onClick={targetable ? onClick : undefined}>
             {hit && hit.amt > 0 ? <span className="dmg-float" key={hit.key}>−{hit.amt}</span> : null}
             {targetable && kbdNum ? <span className="kbd">{kbdNum}</span> : null}
             {down ? "✓ down" : d.typeRevealed ? <b className={"dtype t-" + d.type}>{d.type}</b> : <span className="muted">???</span>}
@@ -224,6 +224,8 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
     const [spike, setSpike] = useState(false);
     const [glitch, setGlitch] = useState(0); // 0 none · 1 minor · 2 hard — detection-rise screen glitch
     const [hits, setHits] = useState<Record<string, { amt: number; key: number }>>({});
+    const [projectiles, setProjectiles] = useState<{ id: number; cls: string; glyph: string; x: number; y: number; dx: number; dy: number; dur: number; delay: number }[]>([]);
+    const [shatterIdx, setShatterIdx] = useState<number | null>(null);
     const [feed, setFeed] = useState<{ who: "op" | "watcher"; text: string; key: number }[]>([]); // the live comms transcript
     const fxKey = useRef(0);
     const feedKey = useRef(0);
@@ -234,7 +236,36 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
     const say = (kind: string) => push("op", pickQuip(kind));
     const watcherSays = () => push("watcher", pickFrom(WATCHER_LINES));
 
-    const dispatch = (card: string, target?: number) => { setState((s) => applyAction(s, { type: "playCard", card, target })); setArmed(null); };
+    // Kinetic attack FX: playing an attack sends something ACROSS the screen that
+    // penetrates the layer — an exploit fires a packet up from your console; a
+    // bug/worm crawls in from the edge and burrows in. Reserved for attacks so the
+    // motion reads as meaningful, not decoration. Skipped under reduced-motion.
+    const spawnAttackFx = (card: string, target?: number) => {
+        const c = CARDS[card];
+        if (!c || typeof window === "undefined") return;
+        try { if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return; } catch { /* no matchMedia */ }
+        const eff = c.effect || "";
+        const isWorm = /bomb|parasite|contagion|trojan|necro|incubate|worm|detonate|blight|viral/i.test(eff);
+        const isAttack = isWorm || c.kind === "exploit" || eff === "backdoor";
+        if (!isAttack) return;
+        let tRect: DOMRect | null = null;
+        if (target != null) { const el = document.querySelector(`[data-chip="${state.current}-${target}"]`); if (el) tRect = el.getBoundingClientRect(); }
+        if (!tRect) { const el = document.querySelector(`[data-layer="${state.current}"]`); if (el) tRect = el.getBoundingClientRect(); }
+        if (!tRect) return;
+        const tx = tRect.left + tRect.width / 2, ty = tRect.top + tRect.height / 2;
+        const sx = isWorm ? -28 : window.innerWidth / 2;
+        const sy = isWorm ? ty : window.innerHeight - 52;
+        const dur = isWorm ? 520 : 300;
+        const id = ++fxKey.current, bid = id + 500000;
+        const glyph = isWorm ? "☣" : c.kind === "exploit" ? "⟫" : "◈";
+        const cls = isWorm ? "fx-worm" : "fx-packet";
+        setProjectiles((p) => [...p,
+            { id, cls, glyph, x: sx, y: sy, dx: tx - sx, dy: ty - sy, dur, delay: 0 },
+            { id: bid, cls: cls + "-burst fx-burst", glyph: "", x: tx, y: ty, dx: 0, dy: 0, dur: 280, delay: dur - 40 },
+        ]);
+        window.setTimeout(() => setProjectiles((p) => p.filter((q) => q.id !== id && q.id !== bid)), dur + 320);
+    };
+    const dispatch = (card: string, target?: number) => { spawnAttackFx(card, target); setState((s) => applyAction(s, { type: "playCard", card, target })); setArmed(null); };
     const endTurn = () => {
         // telegraph the system's counter-move: sound the alarm right before it strikes
         const it = state.systemIntent;
@@ -325,6 +356,9 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                 setShaking(true); setBreachFx(true);
                 window.setTimeout(() => setShaking(false), 340);
                 window.setTimeout(() => setBreachFx(false), 560);
+                // the wall comes down: crack-sweep the layer that just breached
+                const li = state.layers.findIndex((l, k) => l.breached && !prev.layers[k]?.breached);
+                if (li >= 0) { setShatterIdx(li); window.setTimeout(() => setShatterIdx((cur) => (cur === li ? null : cur)), 720); }
             }
             // per-defense damage → floating numbers (keyed by defense, replays on new hit)
             const newHits: Record<string, { amt: number; key: number }> = {};
@@ -370,6 +404,13 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
         <div className={"wrap" + (shaking ? " shaking" : "") + (glitch ? (glitch === 2 ? " glitching hard" : " glitching") : "")}>
             {breachFx && <div className="breach-flash"><div className="bd">LAYER DOWN</div></div>}
             {cascadeFx && <div className="cascade-flash"><div className="cd">⚡ SYSTEM CASCADE</div></div>}
+            {projectiles.length > 0 && (
+                <div className="fxfield" aria-hidden>
+                    {projectiles.map((p) => (
+                        <span key={p.id} className={"fxproj " + p.cls} style={{ left: p.x, top: p.y, ["--dx" as string]: p.dx + "px", ["--dy" as string]: p.dy + "px", ["--dur" as string]: p.dur + "ms", animationDelay: p.delay + "ms" }}>{p.glyph}</span>
+                    ))}
+                </div>
+            )}
             {glitch > 0 && <div className={"det-glitch" + (glitch === 2 ? " hard" : "")} />}
             <div className="title">
                 BREACH <span className="sub">// {systemTitle}</span>
@@ -430,12 +471,13 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                     const isObjective = i === state.layers.length - 1;
                     const nodeGlyph = l.breached ? "✓" : isCurrent ? "◉" : isObjective ? "◎" : "○";
                     return (
-                        <div key={i} className={"layer" + (isCurrent ? " current" : "") + (l.breached ? " breached" : "") + (isObjective ? " objective" : "")} style={{ ["--danger" as string]: dangerColor(i, state.layers.length) }}>
+                        <div key={i} data-layer={i} className={"layer" + (isCurrent ? " current" : "") + (l.breached ? " breached" : "") + (isObjective ? " objective" : "") + (shatterIdx === i ? " shatter" : "")} style={{ ["--danger" as string]: dangerColor(i, state.layers.length) }}>
+                            {isCurrent && !l.breached && <span className="barrier-scan" aria-hidden />}
                             <span className="lnode" aria-hidden>{nodeGlyph}</span>
                             <span className="lgate"><span className="lemblem" aria-hidden>{layerEmblem(i, state.layers.length)}</span><span className="lname">{l.name}</span></span>
                             <span className="defs">
                                 {l.breached ? <span className="muted">BREACHED</span> : l.defenses.map((d, di) => (
-                                    <DefenseChip key={di} d={d} worm={wormOn(state, i, di)} targetable={isCurrent && !!armed && d.strength > 0} preview={isCurrent && armed && d.strength > 0 ? previewOnTarget(state, armed, di) : null} kbdNum={isCurrent && armed ? targetOpts.indexOf(di) + 1 : undefined} hit={hits[`${i}-${di}`]} onClick={() => dispatch(armed!, di)} />
+                                    <DefenseChip key={di} d={d} chipId={`${i}-${di}`} worm={wormOn(state, i, di)} targetable={isCurrent && !!armed && d.strength > 0} preview={isCurrent && armed && d.strength > 0 ? previewOnTarget(state, armed, di) : null} kbdNum={isCurrent && armed ? targetOpts.indexOf(di) + 1 : undefined} hit={hits[`${i}-${di}`]} onClick={() => dispatch(armed!, di)} />
                                 ))}
                             </span>
                             {isCurrent && l.defenses.some((d) => !d.typeRevealed && d.strength > 0) && (
