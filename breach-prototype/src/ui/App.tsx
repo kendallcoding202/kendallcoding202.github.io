@@ -208,6 +208,40 @@ function CommsPanel({ op, opState, feed, onPoke }: { op: string; opState: "calm"
     );
 }
 
+/** Flanking comms towers that fill the side gutters on wide screens: the hero
+    operator on the left (always with you), and the watcher/villain on the right
+    that stays dormant while you're a ghost, then rises in and escalates as the
+    trace climbs. Hidden on narrower screens (the inline CommsPanel covers those). */
+function CommsTowers({ op, opState, alert, feed, onPoke, onTaunt }: { op: string; opState: "calm" | "tense" | "alarmed"; alert: string; feed: { who: "op" | "watcher"; text: string; key: number }[]; onPoke: () => void; onTaunt: () => void }) {
+    const opLines = feed.filter((f) => f.who === "op").slice(-7);
+    const watcherLines = feed.filter((f) => f.who === "watcher").slice(-7);
+    const vClass = alert === "LOCKDOWN" ? "lockdown" : alert === "ALERTED" ? "hunting" : alert === "SUSPICIOUS" ? "watching" : "dormant";
+    const vState: "calm" | "tense" | "alarmed" = alert === "LOCKDOWN" ? "alarmed" : alert === "ALERTED" || alert === "SUSPICIOUS" ? "tense" : "calm";
+    const vLabel = alert === "LOCKDOWN" ? "⌁ TRACE LOCKED" : alert === "ALERTED" ? "⌁ HUNTING YOU" : alert === "SUSPICIOUS" ? "⌁ ON YOUR TRAIL" : "⌁ TRACE DORMANT";
+    return (
+        <>
+            <aside className={"comms-tower hero fx-" + opState} aria-hidden>
+                <div className="tower-head"><span className="cdot" /> OPERATOR · <span className="cyan">{op.toUpperCase()}</span></div>
+                <button className="tower-face" onClick={onPoke} title="ping your operator" aria-label="ping your operator">
+                    <HeroFace op={op} state={opState} />
+                    <span className="tower-tag">{opState === "alarmed" ? "ON EDGE" : opState === "tense" ? "FOCUSED" : "GHOST"}</span>
+                </button>
+                <div className="tower-feed">
+                    {opLines.length ? opLines.map((l) => <div key={l.key} className="tline op">{l.text}</div>) : <div className="tline muted">…secure channel open…</div>}
+                </div>
+                <div className="tower-hint">▸ tap to ping</div>
+            </aside>
+            <aside className={"comms-tower villain " + vClass} onClick={onTaunt} title="the watcher" aria-hidden>
+                <div className="tower-head"><span className="cdot" /> {vLabel}</div>
+                <div className="tower-face"><WatcherFace state={vState} /><span className="tower-tag">{alert}</span></div>
+                <div className="tower-feed">
+                    {watcherLines.length ? watcherLines.map((l) => <div key={l.key} className="tline watcher">{l.text}</div>) : <div className="tline muted">{vClass === "dormant" ? "no signal on you… yet" : "…triangulating your position…"}</div>}
+                </div>
+            </aside>
+        </>
+    );
+}
+
 /* ============================================================
    BREACH SCREEN (one job)
    ============================================================ */
@@ -433,6 +467,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                 </div>
             )}
             <div className="implant-strip muted">{hacker.glyph} <b>{hacker.name}</b> · <span className="cyan">{hacker.passiveName}</span>{implants && implants.length > 0 ? " · ◆ " + implants.map((id) => IMPLANTS[id] && IMPLANTS[id].name).filter(Boolean).join(" · ") : ""}</div>
+            <CommsTowers op={hackerId || "wraith"} opState={avatarState} alert={state.alert} feed={feed} onPoke={() => say("poke")} onTaunt={watcherSays} />
             <CommsPanel op={hackerId || "wraith"} opState={avatarState} feed={feed} onPoke={() => say("poke")} />
             <hr />
 

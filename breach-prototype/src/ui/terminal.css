@@ -1040,6 +1040,61 @@ button.term.ghost:hover { background: var(--dim); color: #000; }
 }
 @media (max-width: 620px) { .hud-avatar { width: 48px; height: 60px; top: 6px; right: 6px; } }
 
+/* ============================================================
+   COMMS TOWERS — flank the board in the side gutters on wide screens.
+   Hero (left) is always with you; the watcher (right) sits dormant while
+   you're a ghost, then rises in and escalates red as the trace climbs.
+   ============================================================ */
+.comms-tower { display: none; }
+@media (min-width: 1440px) {
+    .breachview .comms { display: none; } /* towers take over from the inline panel */
+    .comms-tower {
+        display: flex; flex-direction: column; position: fixed; z-index: 40;
+        top: 100px; width: min(212px, calc((100vw - 1060px) / 2 - 20px));
+        max-height: calc(100vh - 200px);
+        border: 1px solid var(--line); border-radius: 5px;
+        background: linear-gradient(180deg, #06130e, #04080700 90%), var(--panel);
+        padding: 11px 11px 9px;
+    }
+    .comms-tower.hero { left: 18px; border-left: 3px solid var(--cyan); box-shadow: 0 0 22px -10px var(--cyan); }
+    .comms-tower.villain { right: 18px; text-align: right; }
+
+    .tower-head { font-size: 10px; letter-spacing: 1px; color: var(--dim); border-bottom: 1px solid #12281f; padding-bottom: 6px; margin-bottom: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tower-head .cdot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 6px var(--cyan); margin-right: 6px; vertical-align: middle; animation: blink 1.4s steps(2) infinite; }
+    .tower-face { background: none; border: none; padding: 0; cursor: pointer; align-self: center; width: 104px; display: flex; flex-direction: column; align-items: center; }
+    .tower-face .face { width: 104px; height: 132px; }
+    .comms-tower.hero .tower-face:hover .face { filter: brightness(1.18) drop-shadow(0 0 6px #35e0d855); }
+    .tower-tag { display: block; text-align: center; font-size: 8.5px; letter-spacing: 1.5px; color: var(--dim); margin-top: 2px; }
+    .tower-feed { margin-top: 9px; display: flex; flex-direction: column; justify-content: flex-end; gap: 5px; overflow: hidden; flex: 1; min-height: 0; }
+    .tower-feed .tline { font-size: 11.5px; line-height: 1.3; color: #9fd7c4; opacity: 0.5; overflow-wrap: anywhere; }
+    .tower-feed .tline:last-child { opacity: 1; animation: linein 0.3s ease-out; }
+    .tower-feed .tline.watcher { color: #ff9a9a; }
+    .tower-feed .tline.muted { color: var(--dim); font-style: italic; }
+    .tower-hint { font-size: 9px; color: #3a5a4c; text-align: center; margin-top: 7px; letter-spacing: 0.5px; }
+
+    /* hero tint by stress */
+    .comms-tower.hero.fx-tense { border-left-color: var(--amber); }
+    .comms-tower.hero.fx-alarmed { border-left-color: var(--red); }
+
+    /* villain: dormant → rises in and escalates as the trace climbs (transition = the "rise") */
+    .comms-tower.villain { border-right: 3px solid #3a1414; transition: opacity 0.5s ease, transform 0.5s cubic-bezier(.2,.8,.2,1), box-shadow 0.4s ease, border-color 0.4s ease; }
+    .comms-tower.villain.dormant { opacity: 0.3; transform: translateX(22px); filter: grayscale(0.6) brightness(0.7); }
+    .comms-tower.villain.dormant .tower-head .cdot { background: #5a2a2a; box-shadow: none; animation: none; }
+    .comms-tower.villain.watching { opacity: 0.9; transform: none; border-right-color: var(--amber); }
+    .comms-tower.villain.watching .tower-head { color: var(--amber); }
+    .comms-tower.villain.hunting { opacity: 1; transform: none; border-right-color: #ff6a1a; box-shadow: 0 0 26px -8px #ff6a1a; }
+    .comms-tower.villain.hunting .tower-head { color: #ff6a1a; }
+    .comms-tower.villain.lockdown { opacity: 1; transform: none; border-right-color: var(--red); box-shadow: 0 0 30px -4px var(--red); animation: villainAlarm 1.1s steps(2) infinite; }
+    .comms-tower.villain.lockdown .tower-head { color: var(--red); }
+    .comms-tower.villain .tower-head .cdot, .comms-tower.villain.hunting .tower-head .cdot, .comms-tower.villain.lockdown .tower-head .cdot { background: var(--red); box-shadow: 0 0 6px var(--red); }
+    @keyframes villainAlarm { 50% { box-shadow: 0 0 34px 0 var(--red); } }
+}
+@media (prefers-reduced-motion: reduce) {
+    .comms-tower.villain { transition: none; }
+    .comms-tower.villain.lockdown { animation: none; }
+    .tower-head .cdot { animation: none; }
+}
+
 /* the talking portrait beside a transmission */
 .txface { width: 92px; height: 116px; flex-shrink: 0; }
 
