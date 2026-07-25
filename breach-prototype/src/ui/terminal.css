@@ -323,15 +323,36 @@ body::before {
 .fx-worm-burst { border-color: #c86ff0; box-shadow: 0 0 14px #c86ff0; }
 @keyframes burstPop { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.25); } 35% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -50%) scale(2.5); } }
 
-/* --- LIVING WALLS: an energy scan drifts across the active barrier; it shatters when breached --- */
-.layers.schematic .layer.current .barrier-scan {
-    position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; opacity: 0.5;
-    background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--danger) 55%, transparent) 48%, transparent 52%);
-    background-size: 42% 100%; background-repeat: no-repeat;
-    animation: barrierScan 3.4s linear infinite; mix-blend-mode: screen;
-    -webkit-mask-image: linear-gradient(90deg, transparent, #000 20%, #000 80%, transparent);
+/* --- ACTIVE BARRIER: the current layer reads as a live security panel you're
+   breaching — a substantial framed wall with a type texture, corner reticle
+   brackets, a status light, and a one-shot "power-on" sweep when you arrive
+   (no constant pulsing). It shatters when breached. --- */
+.layers.schematic .layer.current {
+    background:
+        linear-gradient(90deg, color-mix(in srgb, var(--danger) 16%, var(--panel)) 0%, var(--panel) 55%),
+        var(--panel);
+    box-shadow: 0 0 20px -4px var(--danger), inset 0 0 34px -18px var(--danger), inset 3px 0 0 var(--danger);
 }
-@keyframes barrierScan { 0% { background-position: -60% 0; } 100% { background-position: 160% 0; } }
+/* one-shot activation sweep — plays once when the layer becomes current, then rests */
+.layers.schematic .layer.current .barrier-activate {
+    position: absolute; inset: 0; pointer-events: none; z-index: 1; overflow: hidden;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--danger) 70%, transparent) 50%, transparent);
+    background-size: 55% 100%; background-repeat: no-repeat; mix-blend-mode: screen; opacity: 0;
+    animation: barrierActivate 620ms ease-out 1;
+}
+@keyframes barrierActivate { 0% { background-position: -60% 0; opacity: 0.9; } 100% { background-position: 170% 0; opacity: 0; } }
+/* corner reticle brackets that gently breathe — "locked on", not sweeping */
+.layers.schematic .layer.current .barrier-frame { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+.layers.schematic .layer.current .barrier-frame i { position: absolute; width: 12px; height: 12px; border: 2px solid var(--danger); box-shadow: 0 0 8px -1px var(--danger); animation: reticle 2.4s ease-in-out infinite; }
+.layers.schematic .layer.current .barrier-frame i:nth-child(1) { top: 2px; left: 2px; border-right: 0; border-bottom: 0; }
+.layers.schematic .layer.current .barrier-frame i:nth-child(2) { top: 2px; right: 2px; border-left: 0; border-bottom: 0; }
+.layers.schematic .layer.current .barrier-frame i:nth-child(3) { bottom: 2px; left: 2px; border-right: 0; border-top: 0; }
+.layers.schematic .layer.current .barrier-frame i:nth-child(4) { bottom: 2px; right: 2px; border-left: 0; border-top: 0; }
+@keyframes reticle { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+/* live status light + type label in the gate header */
+.layers.schematic .layer.current .lstatus { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 8px var(--danger); margin-right: 8px; flex-shrink: 0; animation: statusblink 1.5s steps(2) infinite; }
+@keyframes statusblink { 0%, 60% { opacity: 1; } 61%, 100% { opacity: 0.25; } }
+.layers.schematic .layer.current .ltype { color: var(--danger); font-size: 10px; letter-spacing: 1.5px; margin-left: 8px; opacity: 0.85; font-weight: bold; align-self: center; }
 .layer.shatter { animation: layerShatter 0.7s ease-out; z-index: 3; }
 @keyframes layerShatter {
     0% { box-shadow: 0 0 0 var(--danger); }
@@ -372,8 +393,8 @@ body::before {
 .layers.schematic .layer > .lgate, .layers.schematic .layer > .defs, .layers.schematic .layer > .scan-hint, .layers.schematic .layer > .grab-tell { position: relative; z-index: 2; }
 
 /* --- PER-TYPE BARRIER TEXTURES: each wall reads as its defence type --- */
-.layer .barrier-tex { position: absolute; inset: 0; z-index: 0; pointer-events: none; opacity: 0.5; mix-blend-mode: screen;
-    -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 34%, transparent 62%); mask-image: linear-gradient(90deg, #000 0%, #000 34%, transparent 62%); }
+.layer .barrier-tex { position: absolute; inset: 0; z-index: 0; pointer-events: none; opacity: 0.62; mix-blend-mode: screen;
+    -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 40%, transparent 70%); mask-image: linear-gradient(90deg, #000 0%, #000 40%, transparent 70%); }
 /* firewall → mortared brick wall, faint ember flicker */
 .tex-firewall { background:
         repeating-linear-gradient(0deg, transparent 0 12px, rgba(255,110,40,0.20) 12px 13px),
@@ -432,10 +453,28 @@ html.crt .wrap.breachview { padding-top: 14px; }
    (full text on hover). Phones keep their swipeable horizontal-scroll hand. */
 @media (min-width: 721px) {
     .breachview .hand { flex-wrap: nowrap; gap: 8px; margin-top: 4px; }
-    .breachview .hand .card { flex: 1 1 0; min-width: 0; width: auto; max-width: 210px; height: 92px; min-height: 0; padding: 5px 8px; overflow: hidden; }
+    .breachview .hand .card { flex: 1 1 0; min-width: 0; width: auto; max-width: 210px; height: 92px; min-height: 0; padding: 5px 8px; overflow: visible; }
     .breachview .hand .card .ctext { margin-top: 2px; font-size: 10px; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
     .breachview .hand .card .kind { font-size: 9px; }
+    /* full card revealed in a popover above the card on hover/focus (the clamped
+       text is just the resting state — hover to read the whole thing) */
+    .breachview .hand .card .card-full {
+        position: absolute; left: 50%; bottom: calc(100% + 8px); width: 236px; max-width: 62vw; z-index: 70;
+        background: #081512; border: 1px solid var(--fg); border-radius: 5px; padding: 9px 11px;
+        box-shadow: 0 10px 26px #000c, 0 0 0 1px #0a1f18; text-align: left;
+        opacity: 0; visibility: hidden; pointer-events: none;
+        transform: translateX(-50%) translateY(6px) scale(0.98); transition: opacity 0.12s ease, transform 0.12s ease;
+    }
+    .breachview .hand .card:hover .card-full, .breachview .hand .card:focus-within .card-full { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0) scale(1); }
+    /* a little pointer under the popover */
+    .breachview .hand .card .card-full::after { content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 6px solid transparent; border-top-color: var(--fg); }
+    .card-full .cf-name { font-weight: bold; color: var(--fg); font-size: 13px; margin-bottom: 2px; }
+    .card-full .cf-noise { font-weight: normal; font-size: 11px; }
+    .card-full .cf-kind { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
+    .card-full .cf-text { font-size: 12px; line-height: 1.4; color: #d0ece0; }
 }
+.card .card-full { display: none; }
+@media (min-width: 721px) { .breachview .hand .card .card-full { display: block; } }
 
 /* --- floating damage numbers + smoother strength bar --- */
 .dchip { position: relative; }
@@ -496,10 +535,10 @@ html.crt .wrap.breachview { padding-top: 14px; }
 /* respect reduced-motion */
 @media (prefers-reduced-motion: reduce) {
     .wrap.shaking, .wrap.glitching, .det-glitch, .budget-turn .cyan, .breach-flash, .breach-flash .bd, .cascade-flash, .cascade-flash .cd, .dmg-float, .meter.spike, .meter.hot .fill,
-    .fxproj, .fx-burst, .layer.current .barrier-scan, .layer.shatter, .layer.shatter::after,
+    .fxproj, .fx-burst, .layer.current .barrier-activate, .layer.current .barrier-frame i, .layer.current .lstatus, .layer.shatter, .layer.shatter::after,
     .layers.schematic.depthstack.punching, .punch-banner, .barrier-tex,
     #root::before, body::before, .transmission .tbox, .transmission .ttext, .log .ln:last-child, .layers.schematic .layer.current .lnode { animation: none; }
-    .layer.current .barrier-scan, .barrier-tex { display: none; }
+    .layer.current .barrier-activate { display: none; }
     /* keep depth readable but static: no receding transforms under reduced-motion */
     .layers.schematic.depthstack { perspective: none; }
     .layers.schematic.depthstack .layer { transform: none !important; opacity: 1; transition: none; }
@@ -662,18 +701,9 @@ html.crt .wrap { padding-top: 24px; }
     color: var(--danger, var(--fg)); text-shadow: 0 0 9px var(--danger);
 }
 .layers.schematic .layer.objective .lemblem { font-size: 23px; }
-/* the ACTIVE gate reads as a live threat: danger glow + targeting brackets on the corners */
-.layers.schematic .layer.current {
-    border-color: var(--danger);
-    box-shadow: 0 0 18px -3px var(--danger), inset 0 0 24px -16px var(--danger);
-}
-.layers.schematic .layer.current::before,
-.layers.schematic .layer.current::after {
-    content: ""; position: absolute; right: -2px; width: 13px; height: 13px;
-    border: 2px solid var(--danger); pointer-events: none;
-}
-.layers.schematic .layer.current::before { top: -2px; border-left: 0; border-bottom: 0; }
-.layers.schematic .layer.current::after { bottom: -2px; border-left: 0; border-top: 0; }
+/* the ACTIVE gate border colour (glow, texture, corner reticle + status handled
+   in the ACTIVE BARRIER block above) */
+.layers.schematic .layer.current { border-color: var(--danger); }
 /* the deeper gates loom darker/redder even while locked — dread of what's ahead */
 .layers.schematic .layer:not(.current):not(.breached) { background: linear-gradient(90deg, color-mix(in srgb, var(--danger) 9%, var(--panel)), var(--panel) 60%); }
 

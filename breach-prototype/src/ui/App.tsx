@@ -481,10 +481,11 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                     return (
                         <div key={i} data-layer={i} className={"layer bar-" + barType + (isCurrent ? " current" : "") + (l.breached ? " breached" : "") + (isObjective ? " objective" : "") + (shatterIdx === i ? " shatter" : "")}
                             style={{ ["--danger" as string]: dangerColor(i, state.layers.length), ...(ahead > 0 ? { transform: `translateZ(${-ahead * 42}px)`, opacity: Math.max(0.32, 0.72 - ahead * 0.13), zIndex: 10 - ahead } : {}) }}>
-                            {isCurrent && !l.breached && <span className="barrier-scan" aria-hidden />}
                             {isCurrent && !l.breached && <span className={"barrier-tex tex-" + barType} aria-hidden />}
+                            {isCurrent && !l.breached && <span className="barrier-activate" aria-hidden />}
+                            {isCurrent && !l.breached && <span className="barrier-frame" aria-hidden><i /><i /><i /><i /></span>}
                             <span className="lnode" aria-hidden>{nodeGlyph}</span>
-                            <span className="lgate"><span className="lemblem" aria-hidden>{layerEmblem(i, state.layers.length)}</span><span className="lname">{l.name}</span></span>
+                            <span className="lgate">{isCurrent && !l.breached && <span className="lstatus" aria-hidden />}<span className="lemblem" aria-hidden>{layerEmblem(i, state.layers.length)}</span><span className="lname">{l.name}</span>{isCurrent && !l.breached && <span className="ltype" aria-hidden>· {barType.toUpperCase()}</span>}</span>
                             <span className="defs">
                                 {l.breached ? <span className="muted">BREACHED</span> : l.defenses.map((d, di) => (
                                     <DefenseChip key={di} d={d} chipId={`${i}-${di}`} worm={wormOn(state, i, di)} targetable={isCurrent && !!armed && d.strength > 0} preview={isCurrent && armed && d.strength > 0 ? previewOnTarget(state, armed, di) : null} kbdNum={isCurrent && armed ? targetOpts.indexOf(di) + 1 : undefined} hit={hits[`${i}-${di}`]} onClick={() => dispatch(armed!, di)} />
@@ -536,13 +537,18 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                     const needsT = needsTarget(id);
                     const blocked = needsT && targetOpts.length === 0;
                     return (
-                        <div key={i} className={"card kind-" + def.kind + (playable && !blocked ? "" : " disabled") + (danger ? " danger" : "") + (armed === id ? " armed" : "")} onClick={() => !blocked && onCardClick(id)} title={def.text}>
+                        <div key={i} className={"card kind-" + def.kind + (playable && !blocked ? "" : " disabled") + (danger ? " danger" : "") + (armed === id ? " armed" : "")} onClick={() => !blocked && onCardClick(id)}>
                             <div className="chead">
                                 <span className="cname">{i < 9 && !armed ? <span className="kbd">{i + 1}</span> : null}<span className="cicon" aria-hidden>{KIND_ICON[def.kind] || "◈"}</span>{def.name}{needsT ? <span className="muted"> ◎</span> : null}</span>
                                 <span className="noise" style={{ color: danger ? "#ff4141" : noise === 0 ? "#35e0d8" : "#ffb000" }}>{noise === 0 ? "SILENT" : "◈" + noise}</span>
                             </div>
                             <div className="kind">{def.kind}{def.matchType ? <span className="typetag"> ▸ vs {def.matchType.toUpperCase()}</span> : null}{def.tag ? <span className={"synergy s-" + def.tag}> · {def.tag}</span> : null}</div>
                             <div className="ctext">{def.text}</div>
+                            <div className="card-full" aria-hidden>
+                                <div className="cf-name"><span className="cicon" aria-hidden>{KIND_ICON[def.kind] || "◈"}</span>{def.name} <span className="cf-noise" style={{ color: noise === 0 ? "#35e0d8" : "#ffb000" }}>· {noise === 0 ? "SILENT" : "◈" + noise + " noise"}</span></div>
+                                <div className="cf-kind">{def.kind}{def.matchType ? ` ▸ vs ${def.matchType.toUpperCase()}` : ""}{def.tag ? ` · ${def.tag}` : ""}</div>
+                                <div className="cf-text">{def.text}</div>
+                            </div>
                         </div>
                     );
                 })}
