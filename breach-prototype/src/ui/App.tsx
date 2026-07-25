@@ -404,7 +404,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
     };
 
     return (
-        <div className={"wrap" + (shaking ? " shaking" : "") + (glitch ? (glitch === 2 ? " glitching hard" : " glitching") : "")}>
+        <div className={"wrap breachview" + (shaking ? " shaking" : "") + (glitch ? (glitch === 2 ? " glitching hard" : " glitching") : "")}>
             {breachFx && <div className="breach-flash"><div className="bd">LAYER DOWN</div></div>}
             {cascadeFx && <div className="cascade-flash"><div className="cd">⚡ SYSTEM CASCADE</div></div>}
             {projectiles.length > 0 && (

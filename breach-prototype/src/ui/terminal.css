@@ -392,6 +392,51 @@ body::before {
 @keyframes texClimb { 0% { background-position: 0 0; } 100% { background-position: 0 -46px; } }
 @keyframes texRoll { 0% { background-position: 0 0; } 100% { background-position: 0 13px; } }
 
+/* ============================================================
+   BREACH VIEW — fit the whole board on one screen (no scrolling).
+   Tightens vertical rhythm across every section; the hand stays a
+   single row; the comms panel slims down during the live breach.
+   ============================================================ */
+.wrap.breachview { padding: 5px 18px 6px; max-width: 1060px; }
+html.crt .wrap.breachview { padding-top: 14px; }
+.breachview hr { margin: 3px 0; }
+.breachview > .muted { font-size: 12px; }
+/* comms panel: slim to a ticker during a breach */
+.breachview .comms { margin: 5px 0 2px; padding: 4px 10px; gap: 9px; align-items: center; }
+.breachview .comms-face, .breachview .comms-face .face { width: 48px; }
+.breachview .comms-face .face { height: 60px; }
+.breachview .comms-tag { font-size: 7.5px; }
+.breachview .comms-head { padding-bottom: 2px; margin-bottom: 2px; font-size: 9.5px; }
+.breachview .comms-lines { max-height: 38px; overflow: hidden; font-size: 11px; line-height: 1.28; }
+/* meters + system panel */
+.breachview .implant-strip { margin-top: 2px; }
+.breachview .meter-label { margin-bottom: 2px; }
+.breachview .meter { height: 13px; }
+.breachview .meter-marks { height: 9px; }
+.breachview .budget { font-size: 11.5px; }
+.breachview .sys { margin-top: 4px; padding: 3px 12px; font-size: 12px; }
+.breachview .schematic-head { margin: 4px 2px 1px; }
+/* the intrusion stack — tighter rows so even a 5-layer system fits */
+.breachview .layers.schematic .layer { padding: 1px 12px; margin: 2px 0; }
+.breachview .layers.schematic .lemblem { font-size: 16px; margin-right: 8px; }
+.breachview .dchip { padding: 1px 7px; }
+.breachview .dchip .dbar { height: 4px; }
+/* preview (not-current) layers sit compact & receding — keeps deep systems on-screen */
+.breachview .layers.schematic .layer:not(.current) { padding-top: 0; padding-bottom: 0; }
+.breachview .layers.schematic .layer:not(.current) .dchip { padding: 0 6px; font-size: 11px; }
+.breachview .layers.schematic .layer:not(.current) .lemblem { font-size: 14px; }
+.breachview .sys .sweep-tell { font-size: 10.5px; margin-top: 1px; padding-top: 3px; }
+.breachview .last-action { margin: 3px 0 2px; padding: 3px 12px; }
+.breachview .budget { margin: 3px 0 0; }
+/* the hand: on laptop/desktop, always ONE row of shorter cards with clamped text
+   (full text on hover). Phones keep their swipeable horizontal-scroll hand. */
+@media (min-width: 721px) {
+    .breachview .hand { flex-wrap: nowrap; gap: 8px; margin-top: 4px; }
+    .breachview .hand .card { flex: 1 1 0; min-width: 0; width: auto; max-width: 210px; height: 92px; min-height: 0; padding: 5px 8px; overflow: hidden; }
+    .breachview .hand .card .ctext { margin-top: 2px; font-size: 10px; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .breachview .hand .card .kind { font-size: 9px; }
+}
+
 /* --- floating damage numbers + smoother strength bar --- */
 .dchip { position: relative; }
 .dmg-float {
