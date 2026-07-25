@@ -226,6 +226,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
     const [hits, setHits] = useState<Record<string, { amt: number; key: number }>>({});
     const [projectiles, setProjectiles] = useState<{ id: number; cls: string; glyph: string; x: number; y: number; dx: number; dy: number; dur: number; delay: number }[]>([]);
     const [shatterIdx, setShatterIdx] = useState<number | null>(null);
+    const [punching, setPunching] = useState(false); // forward camera-lunge when you cross into the next layer
     const [feed, setFeed] = useState<{ who: "op" | "watcher"; text: string; key: number }[]>([]); // the live comms transcript
     const fxKey = useRef(0);
     const feedKey = useRef(0);
@@ -359,6 +360,8 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                 // the wall comes down: crack-sweep the layer that just breached
                 const li = state.layers.findIndex((l, k) => l.breached && !prev.layers[k]?.breached);
                 if (li >= 0) { setShatterIdx(li); window.setTimeout(() => setShatterIdx((cur) => (cur === li ? null : cur)), 720); }
+                // crossing INWARD to a new layer: lunge the camera forward through the wall
+                if (state.current > prev.current) { setPunching(true); window.setTimeout(() => setPunching(false), 640); }
             }
             // per-defense damage → floating numbers (keyed by defense, replays on new hit)
             const newHits: Record<string, { amt: number; key: number }> = {};
@@ -465,14 +468,21 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
             </div>
 
             <div className="schematic-head">▼ INTRUSION PATH · <b>depth {Math.min(state.current + 1, state.layers.length)}/{state.layers.length}</b> — punch inward to the core</div>
-            <div className="layers schematic">
+            <div className={"layers schematic depthstack" + (punching ? " punching" : "")}>
+                {punching && <div className="punch-banner" aria-hidden>▸▸ PUNCHING INWARD · DEPTH {Math.min(state.current + 1, state.layers.length)}/{state.layers.length}</div>}
                 {state.layers.map((l, i) => {
                     const isCurrent = i === state.current && !l.breached;
                     const isObjective = i === state.layers.length - 1;
                     const nodeGlyph = l.breached ? "✓" : isCurrent ? "◉" : isObjective ? "◎" : "○";
+                    // depth cue: layers still AHEAD recede toward the core (the objective is deepest)
+                    const rel = i - state.current;
+                    const ahead = !l.breached && rel > 0 ? rel : 0;
+                    const barType = (l.defenses.find((d) => d.strength > 0) || l.defenses[0])?.type || "firewall";
                     return (
-                        <div key={i} data-layer={i} className={"layer" + (isCurrent ? " current" : "") + (l.breached ? " breached" : "") + (isObjective ? " objective" : "") + (shatterIdx === i ? " shatter" : "")} style={{ ["--danger" as string]: dangerColor(i, state.layers.length) }}>
+                        <div key={i} data-layer={i} className={"layer bar-" + barType + (isCurrent ? " current" : "") + (l.breached ? " breached" : "") + (isObjective ? " objective" : "") + (shatterIdx === i ? " shatter" : "")}
+                            style={{ ["--danger" as string]: dangerColor(i, state.layers.length), ...(ahead > 0 ? { transform: `translateZ(${-ahead * 42}px)`, opacity: Math.max(0.32, 0.72 - ahead * 0.13), zIndex: 10 - ahead } : {}) }}>
                             {isCurrent && !l.breached && <span className="barrier-scan" aria-hidden />}
+                            {isCurrent && !l.breached && <span className={"barrier-tex tex-" + barType} aria-hidden />}
                             <span className="lnode" aria-hidden>{nodeGlyph}</span>
                             <span className="lgate"><span className="lemblem" aria-hidden>{layerEmblem(i, state.layers.length)}</span><span className="lname">{l.name}</span></span>
                             <span className="defs">

@@ -347,6 +347,51 @@ body::before {
 }
 @keyframes wallCrack { 0% { opacity: 0; clip-path: inset(0 100% 0 0); } 18% { opacity: 1; } 100% { opacity: 0; clip-path: inset(0 0 0 0); } }
 
+/* --- DEPTH TUNNEL: the stack recedes toward the core, and you PUNCH inward on breach --- */
+.layers.schematic.depthstack { position: relative; perspective: 1150px; perspective-origin: 50% 40%; transform-style: preserve-3d; }
+.layers.schematic.depthstack .layer { transition: transform 360ms cubic-bezier(.2,.7,.2,1), opacity 360ms ease; transform-origin: 50% 50%; }
+/* the whole stack lunges forward when you cross into the next layer */
+.layers.schematic.depthstack.punching { animation: punchDolly 640ms cubic-bezier(.2,.75,.25,1); }
+@keyframes punchDolly {
+    0% { transform: scale(0.92) translateY(12px); filter: brightness(1.6) saturate(1.15); }
+    30% { transform: scale(1.045) translateY(-5px); filter: brightness(1.18); }
+    100% { transform: scale(1) translateY(0); filter: brightness(1); }
+}
+.punch-banner {
+    position: absolute; top: 46%; left: 0; right: 0; text-align: center; z-index: 20; pointer-events: none;
+    color: #eafff2; font-weight: bold; letter-spacing: 5px; font-size: 21px;
+    text-shadow: 0 0 18px var(--fg), 0 0 40px #28ff9a;
+    animation: punchBanner 640ms cubic-bezier(.2,.8,.2,1) forwards;
+}
+@keyframes punchBanner {
+    0% { opacity: 0; transform: translateY(14px) scale(0.55); letter-spacing: 0; }
+    28% { opacity: 1; transform: translateY(0) scale(1.05); }
+    100% { opacity: 0; transform: translateY(-10px) scale(1.28); letter-spacing: 13px; }
+}
+/* keep layer content above the barrier textures */
+.layers.schematic .layer > .lgate, .layers.schematic .layer > .defs, .layers.schematic .layer > .scan-hint, .layers.schematic .layer > .grab-tell { position: relative; z-index: 2; }
+
+/* --- PER-TYPE BARRIER TEXTURES: each wall reads as its defence type --- */
+.layer .barrier-tex { position: absolute; inset: 0; z-index: 0; pointer-events: none; opacity: 0.5; mix-blend-mode: screen;
+    -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 34%, transparent 62%); mask-image: linear-gradient(90deg, #000 0%, #000 34%, transparent 62%); }
+/* firewall → mortared brick wall, faint ember flicker */
+.tex-firewall { background:
+        repeating-linear-gradient(0deg, transparent 0 12px, rgba(255,110,40,0.20) 12px 13px),
+        repeating-linear-gradient(90deg, transparent 0 30px, rgba(255,90,30,0.18) 30px 31px);
+    animation: texFlicker 2.6s ease-in-out infinite; }
+/* ids → radar sweep bars, cyan */
+.tex-ids { background: repeating-linear-gradient(90deg, transparent 0 5px, rgba(53,224,216,0.14) 5px 6px); animation: texSweep 3.2s linear infinite; }
+/* auth → keyhole/lock lattice, amber */
+.tex-auth { background-image: radial-gradient(circle, rgba(255,210,80,0.22) 1.6px, transparent 2.4px); background-size: 15px 15px; animation: texFlicker 3s ease-in-out infinite; }
+/* privilege → ascending chevrons, magenta */
+.tex-privilege { background: repeating-linear-gradient(135deg, transparent 0 11px, rgba(200,110,255,0.18) 11px 13px); animation: texClimb 4s linear infinite; }
+/* database → stacked cylinder rings, blue */
+.tex-database { background: repeating-linear-gradient(0deg, rgba(80,190,255,0.20) 0 2px, transparent 2px 13px); animation: texRoll 5s linear infinite; }
+@keyframes texFlicker { 0%,100% { opacity: 1; } 45% { opacity: 0.72; } 70% { opacity: 0.9; } }
+@keyframes texSweep { 0% { background-position: 0 0; } 100% { background-position: 60px 0; } }
+@keyframes texClimb { 0% { background-position: 0 0; } 100% { background-position: 0 -46px; } }
+@keyframes texRoll { 0% { background-position: 0 0; } 100% { background-position: 0 13px; } }
+
 /* --- floating damage numbers + smoother strength bar --- */
 .dchip { position: relative; }
 .dmg-float {
@@ -407,8 +452,12 @@ body::before {
 @media (prefers-reduced-motion: reduce) {
     .wrap.shaking, .wrap.glitching, .det-glitch, .budget-turn .cyan, .breach-flash, .breach-flash .bd, .cascade-flash, .cascade-flash .cd, .dmg-float, .meter.spike, .meter.hot .fill,
     .fxproj, .fx-burst, .layer.current .barrier-scan, .layer.shatter, .layer.shatter::after,
+    .layers.schematic.depthstack.punching, .punch-banner, .barrier-tex,
     #root::before, body::before, .transmission .tbox, .transmission .ttext, .log .ln:last-child, .layers.schematic .layer.current .lnode { animation: none; }
-    .layer.current .barrier-scan { display: none; }
+    .layer.current .barrier-scan, .barrier-tex { display: none; }
+    /* keep depth readable but static: no receding transforms under reduced-motion */
+    .layers.schematic.depthstack { perspective: none; }
+    .layers.schematic.depthstack .layer { transform: none !important; opacity: 1; transition: none; }
 }
 
 /* ============================================================
