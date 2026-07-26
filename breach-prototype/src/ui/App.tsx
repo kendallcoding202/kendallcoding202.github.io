@@ -238,7 +238,9 @@ function CommsTowers({ op, opState, alert, feed, onPoke, onTaunt }: { op: string
                 <div className="tower-head"><span className="cdot" /> {vLabel}</div>
                 <div className="tower-face"><WatcherFace state={vState} /><span className="tower-tag">{alert}</span></div>
                 <div className="tower-feed">
-                    {watcherLines.length ? watcherLines.map((l) => <div key={l.key} className="tline watcher">{l.text}</div>) : <div className="tline muted">{vClass === "dormant" ? "no signal on you… yet" : "…triangulating your position…"}</div>}
+                    {vClass === "dormant"
+                        ? <div className="tline muted">standby · no signal on you yet</div>
+                        : (watcherLines.length ? watcherLines.map((l) => <div key={l.key} className="tline watcher">{l.text}</div>) : <div className="tline muted">…triangulating your position…</div>)}
                 </div>
             </aside>
         </>

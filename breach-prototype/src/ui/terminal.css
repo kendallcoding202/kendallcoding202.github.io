@@ -1078,15 +1078,18 @@ button.term.ghost:hover { background: var(--dim); color: #000; }
 @media (min-width: 1440px) {
     .breachview .comms { display: none; } /* towers take over from the inline panel */
     .comms-tower {
+        /* anchored to the board's edge (board is max-width 1060 → half = 530),
+           so on ultra-wide screens they sit BESIDE the board, not stranded at the
+           screen edge. Empty space lands at the outer edges instead. */
         display: flex; flex-direction: column; position: fixed; z-index: 40;
-        top: 100px; width: min(212px, calc((100vw - 1060px) / 2 - 20px));
+        top: 100px; width: min(216px, calc(50vw - 546px - 14px));
         max-height: calc(100vh - 200px);
         border: 1px solid var(--line); border-radius: 5px;
         background: linear-gradient(180deg, #06130e, #04080700 90%), var(--panel);
         padding: 11px 11px 9px;
     }
-    .comms-tower.hero { left: 18px; border-left: 3px solid var(--cyan); box-shadow: 0 0 22px -10px var(--cyan); }
-    .comms-tower.villain { right: 18px; text-align: right; }
+    .comms-tower.hero { right: calc(50% + 546px); border-left: 3px solid var(--cyan); box-shadow: 0 0 22px -10px var(--cyan); }
+    .comms-tower.villain { left: calc(50% + 546px); text-align: right; }
 
     .tower-head { font-size: 10px; letter-spacing: 1px; color: var(--dim); border-bottom: 1px solid #12281f; padding-bottom: 6px; margin-bottom: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tower-head .cdot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 6px var(--cyan); margin-right: 6px; vertical-align: middle; animation: blink 1.4s steps(2) infinite; }
@@ -1106,8 +1109,9 @@ button.term.ghost:hover { background: var(--dim); color: #000; }
     .comms-tower.hero.fx-alarmed { border-left-color: var(--red); }
 
     /* villain: dormant → rises in and escalates as the trace climbs (transition = the "rise") */
-    .comms-tower.villain { border-right: 3px solid #3a1414; transition: opacity 0.5s ease, transform 0.5s cubic-bezier(.2,.8,.2,1), box-shadow 0.4s ease, border-color 0.4s ease; }
-    .comms-tower.villain.dormant { opacity: 0.3; transform: translateX(22px); filter: grayscale(0.6) brightness(0.7); }
+    .comms-tower.villain { border-right: 3px solid #3a1414; transition: opacity 0.5s ease, transform 0.5s cubic-bezier(.2,.8,.2,1), box-shadow 0.4s ease, border-color 0.4s ease, filter 0.5s ease; }
+    /* dormant = fully on-screen but subdued/standby (no off-screen clip); it "wakes" by brightening + colouring in, not sliding */
+    .comms-tower.villain.dormant { opacity: 0.55; transform: scale(0.97); filter: grayscale(0.55) brightness(0.74); }
     .comms-tower.villain.dormant .tower-head .cdot { background: #5a2a2a; box-shadow: none; animation: none; }
     .comms-tower.villain.watching { opacity: 0.9; transform: none; border-right-color: var(--amber); }
     .comms-tower.villain.watching .tower-head { color: var(--amber); }
