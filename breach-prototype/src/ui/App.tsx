@@ -441,6 +441,10 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
     };
 
     return (
+        <>
+            {/* fixed-position towers live OUTSIDE .wrap so the breach shake/glitch
+                (a transform on .wrap) can't reparent them and fling them to center */}
+            <CommsTowers op={hackerId || "wraith"} opState={avatarState} alert={state.alert} feed={feed} onPoke={() => say("poke")} onTaunt={watcherSays} />
         <div className={"wrap breachview" + (shaking ? " shaking" : "") + (glitch ? (glitch === 2 ? " glitching hard" : " glitching") : "")}>
             {breachFx && <div className="breach-flash"><div className="bd">LAYER DOWN</div></div>}
             {cascadeFx && <div className="cascade-flash"><div className="cd">⚡ SYSTEM CASCADE</div></div>}
@@ -470,7 +474,6 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                 </div>
             )}
             <div className="implant-strip muted">{hacker.glyph} <b>{hacker.name}</b> · <span className="cyan">{hacker.passiveName}</span>{implants && implants.length > 0 ? " · ◆ " + implants.map((id) => IMPLANTS[id] && IMPLANTS[id].name).filter(Boolean).join(" · ") : ""}</div>
-            <CommsTowers op={hackerId || "wraith"} opState={avatarState} alert={state.alert} feed={feed} onPoke={() => say("poke")} onTaunt={watcherSays} />
             <CommsPanel op={hackerId || "wraith"} opState={avatarState} feed={feed} onPoke={() => say("poke")} />
             <hr />
 
@@ -616,6 +619,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                 </div>
             )}
         </div>
+        </>
     );
 }
 
