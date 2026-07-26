@@ -329,30 +329,46 @@ body::before {
    (no constant pulsing). It shatters when breached. --- */
 .layers.schematic .layer.current {
     background:
-        linear-gradient(90deg, color-mix(in srgb, var(--danger) 16%, var(--panel)) 0%, var(--panel) 55%),
+        linear-gradient(90deg, color-mix(in srgb, var(--ltc, var(--danger)) 22%, var(--panel)) 0%, var(--panel) 58%),
         var(--panel);
-    box-shadow: 0 0 20px -4px var(--danger), inset 0 0 34px -18px var(--danger), inset 3px 0 0 var(--danger);
+    box-shadow: 0 0 22px -4px var(--ltc, var(--danger)), inset 0 0 34px -18px var(--ltc, var(--danger)), inset 3px 0 0 var(--ltc, var(--danger));
 }
 /* one-shot activation sweep — plays once when the layer becomes current, then rests */
 .layers.schematic .layer.current .barrier-activate {
     position: absolute; inset: 0; pointer-events: none; z-index: 1; overflow: hidden;
-    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--danger) 70%, transparent) 50%, transparent);
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ltc, var(--danger)) 70%, transparent) 50%, transparent);
     background-size: 55% 100%; background-repeat: no-repeat; mix-blend-mode: screen; opacity: 0;
     animation: barrierActivate 620ms ease-out 1;
 }
 @keyframes barrierActivate { 0% { background-position: -60% 0; opacity: 0.9; } 100% { background-position: 170% 0; opacity: 0; } }
 /* corner reticle brackets that gently breathe — "locked on", not sweeping */
 .layers.schematic .layer.current .barrier-frame { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
-.layers.schematic .layer.current .barrier-frame i { position: absolute; width: 12px; height: 12px; border: 2px solid var(--danger); box-shadow: 0 0 8px -1px var(--danger); animation: reticle 2.4s ease-in-out infinite; }
+.layers.schematic .layer.current .barrier-frame i { position: absolute; width: 12px; height: 12px; border: 2px solid var(--ltc, var(--danger)); box-shadow: 0 0 8px -1px var(--ltc, var(--danger)); animation: reticle 2.4s ease-in-out infinite; }
 .layers.schematic .layer.current .barrier-frame i:nth-child(1) { top: 2px; left: 2px; border-right: 0; border-bottom: 0; }
 .layers.schematic .layer.current .barrier-frame i:nth-child(2) { top: 2px; right: 2px; border-left: 0; border-bottom: 0; }
 .layers.schematic .layer.current .barrier-frame i:nth-child(3) { bottom: 2px; left: 2px; border-right: 0; border-top: 0; }
 .layers.schematic .layer.current .barrier-frame i:nth-child(4) { bottom: 2px; right: 2px; border-left: 0; border-top: 0; }
 @keyframes reticle { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
-/* live status light + type label in the gate header */
-.layers.schematic .layer.current .lstatus { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 8px var(--danger); margin-right: 8px; flex-shrink: 0; animation: statusblink 1.5s steps(2) infinite; }
+/* live status light in the gate header */
+.layers.schematic .layer.current .lstatus { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ltc, var(--danger)); box-shadow: 0 0 8px var(--ltc, var(--danger)); margin-right: 8px; flex-shrink: 0; animation: statusblink 1.5s steps(2) infinite; }
 @keyframes statusblink { 0%, 60% { opacity: 1; } 61%, 100% { opacity: 0.25; } }
-.layers.schematic .layer.current .ltype { color: var(--danger); font-size: 10px; letter-spacing: 1.5px; margin-left: 8px; opacity: 0.85; font-weight: bold; align-self: center; }
+
+/* --- PER-LAYER TYPE IDENTITY — every wall reads clearly as its defence type,
+   by colour, emblem, name tint and label, so punching through feels distinct --- */
+.layer.bar-firewall { --ltc: var(--t-firewall); }
+.layer.bar-ids { --ltc: var(--t-ids); }
+.layer.bar-auth { --ltc: var(--t-auth); }
+.layer.bar-privilege { --ltc: var(--t-privilege); }
+.layer.bar-database { --ltc: var(--t-database); }
+.layers.schematic .layer { border-left-color: var(--ltc, var(--danger)); }
+.layers.schematic .layer .lemblem { color: var(--ltc, var(--danger)); text-shadow: 0 0 10px var(--ltc, var(--danger)); }
+.layers.schematic .layer .lname { color: color-mix(in srgb, var(--ltc, #eafff2) 42%, #eafff2); }
+.layers.schematic .layer .ltype { color: var(--ltc, var(--danger)); font-size: 10px; letter-spacing: 1.5px; margin-left: 8px; opacity: 0.75; font-weight: bold; align-self: center; }
+.layers.schematic .layer.current .ltype { opacity: 1; }
+/* resting (not-current) gates take a faint wash of their type colour */
+.layers.schematic .layer:not(.current):not(.breached) { background: linear-gradient(90deg, color-mix(in srgb, var(--ltc, var(--danger)) 13%, var(--panel)), var(--panel) 60%); }
+/* the OBJECTIVE is the prize — override to gold so the vault always stands apart */
+.layers.schematic .layer.objective { --ltc: #ffd24a; }
 .layer.shatter { animation: layerShatter 0.7s ease-out; z-index: 3; }
 @keyframes layerShatter {
     0% { box-shadow: 0 0 0 var(--danger); }
@@ -393,8 +409,8 @@ body::before {
 .layers.schematic .layer > .lgate, .layers.schematic .layer > .defs, .layers.schematic .layer > .scan-hint, .layers.schematic .layer > .grab-tell { position: relative; z-index: 2; }
 
 /* --- PER-TYPE BARRIER TEXTURES: each wall reads as its defence type --- */
-.layer .barrier-tex { position: absolute; inset: 0; z-index: 0; pointer-events: none; opacity: 0.62; mix-blend-mode: screen;
-    -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 40%, transparent 70%); mask-image: linear-gradient(90deg, #000 0%, #000 40%, transparent 70%); }
+.layer .barrier-tex { position: absolute; inset: 0; z-index: 0; pointer-events: none; opacity: 0.8; mix-blend-mode: screen;
+    -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 46%, transparent 76%); mask-image: linear-gradient(90deg, #000 0%, #000 46%, transparent 76%); }
 /* firewall → mortared brick wall, faint ember flicker */
 .tex-firewall { background:
         repeating-linear-gradient(0deg, transparent 0 12px, rgba(255,110,40,0.20) 12px 13px),

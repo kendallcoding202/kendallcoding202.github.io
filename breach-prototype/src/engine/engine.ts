@@ -29,8 +29,11 @@ const GRAB_LETHAL_AT = 0.85; // the grab only CATCHES you if you grab at/above t
     real lose condition (grabbing while already in LOCKDOWN and overflowing);
     `critical` flags that you're in the danger zone where the grab can finish you. */
 export function grabForecast(s: GameState): { spike: number; after: number; frac: number; caught: boolean; critical: boolean } {
-    const spike = Math.round(s.detectionMax * GRAB_SPIKE);
-    const critical = s.detection >= Math.round(s.detectionMax * GRAB_LETHAL_AT);
+    // The watcher's grip makes the exfil deadlier late in a run: a bigger alarm
+    // spike and a lower lethal line the more it's hunting you (huntTier 0-3).
+    const spike = Math.round(s.detectionMax * (GRAB_SPIKE + s.huntTier * 0.03));
+    const lethalAt = Math.max(0.62, GRAB_LETHAL_AT - s.huntTier * 0.032);
+    const critical = s.detection >= Math.round(s.detectionMax * lethalAt);
     const raw = s.detection + spike;
     const caught = critical && raw >= s.detectionMax;
     const after = caught ? s.detectionMax : Math.min(raw, s.detectionMax - 1);
@@ -80,6 +83,7 @@ export function createInitialState(seed: number, systemKey: string = DEFAULT_SYS
         turnNoise: 0,
         sweepIn: SWEEP_INTERVAL,
         noiseSinceSweep: 0,
+        huntTier: h ? h.tier : 0,
         cardsThisTurn: 0,
         silentThisTurn: 0,
         cascade: false,
@@ -341,17 +345,15 @@ function afterBreachCheck(s: GameState) {
             // LOCKDOWN (≥80%). Clean, teachable rule: cool below LOCKDOWN before you
             // grab, or the alarm finishes you with the payload in your hands.
             s.objectiveExposed = true;
-            const spike = Math.round(s.detectionMax * GRAB_SPIKE);
-            const wasCritical = s.detection >= Math.round(s.detectionMax * GRAB_LETHAL_AT);
-            log(s, `${layer.name} cracked — you grab the payload and every alarm trips (+${spike} detection).`);
-            s.detection += spike;
-            if (s.detection >= s.detectionMax && wasCritical) {
+            const grab = grabForecast(s); // scales with the watcher's hunt grip
+            log(s, `${layer.name} cracked — you grab the payload and every alarm trips (+${grab.spike} detection).`);
+            if (grab.caught) {
                 s.detection = s.detectionMax;
                 s.outcome = "lost";
-                s.lossReason = "Caught with the payload — you grabbed it already in LOCKDOWN.";
+                s.lossReason = "Caught with the payload — you grabbed it while the trace was on top of you.";
                 log(s, "🚨 Too hot. They had you the second you took it.");
             } else {
-                if (s.detection >= s.detectionMax) s.detection = s.detectionMax - 1; // out by a hair
+                s.detection = grab.after; // slams deep into the red; out by a hair at worst
                 s.outcome = "won";
                 log(s, "Payload out ahead of the lockout. You're a ghost.");
             }

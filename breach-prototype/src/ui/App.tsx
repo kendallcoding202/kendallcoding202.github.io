@@ -68,6 +68,9 @@ const pickQuip = (k: string) => pickFrom(HERO_QUIPS[k]);
 // a distinct "gate" emblem per breach layer so each reads as its own barrier
 const LAYER_EMBLEMS = ["▦", "⊞", "⬢", "◈", "⟠", "⊠"];
 const layerEmblem = (i: number, total: number) => (i === total - 1 ? "⊛" : LAYER_EMBLEMS[i % LAYER_EMBLEMS.length]);
+// each defence type gets its OWN mark, so every layer reads as a distinct wall
+const TYPE_EMBLEM: Record<string, string> = { firewall: "▦", ids: "◎", auth: "⊟", privilege: "▲", database: "▤" };
+const typeEmblem = (t: string) => TYPE_EMBLEM[t] || "◈";
 // escalating danger colour by depth: cool green at the perimeter → hot red at the core
 const dangerColor = (i: number, total: number) => `hsl(${Math.round(150 - 150 * (total > 1 ? i / (total - 1) : 0))}, 78%, 58%)`;
 
@@ -520,14 +523,14 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                             {isCurrent && !l.breached && <span className="barrier-activate" aria-hidden />}
                             {isCurrent && !l.breached && <span className="barrier-frame" aria-hidden><i /><i /><i /><i /></span>}
                             <span className="lnode" aria-hidden>{nodeGlyph}</span>
-                            <span className="lgate">{isCurrent && !l.breached && <span className="lstatus" aria-hidden />}<span className="lemblem" aria-hidden>{layerEmblem(i, state.layers.length)}</span><span className="lname">{l.name}</span>{isCurrent && !l.breached && <span className="ltype" aria-hidden>· {barType.toUpperCase()}</span>}</span>
+                            <span className="lgate">{isCurrent && !l.breached && <span className="lstatus" aria-hidden />}<span className="lemblem" aria-hidden>{l.breached ? "✓" : typeEmblem(barType)}</span><span className="lname">{l.name}</span>{!l.breached && <span className="ltype" aria-hidden>· {barType.toUpperCase()}</span>}</span>
                             <span className="defs">
                                 {l.breached ? <span className="muted">BREACHED</span> : l.defenses.map((d, di) => (
                                     <DefenseChip key={di} d={d} chipId={`${i}-${di}`} worm={wormOn(state, i, di)} targetable={isCurrent && !!armed && d.strength > 0} preview={isCurrent && armed && d.strength > 0 ? previewOnTarget(state, armed, di) : null} kbdNum={isCurrent && armed ? targetOpts.indexOf(di) + 1 : undefined} hit={hits[`${i}-${di}`]} onClick={() => dispatch(armed!, di)} />
                                 ))}
                             </span>
                             {isCurrent && l.defenses.some((d) => !d.typeRevealed && d.strength > 0) && (
-                                <span className="scan-hint">🔍 unscanned — play a <b>recon</b> card to reveal type &amp; Strength, then hit each with its match</span>
+                                <span className="scan-hint">🔍 unscanned — play a <b>recon</b> card to reveal <b>Strength</b> &amp; lock in matched exploits</span>
                             )}
                             {isObjective && !l.breached && (() => {
                                 const g = grabForecast(state);
