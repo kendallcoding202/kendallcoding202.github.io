@@ -199,6 +199,10 @@ def record_run(state_path: Path, result: ScanResult, timestamp: str,
         snapshot["awaiting_encryption"] = len(
             waiting_files(protected, exclude=vault))
 
+    if vault is not None:
+        from .backup import days_since_backup
+        snapshot["days_since_backup"] = days_since_backup(vault)
+
     drift = diff(previous, snapshot)
     history.append(snapshot)
     state["inventory"] = result.inventory
