@@ -235,6 +235,52 @@ def render_report(ctx: dict) -> str:
 """
 
 
+def render_breach_report(summary: dict, client: str | None = None) -> str:
+    """Standalone HTML for an email breach-exposure scan (HIBP)."""
+    rows = []
+    for d in summary.get("details", []):
+        if d["error"]:
+            state = f'<span class="muted">check failed: {_esc(d["error"])}</span>'
+        elif d["exposed"]:
+            state = (f'<span class="status-bad">&#9888; exposed in '
+                     f'{len(d["breaches"])}: {_esc(", ".join(d["breaches"][:8]))}'
+                     f'</span>')
+        else:
+            state = '<span class="status-good">&#10003; no known breaches</span>'
+        rows.append(f'<tr><td>{_esc(d["email"])}</td><td>{state}</td></tr>')
+
+    tiles = (_tile("Emails checked", str(summary["checked"]))
+             + _tile("Exposed", str(summary["exposed"]),
+                     "found in known breaches",
+                     "status-bad" if summary["exposed"] else "status-good")
+             + _tile("Clean", str(summary["clean"])))
+    body = (
+        '<h2>Email breach exposure</h2>'
+        '<p class="muted">Checked against Have I Been Pwned, a public '
+        'database of known data breaches. An exposed address means it '
+        'appeared in a breach somewhere online — a prompt to change that '
+        'password and confirm multi-factor authentication is on.</p>'
+        f'<div class="tiles">{tiles}</div>'
+        '<div class="table-wrap"><table><tr><th>Email</th>'
+        f'<th>Result</th></tr>{"".join(rows)}</table></div>'
+        '<p class="note">This check sends the email addresses to the HIBP '
+        'service; it does not send passwords or file contents.</p>'
+    )
+    subtitle = f"Prepared for {_esc(client)}" if client else "Exposure scan"
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kovyr — Email Breach Exposure</title>
+<style>{_CSS}</style></head><body>
+<div class="hero"><div class="inner">
+<div class="badge"><span class="dot"></span>Kovyr &middot; Exposure Scan</div>
+<h1>Email Breach Exposure</h1><p>{subtitle}</p>
+</div></div>
+<main>{body}</main>
+</body></html>
+"""
+
+
 def render_monitor_report(ctx: dict) -> str:
     """Render the recurring-monitoring report from monitor state history."""
     client = ctx.get("client")
