@@ -87,6 +87,10 @@ def backup(vault_root: Path, dest_root: Path,
             on_progress(index, total)
 
     _write_marker(vault_root, dest_root, result)
+    from . import audit
+    audit.record(vault_root, audit.EV_BACKUP, target=str(dest_root),
+                 nbytes=result.bytes_copied,
+                 detail={"copied": result.copied, "skipped": result.skipped})
     return result
 
 

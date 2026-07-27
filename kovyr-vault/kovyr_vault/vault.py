@@ -15,31 +15,16 @@ from __future__ import annotations
 import base64
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 
-from . import crypto
+from . import audit, crypto
 from .hashing import hash_bytes
 
 HEADER_NAME = "vault.json"
 INDEX_NAME = "index.kvi"
 BLOB_DIR = "blobs"
-ACCESS_LOG_NAME = "access.log"
+ACCESS_LOG_NAME = "access.log"  # legacy; migrated into audit.jsonl
 FORMAT_VERSION = 1
-
-
-def _log_access(root: Path, event: str) -> None:
-    """Append an access event (best-effort tripwire, never fatal).
-
-    The log is plaintext metadata — timestamps and outcomes only, no
-    content — and feeds the monitoring report's failed-unlock count.
-    """
-    try:
-        stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        with open(root / ACCESS_LOG_NAME, "a", encoding="utf-8") as f:
-            f.write(f"{stamp}\t{event}\n")
-    except OSError:
-        pass
 
 
 def _read_keyfile(path: Path) -> bytes:
@@ -165,11 +150,11 @@ class Vault:
                 wrapping, _unb64(header["wrapped_key"]), crypto.AAD_KEY_WRAP
             )
         except crypto.IntegrityError as exc:
-            _log_access(root, "FAILED_UNLOCK")
+            audit.record(root, audit.EV_UNLOCK_FAIL, result="fail")
             raise crypto.WrongPassphrase(
                 "incorrect passphrase or keyfile for this vault"
             ) from exc
-        _log_access(root, "UNLOCK_OK")
+        audit.record(root, audit.EV_UNLOCK_OK)
         return cls(root, master_key)
 
     # ---------- index ----------
@@ -226,9 +211,13 @@ class Vault:
             blob_path.write_bytes(blob)
             stored = True
 
+        overwrite = name in self._index and self._index[name].sha256 != sha256
         self._index[name] = entry
         if save_index:
             self._save_index()
+        audit.record(self.root, audit.EV_FILE_ADD,
+                     target=audit.file_id(name), nbytes=entry.size,
+                     detail={"overwrite": True} if overwrite else None)
         return entry, stored
 
     def flush_index(self) -> None:
@@ -250,8 +239,19 @@ class Vault:
         return plaintext
 
     def restore_file(self, name: str, dest: Path) -> None:
+        # Explicit restore-to-disk is the loggable "export"; internal
+        # reads (verify, integrity) go through read_file and are NOT
+        # logged, so they never trip mass-export detection.
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(self.read_file(name))
+        data = self.read_file(name)
+        dest.write_bytes(data)
+        audit.record(self.root, audit.EV_FILE_EXPORT,
+                     target=audit.file_id(name), nbytes=len(data))
+
+    def log_lock(self, auto: bool = False) -> None:
+        """Record that the vault was locked (key dropped from memory)."""
+        audit.record(self.root,
+                     audit.EV_LOCK_AUTO if auto else audit.EV_LOCK)
 
     def list_files(self) -> dict[str, FileEntry]:
         return dict(self._index)

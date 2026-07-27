@@ -193,6 +193,19 @@ def cmd_backup(args: argparse.Namespace) -> int:
     return 1 if result.errors else 0
 
 
+def cmd_verify_log(args: argparse.Namespace) -> int:
+    from . import audit
+    result = audit.verify_log(Path(args.vault))
+    if result["ok"]:
+        print(f"Audit log verified intact — {result['entries']} entries, "
+              f"chain unbroken.")
+        return 0
+    print(f"AUDIT LOG TAMPERING DETECTED at entry #{result['broken_seq']}: "
+          f"{result['reason']}", file=sys.stderr)
+    print(f"({result['entries']} entries scanned.)", file=sys.stderr)
+    return 1
+
+
 def cmd_verify(args: argparse.Namespace) -> int:
     vault = _open_vault(Path(args.vault), args.keyfile)
     problems = vault.verify()
@@ -242,6 +255,9 @@ def cmd_report(args: argparse.Namespace) -> int:
             "unique_blobs": vault.unique_blobs(),
             "verify_problems": problems,
         }
+        from . import audit
+        audit.record(Path(args.vault), audit.EV_REPORT,
+                     detail={"kind": "engagement"})
     out = Path(args.output)
     out.write_text(report_mod.render_report(ctx), encoding="utf-8")
     print(f"Report written to {out}")
@@ -385,6 +401,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("vault")
     p.add_argument("dest", help="backup destination (USB drive, etc.)")
     p.set_defaults(func=cmd_backup)
+
+    p = sub.add_parser("verify-log", help="check the audit log's tamper-"
+                                          "evidence hash chain")
+    p.add_argument("vault")
+    p.set_defaults(func=cmd_verify_log)
 
     p = sub.add_parser("report", help="generate a branded HTML engagement "
                                       "report")
