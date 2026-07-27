@@ -230,6 +230,37 @@ class App:
         except Exception:
             pass
 
+    def _primary_button(self, parent, text, command):
+        """A navy 'primary' button drawn as a colored label — tk.Button
+        ignores background color on macOS (drawing the native light face),
+        which made white button text unreadable. A Label fills the navy on
+        every platform. Exposes .set_enabled() for the two that toggle."""
+        tk = self.tk
+        NAVY_HOVER = "#16283f"
+        DISABLED_BG = "#9aa7b4"
+        lbl = tk.Label(parent, text=text, bg=NAVY, fg="white", padx=14,
+                       pady=6, font=("Segoe UI", 10, "bold"),
+                       cursor="hand2")
+        st = {"on": True}
+
+        def click(_e=None):
+            if st["on"]:
+                command()
+
+        lbl.bind("<Button-1>", click)
+        lbl.bind("<Enter>", lambda e: st["on"] and lbl.config(bg=NAVY_HOVER))
+        lbl.bind("<Leave>", lambda e: lbl.config(
+            bg=NAVY if st["on"] else DISABLED_BG))
+
+        def set_enabled(on: bool) -> None:
+            st["on"] = on
+            lbl.config(bg=NAVY if on else DISABLED_BG,
+                       fg="white" if on else "#e6ebf1",
+                       cursor="hand2" if on else "arrow")
+
+        lbl.set_enabled = set_enabled
+        return lbl
+
     def _open_documents(self, *paths) -> None:
         for path in paths:
             self.handle_receipt(str(path))
@@ -344,11 +375,8 @@ class App:
 
         buttons = tk.Frame(tab, bg="white")
         buttons.pack(anchor="w", pady=(18, 0))
-        self.check_btn = tk.Button(buttons, text="Run check now",
-                                   command=self.run_check, bg=NAVY,
-                                   fg="white", padx=14, pady=6,
-                                   font=("Segoe UI", 10, "bold"),
-                                   relief="flat", cursor="hand2")
+        self.check_btn = self._primary_button(
+            buttons, "Run check now", self.run_check)
         self.check_btn.pack(side="left", padx=(0, 10))
         tk.Button(buttons, text="Open full report",
                   command=self.open_report, padx=14, pady=6,
@@ -381,10 +409,7 @@ class App:
                                    highlightbackground="#e2e8f0")
         self.pass_entry.pack(side="left", padx=(0, 10))
         self.pass_entry.bind("<Return>", lambda _e: self.unlock())
-        self.unlock_btn = tk.Button(row, text="Unlock", command=self.unlock,
-                                    bg=NAVY, fg="white", activebackground=NAVY, activeforeground="white", padx=14, pady=4,
-                                    font=("Segoe UI", 10, "bold"),
-                                    relief="flat", cursor="hand2")
+        self.unlock_btn = self._primary_button(row, "Unlock", self.unlock)
         self.unlock_btn.pack(side="left")
         self.unlock_msg = tk.Label(self.unlock_frame, text="", fg=BAD,
                                    bg="white", font=("Segoe UI", 9))
@@ -405,11 +430,9 @@ class App:
         scroll.pack(side="left", fill="y")
 
         self.vault_buttons = tk.Frame(tab, bg="white")
-        tk.Button(self.vault_buttons, text="Restore selected…",
-                  command=self.restore_selected, bg=NAVY, fg="white", activebackground=NAVY, activeforeground="white",
-                  padx=14, pady=5, font=("Segoe UI", 10, "bold"),
-                  relief="flat", cursor="hand2").pack(side="left",
-                                                      padx=(0, 10))
+        self._primary_button(self.vault_buttons, "Restore selected…",
+                             self.restore_selected).pack(side="left",
+                                                         padx=(0, 10))
         tk.Button(self.vault_buttons, text="Encrypt waiting files…",
                   command=self.sweep_protected, padx=14, pady=5,
                   font=("Segoe UI", 10), relief="groove",
@@ -505,10 +528,8 @@ class App:
                   command=self.clear_dupe_selection, padx=10, pady=4,
                   relief="groove", cursor="hand2").pack(side="left",
                                                         padx=(0, 8))
-        tk.Button(row, text="Quarantine selected…",
-                  command=self.quarantine_selected, bg=NAVY, fg="white", activebackground=NAVY, activeforeground="white",
-                  padx=12, pady=4, font=("Segoe UI", 10, "bold"),
-                  relief="flat", cursor="hand2").pack(side="left")
+        self._primary_button(row, "Quarantine selected…",
+                             self.quarantine_selected).pack(side="left")
         tk.Label(row, text="Nothing is deleted — quarantined files can "
                  "be restored below.", fg=MUTED, bg="white",
                  font=("Segoe UI", 8)).pack(side="left", padx=10)
@@ -799,10 +820,9 @@ class App:
 
         actions = tk.Frame(tab, bg="white")
         actions.pack(anchor="w", pady=(18, 0))
-        tk.Button(actions, text="Save settings", command=self.save_settings,
-                  bg=NAVY, fg="white", activebackground=NAVY, activeforeground="white", padx=14, pady=6,
-                  font=("Segoe UI", 10, "bold"), relief="flat",
-                  cursor="hand2").pack(side="left", padx=(0, 10))
+        self._primary_button(actions, "Save settings",
+                             self.save_settings).pack(side="left",
+                                                      padx=(0, 10))
         tk.Button(actions, text="Check for updates",
                   command=self.check_updates, padx=12, pady=5,
                   font=("Segoe UI", 10), relief="groove",
@@ -1025,10 +1045,8 @@ class App:
                          "factor and cannot be regenerated.")
             messagebox.showinfo("Kovyr Vault", note)
 
-        tk.Button(dlg, text="Create vault", command=do_create, bg=NAVY,
-                  fg="white", padx=14, pady=5,
-                  font=("Segoe UI", 10, "bold"), relief="flat",
-                  cursor="hand2").pack(anchor="w", pady=(8, 0))
+        self._primary_button(dlg, "Create vault", do_create).pack(
+            anchor="w", pady=(8, 0))
         p1.focus_set()
 
     # ---------- status tab behavior ----------
@@ -1076,7 +1094,7 @@ class App:
     def run_check(self) -> None:
         if self.config is None:
             return
-        self.check_btn.config(state="disabled")
+        self.check_btn.set_enabled(False)
         self.activity.config(text="Checking…")
         threading.Thread(target=self._run_check_worker, daemon=True).start()
 
@@ -1120,7 +1138,7 @@ class App:
         self.root.after(0, self._run_check_done, message)
 
     def _run_check_done(self, message: str) -> None:
-        self.check_btn.config(state="normal")
+        self.check_btn.set_enabled(True)
         self.activity.config(text=message)
         self.refresh_status()
 
@@ -1154,7 +1172,7 @@ class App:
                     text="This vault needs its keyfile to unlock.")
                 return
             keyfile = chosen
-        self.unlock_btn.config(state="disabled")
+        self.unlock_btn.set_enabled(False)
         self.unlock_msg.config(text="Unlocking…", fg=MUTED)
         threading.Thread(target=self._unlock_worker,
                          args=(vault_path, passphrase, keyfile),
@@ -1173,7 +1191,7 @@ class App:
         self.root.after(0, self._unlock_done, vault, error)
 
     def _unlock_done(self, vault, error) -> None:
-        self.unlock_btn.config(state="normal")
+        self.unlock_btn.set_enabled(True)
         if error:
             self.unlock_msg.config(text=error, fg=BAD)
             return
