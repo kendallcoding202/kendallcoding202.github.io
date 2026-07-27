@@ -231,6 +231,52 @@ def cmd_purge(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_breach_scan(args: argparse.Namespace) -> int:
+    import os
+    from . import breach
+    api_key = args.api_key or os.environ.get("KOVYR_HIBP_KEY")
+    if not api_key:
+        sys.exit("error: no HIBP API key — pass --api-key or set "
+                 "KOVYR_HIBP_KEY. A key is required (haveibeenpwned.com/API).")
+    emails = list(args.emails)
+    if args.file:
+        try:
+            emails += [ln.strip() for ln in
+                       Path(args.file).read_text().splitlines() if ln.strip()]
+        except OSError as exc:
+            sys.exit(f"error: cannot read {args.file}: {exc}")
+    if not emails:
+        sys.exit("error: give one or more emails, or --file")
+    print(f"Checking {len(emails)} email(s) against Have I Been Pwned. "
+          "Note: these addresses are sent to the HIBP service.")
+    try:
+        results = breach.scan(emails, api_key,
+                              on_progress=lambda d, t: print(
+                                  f"  {d}/{t}…", file=sys.stderr))
+    except breach.BreachError as exc:
+        sys.exit(f"error: {exc}")
+    summary = breach.summarize(results)
+    if args.json:
+        print(json.dumps(summary, indent=2))
+        return 1 if summary["exposed"] else 0
+    for r in results:
+        if r.error:
+            print(f"  ?  {r.email}: {r.error}")
+        elif r.exposed:
+            print(f"  ⚠  {r.email}: found in {len(r.breaches)} "
+                  f"breach(es) — {', '.join(r.breach_names[:6])}")
+        else:
+            print(f"  ✓  {r.email}: no known breaches")
+    print(f"\n{summary['exposed']} exposed, {summary['clean']} clean, "
+          f"{summary['errors']} error(s), of {summary['checked']} checked.")
+    if args.html:
+        Path(args.html).write_text(
+            report_mod.render_breach_report(summary, args.client),
+            encoding="utf-8")
+        print(f"Report written to {args.html}")
+    return 1 if summary["exposed"] else 0
+
+
 def cmd_security_report(args: argparse.Namespace) -> int:
     from . import audit, security_report
     vault = _open_vault(Path(args.vault), args.keyfile)
@@ -473,6 +519,18 @@ def build_parser() -> argparse.ArgumentParser:
                                           "evidence hash chain")
     p.add_argument("vault")
     p.set_defaults(func=cmd_verify_log)
+
+    p = sub.add_parser("breach-scan", help="check client emails against "
+                                           "Have I Been Pwned (sends the "
+                                           "addresses to HIBP)")
+    p.add_argument("emails", nargs="*", help="email addresses to check")
+    p.add_argument("--file", help="text file of emails, one per line")
+    p.add_argument("--api-key", help="HIBP API key (or set KOVYR_HIBP_KEY)")
+    p.add_argument("--client", help="client name for the HTML report")
+    p.add_argument("--html", metavar="OUT", help="write an HTML report")
+    p.add_argument("--json", action="store_true",
+                   help="emit a machine-readable summary")
+    p.set_defaults(func=cmd_breach_scan)
 
     p = sub.add_parser("security-report", help="client-facing HTML security "
                                               "report (access activity, "
