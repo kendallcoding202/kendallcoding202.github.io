@@ -28,7 +28,7 @@ from pathlib import Path
 
 from . import __version__, crypto, monitor as monitor_mod, notify as notify_mod, protect_folder as protect_mod, quarantine as quarantine_mod, report as report_mod, scanner
 from .util import human_size, mirror_path, now_stamp
-from .vault import Vault, VaultError
+from .vault import generate_keyfile, Vault, VaultError
 
 NAVY = "#1e3a5f"
 NAVY_LIGHT = "#4a7ab2"
@@ -925,11 +925,24 @@ class App:
         tk.Label(dlg, text="Confirm:", bg="white", fg=TEXT,
                  font=("Segoe UI", 9)).pack(anchor="w")
         p2.pack(anchor="w", pady=(0, 10))
+
+        use_keyfile = tk.BooleanVar(value=False)
+        tk.Checkbutton(
+            dlg, text="Also require a keyfile (two-factor)",
+            variable=use_keyfile, bg="white", fg=TEXT,
+            selectcolor="white", activebackground="white",
+            font=("Segoe UI", 9)).pack(anchor="w")
+        tk.Label(dlg, text="Adds a second factor: a small file kept on a "
+                 "USB drive, needed\nalongside the passphrase. Stronger — "
+                 "but losing the keyfile also\nlocks the vault forever.",
+                 bg="white", fg=MUTED, justify="left",
+                 font=("Segoe UI", 8)).pack(anchor="w", pady=(0, 8))
         msg = tk.Label(dlg, text="", bg="white", fg=BAD,
                        font=("Segoe UI", 9))
         msg.pack(anchor="w")
 
         def do_create() -> None:
+            from tkinter import filedialog
             phrase, confirm = p1.get(), p2.get()
             if not phrase:
                 msg.config(text="Passphrase must not be empty.")
@@ -937,17 +950,34 @@ class App:
             if phrase != confirm:
                 msg.config(text="Passphrases do not match.")
                 return
+            keyfile_path = None
+            if use_keyfile.get():
+                dest = filedialog.asksaveasfilename(
+                    title="Save the new keyfile (e.g. on a USB drive)",
+                    defaultextension=".kovyrkey",
+                    initialfile="vault.kovyrkey")
+                if not dest:
+                    msg.config(text="Choose where to save the keyfile.")
+                    return
+                try:
+                    keyfile_path = generate_keyfile(Path(dest))
+                except (VaultError, OSError) as exc:
+                    msg.config(text=str(exc))
+                    return
             try:
-                Vault.create(vault_path, phrase)
+                Vault.create(vault_path, phrase, keyfile=keyfile_path)
             except (VaultError, OSError) as exc:
                 msg.config(text=str(exc))
                 return
             dlg.destroy()
             self._refresh_vault_status()
-            messagebox.showinfo(
-                "Kovyr Vault",
-                "Vault created. Write the passphrase into a password "
-                "manager now — it cannot be recovered.")
+            note = ("Vault created. Write the passphrase into a password "
+                    "manager now — it cannot be recovered.")
+            if keyfile_path:
+                note += (f"\n\nKeyfile saved to {keyfile_path}. Keep it on "
+                         "its own device and back it up — it is the second "
+                         "factor and cannot be regenerated.")
+            messagebox.showinfo("Kovyr Vault", note)
 
         tk.Button(dlg, text="Create vault", command=do_create, bg=NAVY,
                   fg="white", padx=14, pady=5,
@@ -1068,17 +1098,30 @@ class App:
         if not passphrase:
             self.unlock_msg.config(text="Enter your passphrase.")
             return
+        keyfile = None
+        if Vault.requires_keyfile(Path(vault_path)):
+            from tkinter import filedialog
+            chosen = filedialog.askopenfilename(
+                title="Select the vault's keyfile (on your USB drive)")
+            if not chosen:
+                self.unlock_msg.config(
+                    text="This vault needs its keyfile to unlock.")
+                return
+            keyfile = chosen
         self.unlock_btn.config(state="disabled")
         self.unlock_msg.config(text="Unlocking…", fg=MUTED)
         threading.Thread(target=self._unlock_worker,
-                         args=(vault_path, passphrase), daemon=True).start()
+                         args=(vault_path, passphrase, keyfile),
+                         daemon=True).start()
 
-    def _unlock_worker(self, vault_path: str, passphrase: str) -> None:
+    def _unlock_worker(self, vault_path: str, passphrase: str,
+                       keyfile: str | None = None) -> None:
         try:
-            vault = Vault.open(Path(vault_path), passphrase)
+            vault = Vault.open(Path(vault_path), passphrase,
+                               keyfile=Path(keyfile) if keyfile else None)
             error = None
         except crypto.WrongPassphrase:
-            vault, error = None, "That passphrase is not correct."
+            vault, error = None, "That passphrase or keyfile is not correct."
         except (VaultError, OSError) as exc:
             vault, error = None, str(exc)
         self.root.after(0, self._unlock_done, vault, error)

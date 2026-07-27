@@ -42,6 +42,28 @@ def _log_access(root: Path, event: str) -> None:
         pass
 
 
+def _read_keyfile(path: Path) -> bytes:
+    data = Path(path).read_bytes()
+    if not data:
+        raise VaultError(f"keyfile {path} is empty")
+    return data
+
+
+def generate_keyfile(path: Path) -> Path:
+    """Write a fresh random keyfile; refuses to clobber an existing one."""
+    path = Path(path)
+    if path.exists():
+        raise VaultError(f"{path} already exists — refusing to overwrite "
+                         f"a keyfile")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(crypto.new_keyfile_bytes())
+    try:
+        path.chmod(0o600)  # owner-only where the OS honors it
+    except OSError:
+        pass
+    return path
+
+
 def _b64(data: bytes) -> str:
     return base64.b64encode(data).decode("ascii")
 
@@ -71,7 +93,8 @@ class Vault:
     # ---------- creation / opening ----------
 
     @classmethod
-    def create(cls, root: Path, passphrase: str) -> "Vault":
+    def create(cls, root: Path, passphrase: str,
+               keyfile: Path | None = None) -> "Vault":
         root = root.resolve()
         if (root / HEADER_NAME).exists():
             raise VaultError(f"a vault already exists at {root}")
@@ -79,6 +102,7 @@ class Vault:
         if any(root.iterdir()):
             raise VaultError(f"refusing to create a vault in non-empty {root}")
 
+        keyfile_bytes = _read_keyfile(keyfile) if keyfile else None
         master_key = crypto.new_master_key()
         salt = crypto.new_salt()
         header = {
@@ -91,8 +115,10 @@ class Vault:
                 "r": crypto.SCRYPT_R,
                 "p": crypto.SCRYPT_P,
             },
+            "keyfile": keyfile_bytes is not None,
             "wrapped_key": _b64(
-                crypto.wrap_master_key(passphrase, master_key, salt)
+                crypto.wrap_master_key(passphrase, master_key, salt,
+                                       keyfile_bytes)
             ),
         }
         (root / HEADER_NAME).write_text(json.dumps(header, indent=2))
@@ -101,8 +127,19 @@ class Vault:
         vault._save_index()
         return vault
 
+    @staticmethod
+    def requires_keyfile(root: Path) -> bool:
+        header_path = Path(root).resolve() / HEADER_NAME
+        if not header_path.exists():
+            return False
+        try:
+            return bool(json.loads(header_path.read_text()).get("keyfile"))
+        except (OSError, json.JSONDecodeError):
+            return False
+
     @classmethod
-    def open(cls, root: Path, passphrase: str) -> "Vault":
+    def open(cls, root: Path, passphrase: str,
+             keyfile: Path | None = None) -> "Vault":
         root = root.resolve()
         header_path = root / HEADER_NAME
         if not header_path.exists():
@@ -114,19 +151,23 @@ class Vault:
             raise VaultError(
                 f"unsupported vault version {header.get('version')}"
             )
+        if header.get("keyfile") and keyfile is None:
+            raise VaultError("this vault requires a keyfile to unlock")
+        keyfile_bytes = _read_keyfile(keyfile) if keyfile else None
         kdf = header["kdf"]
+        salt = _unb64(kdf["salt"])
         derived = crypto.derive_key(
-            passphrase, _unb64(kdf["salt"]),
-            n=kdf["n"], r=kdf["r"], p=kdf["p"],
+            passphrase, salt, n=kdf["n"], r=kdf["r"], p=kdf["p"],
         )
+        wrapping = crypto.combine_wrapping_key(derived, salt, keyfile_bytes)
         try:
             master_key = crypto.decrypt(
-                derived, _unb64(header["wrapped_key"]), crypto.AAD_KEY_WRAP
+                wrapping, _unb64(header["wrapped_key"]), crypto.AAD_KEY_WRAP
             )
         except crypto.IntegrityError as exc:
             _log_access(root, "FAILED_UNLOCK")
             raise crypto.WrongPassphrase(
-                "incorrect passphrase for this vault"
+                "incorrect passphrase or keyfile for this vault"
             ) from exc
         _log_access(root, "UNLOCK_OK")
         return cls(root, master_key)
