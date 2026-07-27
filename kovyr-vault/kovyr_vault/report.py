@@ -235,6 +235,36 @@ def render_report(ctx: dict) -> str:
 """
 
 
+def render_packet_index(client: str, month: str, pieces: list,
+                        generated: str, version: str) -> str:
+    """Cover page linking the documents in a monthly compliance packet."""
+    items = "".join(
+        f'<li><a href="{_esc(href)}">{label}</a></li>'
+        for label, href in pieces)
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kovyr — {_esc(client)} — {_esc(month)}</title>
+<style>{_CSS}</style></head><body>
+<div class="hero"><div class="inner">
+<div class="badge"><span class="dot"></span>Kovyr &middot; Compliance Packet</div>
+<h1>Monthly Security Packet</h1>
+<p>Prepared for {_esc(client)} &middot; {_esc(month)}</p>
+</div></div>
+<main>
+<p class="muted">This packet documents the data-protection safeguards in
+place for the period shown. File it with the practice's written
+information security program (WISP) or HIPAA risk documentation. These
+are confidential records — keep them private.</p>
+<h2>Included documents</h2>
+<ul>{items}</ul>
+<p class="note">Generated {_esc(generated)} &middot; Kovyr Vault
+v{_esc(version)}. Not a certification; documents the safeguards Kovyr
+provides, which are one part of an overall security program.</p>
+</main></body></html>
+"""
+
+
 def render_breach_report(summary: dict, client: str | None = None) -> str:
     """Standalone HTML for an email breach-exposure scan (HIBP)."""
     rows = []
