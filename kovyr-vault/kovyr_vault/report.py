@@ -208,6 +208,10 @@ def render_report(ctx: dict) -> str:
             "corruption is detected on decrypt.</p>"
         )
 
+    if ctx.get("security"):
+        from .security_report import render_security_section
+        sections.append(render_security_section(ctx["security"]))
+
     title = "Data Protection Report"
     subtitle = f"Prepared for {_esc(client)}" if client else "Engagement summary"
     prepared = ctx.get("prepared_by")

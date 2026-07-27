@@ -15,10 +15,22 @@ from __future__ import annotations
 import base64
 import json
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import audit, crypto
 from .hashing import hash_bytes
+from .util import now_iso
+
+
+def _version_ts(v) -> datetime:
+    """Parse a Version.ts back to an aware datetime; unparseable or
+    'current' sorts as 'now' so it's never purged."""
+    try:
+        return datetime.strptime(v.ts, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=timezone.utc)
+    except (ValueError, AttributeError):
+        return datetime.now(timezone.utc)
 
 HEADER_NAME = "vault.json"
 INDEX_NAME = "index.kvi"
@@ -57,11 +69,25 @@ def _unb64(text: str) -> bytes:
     return base64.b64decode(text)
 
 
+DEFAULT_RETENTION_DAYS = 30
+
+
 @dataclass
 class FileEntry:
     sha256: str
     size: int
     mtime: float
+
+
+@dataclass
+class Version:
+    """A historical or deleted revision of a vault file, retained until
+    it ages past the retention window and is explicitly purged."""
+    sha256: str
+    size: int
+    mtime: float
+    ts: str            # when this revision left 'current' (ISO-8601 UTC)
+    deleted: bool = False  # True = the file was soft-deleted (tombstone)
 
 
 class VaultError(Exception):
@@ -73,6 +99,9 @@ class Vault:
         self.root = root
         self._key = master_key
         self._index: dict[str, FileEntry] = {}
+        # Prior/deleted revisions per name, oldest first. Blobs behind
+        # them stay on disk until purge() removes aged-out versions.
+        self._history: dict[str, list[Version]] = {}
         self._load_index()
 
     # ---------- creation / opening ----------
@@ -171,12 +200,23 @@ class Vault:
         self._index = {
             name: FileEntry(**entry) for name, entry in data["files"].items()
         }
+        # index_version 2 adds history; version-1 indexes load with none
+        # (migration is transparent — old vaults just gain empty history).
+        self._history = {
+            name: [Version(**v) for v in versions]
+            for name, versions in data.get("history", {}).items()
+        }
 
     def _save_index(self) -> None:
         data = {
+            "index_version": 2,
             "files": {
                 name: vars(entry) for name, entry in self._index.items()
-            }
+            },
+            "history": {
+                name: [vars(v) for v in versions]
+                for name, versions in self._history.items() if versions
+            },
         }
         blob = crypto.encrypt(
             self._key, json.dumps(data).encode("utf-8"), crypto.AAD_INDEX
@@ -211,7 +251,12 @@ class Vault:
             blob_path.write_bytes(blob)
             stored = True
 
-        overwrite = name in self._index and self._index[name].sha256 != sha256
+        prior = self._index.get(name)
+        overwrite = prior is not None and prior.sha256 != sha256
+        if overwrite:
+            # Preserve the superseded revision — never destroy on overwrite.
+            self._history.setdefault(name, []).append(
+                Version(prior.sha256, prior.size, prior.mtime, now_iso()))
         self._index[name] = entry
         if save_index:
             self._save_index()
@@ -219,6 +264,83 @@ class Vault:
                      target=audit.file_id(name), nbytes=entry.size,
                      detail={"overwrite": True} if overwrite else None)
         return entry, stored
+
+    def delete_file(self, name: str) -> None:
+        """Soft-delete: the current revision becomes a tombstone; the
+        blob stays until purge() removes it after the retention window."""
+        entry = self._index.get(name)
+        if entry is None:
+            raise VaultError(f"no such file in vault: {name}")
+        self._history.setdefault(name, []).append(
+            Version(entry.sha256, entry.size, entry.mtime, now_iso(),
+                    deleted=True))
+        del self._index[name]
+        self._save_index()
+        audit.record(self.root, audit.EV_FILE_DELETE,
+                     target=audit.file_id(name))
+
+    def list_versions(self, name: str) -> list[Version]:
+        """All retained revisions for a name, oldest first, plus the
+        current live one last (if it exists)."""
+        versions = list(self._history.get(name, []))
+        current = self._index.get(name)
+        if current is not None:
+            versions.append(Version(current.sha256, current.size,
+                                    current.mtime, "current"))
+        return versions
+
+    def restore_version(self, name: str, sha256: str) -> None:
+        """Make a retained revision the current one again (its blob is
+        still present). The displaced current is itself kept in history."""
+        match = next((v for v in self._history.get(name, [])
+                      if v.sha256 == sha256), None)
+        if match is None:
+            raise VaultError(f"no retained version {sha256[:12]} for {name}")
+        if not self._blob_path(sha256).exists():
+            raise VaultError(f"blob for that version is gone (purged)")
+        current = self._index.get(name)
+        if current is not None:
+            self._history.setdefault(name, []).append(
+                Version(current.sha256, current.size, current.mtime,
+                        now_iso()))
+        self._index[name] = FileEntry(match.sha256, match.size, match.mtime)
+        self._history[name] = [v for v in self._history[name]
+                               if v is not match]
+        self._save_index()
+        audit.record(self.root, audit.EV_FILE_VERSION_RESTORE,
+                     target=audit.file_id(name))
+
+    def purge_versions(self, retention_days: int = DEFAULT_RETENTION_DAYS,
+                       now: datetime | None = None) -> int:
+        """Permanently drop retained versions older than the window and
+        delete any blob no longer referenced by anything. Returns blobs
+        removed. The only destructive version operation — logged."""
+        now = now or datetime.now(timezone.utc)
+        cutoff = now - timedelta(days=retention_days)
+        for name, versions in list(self._history.items()):
+            kept = [v for v in versions if _version_ts(v) >= cutoff]
+            if kept:
+                self._history[name] = kept
+            else:
+                self._history.pop(name, None)
+        self._save_index()
+
+        referenced = {e.sha256 for e in self._index.values()}
+        for versions in self._history.values():
+            referenced.update(v.sha256 for v in versions)
+        removed = 0
+        for blob in (self.root / BLOB_DIR).rglob("*.kvb"):
+            sha = blob.stem
+            if sha not in referenced:
+                try:
+                    blob.unlink()
+                    removed += 1
+                except OSError:
+                    pass
+        audit.record(self.root, audit.EV_FILE_PURGE,
+                     detail={"retention_days": retention_days,
+                             "blobs_removed": removed})
+        return removed
 
     def flush_index(self) -> None:
         """Persist the index now (pairs with add_file(save_index=False))."""
