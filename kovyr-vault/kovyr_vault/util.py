@@ -18,6 +18,11 @@ def now_stamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
 
+def now_iso() -> str:
+    """ISO-8601 UTC to the second, for machine-readable log timestamps."""
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def mirror_path(dest: Path, name: str) -> Path:
     """Rebuild a vault entry's original path underneath dest.
 

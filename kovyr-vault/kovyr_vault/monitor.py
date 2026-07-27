@@ -40,7 +40,11 @@ class Drift:
 
 
 def count_failed_unlocks(vault_root: Path) -> int:
-    """Total FAILED_UNLOCK events in the vault's access log."""
+    """Total failed unlock events. Prefers the structured audit log;
+    falls back to a not-yet-migrated legacy access.log."""
+    from . import audit
+    if (Path(vault_root) / audit.AUDIT_LOG_NAME).exists():
+        return audit.count_events(vault_root, audit.EV_UNLOCK_FAIL)
     log = vault_root / ACCESS_LOG_NAME
     if not log.exists():
         return 0

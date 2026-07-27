@@ -1287,6 +1287,8 @@ class App:
             self.vault_msg.config(
                 text="Encrypting — the vault locks when the sweep finishes.")
             return
+        if self.vault is not None:
+            self.vault.log_lock()
         self.vault = None
         self.files_frame.pack_forget()
         self.vault_buttons.pack_forget()

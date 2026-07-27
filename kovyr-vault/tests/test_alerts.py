@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from kovyr_vault import crypto, monitor, scanner
-from kovyr_vault.vault import ACCESS_LOG_NAME, BLOB_DIR, Vault
+from kovyr_vault.vault import BLOB_DIR, Vault
 
 PASS = "test-passphrase"
 
@@ -27,9 +27,9 @@ def test_unlock_attempts_are_logged(tmp_path):
         Vault.open(vault_dir, "still wrong")
     Vault.open(vault_dir, PASS)
 
-    log = (vault_dir / ACCESS_LOG_NAME).read_text()
-    assert log.count("FAILED_UNLOCK") == 2
-    assert log.count("UNLOCK_OK") == 1
+    from kovyr_vault import audit
+    assert audit.count_events(vault_dir, audit.EV_UNLOCK_FAIL) == 2
+    assert audit.count_events(vault_dir, audit.EV_UNLOCK_OK) == 1
     assert monitor.count_failed_unlocks(vault_dir) == 2
 
 
