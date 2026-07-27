@@ -15,11 +15,14 @@ from __future__ import annotations
 import os
 
 from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 
 KEY_SIZE = 32
 NONCE_SIZE = 12
+KEYFILE_SIZE = 64  # bytes of randomness in a generated keyfile
 
 # scrypt cost: ~32 MiB memory, comfortably slow for guessing, fast to unlock.
 SCRYPT_N = 2**15
@@ -52,6 +55,25 @@ def new_salt() -> bytes:
     return os.urandom(16)
 
 
+def new_keyfile_bytes() -> bytes:
+    return os.urandom(KEYFILE_SIZE)
+
+
+def combine_wrapping_key(derived_key: bytes, salt: bytes,
+                         keyfile_bytes: bytes | None) -> bytes:
+    """The key that actually wraps the master key.
+
+    With no keyfile it's the passphrase-derived key (single factor,
+    backward compatible). With a keyfile, both secrets are folded
+    together through HKDF — so unwrapping requires the passphrase AND
+    the keyfile (something you know + something you have)."""
+    if not keyfile_bytes:
+        return derived_key
+    hkdf = HKDF(algorithm=hashes.SHA256(), length=KEY_SIZE, salt=salt,
+                info=b"kovyr-vault-keyfile-v1")
+    return hkdf.derive(derived_key + keyfile_bytes)
+
+
 def encrypt(key: bytes, plaintext: bytes, aad: bytes = b"") -> bytes:
     """Encrypt with AES-256-GCM; returns nonce || ciphertext+tag."""
     nonce = os.urandom(NONCE_SIZE)
@@ -67,12 +89,19 @@ def decrypt(key: bytes, blob: bytes, aad: bytes = b"") -> bytes:
         raise IntegrityError("authentication failed") from exc
 
 
-def wrap_master_key(passphrase: str, master_key: bytes, salt: bytes) -> bytes:
-    return encrypt(derive_key(passphrase, salt), master_key, AAD_KEY_WRAP)
+def wrap_master_key(passphrase: str, master_key: bytes, salt: bytes,
+                    keyfile_bytes: bytes | None = None) -> bytes:
+    wrapping = combine_wrapping_key(
+        derive_key(passphrase, salt), salt, keyfile_bytes)
+    return encrypt(wrapping, master_key, AAD_KEY_WRAP)
 
 
-def unwrap_master_key(passphrase: str, wrapped: bytes, salt: bytes) -> bytes:
+def unwrap_master_key(passphrase: str, wrapped: bytes, salt: bytes,
+                      keyfile_bytes: bytes | None = None) -> bytes:
+    wrapping = combine_wrapping_key(
+        derive_key(passphrase, salt), salt, keyfile_bytes)
     try:
-        return decrypt(derive_key(passphrase, salt), wrapped, AAD_KEY_WRAP)
+        return decrypt(wrapping, wrapped, AAD_KEY_WRAP)
     except IntegrityError as exc:
-        raise WrongPassphrase("incorrect passphrase for this vault") from exc
+        raise WrongPassphrase(
+            "incorrect passphrase or keyfile for this vault") from exc

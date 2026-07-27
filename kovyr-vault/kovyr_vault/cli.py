@@ -24,9 +24,12 @@ def _prompt_passphrase(confirm: bool = False) -> str:
     return phrase
 
 
-def _open_vault(path: Path) -> Vault:
+def _open_vault(path: Path, keyfile: str | None = None) -> Vault:
+    kf = Path(keyfile) if keyfile else None
+    if kf is None and Vault.requires_keyfile(path):
+        sys.exit("error: this vault requires a keyfile — pass --keyfile PATH")
     try:
-        return Vault.open(path, _prompt_passphrase())
+        return Vault.open(path, _prompt_passphrase(), keyfile=kf)
     except (VaultError, crypto.WrongPassphrase) as exc:
         sys.exit(f"error: {exc}")
 
@@ -96,18 +99,35 @@ def cmd_dedupe(args: argparse.Namespace) -> int:
     return 1 if outcome.errors else 0
 
 
-def cmd_init(args: argparse.Namespace) -> int:
+def cmd_keyfile(args: argparse.Namespace) -> int:
+    from .vault import generate_keyfile
     try:
-        Vault.create(Path(args.vault), _prompt_passphrase(confirm=True))
+        path = generate_keyfile(Path(args.output))
+    except VaultError as exc:
+        sys.exit(f"error: {exc}")
+    print(f"Keyfile written to {path}")
+    print("This is the SECOND factor. Store it on a separate device "
+          "(USB drive) and back it up — losing it locks the vault "
+          "as surely as losing the passphrase.")
+    return 0
+
+
+def cmd_init(args: argparse.Namespace) -> int:
+    keyfile = Path(args.keyfile) if args.keyfile else None
+    try:
+        Vault.create(Path(args.vault), _prompt_passphrase(confirm=True),
+                     keyfile=keyfile)
     except VaultError as exc:
         sys.exit(f"error: {exc}")
     print(f"Vault created at {args.vault}")
+    if keyfile:
+        print(f"Two-factor: unlocking needs the passphrase AND {keyfile}.")
     print("Keep the passphrase safe — without it the data is unrecoverable.")
     return 0
 
 
 def cmd_protect(args: argparse.Namespace) -> int:
-    vault = _open_vault(Path(args.vault))
+    vault = _open_vault(Path(args.vault), args.keyfile)
     files = scanner.iter_files([Path(p) for p in args.paths])
     vault_root = vault.root
     stored = deduped = 0
@@ -133,7 +153,7 @@ def cmd_protect(args: argparse.Namespace) -> int:
 
 
 def cmd_restore(args: argparse.Namespace) -> int:
-    vault = _open_vault(Path(args.vault))
+    vault = _open_vault(Path(args.vault), args.keyfile)
     dest = Path(args.dest)
     entries = vault.list_files()
     if args.name:
@@ -149,7 +169,7 @@ def cmd_restore(args: argparse.Namespace) -> int:
 
 
 def cmd_list(args: argparse.Namespace) -> int:
-    vault = _open_vault(Path(args.vault))
+    vault = _open_vault(Path(args.vault), args.keyfile)
     entries = vault.list_files()
     total = sum(e.size for e in entries.values())
     for name, entry in sorted(entries.items()):
@@ -160,7 +180,7 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 
 def cmd_verify(args: argparse.Namespace) -> int:
-    vault = _open_vault(Path(args.vault))
+    vault = _open_vault(Path(args.vault), args.keyfile)
     problems = vault.verify()
     count = len(vault.list_files())
     if problems:
@@ -198,7 +218,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         sys.exit("error: nothing to report — give --before/--after scan "
                  "JSON and/or --vault")
     if args.vault:
-        vault = _open_vault(Path(args.vault))
+        vault = _open_vault(Path(args.vault), args.keyfile)
         entries = vault.list_files()
         print("Verifying vault integrity…")
         problems = vault.verify()
@@ -307,8 +327,16 @@ def build_parser() -> argparse.ArgumentParser:
                    help="move removed copies here instead of deleting")
     p.set_defaults(func=cmd_dedupe)
 
+    p = sub.add_parser("keyfile", help="generate a keyfile (optional "
+                                       "second unlock factor)")
+    p.add_argument("output", help="path to write the new keyfile to "
+                                  "(e.g. a USB drive)")
+    p.set_defaults(func=cmd_keyfile)
+
     p = sub.add_parser("init", help="create a new encrypted vault")
     p.add_argument("vault", help="directory for the new vault")
+    p.add_argument("--keyfile", help="require this keyfile as a second "
+                                     "factor to unlock the vault")
     p.set_defaults(func=cmd_init)
 
     p = sub.add_parser("protect", help="encrypt files into the vault "
@@ -317,21 +345,25 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("paths", nargs="+")
     p.add_argument("--remove-originals", action="store_true",
                    help="delete plaintext originals after encrypting")
+    p.add_argument("--keyfile", help="keyfile for a two-factor vault")
     p.set_defaults(func=cmd_protect)
 
     p = sub.add_parser("restore", help="decrypt files out of the vault")
     p.add_argument("vault")
     p.add_argument("dest", help="directory to restore into")
     p.add_argument("--name", help="restore a single file by its vault name")
+    p.add_argument("--keyfile", help="keyfile for a two-factor vault")
     p.set_defaults(func=cmd_restore)
 
     p = sub.add_parser("list", help="list vault contents")
     p.add_argument("vault")
+    p.add_argument("--keyfile", help="keyfile for a two-factor vault")
     p.set_defaults(func=cmd_list)
 
     p = sub.add_parser("verify", help="check every vault entry decrypts "
                                       "and matches its hash")
     p.add_argument("vault")
+    p.add_argument("--keyfile", help="keyfile for a two-factor vault")
     p.set_defaults(func=cmd_verify)
 
     p = sub.add_parser("report", help="generate a branded HTML engagement "
@@ -345,6 +377,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="'scan --json' output from after remediation")
     p.add_argument("--vault", help="include vault stats + integrity check "
                                    "(prompts for passphrase)")
+    p.add_argument("--keyfile", help="keyfile for a two-factor vault")
     p.set_defaults(func=cmd_report)
 
     p = sub.add_parser("monitor", help="recurring scan: record a snapshot "
