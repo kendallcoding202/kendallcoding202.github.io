@@ -193,6 +193,72 @@ def cmd_backup(args: argparse.Namespace) -> int:
     return 1 if result.errors else 0
 
 
+def cmd_versions(args: argparse.Namespace) -> int:
+    vault = _open_vault(Path(args.vault), args.keyfile)
+    versions = vault.list_versions(args.name)
+    if not versions:
+        sys.exit(f"error: no such file in vault: {args.name}")
+    for v in versions:
+        when = "current" if v.ts == "current" else v.ts
+        tag = " (deleted)" if v.deleted else ""
+        current = "  <- current" if v.ts == "current" else ""
+        print(f"{v.sha256[:12]}  {human_size(v.size):>10}  {when}{tag}"
+              f"{current}")
+    return 0
+
+
+def cmd_restore_version(args: argparse.Namespace) -> int:
+    vault = _open_vault(Path(args.vault), args.keyfile)
+    try:
+        vault.restore_version(args.name, args.sha256)
+    except VaultError as exc:
+        sys.exit(f"error: {exc}")
+    print(f"Restored {args.name} to version {args.sha256[:12]}.")
+    return 0
+
+
+def cmd_purge(args: argparse.Namespace) -> int:
+    vault = _open_vault(Path(args.vault), args.keyfile)
+    if not args.yes:
+        resp = input(f"Permanently delete retained versions older than "
+                     f"{args.retention_days} days? This cannot be undone. "
+                     f"[y/N] ")
+        if resp.strip().lower() not in ("y", "yes"):
+            print("Aborted.")
+            return 0
+    removed = vault.purge_versions(retention_days=args.retention_days)
+    print(f"Purged {removed} aged-out blob(s).")
+    return 0
+
+
+def cmd_security_report(args: argparse.Namespace) -> int:
+    from . import audit, security_report
+    vault = _open_vault(Path(args.vault), args.keyfile)
+    summary = security_report.summarize(Path(args.vault), since=args.since)
+    ctx = {
+        "client": args.client,
+        "prepared_by": args.prepared_by,
+        "generated": now_stamp(),
+        "version": __version__,
+        "vault": {
+            "files": len(vault.list_files()),
+            "total_bytes": sum(e.size for e in vault.list_files().values()),
+            "unique_blobs": vault.unique_blobs(),
+            "verify_problems": vault.verify(),
+        },
+        "security": summary,
+    }
+    Path(args.output).write_text(report_mod.render_report(ctx),
+                                 encoding="utf-8")
+    audit.record(Path(args.vault), audit.EV_REPORT,
+                 detail={"kind": "security", "since": args.since or "all"})
+    print(f"Security report written to {args.output}")
+    if not summary["log_verified"]:
+        print("WARNING: audit log integrity check FAILED.", file=sys.stderr)
+        return 1
+    return 0
+
+
 def cmd_verify_log(args: argparse.Namespace) -> int:
     from . import audit
     result = audit.verify_log(Path(args.vault))
@@ -255,7 +321,8 @@ def cmd_report(args: argparse.Namespace) -> int:
             "unique_blobs": vault.unique_blobs(),
             "verify_problems": problems,
         }
-        from . import audit
+        from . import audit, security_report
+        ctx["security"] = security_report.summarize(Path(args.vault))
         audit.record(Path(args.vault), audit.EV_REPORT,
                      detail={"kind": "engagement"})
     out = Path(args.output)
@@ -406,6 +473,41 @@ def build_parser() -> argparse.ArgumentParser:
                                           "evidence hash chain")
     p.add_argument("vault")
     p.set_defaults(func=cmd_verify_log)
+
+    p = sub.add_parser("security-report", help="client-facing HTML security "
+                                              "report (access activity, "
+                                              "log verification, retention)")
+    p.add_argument("vault")
+    p.add_argument("output", help="path for the HTML report")
+    p.add_argument("--client", help="client name shown on the report")
+    p.add_argument("--prepared-by", help="assessor name for the footer")
+    p.add_argument("--since", help="ISO date prefix to filter activity, "
+                                   "e.g. 2026-07 for a monthly report")
+    p.add_argument("--keyfile", help="keyfile for a two-factor vault")
+    p.set_defaults(func=cmd_security_report)
+
+    p = sub.add_parser("versions", help="list retained versions of a file")
+    p.add_argument("vault")
+    p.add_argument("name", help="the file's vault name")
+    p.add_argument("--keyfile", help="keyfile for a two-factor vault")
+    p.set_defaults(func=cmd_versions)
+
+    p = sub.add_parser("restore-version", help="make a retained version "
+                                              "current again")
+    p.add_argument("vault")
+    p.add_argument("name")
+    p.add_argument("sha256", help="version hash (from 'versions')")
+    p.add_argument("--keyfile", help="keyfile for a two-factor vault")
+    p.set_defaults(func=cmd_restore_version)
+
+    p = sub.add_parser("purge", help="permanently delete retained versions "
+                                     "older than the retention window")
+    p.add_argument("vault")
+    p.add_argument("--retention-days", type=int, default=30)
+    p.add_argument("--yes", action="store_true",
+                   help="skip the confirmation prompt")
+    p.add_argument("--keyfile", help="keyfile for a two-factor vault")
+    p.set_defaults(func=cmd_purge)
 
     p = sub.add_parser("report", help="generate a branded HTML engagement "
                                       "report")

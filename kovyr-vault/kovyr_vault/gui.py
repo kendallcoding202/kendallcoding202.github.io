@@ -382,7 +382,7 @@ class App:
         self.pass_entry.pack(side="left", padx=(0, 10))
         self.pass_entry.bind("<Return>", lambda _e: self.unlock())
         self.unlock_btn = tk.Button(row, text="Unlock", command=self.unlock,
-                                    bg=NAVY, fg="white", padx=14, pady=4,
+                                    bg=NAVY, fg="white", activebackground=NAVY, activeforeground="white", padx=14, pady=4,
                                     font=("Segoe UI", 10, "bold"),
                                     relief="flat", cursor="hand2")
         self.unlock_btn.pack(side="left")
@@ -406,7 +406,7 @@ class App:
 
         self.vault_buttons = tk.Frame(tab, bg="white")
         tk.Button(self.vault_buttons, text="Restore selected…",
-                  command=self.restore_selected, bg=NAVY, fg="white",
+                  command=self.restore_selected, bg=NAVY, fg="white", activebackground=NAVY, activeforeground="white",
                   padx=14, pady=5, font=("Segoe UI", 10, "bold"),
                   relief="flat", cursor="hand2").pack(side="left",
                                                       padx=(0, 10))
@@ -506,7 +506,7 @@ class App:
                   relief="groove", cursor="hand2").pack(side="left",
                                                         padx=(0, 8))
         tk.Button(row, text="Quarantine selected…",
-                  command=self.quarantine_selected, bg=NAVY, fg="white",
+                  command=self.quarantine_selected, bg=NAVY, fg="white", activebackground=NAVY, activeforeground="white",
                   padx=12, pady=4, font=("Segoe UI", 10, "bold"),
                   relief="flat", cursor="hand2").pack(side="left")
         tk.Label(row, text="Nothing is deleted — quarantined files can "
@@ -800,7 +800,7 @@ class App:
         actions = tk.Frame(tab, bg="white")
         actions.pack(anchor="w", pady=(18, 0))
         tk.Button(actions, text="Save settings", command=self.save_settings,
-                  bg=NAVY, fg="white", padx=14, pady=6,
+                  bg=NAVY, fg="white", activebackground=NAVY, activeforeground="white", padx=14, pady=6,
                   font=("Segoe UI", 10, "bold"), relief="flat",
                   cursor="hand2").pack(side="left", padx=(0, 10))
         tk.Button(actions, text="Check for updates",
