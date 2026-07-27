@@ -283,6 +283,21 @@ def render_monitor_report(ctx: dict) -> str:
                                    "&#10003; none",
                                    "Protected folders fully encrypted",
                                    "status-good"))
+        dsb = current.get("days_since_backup")
+        if dsb is not None:
+            if dsb <= 14:
+                tiles.append(_tile("Vault backup",
+                                   f"&#10003; {dsb}d ago",
+                                   "encrypted vault backed up recently",
+                                   "status-good"))
+            else:
+                tiles.append(_tile("Vault backup",
+                                   f"&#9888; {dsb}d ago",
+                                   "back up the vault to a safe location",
+                                   "status-bad"))
+        elif "days_since_backup" in current:
+            tiles.append(_tile("Vault backup", "&#9888; never",
+                               "no backup recorded yet", "status-bad"))
         if current.get("failed_unlocks") is not None:
             if new_failed:
                 tiles.append(_tile("Failed vault unlocks",

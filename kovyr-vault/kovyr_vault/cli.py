@@ -179,6 +179,20 @@ def cmd_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_backup(args: argparse.Namespace) -> int:
+    from . import backup as backup_mod
+    try:
+        result = backup_mod.backup(Path(args.vault), Path(args.dest))
+    except (FileNotFoundError, ValueError) as exc:
+        sys.exit(f"error: {exc}")
+    print(f"Backed up to {args.dest}: {result.copied} files copied "
+          f"({human_size(result.bytes_copied)}), {result.skipped} already "
+          f"current.")
+    for err in result.errors:
+        print(f"warning: {err}", file=sys.stderr)
+    return 1 if result.errors else 0
+
+
 def cmd_verify(args: argparse.Namespace) -> int:
     vault = _open_vault(Path(args.vault), args.keyfile)
     problems = vault.verify()
@@ -365,6 +379,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("vault")
     p.add_argument("--keyfile", help="keyfile for a two-factor vault")
     p.set_defaults(func=cmd_verify)
+
+    p = sub.add_parser("backup", help="incrementally copy the encrypted "
+                                      "vault to another location")
+    p.add_argument("vault")
+    p.add_argument("dest", help="backup destination (USB drive, etc.)")
+    p.set_defaults(func=cmd_backup)
 
     p = sub.add_parser("report", help="generate a branded HTML engagement "
                                       "report")

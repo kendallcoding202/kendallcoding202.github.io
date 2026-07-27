@@ -414,6 +414,10 @@ class App:
                   command=self.sweep_protected, padx=14, pady=5,
                   font=("Segoe UI", 10), relief="groove",
                   cursor="hand2").pack(side="left", padx=(0, 10))
+        tk.Button(self.vault_buttons, text="Back up vault…",
+                  command=self.backup_vault, padx=14, pady=5,
+                  font=("Segoe UI", 10), relief="groove",
+                  cursor="hand2").pack(side="left", padx=(0, 10))
         tk.Button(self.vault_buttons, text="Lock", command=self.lock,
                   padx=14, pady=5, font=("Segoe UI", 10),
                   relief="groove", cursor="hand2").pack(side="left")
@@ -421,6 +425,48 @@ class App:
                                   bg="white", font=("Segoe UI", 9))
         self.vault_msg.pack(side="left", padx=(12, 0))
         self._sweeping = False
+        self._backing_up = False
+
+    def backup_vault(self) -> None:
+        from tkinter import filedialog
+        from . import backup as backup_mod
+        if self._backing_up or self.vault is None:
+            return
+        dest = filedialog.askdirectory(
+            title="Choose a backup location (USB drive, external disk)")
+        if not dest:
+            return
+        vault_root = self.vault.root
+        self._backing_up = True
+        self.vault_msg.config(text="Backing up…")
+
+        def progress(done: int, total: int) -> None:
+            self.root.after(0, lambda: self.vault_msg.config(
+                text=f"Backing up… {done:,} of {total:,}"))
+
+        def worker() -> None:
+            try:
+                result = backup_mod.backup(
+                    vault_root, Path(dest), on_progress=progress)
+                err = None
+            except Exception as exc:
+                result, err = None, str(exc)
+            self.root.after(0, done, result, err)
+
+        def done(result, err) -> None:
+            from tkinter import messagebox
+            self._backing_up = False
+            self.vault_msg.config(text="")
+            if err:
+                messagebox.showinfo("Kovyr Vault", f"Backup failed: {err}")
+                return
+            msg = (f"Backed up to {dest}: {result.copied:,} file(s) "
+                   f"copied, {result.skipped:,} already current.")
+            if result.errors:
+                msg += f"  ({len(result.errors)} problem(s).)"
+            messagebox.showinfo("Kovyr Vault", msg)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     # ---------- duplicates tab ----------
 
