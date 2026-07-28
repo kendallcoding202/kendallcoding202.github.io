@@ -397,6 +397,22 @@ def cmd_verify_log(args: argparse.Namespace) -> int:
     return 1
 
 
+def cmd_disk_check(args: argparse.Namespace) -> int:
+    """Report whole-disk encryption (FileVault/BitLocker) on this machine.
+    Read-only. Run it on the client's machine to capture the answer to the
+    assessment's 'is data encrypted at rest?' at the device level."""
+    from . import diskcrypto
+    status = diskcrypto.check()
+    if args.json:
+        print(json.dumps(status.as_dict(), indent=2))
+    else:
+        mark = {True: "ON ", False: "OFF", None: "???"}[status.encrypted]
+        print(f"[{mark}] {status.feature}: {status.detail}")
+    # Exit non-zero only when we positively determined it is OFF, so this
+    # can gate scripts; "unknown" stays 0 (nothing to assert).
+    return 1 if status.encrypted is False else 0
+
+
 def cmd_verify(args: argparse.Namespace) -> int:
     vault = _open_vault(Path(args.vault), args.keyfile)
     problems = vault.verify()
@@ -598,6 +614,13 @@ def build_parser() -> argparse.ArgumentParser:
                                           "evidence hash chain")
     p.add_argument("vault")
     p.set_defaults(func=cmd_verify_log)
+
+    p = sub.add_parser("disk-check", help="report whole-disk encryption "
+                                          "(FileVault/BitLocker) on this "
+                                          "machine")
+    p.add_argument("--json", action="store_true",
+                   help="emit machine-readable JSON")
+    p.set_defaults(func=cmd_disk_check)
 
     p = sub.add_parser("packet", help="generate a full monthly compliance "
                                       "packet (security + breach + monitoring) "
