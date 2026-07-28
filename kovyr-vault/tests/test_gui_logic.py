@@ -108,6 +108,47 @@ def test_status_flags_drift():
     assert summary["new_groups"] == 1
 
 
+def test_status_detail_not_configured():
+    text = gui.status_detail({"configured": False})
+    assert "Run check now" in text
+
+
+def test_status_detail_clean_is_reassuring():
+    text = gui.status_detail(gui.status_summary([snapshot()]))
+    assert "normal" in text.lower()
+
+
+def test_status_detail_duplicates_points_to_tab():
+    g = {"sha256": "cd" * 32, "size": 50, "count": 2, "paths": ["/a", "/b"]}
+    summary = gui.status_summary([snapshot(dupes=1, wasted=50, groups=[g])])
+    text = gui.status_detail(summary)
+    assert "Duplicates tab" in text
+    assert "1 redundant copy" in text
+
+
+def test_status_detail_awaiting_encryption():
+    snap = snapshot()
+    snap["awaiting_encryption"] = 3
+    text = gui.status_detail(gui.status_summary([snap]))
+    assert "waiting" in text.lower()
+    assert "Encrypt waiting files" in text
+
+
+def test_status_detail_alert_surfaces_reason_and_cause():
+    """An 'Attention needed' status must explain itself: the actual alert
+    reason, the common benign cause (code/Git churn), and the escalation."""
+    snap = snapshot()
+    snap["canary_alerts"] = [
+        "unusual mass file activity: 30 of 40 watched files disappeared "
+        "and 28 new files appeared since the last check"]
+    summary = gui.status_summary([snapshot(), snap])
+    text = gui.status_detail(summary)
+    assert "mass file activity" in text          # the real reason, shown
+    assert ("Git repository" in text or "source code" in text)
+    assert "Settings" in text                    # how to fix a benign case
+    assert "contact Kovyr" in text               # escalation if unexpected
+
+
 def test_restore_single_file_lands_flat(tmp_path):
     targets = gui.plan_restore_targets(["/data/reports/customers.csv"],
                                        tmp_path)
