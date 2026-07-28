@@ -196,6 +196,46 @@ def status_summary(history: list[dict]) -> dict:
     }
 
 
+def status_detail(summary: dict) -> str:
+    """Plain-English 'what's going on' text — the client should never see a
+    bare 'Attention needed' with no reason. Mirrors the headline's priority
+    order. Pure function so it's testable without a display."""
+    if not summary.get("configured"):
+        return ("No protection check has run yet. Click “Run check now” to "
+                "scan your watched folders and record the first snapshot.")
+    if summary["alerts"]:
+        lines = ["The last check flagged unusual activity:"]
+        lines += [f"  •  {a}" for a in summary["alerts"]]
+        lines.append("")
+        lines.append(
+            "This usually means a fast-changing folder — source code, a Git "
+            "repository, or a system/build folder — is being watched, where "
+            "normal edits and commits look like a mass rewrite. If you added "
+            "one, remove it from the watched folders in Settings and re-run "
+            "the check. If you did NOT expect this, it can also signal "
+            "ransomware or tampering — contact Kovyr before making changes.")
+        return "\n".join(lines)
+    if summary["awaiting"]:
+        n = summary["awaiting"]
+        return (f"{n:,} file(s) are waiting in a locked folder to be "
+                "encrypted. Open the “My encrypted files” tab, enter your "
+                "passphrase, and click “Encrypt waiting files”.")
+    if summary["new_groups"]:
+        return (f"{summary['new_groups']} new duplicate group(s) appeared "
+                "since the last check. Open the Duplicates tab to review and "
+                "quarantine the extra copies — nothing is deleted "
+                "automatically, and one copy is always kept.")
+    if summary["duplicates"]:
+        n = summary["duplicates"]
+        return (f"{n:,} redundant cop{'y' if n == 1 else 'ies'} found across "
+                "your watched folders. Open the Duplicates tab to review and "
+                "quarantine them. Nothing is deleted automatically; one copy "
+                "of each file is always kept.")
+    return ("Everything looks normal — no duplicates, no unusual activity, "
+            "and your files are protected. Nothing needs your attention "
+            "right now.")
+
+
 class App:
     def __init__(self, root, config: dict | None, config_error: str | None,
                  config_path: Path | None = None):
@@ -317,8 +357,8 @@ class App:
         self.ttk = ttk
         root = self.root
         root.title("Kovyr Vault")
-        root.geometry("900x640")
-        root.minsize(820, 560)
+        root.geometry("900x720")
+        root.minsize(820, 620)
         root.configure(bg=CANVAS)
 
         header = tk.Frame(root, bg=NAVY, padx=24, pady=16)
@@ -440,6 +480,21 @@ class App:
                                  font=("Segoe UI", 9), justify="left",
                                  wraplength=760)
         self.activity.pack(anchor="w", pady=(16, 0))
+
+        # A plain-English "what's going on" panel so a status like
+        # "Attention needed" always explains itself instead of leaving the
+        # client guessing.
+        detail = tk.Frame(tab, bg=SURFACE, padx=16, pady=13,
+                          highlightbackground=BORDER, highlightthickness=1)
+        detail.pack(fill="x", pady=(18, 0))
+        self.detail_title = tk.Label(detail, text="WHAT'S GOING ON",
+                                     fg=MUTED, bg=SURFACE,
+                                     font=("Segoe UI", 8, "bold"))
+        self.detail_title.pack(anchor="w")
+        self.detail_text = tk.Label(detail, text="", fg=TEXT, bg=SURFACE,
+                                    font=("Segoe UI", 10), justify="left",
+                                    wraplength=760)
+        self.detail_text.pack(anchor="w", pady=(4, 0))
 
     def _build_vault_tab(self) -> None:
         tk = self.tk
@@ -1127,6 +1182,10 @@ class App:
             self.subline.config(
                 text="Open the Settings tab to choose the folders to "
                 "protect and create your vault.")
+            self.detail_text.config(
+                text="Kovyr Vault isn't set up on this machine yet. Open "
+                "the Settings tab to choose the folders to watch and to "
+                "create your encrypted vault.")
             return
         try:
             history = monitor_mod.load_history(Path(self.config["state"]))
@@ -1138,12 +1197,16 @@ class App:
             self.headline.config(text="No checks recorded yet", fg=MUTED)
             self.subline.config(text="Click “Run check now” to record "
                                 "the first snapshot.")
+            self.detail_text.config(
+                text="No protection check has run yet. Click “Run check "
+                "now” to scan your watched folders and record the first "
+                "snapshot.")
             return
         if summary["clean"]:
             self.headline.config(text="✓ Protected", fg=GOOD)
         elif summary["alerts"]:
             self.headline.config(
-                text="⚠ Attention needed — contact Kovyr", fg=BAD)
+                text="⚠ Attention needed — see details below", fg=BAD)
         elif summary["awaiting"]:
             self.headline.config(
                 text=f"⚠ {summary['awaiting']} file(s) awaiting "
@@ -1161,6 +1224,7 @@ class App:
         self.tile_vars["files"].set(f"{summary['files']:,}")
         self.tile_vars["dupes"].set(f"{summary['duplicates']:,}")
         self.tile_vars["exposure"].set(human_size(summary["exposure"]))
+        self.detail_text.config(text=status_detail(summary))
 
     def run_check(self) -> None:
         if self.config is None:
