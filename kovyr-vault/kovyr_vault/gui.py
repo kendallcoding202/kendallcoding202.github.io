@@ -37,6 +37,8 @@ TEXT = "#1c2733"
 MUTED = "#5a6b7b"
 GOOD = "#1a7f4e"
 BAD = "#b3261e"
+BORDER = "#dbe2ea"
+CANVAS = "#f0f3f7"  # window backdrop behind the white content area
 
 
 def app_support_config_path() -> Path:
@@ -261,6 +263,21 @@ class App:
         lbl.set_enabled = set_enabled
         return lbl
 
+    def _secondary_button(self, parent, text, command):
+        """A light 'secondary' button — bordered, navy text — drawn as a
+        Label so it looks consistent across platforms instead of the dated
+        native gray button."""
+        tk = self.tk
+        HOVER = "#eef2f7"
+        lbl = tk.Label(parent, text=text, bg="white", fg=NAVY, padx=13,
+                       pady=6, font=("Segoe UI", 10),
+                       highlightbackground=BORDER, highlightthickness=1,
+                       cursor="hand2")
+        lbl.bind("<Button-1>", lambda _e: command())
+        lbl.bind("<Enter>", lambda e: lbl.config(bg=HOVER))
+        lbl.bind("<Leave>", lambda e: lbl.config(bg="white"))
+        return lbl
+
     def _open_documents(self, *paths) -> None:
         for path in paths:
             self.handle_receipt(str(path))
@@ -297,37 +314,52 @@ class App:
         self.ttk = ttk
         root = self.root
         root.title("Kovyr Vault")
-        root.geometry("760x560")
-        root.configure(bg="white")
+        root.geometry("900x640")
+        root.minsize(820, 560)
+        root.configure(bg=CANVAS)
 
-        header = tk.Frame(root, bg=NAVY, padx=20, pady=14)
+        header = tk.Frame(root, bg=NAVY, padx=24, pady=16)
         header.pack(fill="x")
-        tk.Label(header, text="KOVYR  ·  DATA PROTECTION", fg="#9fc0e8",
-                 bg=NAVY, font=("Segoe UI", 9, "bold")).pack(anchor="w")
-        tk.Label(header, text="Your data, protected", fg="white", bg=NAVY,
-                 font=("Segoe UI", 16, "bold")).pack(anchor="w")
+        tk.Label(header, text="KOVYR", fg="white", bg=NAVY,
+                 font=("Segoe UI", 15, "bold")).pack(side="left")
+        tk.Label(header, text="Data Protection", fg="#9fc0e8", bg=NAVY,
+                 font=("Segoe UI", 11)).pack(side="left", padx=(10, 0),
+                                             pady=(4, 0))
+        self.header_client = tk.Label(
+            header, text="", fg="#c7d8ec", bg=NAVY,
+            font=("Segoe UI", 10))
+        self.header_client.pack(side="right", pady=(4, 0))
 
         style = ttk.Style(root)
         try:
             style.theme_use("clam")
         except self.tk.TclError:
             pass
-        style.configure("TNotebook", background="white", borderwidth=0)
-        style.configure("TNotebook.Tab", padding=(16, 8),
-                        font=("Segoe UI", 10))
+        style.configure("TNotebook", background=CANVAS, borderwidth=0)
+        style.configure("TNotebook.Tab", padding=(18, 9),
+                        font=("Segoe UI", 10), background=CANVAS,
+                        foreground=MUTED, borderwidth=0)
+        style.map("TNotebook.Tab",
+                  background=[("selected", "white")],
+                  foreground=[("selected", NAVY)],
+                  expand=[("selected", (0, 0, 0, 0))])
         # Explicit colors so macOS/Windows dark mode can't invert the
         # app's white surfaces out from under the text.
         style.configure("Treeview", background="white",
-                        fieldbackground="white", foreground=TEXT)
-        style.configure("Treeview.Heading", foreground=TEXT)
+                        fieldbackground="white", foreground=TEXT,
+                        rowheight=26, borderwidth=0)
+        style.configure("Treeview.Heading", foreground=MUTED,
+                        background=SURFACE, relief="flat",
+                        font=("Segoe UI", 9, "bold"))
+        style.map("Treeview.Heading", background=[("active", SURFACE)])
 
         notebook = ttk.Notebook(root)
-        notebook.pack(fill="both", expand=True, padx=12, pady=12)
+        notebook.pack(fill="both", expand=True, padx=16, pady=(12, 0))
         self.notebook = notebook
-        self.status_tab = tk.Frame(notebook, bg="white", padx=16, pady=16)
-        self.vault_tab = tk.Frame(notebook, bg="white", padx=16, pady=16)
-        self.dupes_tab = tk.Frame(notebook, bg="white", padx=16, pady=16)
-        self.settings_tab = tk.Frame(notebook, bg="white", padx=16, pady=16)
+        self.status_tab = tk.Frame(notebook, bg="white", padx=26, pady=24)
+        self.vault_tab = tk.Frame(notebook, bg="white", padx=26, pady=22)
+        self.dupes_tab = tk.Frame(notebook, bg="white", padx=26, pady=22)
+        self.settings_tab = tk.Frame(notebook, bg="white", padx=26, pady=22)
         notebook.add(self.status_tab, text="  Protection status  ")
         notebook.add(self.vault_tab, text="  My encrypted files  ")
         notebook.add(self.dupes_tab, text="  Duplicates  ")
@@ -340,52 +372,57 @@ class App:
         if self.config is None:
             notebook.select(self.settings_tab)  # first run lands on setup
 
-        footer = tk.Label(root, text=f"Kovyr Vault v{__version__} — your "
-                          "passphrase is never stored by this app",
-                          fg=MUTED, bg="white", font=("Segoe UI", 8))
-        footer.pack(pady=(0, 8))
+        footer = tk.Label(root, text=f"Kovyr Vault v{__version__}   ·   "
+                          "your passphrase is never stored by this app",
+                          fg=MUTED, bg=CANVAS, font=("Segoe UI", 8))
+        footer.pack(pady=(6, 8))
+        client = (self.config or {}).get("client")
+        if client:
+            self.header_client.config(text=client)
 
     def _build_status_tab(self) -> None:
         tk = self.tk
         tab = self.status_tab
 
         self.headline = tk.Label(tab, text="", bg="white", fg=TEXT,
-                                 font=("Segoe UI", 14, "bold"))
+                                 font=("Segoe UI", 15, "bold"))
         self.headline.pack(anchor="w")
         self.subline = tk.Label(tab, text="", fg=MUTED, bg="white",
                                 font=("Segoe UI", 10), justify="left")
-        self.subline.pack(anchor="w", pady=(2, 14))
+        self.subline.pack(anchor="w", pady=(3, 18))
 
         tiles = tk.Frame(tab, bg="white")
         tiles.pack(fill="x")
         self.tile_vars = {}
-        for key, label in (("files", "Files watched"),
-                           ("dupes", "Redundant copies"),
-                           ("exposure", "Excess exposure")):
-            frame = tk.Frame(tiles, bg=SURFACE, padx=14, pady=10,
-                             highlightbackground="#e2e8f0",
-                             highlightthickness=1)
-            frame.pack(side="left", padx=(0, 10), fill="x", expand=True)
+        specs = (("files", "Files watched"), ("dupes", "Redundant copies"),
+                 ("exposure", "Excess exposure"))
+        for col, (key, label) in enumerate(specs):
+            tiles.columnconfigure(col, weight=1, uniform="tile")
+            frame = tk.Frame(tiles, bg=SURFACE, padx=18, pady=15,
+                             highlightbackground=BORDER, highlightthickness=1)
+            frame.grid(row=0, column=col, sticky="ew",
+                       padx=(0 if col == 0 else 6,
+                             0 if col == len(specs) - 1 else 6))
             tk.Label(frame, text=label.upper(), fg=MUTED, bg=SURFACE,
                      font=("Segoe UI", 8, "bold")).pack(anchor="w")
             var = tk.StringVar(value="—")
             tk.Label(frame, textvariable=var, fg=TEXT, bg=SURFACE,
-                     font=("Segoe UI", 16, "bold")).pack(anchor="w")
+                     font=("Segoe UI", 22, "bold")).pack(anchor="w",
+                                                         pady=(4, 0))
             self.tile_vars[key] = var
 
         buttons = tk.Frame(tab, bg="white")
-        buttons.pack(anchor="w", pady=(18, 0))
+        buttons.pack(anchor="w", pady=(22, 0))
         self.check_btn = self._primary_button(
             buttons, "Run check now", self.run_check)
         self.check_btn.pack(side="left", padx=(0, 10))
-        tk.Button(buttons, text="Open full report",
-                  command=self.open_report, padx=14, pady=6,
-                  font=("Segoe UI", 10), relief="groove",
-                  cursor="hand2").pack(side="left")
+        self._secondary_button(buttons, "Open full report",
+                               self.open_report).pack(side="left")
 
         self.activity = tk.Label(tab, text="", fg=MUTED, bg="white",
-                                 font=("Segoe UI", 9), justify="left")
-        self.activity.pack(anchor="w", pady=(14, 0))
+                                 font=("Segoe UI", 9), justify="left",
+                                 wraplength=760)
+        self.activity.pack(anchor="w", pady=(16, 0))
 
     def _build_vault_tab(self) -> None:
         tk = self.tk
@@ -406,7 +443,7 @@ class App:
         self.pass_entry = tk.Entry(row, show="•", width=32,
                                    font=("Segoe UI", 11), bg="white",
                                    fg=TEXT, insertbackground=TEXT,
-                                   highlightbackground="#e2e8f0")
+                                   highlightbackground=BORDER)
         self.pass_entry.pack(side="left", padx=(0, 10))
         self.pass_entry.bind("<Return>", lambda _e: self.unlock())
         self.unlock_btn = self._primary_button(row, "Unlock", self.unlock)
@@ -433,17 +470,14 @@ class App:
         self._primary_button(self.vault_buttons, "Restore selected…",
                              self.restore_selected).pack(side="left",
                                                          padx=(0, 10))
-        tk.Button(self.vault_buttons, text="Encrypt waiting files…",
-                  command=self.sweep_protected, padx=14, pady=5,
-                  font=("Segoe UI", 10), relief="groove",
-                  cursor="hand2").pack(side="left", padx=(0, 10))
-        tk.Button(self.vault_buttons, text="Back up vault…",
-                  command=self.backup_vault, padx=14, pady=5,
-                  font=("Segoe UI", 10), relief="groove",
-                  cursor="hand2").pack(side="left", padx=(0, 10))
-        tk.Button(self.vault_buttons, text="Lock", command=self.lock,
-                  padx=14, pady=5, font=("Segoe UI", 10),
-                  relief="groove", cursor="hand2").pack(side="left")
+        self._secondary_button(self.vault_buttons, "Encrypt waiting files…",
+                               self.sweep_protected).pack(side="left",
+                                                          padx=(0, 10))
+        self._secondary_button(self.vault_buttons, "Back up vault…",
+                               self.backup_vault).pack(side="left",
+                                                       padx=(0, 10))
+        self._secondary_button(self.vault_buttons, "Lock",
+                               self.lock).pack(side="left")
         self.vault_msg = tk.Label(self.vault_buttons, text="", fg=MUTED,
                                   bg="white", font=("Segoe UI", 9))
         self.vault_msg.pack(side="left", padx=(12, 0))
@@ -505,10 +539,10 @@ class App:
         header = tk.Frame(tab, bg="white")
         header.pack(fill="x")
         tk.Label(header, text="Duplicate copies from the last check",
-                 bg="white", fg=TEXT, font=("Segoe UI", 11, "bold")).pack(side="left")
-        tk.Button(header, text="Refresh", command=self.refresh_dupes,
-                  padx=10, pady=2, relief="groove",
-                  cursor="hand2").pack(side="right")
+                 bg="white", fg=TEXT,
+                 font=("Segoe UI", 12, "bold")).pack(side="left")
+        self._secondary_button(header, "Refresh",
+                               self.refresh_dupes).pack(side="right")
 
         self.dupes_tree = ttk.Treeview(tab, columns=("size",),
                                        selectmode="extended", height=8)
@@ -519,24 +553,22 @@ class App:
         self.dupes_tree.pack(fill="both", expand=True, pady=(6, 0))
 
         row = tk.Frame(tab, bg="white")
-        row.pack(anchor="w", pady=(8, 0), fill="x")
-        tk.Button(row, text="Select all copies",
-                  command=self.select_all_dupes, padx=10, pady=4,
-                  relief="groove", cursor="hand2").pack(side="left",
-                                                        padx=(0, 8))
-        tk.Button(row, text="Clear selection",
-                  command=self.clear_dupe_selection, padx=10, pady=4,
-                  relief="groove", cursor="hand2").pack(side="left",
-                                                        padx=(0, 8))
+        row.pack(anchor="w", pady=(10, 0), fill="x")
+        self._secondary_button(row, "Select all copies",
+                               self.select_all_dupes).pack(side="left",
+                                                           padx=(0, 8))
+        self._secondary_button(row, "Clear selection",
+                               self.clear_dupe_selection).pack(side="left",
+                                                               padx=(0, 8))
         self._primary_button(row, "Quarantine selected…",
                              self.quarantine_selected).pack(side="left")
-        tk.Label(row, text="Nothing is deleted — quarantined files can "
-                 "be restored below.", fg=MUTED, bg="white",
-                 font=("Segoe UI", 8)).pack(side="left", padx=10)
+        tk.Label(tab, text="Nothing is deleted — quarantined files can "
+                 "be restored from the list below.", fg=MUTED, bg="white",
+                 font=("Segoe UI", 8)).pack(anchor="w", pady=(6, 0))
 
         tk.Label(tab, text="Quarantine", bg="white", fg=TEXT,
-                 font=("Segoe UI", 11, "bold")).pack(anchor="w",
-                                                     pady=(14, 0))
+                 font=("Segoe UI", 12, "bold")).pack(anchor="w",
+                                                     pady=(18, 0))
         self.quarantine_tree = ttk.Treeview(tab, columns=("age",),
                                             selectmode="extended", height=5)
         self.quarantine_tree.heading("#0", text="Original location")
@@ -547,13 +579,11 @@ class App:
 
         qrow = tk.Frame(tab, bg="white")
         qrow.pack(anchor="w", pady=(8, 0))
-        tk.Button(qrow, text="Restore selected",
-                  command=self.restore_quarantined, padx=10, pady=3,
-                  relief="groove", cursor="hand2").pack(side="left",
-                                                        padx=(0, 8))
-        tk.Button(qrow, text="Empty quarantine…",
-                  command=self.empty_quarantine, padx=10, pady=3,
-                  relief="groove", cursor="hand2").pack(side="left")
+        self._secondary_button(qrow, "Restore selected",
+                               self.restore_quarantined).pack(side="left",
+                                                              padx=(0, 8))
+        self._secondary_button(qrow, "Empty quarantine…",
+                               self.empty_quarantine).pack(side="left")
         self.dupes_msg = tk.Label(tab, text="", bg="white", fg=MUTED,
                                   font=("Segoe UI", 9))
         self.dupes_msg.pack(anchor="w", pady=(8, 0))
@@ -747,7 +777,8 @@ class App:
                  "watch, locked folders we encrypt. Move a file into a "
                  "locked folder to archive it securely.", fg=MUTED,
                  bg="white", font=("Segoe UI", 9),
-                 justify="left").pack(anchor="w", pady=(0, 10))
+                 justify="left", wraplength=780).pack(anchor="w",
+                                                      pady=(0, 10))
 
         tk.Label(tab, text="Everyday folders — watched, not encrypted",
                  fg=TEXT, bg="white",
@@ -755,24 +786,23 @@ class App:
         tk.Label(tab, text="For files in active use. Scanned for "
                  "duplicates and unusual changes (all subfolders); "
                  "files stay normal and editable.", fg=MUTED, bg="white",
-                 font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 6))
+                 font=("Segoe UI", 9), justify="left",
+                 wraplength=780).pack(anchor="w", pady=(0, 6))
 
         folders = tk.Frame(tab, bg="white")
         folders.pack(fill="x")
         self.folders_list = tk.Listbox(folders, height=4,
                                        font=("Segoe UI", 10),
                                        bg="white", fg=TEXT,
-                                       highlightbackground="#e2e8f0",
+                                       highlightbackground=BORDER,
                                        selectmode="extended")
         self.folders_list.pack(side="left", fill="x", expand=True)
         btns = tk.Frame(folders, bg="white")
         btns.pack(side="left", padx=(10, 0), anchor="n")
-        tk.Button(btns, text="Add folder…", command=self.add_folder,
-                  padx=10, pady=3, relief="groove",
-                  cursor="hand2").pack(fill="x", pady=(0, 6))
-        tk.Button(btns, text="Remove selected", command=self.remove_folder,
-                  padx=10, pady=3, relief="groove",
-                  cursor="hand2").pack(fill="x")
+        self._secondary_button(btns, "Add folder…",
+                               self.add_folder).pack(fill="x", pady=(0, 6))
+        self._secondary_button(btns, "Remove selected",
+                               self.remove_folder).pack(fill="x")
 
         tk.Label(tab, text="Locked folders — encrypted into the vault",
                  fg=TEXT, bg="white",
@@ -782,24 +812,23 @@ class App:
                  "saved here (any subfolder) are encrypted when you "
                  "unlock and sweep — each is replaced by a small "
                  ".kovyr receipt.", fg=MUTED, bg="white",
-                 font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 6))
+                 font=("Segoe UI", 9), justify="left",
+                 wraplength=780).pack(anchor="w", pady=(0, 6))
         pfolders = tk.Frame(tab, bg="white")
         pfolders.pack(fill="x")
         self.protected_list = tk.Listbox(pfolders, height=3,
                                          font=("Segoe UI", 10),
                                          bg="white", fg=TEXT,
-                                         highlightbackground="#e2e8f0",
+                                         highlightbackground=BORDER,
                                          selectmode="extended")
         self.protected_list.pack(side="left", fill="x", expand=True)
         pbtns = tk.Frame(pfolders, bg="white")
         pbtns.pack(side="left", padx=(10, 0), anchor="n")
-        tk.Button(pbtns, text="Add folder…",
-                  command=self.add_protected_folder, padx=10, pady=3,
-                  relief="groove", cursor="hand2").pack(fill="x",
-                                                        pady=(0, 6))
-        tk.Button(pbtns, text="Remove selected",
-                  command=self.remove_protected_folder, padx=10, pady=3,
-                  relief="groove", cursor="hand2").pack(fill="x")
+        self._secondary_button(pbtns, "Add folder…",
+                               self.add_protected_folder).pack(
+                                   fill="x", pady=(0, 6))
+        self._secondary_button(pbtns, "Remove selected",
+                               self.remove_protected_folder).pack(fill="x")
 
         row = tk.Frame(tab, bg="white")
         row.pack(anchor="w", pady=(14, 0))
@@ -808,25 +837,23 @@ class App:
         self.client_entry = tk.Entry(row, width=28, font=("Segoe UI", 10),
                                      bg="white", fg=TEXT,
                                      insertbackground=TEXT,
-                                     highlightbackground="#e2e8f0")
+                                     highlightbackground=BORDER)
         self.client_entry.pack(side="left", padx=8)
 
         self.vault_status = tk.Label(tab, text="", bg="white", fg=MUTED,
-                                     font=("Segoe UI", 9), justify="left")
+                                     font=("Segoe UI", 9), justify="left",
+                                     wraplength=780)
         self.vault_status.pack(anchor="w", pady=(14, 0))
-        self.create_vault_btn = tk.Button(
-            tab, text="Create vault…", command=self.create_vault_dialog,
-            padx=10, pady=3, relief="groove", cursor="hand2")
+        self.create_vault_btn = self._secondary_button(
+            tab, "Create vault…", self.create_vault_dialog)
 
         actions = tk.Frame(tab, bg="white")
         actions.pack(anchor="w", pady=(18, 0))
         self._primary_button(actions, "Save settings",
                              self.save_settings).pack(side="left",
                                                       padx=(0, 10))
-        tk.Button(actions, text="Check for updates",
-                  command=self.check_updates, padx=12, pady=5,
-                  font=("Segoe UI", 10), relief="groove",
-                  cursor="hand2").pack(side="left")
+        self._secondary_button(actions, "Check for updates",
+                               self.check_updates).pack(side="left")
         self.settings_msg = tk.Label(tab, text="", bg="white", fg=MUTED,
                                      font=("Segoe UI", 9))
         self.settings_msg.pack(anchor="w", pady=(6, 0))
@@ -981,10 +1008,10 @@ class App:
                      anchor="w", pady=(4, 10))
         p1 = tk.Entry(dlg, show="•", width=30, font=("Segoe UI", 11),
                       bg="white", fg=TEXT, insertbackground=TEXT,
-                      highlightbackground="#e2e8f0")
+                      highlightbackground=BORDER)
         p2 = tk.Entry(dlg, show="•", width=30, font=("Segoe UI", 11),
                       bg="white", fg=TEXT, insertbackground=TEXT,
-                      highlightbackground="#e2e8f0")
+                      highlightbackground=BORDER)
         tk.Label(dlg, text="Passphrase:", bg="white", fg=TEXT,
                  font=("Segoe UI", 9)).pack(anchor="w")
         p1.pack(anchor="w", pady=(0, 6))
@@ -1083,8 +1110,9 @@ class App:
                 text=f"⚠ {summary['new_groups']} new duplicate "
                 "group(s) found", fg=BAD)
         else:
+            n = summary['duplicates']
             self.headline.config(
-                text=f"⚠ {summary['duplicates']} redundant copies "
+                text=f"⚠ {n:,} redundant cop{'y' if n == 1 else 'ies'} "
                 "present", fg=BAD)
         self.subline.config(text=f"Last check: {summary['last_run']}")
         self.tile_vars["files"].set(f"{summary['files']:,}")
