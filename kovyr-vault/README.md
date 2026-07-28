@@ -151,6 +151,34 @@ With the secrets in place, builds come out signed with the hardened
 runtime, notarized by Apple, and stapled — clients double-click and it
 just opens.
 
+### Windows code signing
+
+Unsigned, Windows shows a blue **SmartScreen** "Windows protected your
+PC" prompt on first run (More info → Run anyway). To remove it, the
+Windows job Authenticode-signs the two program exes and the installer
+automatically once these two repository secrets exist — no workflow edit
+needed. Without them it still builds, just unsigned.
+
+| Secret | Value |
+|---|---|
+| `WINDOWS_CERT_PFX` | Your code-signing certificate as a `.pfx`, base64-encoded (`certutil -encode cert.pfx cert.b64`, then paste the body) |
+| `WINDOWS_CERT_PASSWORD` | The password you set when exporting the `.pfx` |
+
+Two ways to get the certificate:
+
+- **Standard (OV) code-signing certificate** — ~$200–400/year from a CA
+  (Sectigo, DigiCert, SSL.com). Exports to a `.pfx`, so it drops straight
+  into the two secrets above. Removes "unknown publisher"; note SmartScreen
+  reputation still builds over the first weeks of downloads.
+- **Azure Trusted Signing** (recommended if you're comfortable with an
+  Azure account) — ~$10/month, cloud-based (no hardware token), and clears
+  SmartScreen faster. It signs via a different action rather than a `.pfx`;
+  swap the two "Sign" steps for the `azure/trusted-signing-action` when you
+  go this route.
+
+The signing uses a timestamp server, so already-signed installers stay
+valid even after the certificate itself expires.
+
 ## Security design
 
 - **AES-256-GCM** authenticated encryption — tampering or corruption is
