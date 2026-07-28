@@ -264,19 +264,22 @@ class App:
         return lbl
 
     def _secondary_button(self, parent, text, command):
-        """A light 'secondary' button — bordered, navy text — drawn as a
-        Label so it looks consistent across platforms instead of the dated
-        native gray button."""
+        """A light 'secondary' button — bordered, navy text. The border is a
+        1px colored Frame wrapping a white Label: macOS Aqua does not draw
+        highlightthickness on a (non-focusable) Label, so the box would be
+        invisible there. A filled Frame renders on every platform. Returns
+        the border Frame, which supports pack()/pack_forget() like a widget."""
         tk = self.tk
         HOVER = "#eef2f7"
-        lbl = tk.Label(parent, text=text, bg="white", fg=NAVY, padx=13,
-                       pady=6, font=("Segoe UI", 10),
-                       highlightbackground=BORDER, highlightthickness=1,
-                       cursor="hand2")
-        lbl.bind("<Button-1>", lambda _e: command())
-        lbl.bind("<Enter>", lambda e: lbl.config(bg=HOVER))
-        lbl.bind("<Leave>", lambda e: lbl.config(bg="white"))
-        return lbl
+        border = tk.Frame(parent, bg=BORDER, cursor="hand2")
+        lbl = tk.Label(border, text=text, bg="white", fg=NAVY, padx=13,
+                       pady=6, font=("Segoe UI", 10), cursor="hand2")
+        lbl.pack(fill="both", expand=True, padx=1, pady=1)
+        for widget in (border, lbl):
+            widget.bind("<Button-1>", lambda _e: command())
+        border.bind("<Enter>", lambda e: lbl.config(bg=HOVER))
+        border.bind("<Leave>", lambda e: lbl.config(bg="white"))
+        return border
 
     def _open_documents(self, *paths) -> None:
         for path in paths:
