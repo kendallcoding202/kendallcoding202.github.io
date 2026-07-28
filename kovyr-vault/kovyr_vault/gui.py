@@ -414,6 +414,20 @@ class App:
                                                          pady=(4, 0))
             self.tile_vars[key] = var
 
+        # Whole-disk encryption (FileVault / BitLocker): answers the
+        # assessment's "is data encrypted at rest?" at the device level,
+        # alongside the vault's file-level encryption.
+        disk = tk.Frame(tab, bg=SURFACE, padx=16, pady=12,
+                        highlightbackground=BORDER, highlightthickness=1)
+        disk.pack(fill="x", pady=(12, 0))
+        tk.Label(disk, text="DEVICE ENCRYPTION", fg=MUTED, bg=SURFACE,
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w")
+        self.disk_status = tk.Label(disk, text="Checking…", fg=MUTED,
+                                    bg=SURFACE, font=("Segoe UI", 11),
+                                    justify="left", wraplength=780)
+        self.disk_status.pack(anchor="w", pady=(3, 0))
+        self._start_disk_check()
+
         buttons = tk.Frame(tab, bg="white")
         buttons.pack(anchor="w", pady=(22, 0))
         self.check_btn = self._primary_button(
@@ -1080,6 +1094,32 @@ class App:
         p1.focus_set()
 
     # ---------- status tab behavior ----------
+
+    def _start_disk_check(self) -> None:
+        """Assess FileVault/BitLocker off the UI thread — the OS tool is
+        fast but shelling out shouldn't ever stall the window."""
+        from . import diskcrypto
+
+        def worker() -> None:
+            try:
+                status = diskcrypto.check()
+            except Exception:  # never let a status check crash the app
+                status = None
+            self.root.after(0, lambda: self._show_disk_status(status))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _show_disk_status(self, status) -> None:
+        if status is None:
+            self.disk_status.config(
+                text="Couldn't check full-disk encryption.", fg=MUTED)
+            return
+        if status.encrypted is True:
+            self.disk_status.config(text="✓ " + status.detail, fg=GOOD)
+        elif status.encrypted is False:
+            self.disk_status.config(text="⚠ " + status.detail, fg=BAD)
+        else:
+            self.disk_status.config(text=status.detail, fg=MUTED)
 
     def refresh_status(self) -> None:
         if self.config is None:
