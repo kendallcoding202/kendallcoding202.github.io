@@ -41,9 +41,30 @@ def test_parse_netsh_firewall_empty_unknown():
 # ---------- screen lock parsing ----------
 
 def test_parse_mac_screenlock():
-    assert posture.parse_mac_screenlock("1\n") is True
-    assert posture.parse_mac_screenlock("0") is False
-    assert posture.parse_mac_screenlock("") is None
+    on, delay = posture.parse_mac_screenlock(
+        "2026-07-28 23:56:40.819 sysadminctl[34462:33888409] "
+        "screenLock delay is 300 seconds")
+    assert on is True and delay == 300
+    off, _ = posture.parse_mac_screenlock(
+        "sysadminctl[1] screenLock is off")
+    assert off is False
+    unk, _ = posture.parse_mac_screenlock("unrelated output")
+    assert unk is None
+
+
+def test_screenlock_macos_on_shows_delay():
+    run = _runner({"sysadminctl":
+                   (0, "sysadminctl[1] screenLock delay is 300 seconds")})
+    c = posture.screenlock_check(run=run, platform="darwin")
+    assert c.status is True
+    assert "5 minutes" in c.detail
+
+
+def test_screenlock_macos_off():
+    run = _runner({"sysadminctl": (0, "sysadminctl[1] screenLock is off")})
+    c = posture.screenlock_check(run=run, platform="darwin")
+    assert c.status is False
+    assert "doesn't auto-lock" in c.detail
 
 
 def test_parse_win_screenlock_secure_and_short():

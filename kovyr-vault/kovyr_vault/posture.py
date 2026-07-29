@@ -21,6 +21,7 @@ real macOS or Windows machine.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -114,13 +115,27 @@ def firewall_check(run=None, platform: str | None = None) -> Check:
 
 # ---------- automatic screen lock ----------
 
-def parse_mac_screenlock(text: str) -> bool | None:
-    s = text.strip()
-    if s == "1":
-        return True
-    if s == "0":
-        return False
-    return None
+def parse_mac_screenlock(text: str) -> tuple[bool | None, int | None]:
+    """`sysadminctl -screenLock status` prints (to stderr, behind a log
+    prefix) either 'screenLock is off' or 'screenLock delay is N seconds'.
+    Returns (on, delay_seconds). The old `defaults com.apple.screensaver`
+    key was removed in recent macOS, so sysadminctl is the reliable source."""
+    low = text.lower()
+    if "screenlock is off" in low:
+        return False, None
+    m = re.search(r"delay is (\d+) second", low)
+    if m:
+        return True, int(m.group(1))
+    return None, None
+
+
+def _fmt_delay(seconds: int | None) -> str:
+    if not seconds:
+        return "immediately"
+    if seconds % 60 == 0:
+        m = seconds // 60
+        return f"after {m} minute{'s' if m != 1 else ''}"
+    return f"after {seconds} seconds"
 
 
 def parse_win_screenlock(text: str) -> bool | None:
@@ -148,22 +163,26 @@ def screenlock_check(run=None, platform: str | None = None) -> Check:
     run = run or _default_run
     plat = platform or sys.platform
     if plat == "darwin":
-        code, out = run(["defaults", "read", "com.apple.screensaver",
-                         "askForPassword"])
-        on = parse_mac_screenlock(out) if code == 0 else None
-        fix = ("Turn on 'Require password after sleep or screen saver' in "
-               "System Settings › Lock Screen.")
+        # sysadminctl logs to stderr and its exit code isn't reliable, so
+        # parse the combined output regardless of the return code.
+        _, out = run(["sysadminctl", "-screenLock", "status"])
+        on, delay = parse_mac_screenlock(out)
+        on_detail = ("A password is required when the screen sleeps "
+                     f"({_fmt_delay(delay)}).")
+        fix = ("turn on 'Require password after screen saver begins or "
+               "display is off' in System Settings › Lock Screen.")
     elif plat.startswith("win") or plat == "cygwin":
         code, out = run(["reg", "query",
                          "HKCU\\Control Panel\\Desktop"])
         on = parse_win_screenlock(out) if code == 0 else None
-        fix = ("Set a screen saver with 'On resume, display logon screen' "
+        on_detail = "The screen locks automatically when idle."
+        fix = ("set a screen saver with 'On resume, display logon screen' "
                "and a short wait in Screen Saver Settings.")
     else:
         return Check("screenlock", "Automatic screen lock", None,
                      "Screen-lock status isn't checked on this platform.")
     if on is True:
-        detail = "The screen locks automatically when idle."
+        detail = on_detail
     elif on is False:
         detail = "The screen doesn't auto-lock — " + fix
     else:
