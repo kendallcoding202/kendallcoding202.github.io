@@ -141,6 +141,32 @@ def _groups_table(scan: dict) -> str:
     )
 
 
+def render_posture_section(checks: list) -> str:
+    """HTML fragment for the baseline device-security checklist. `checks`
+    is a list of dicts from posture.Check.as_dict()."""
+    rows = []
+    for c in checks:
+        status = c.get("status")
+        if status is True:
+            mark, cls = "&#10003;", "status-good"
+        elif status is False:
+            mark, cls = "&#9888;", "status-bad"
+        else:
+            mark, cls = "&ndash;", ""
+        rows.append(
+            f'<tr><td class="{cls}" style="width:1.5em">{mark}</td>'
+            f'<td><strong>{html.escape(str(c.get("name", "")))}</strong></td>'
+            f'<td>{html.escape(str(c.get("detail", "")))}</td></tr>')
+    return (
+        "<h2>Device security controls</h2>"
+        "<p>Baseline technical safeguards detected on the client's machine "
+        "(read-only). Policy and human controls &mdash; MFA, activity "
+        "logging, individual accounts, vendor agreements, training &mdash; "
+        "are verified separately in the assessment, not by this tool.</p>"
+        f"<table>{''.join(rows)}</table>"
+    )
+
+
 def render_report(ctx: dict) -> str:
     """Render the engagement report. See cli.cmd_report for the ctx shape."""
     client = ctx.get("client")
@@ -207,6 +233,9 @@ def render_report(ctx: dict) -> str:
             "encrypted; identical content is stored once. Tampering or "
             "corruption is detected on decrypt.</p>"
         )
+
+    if ctx.get("posture"):
+        sections.append(render_posture_section(ctx["posture"]))
 
     if ctx.get("security"):
         from .security_report import render_security_section
@@ -411,6 +440,10 @@ def render_monitor_report(ctx: dict) -> str:
             "last). Rising exposure means duplicate copies are creeping "
             "back and a cleanup pass is due.</p>"
         )
+
+    posture = ctx.get("posture") or (current or {}).get("device_posture")
+    if posture:
+        sections.append(render_posture_section(posture))
 
     title = "Ongoing Monitoring Report"
     subtitle = f"Prepared for {_esc(client)}" if client else "Recurring check"
