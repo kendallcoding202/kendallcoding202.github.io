@@ -266,7 +266,11 @@ def render_report(ctx: dict) -> str:
 
 def render_packet_index(client: str, month: str, pieces: list,
                         generated: str, version: str) -> str:
-    """Cover page linking the documents in a monthly compliance packet."""
+    """Cover page for an endpoint & encryption status report.
+
+    This is NOT the WISP/HIPAA compliance packet — that is produced by the
+    Kovyr platform. This report covers only what Kovyr Vault can show: what
+    is encrypted at rest and the machine's baseline device-security controls."""
     items = "".join(
         f'<li><a href="{_esc(href)}">{label}</a></li>'
         for label, href in pieces)
@@ -276,20 +280,25 @@ def render_packet_index(client: str, month: str, pieces: list,
 <title>Kovyr — {_esc(client)} — {_esc(month)}</title>
 <style>{_CSS}</style></head><body>
 <div class="hero"><div class="inner">
-<div class="badge"><span class="dot"></span>Kovyr &middot; Compliance Packet</div>
-<h1>Monthly Security Packet</h1>
+<div class="badge"><span class="dot"></span>Kovyr &middot; Encryption &amp; Endpoint Status</div>
+<h1>Endpoint &amp; Encryption Status Report</h1>
 <p>Prepared for {_esc(client)} &middot; {_esc(month)}</p>
 </div></div>
 <main>
-<p class="muted">This packet documents the data-protection safeguards in
-place for the period shown. File it with the practice's written
-information security program (WISP) or HIPAA risk documentation. These
-are confidential records — keep them private.</p>
-<h2>Included documents</h2>
+<p class="muted">This report shows what Kovyr Vault protects on this client's
+machines for the period shown: what is encrypted at rest, and the baseline
+device-security controls (disk encryption, firewall, screen lock, antivirus).
+Confidential records — keep them private.</p>
+<p class="muted"><strong>This is not the compliance packet.</strong> The written
+WISP or HIPAA compliance documentation is produced by the Kovyr platform; this
+report is the encryption &amp; endpoint evidence that supports it, not a
+replacement for it.</p>
+<h2>Included</h2>
 <ul>{items}</ul>
 <p class="note">Generated {_esc(generated)} &middot; Kovyr Vault
-v{_esc(version)}. Not a certification; documents the safeguards Kovyr
-provides, which are one part of an overall security program.</p>
+v{_esc(version)}. Not a certification; documents the encryption and endpoint
+safeguards Kovyr Vault provides, which are one part of an overall security
+program.</p>
 </main></body></html>
 """
 

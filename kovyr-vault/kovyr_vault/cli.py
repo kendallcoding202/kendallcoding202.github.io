@@ -286,18 +286,18 @@ def _slugify(text: str) -> str:
 
 
 def cmd_packet(args: argparse.Namespace) -> int:
-    """Generate a full monthly compliance packet for one client into a
-    dated local folder, ready to deliver privately with a WISP/HIPAA
-    filing. Never uploaded anywhere — these are confidential documents."""
-    import os
-    from . import audit, breach, security_report
+    """Generate an endpoint & encryption status report for one client into a
+    dated local folder: what's encrypted at rest plus the machine's baseline
+    device-security controls. This is NOT the WISP/HIPAA compliance packet —
+    that is produced by the Kovyr platform. Never uploaded — confidential."""
+    from . import audit, security_report
 
     month = args.month or now_stamp()[:7]
     folder = Path(args.output_dir) / f"{_slugify(args.client)}-{month}"
     folder.mkdir(parents=True, exist_ok=True)
     pieces = []
 
-    # 1. Security report (audit activity + log verification + retention).
+    # 1. Encryption & vault status (what's encrypted + integrity/retention).
     vault = _open_vault(Path(args.vault), args.keyfile)
     summary = security_report.summarize(Path(args.vault),
                                         since=args.since or month)
@@ -311,48 +311,29 @@ def cmd_packet(args: argparse.Namespace) -> int:
                   "verify_problems": vault.verify()},
         "security": summary,
     }
-    (folder / "security-report.html").write_text(
+    (folder / "encryption-status.html").write_text(
         report_mod.render_report(sec_ctx), encoding="utf-8")
-    pieces.append(("Security &amp; access report", "security-report.html"))
+    pieces.append(("Encryption &amp; vault status", "encryption-status.html"))
     audit.record(Path(args.vault), audit.EV_REPORT,
-                 detail={"kind": "packet", "month": month})
+                 detail={"kind": "status-report", "month": month})
 
-    # 2. Breach scan (optional — needs emails + HIBP key).
-    emails = list(args.emails or [])
-    if args.emails_file:
-        try:
-            emails += [ln.strip() for ln in
-                       Path(args.emails_file).read_text().splitlines()
-                       if ln.strip()]
-        except OSError:
-            pass
-    api_key = args.api_key or os.environ.get("KOVYR_HIBP_KEY")
-    if emails and api_key:
-        print(f"Checking {len(emails)} email(s) against HIBP…")
-        results = breach.scan(emails, api_key)
-        (folder / "breach-scan.html").write_text(
-            report_mod.render_breach_report(breach.summarize(results),
-                                            args.client), encoding="utf-8")
-        pieces.append(("Email breach exposure", "breach-scan.html"))
-    elif emails and not api_key:
-        print("Skipping breach scan — no HIBP API key (--api-key / "
-              "KOVYR_HIBP_KEY).")
-
-    # 3. Copy in the client's latest monitoring report if provided.
+    # 2. Device security & monitoring report if provided (carries the
+    #    baseline device-security checks captured on the client machine).
     if args.monitor_html and Path(args.monitor_html).exists():
         import shutil
-        shutil.copy2(args.monitor_html, folder / "monitoring-report.html")
-        pieces.append(("Duplicate &amp; drift monitoring", "monitoring-report.html"))
+        shutil.copy2(args.monitor_html, folder / "device-monitoring.html")
+        pieces.append(("Device security &amp; monitoring",
+                       "device-monitoring.html"))
 
-    # 4. Cover index linking the pieces.
+    # 3. Cover index linking the pieces.
     (folder / "index.html").write_text(
         report_mod.render_packet_index(args.client, month, pieces,
                                        now_stamp(), __version__),
         encoding="utf-8")
 
-    print(f"\nPacket written to {folder}")
-    print("These are confidential client documents — deliver privately "
-          "(encrypted email / secure hand-off), never post them publicly.")
+    print(f"\nEndpoint & encryption status report written to {folder}")
+    print("Confidential — deliver privately. This is not the WISP/HIPAA "
+          "compliance packet; that comes from the Kovyr platform.")
     return 0
 
 
@@ -650,20 +631,17 @@ def build_parser() -> argparse.ArgumentParser:
                    help="emit machine-readable JSON")
     p.set_defaults(func=cmd_device_check)
 
-    p = sub.add_parser("packet", help="generate a full monthly compliance "
-                                      "packet (security + breach + monitoring) "
-                                      "into a dated local folder")
+    p = sub.add_parser("packet", help="generate an endpoint & encryption "
+                                      "status report (encryption + device "
+                                      "security) into a dated local folder")
     p.add_argument("vault")
-    p.add_argument("output_dir", help="where the dated packet folder goes")
+    p.add_argument("output_dir", help="where the dated report folder goes")
     p.add_argument("--client", required=True)
     p.add_argument("--month", help="YYYY-MM label (default: current month)")
     p.add_argument("--since", help="ISO date prefix for activity window")
     p.add_argument("--prepared-by")
-    p.add_argument("--emails", nargs="*", help="emails for the breach scan")
-    p.add_argument("--emails-file", help="file of emails, one per line")
-    p.add_argument("--api-key", help="HIBP key (or KOVYR_HIBP_KEY)")
     p.add_argument("--monitor-html", help="path to the client's latest "
-                                          "monitoring report to include")
+                                          "device & monitoring report to include")
     p.add_argument("--keyfile", help="keyfile for a two-factor vault")
     p.set_defaults(func=cmd_packet)
 

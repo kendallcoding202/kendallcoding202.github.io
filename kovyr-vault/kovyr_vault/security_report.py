@@ -1,10 +1,11 @@
-"""Phase 5 — the client-facing Security summary.
+"""The client-facing encryption & access summary.
 
-Turns the audit log + version state into the plain-English section a
-dental practice hands its HIPAA risk assessor or a CPA firm files with
-its WISP: access activity, log-chain verification, and retention status.
-No jargon, no decrypted content — file references resolve to names only
-when the vault is unlocked to build the report.
+Turns the audit log + version state into a plain-English section showing
+vault access activity, log-chain verification, and retention status — the
+encryption evidence that supports a firm's compliance program. (The WISP
+or HIPAA compliance documentation itself is produced by the Kovyr platform,
+not here.) No jargon, no decrypted content — file references resolve to
+names only when the vault is unlocked to build the report.
 """
 
 from __future__ import annotations

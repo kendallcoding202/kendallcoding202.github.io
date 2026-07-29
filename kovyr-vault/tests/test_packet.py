@@ -16,7 +16,9 @@ def test_packet_index_links_pieces():
         [("Security &amp; access report", "security-report.html"),
          ("Email breach exposure", "breach-scan.html")],
         "2026-07-27 15:00 UTC", "0.11.0")
-    assert "Monthly Security Packet" in html
+    assert "Endpoint &amp; Encryption Status Report" in html
+    # explicitly disclaims being the WISP/HIPAA compliance packet (halden's)
+    assert "not the compliance packet" in html.lower()
     assert "Acme Dental" in html
     assert 'href="security-report.html"' in html
     assert 'href="breach-scan.html"' in html
