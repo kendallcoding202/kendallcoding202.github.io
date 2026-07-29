@@ -175,11 +175,14 @@ def record_run(state_path: Path, result: ScanResult, timestamp: str,
                vault: Path | None = None,
                protected: list[Path] | None = None,
                hash_cache: dict[str, dict] | None = None,
+               posture: list[dict] | None = None,
                ) -> tuple[dict, Drift, list[dict]]:
     """Scan already done — compare, append, persist.
 
     With a vault path, also tracks failed unlock attempts and the
-    vault's immutable blob set for tamper evidence. Returns
+    vault's immutable blob set for tamper evidence. `posture` (from
+    posture.check_all(), captured on the client machine) is stored so the
+    packet can show the machine's technical controls. Returns
     (snapshot, drift, full history including this run); the snapshot
     carries `canary_alerts` and `new_failed_unlocks`.
     """
@@ -187,6 +190,8 @@ def record_run(state_path: Path, result: ScanResult, timestamp: str,
     history = state["history"]
     previous = history[-1] if history else None
     snapshot = snapshot_from_scan(result, timestamp)
+    if posture is not None:
+        snapshot["device_posture"] = posture
 
     curr_blobs = blob_inventory(vault) if vault else None
     snapshot["canary_alerts"] = canary_check(

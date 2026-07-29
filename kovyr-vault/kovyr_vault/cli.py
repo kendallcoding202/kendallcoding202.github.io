@@ -413,6 +413,22 @@ def cmd_disk_check(args: argparse.Namespace) -> int:
     return 1 if status.encrypted is False else 0
 
 
+def cmd_device_check(args: argparse.Namespace) -> int:
+    """Report the baseline device-security controls on this machine — disk
+    encryption, firewall, automatic screen lock, and (Windows) antivirus.
+    Read-only. Run it on the client's machine. Exits non-zero if any check
+    is positively OFF."""
+    from . import posture
+    checks = posture.check_all()
+    if args.json:
+        print(json.dumps([c.as_dict() for c in checks], indent=2))
+    else:
+        mark = {True: "ON ", False: "OFF", None: "???"}
+        for c in checks:
+            print(f"[{mark[c.status]}] {c.name}: {c.detail}")
+    return 1 if any(c.status is False for c in checks) else 0
+
+
 def cmd_verify(args: argparse.Namespace) -> int:
     vault = _open_vault(Path(args.vault), args.keyfile)
     problems = vault.verify()
@@ -473,13 +489,17 @@ def cmd_report(args: argparse.Namespace) -> int:
 
 
 def cmd_monitor(args: argparse.Namespace) -> int:
+    from . import posture as posture_mod
     cache = monitor_mod.load_hash_cache(Path(args.state))
     result = scanner.scan([Path(p) for p in args.paths], cache=cache)
+    # Runs on the client machine, so this is the right place to capture the
+    # device's baseline security controls for the report/packet.
+    device_posture = [c.as_dict() for c in posture_mod.check_all()]
     snapshot, drift, history = monitor_mod.record_run(
         Path(args.state), result, now_stamp(),
         vault=Path(args.vault) if args.vault else None,
         protected=[Path(p) for p in args.protected] or None,
-        hash_cache=cache,
+        hash_cache=cache, posture=device_posture,
     )
     if snapshot.get("awaiting_encryption"):
         print(f"ALERT: {snapshot['awaiting_encryption']} files in "
@@ -517,6 +537,7 @@ def cmd_monitor(args: argparse.Namespace) -> int:
             "history": history,
             "new_groups": drift.new_groups,
             "resolved_groups": drift.resolved_groups,
+            "posture": device_posture,
         }
         Path(args.html).write_text(
             report_mod.render_monitor_report(ctx), encoding="utf-8"
@@ -621,6 +642,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true",
                    help="emit machine-readable JSON")
     p.set_defaults(func=cmd_disk_check)
+
+    p = sub.add_parser("device-check", help="report baseline device "
+                                            "security (encryption, firewall, "
+                                            "screen lock, antivirus)")
+    p.add_argument("--json", action="store_true",
+                   help="emit machine-readable JSON")
+    p.set_defaults(func=cmd_device_check)
 
     p = sub.add_parser("packet", help="generate a full monthly compliance "
                                       "packet (security + breach + monitoring) "

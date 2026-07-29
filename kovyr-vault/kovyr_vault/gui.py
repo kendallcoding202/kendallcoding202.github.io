@@ -454,19 +454,20 @@ class App:
                                                          pady=(4, 0))
             self.tile_vars[key] = var
 
-        # Whole-disk encryption (FileVault / BitLocker): answers the
-        # assessment's "is data encrypted at rest?" at the device level,
-        # alongside the vault's file-level encryption.
-        disk = tk.Frame(tab, bg=SURFACE, padx=16, pady=12,
-                        highlightbackground=BORDER, highlightthickness=1)
-        disk.pack(fill="x", pady=(12, 0))
-        tk.Label(disk, text="DEVICE ENCRYPTION", fg=MUTED, bg=SURFACE,
+        # Baseline device-security checklist: the technical, machine-level
+        # controls Kovyr can verify read-only (disk encryption, firewall,
+        # auto screen lock, and — on Windows — antivirus). Policy/human
+        # controls stay on the manual assessment.
+        posture = tk.Frame(tab, bg=SURFACE, padx=16, pady=12,
+                           highlightbackground=BORDER, highlightthickness=1)
+        posture.pack(fill="x", pady=(12, 0))
+        tk.Label(posture, text="DEVICE SECURITY", fg=MUTED, bg=SURFACE,
                  font=("Segoe UI", 8, "bold")).pack(anchor="w")
-        self.disk_status = tk.Label(disk, text="Checking…", fg=MUTED,
-                                    bg=SURFACE, font=("Segoe UI", 11),
-                                    justify="left", wraplength=780)
-        self.disk_status.pack(anchor="w", pady=(3, 0))
-        self._start_disk_check()
+        self.posture_box = tk.Frame(posture, bg=SURFACE)
+        self.posture_box.pack(fill="x", pady=(5, 0))
+        tk.Label(self.posture_box, text="Checking…", fg=MUTED, bg=SURFACE,
+                 font=("Segoe UI", 10)).pack(anchor="w")
+        self._start_posture_check()
 
         buttons = tk.Frame(tab, bg="white")
         buttons.pack(anchor="w", pady=(22, 0))
@@ -1150,31 +1151,42 @@ class App:
 
     # ---------- status tab behavior ----------
 
-    def _start_disk_check(self) -> None:
-        """Assess FileVault/BitLocker off the UI thread — the OS tool is
-        fast but shelling out shouldn't ever stall the window."""
-        from . import diskcrypto
+    def _start_posture_check(self) -> None:
+        """Run the baseline device-security checks off the UI thread — the
+        OS tools are fast but shelling out shouldn't ever stall the window."""
+        from . import posture
 
         def worker() -> None:
             try:
-                status = diskcrypto.check()
+                checks = posture.check_all()
             except Exception:  # never let a status check crash the app
-                status = None
-            self.root.after(0, lambda: self._show_disk_status(status))
+                checks = None
+            self.root.after(0, lambda: self._show_posture(checks))
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _show_disk_status(self, status) -> None:
-        if status is None:
-            self.disk_status.config(
-                text="Couldn't check full-disk encryption.", fg=MUTED)
+    def _show_posture(self, checks) -> None:
+        tk = self.tk
+        for child in self.posture_box.winfo_children():
+            child.destroy()
+        if not checks:
+            tk.Label(self.posture_box, text="Couldn't run device checks.",
+                     fg=MUTED, bg=SURFACE, font=("Segoe UI", 10)).pack(
+                         anchor="w")
             return
-        if status.encrypted is True:
-            self.disk_status.config(text="✓ " + status.detail, fg=GOOD)
-        elif status.encrypted is False:
-            self.disk_status.config(text="⚠ " + status.detail, fg=BAD)
-        else:
-            self.disk_status.config(text=status.detail, fg=MUTED)
+        glyphs = {True: ("✓", GOOD), False: ("⚠", BAD), None: ("–", MUTED)}
+        for c in checks:
+            mark, color = glyphs[c.status]
+            row = tk.Frame(self.posture_box, bg=SURFACE)
+            row.pack(fill="x", pady=1)
+            tk.Label(row, text=mark, fg=color, bg=SURFACE, width=2,
+                     font=("Segoe UI", 11, "bold")).pack(side="left",
+                                                         anchor="n")
+            txt = tk.Label(row, bg=SURFACE, justify="left", wraplength=740,
+                           font=("Segoe UI", 10),
+                           text=f"{c.name}: {c.detail}",
+                           fg=(BAD if c.status is False else TEXT))
+            txt.pack(side="left", anchor="w")
 
     def refresh_status(self) -> None:
         if self.config is None:

@@ -91,3 +91,42 @@ def test_monitor_report_renders_history():
     assert "Exposure over time" in html
     assert "2026-07-01" in html
     assert "1 new" in html
+
+
+def test_posture_section_renders_states():
+    checks = [
+        {"key": "disk", "name": "Disk encryption", "status": True,
+         "detail": "FileVault is on."},
+        {"key": "firewall", "name": "Firewall", "status": False,
+         "detail": "The firewall is off — turn it on."},
+        {"key": "screenlock", "name": "Automatic screen lock",
+         "status": None, "detail": "Couldn't determine."},
+    ]
+    html = report.render_posture_section(checks)
+    assert "Device security controls" in html
+    assert "Disk encryption" in html
+    assert "Firewall" in html
+    assert "status-good" in html   # the on check
+    assert "status-bad" in html    # the off check
+
+
+def test_monitor_report_includes_posture():
+    ctx = {
+        "generated": "t", "version": "0.13.0",
+        "history": [{"timestamp": "2026-07-08 00:00 UTC",
+                     "files_scanned": 1, "bytes_scanned": 1,
+                     "duplicate_files": 0, "wasted_bytes": 0, "groups": []}],
+        "new_groups": [], "resolved_groups": [],
+        "posture": [{"key": "firewall", "name": "Firewall", "status": False,
+                     "detail": "The firewall is off."}],
+    }
+    html = report.render_monitor_report(ctx)
+    assert "Device security controls" in html
+    assert "Firewall" in html
+
+
+def test_posture_section_escapes_detail():
+    checks = [{"key": "x", "name": "<b>x</b>", "status": True,
+               "detail": "<script>bad</script>"}]
+    html = report.render_posture_section(checks)
+    assert "<script>bad</script>" not in html
