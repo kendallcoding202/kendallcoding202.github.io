@@ -220,6 +220,31 @@ for (const id of CAMPAIGN_ORDER) {
     check("grabbing while in LOCKDOWN gets you caught (loss)", hotGrab.outcome === "lost");
     check("grabForecast flags the caught risk when critical", grabForecast(mkFinal(0.95)).caught === true);
     check("grabForecast is clear when you have headroom", grabForecast(mkFinal(0.3)).caught === false);
+
+    // ACTIVE COUNTERMEASURES (ICE): defenses that fight back on a non-lethal hit.
+    const mkIce = (trait: "reactive" | "blackIce" | "regen" | undefined) => {
+        const g = createInitialState(7, "homeServer", ["knownExploit", "knownExploit", "knownExploit"]);
+        g.layers[g.current].defenses = [{ type: "firewall", strength: 12, maxStrength: 12, typeRevealed: true, strengthRevealed: true, trait }];
+        g.hand = ["knownExploit"];
+        return g;
+    };
+    // reactive: a non-lethal hit (−4) is self-repaired +2 → net 12 − 4 + 2 = 10
+    let re = mkIce("reactive");
+    re = applyAction(re, { type: "playCard", card: "knownExploit", target: 0 });
+    check("reactive armor self-repairs a non-lethal hit", re.layers[re.current].defenses[0].strength === 10);
+    // black ICE: hitting it adds +2 detection beyond the card's own noise
+    let bi = mkIce("blackIce"); const biBase = bi.detection;
+    bi = applyAction(bi, { type: "playCard", card: "knownExploit", target: 0 });
+    let plain = mkIce(undefined); const plainBase = plain.detection;
+    plain = applyAction(plain, { type: "playCard", card: "knownExploit", target: 0 });
+    check("black ICE bites back with +2 detection", (bi.detection - biBase) - (plain.detection - plainBase) === 2);
+    // regen: heals +3 at end of turn if left standing & damaged
+    let rg = mkIce("regen");
+    rg = applyAction(rg, { type: "playCard", card: "knownExploit", target: 0 });
+    const afterHit = rg.layers[rg.current].defenses[0].strength;
+    rg = applyAction(rg, { type: "endTurn" });
+    check("self-healing ICE knits back at end of turn", rg.layers[rg.current].defenses[0].strength === Math.min(12, afterHit + 3));
+    check("reactive/regen never exceed max strength", re.layers[re.current].defenses[0].strength <= 12 && rg.layers[rg.current].defenses[0].strength <= 12);
 }
 
 /* 8. Per-run modifiers: rolled onto every breach, entries stay clean,

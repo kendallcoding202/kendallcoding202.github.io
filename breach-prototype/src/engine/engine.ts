@@ -70,7 +70,7 @@ export function createInitialState(seed: number, systemKey: string = DEFAULT_SYS
             breached: false,
             defenses: l.defenses.map((d): Defense => {
                 const strength = Math.max(1, d.strength + sDelta);
-                return { type: d.type, strength, maxStrength: strength, typeRevealed: false, strengthRevealed: false };
+                return { type: d.type, strength, maxStrength: strength, typeRevealed: false, strengthRevealed: false, trait: d.trait };
             }),
         })),
         current: 0,
@@ -293,6 +293,17 @@ function damageDefense(s: GameState, idx: number, amount: number) {
     if (!d || d.strength <= 0) return;
     const overkill = amount - d.strength;
     d.strength = Math.max(0, d.strength - amount);
+    // ACTIVE COUNTERMEASURES (ICE): if a direct hit didn't kill it, it fights back.
+    // (Logic-bomb rot uses reduceDefenseAt and bypasses this — a HEX advantage.)
+    if (d.strength > 0 && amount > 0 && d.trait) {
+        if (d.trait === "reactive") {
+            d.strength = Math.min(d.maxStrength, d.strength + 2); // self-repairs the chip (doesn't grow the wall) — burst it instead
+            log(s, `⛨ Reactive Armor on ${defenseLabel(d)} repairs +2 — burst it, don't chip.`);
+        } else if (d.trait === "blackIce") {
+            log(s, `⚡ Black ICE on ${defenseLabel(d)} bites back — +2 detection.`);
+            addDetection(s, 2);
+        }
+    }
     // Kinetic Sink implant: excess damage spills onto the next standing defense
     if (s.overkillCarry && overkill > 0) {
         const next = layer.defenses.findIndex((x, i) => i !== idx && x.strength > 0);
@@ -302,6 +313,20 @@ function damageDefense(s: GameState, idx: number, amount: number) {
         }
     }
     afterBreachCheck(s);
+}
+
+/** Self-healing ICE on the current layer knits back up at end of turn if it's
+    still standing but damaged — finish it within a turn or lose the progress. */
+function regenDefenses(s: GameState) {
+    const layer = currentLayer(s);
+    if (!layer || layer.breached) return;
+    for (const d of layer.defenses) {
+        if (d.trait === "regen" && d.strength > 0 && d.strength < d.maxStrength) {
+            const before = d.strength;
+            d.strength = Math.min(d.maxStrength, d.strength + 3);
+            if (d.strength > before) log(s, `♻ Self-healing ICE on ${defenseLabel(d)} knits back +${d.strength - before}.`);
+        }
+    }
 }
 
 /** Reduce a specific defense on a specific layer (used by logic bombs that
@@ -879,6 +904,7 @@ export function applyAction(prev: GameState, action: Action): GameState {
         s.discard.push(...s.hand);
         s.hand = [];
         tickBombs(s); // planted logic bombs resolve as the turn closes
+        regenDefenses(s); // self-healing ICE knits back up if you left it standing
         systemReact(s);
         addDetection(s, s.baselineCreep);
         runSweep(s); // the intrusion scan periodically hunts for a too-quiet intruder

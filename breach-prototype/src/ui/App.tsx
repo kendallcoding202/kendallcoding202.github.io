@@ -71,6 +71,12 @@ const layerEmblem = (i: number, total: number) => (i === total - 1 ? "⊛" : LAY
 // each defence type gets its OWN mark, so every layer reads as a distinct wall
 const TYPE_EMBLEM: Record<string, string> = { firewall: "▦", ids: "◎", auth: "⊟", privilege: "▲", database: "▤" };
 const typeEmblem = (t: string) => TYPE_EMBLEM[t] || "◈";
+// active-countermeasure (ICE) display — revealed with the defense type
+const TRAIT_META: Record<string, { icon: string; label: string; tip: string }> = {
+    reactive: { icon: "⛨", label: "REACTIVE", tip: "Reactive Armor — hardens (+1 Strength) each time you hit it without killing it. Burst it in one blow; don't chip away." },
+    blackIce: { icon: "⚡", label: "BLACK ICE", tip: "Black ICE — bites back with +3 detection every time you attack it and don't kill it. One-shot it, or rot it with a worm (logic bombs don't trigger it)." },
+    regen: { icon: "♻", label: "REGEN", tip: "Self-healing — knits back +3 Strength at end of turn if it's still standing. Finish it within a single turn." },
+};
 // escalating danger colour by depth: cool green at the perimeter → hot red at the core
 const dangerColor = (i: number, total: number) => `hsl(${Math.round(150 - 150 * (total > 1 ? i / (total - 1) : 0))}, 78%, 58%)`;
 
@@ -123,6 +129,9 @@ function DefenseChip({ d, chipId, worm, targetable, preview, kbdNum, hit, onClic
             {hit && hit.amt > 0 ? <span className="dmg-float" key={hit.key}>−{hit.amt}</span> : null}
             {targetable && kbdNum ? <span className="kbd">{kbdNum}</span> : null}
             {down ? "✓ down" : d.typeRevealed ? <b className={"dtype t-" + d.type}>{d.type}</b> : <span className="muted">???</span>}
+            {!down && d.typeRevealed && d.trait && TRAIT_META[d.trait] && (
+                <span className={"dtrait tr-" + d.trait} title={TRAIT_META[d.trait].tip}><span className="tr-ico" aria-hidden>{TRAIT_META[d.trait].icon}</span>{TRAIT_META[d.trait].label}</span>
+            )}
             {!down && (
                 <span className="ds">
                     {d.strengthRevealed ? (

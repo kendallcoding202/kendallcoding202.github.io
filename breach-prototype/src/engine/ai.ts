@@ -138,6 +138,18 @@ function chooseClever(s: GameState): Action {
     let best: { action: Action; val: number } | null = null;
     const consider = (action: Action, val: number) => { if (val > 0 && (!best || val > best.val)) best = { action, val }; };
     const revealed = opts.filter((i) => defs[i].typeRevealed);
+    // ICE discipline: a direct hit that DOESN'T kill an active defense backfires —
+    // reactive hardens, regen heals it back, black ICE stings you. Value those
+    // non-lethal chips lower so the AI bursts them or breaks other defenses first.
+    const iceAdjust = (di: number, dmg: number, val: number): number => {
+        const t = defs[di]?.trait;
+        if (!t || dmg >= defs[di].strength) return val; // killing it removes the problem
+        // deprioritise (never zero out) chipping ICE, so the AI prefers to burst it
+        // or break other defenses first — but still commits when it's the only option.
+        if (t === "blackIce") return val * 0.7;
+        if (t === "reactive" || t === "regen") return val * 0.6;
+        return val;
+    };
     for (const id of s.hand) {
         const c = CARDS[id];
         if (!c || reserved.has(id) || !safe(id)) continue;
@@ -150,10 +162,14 @@ function chooseClever(s: GameState): Action {
                 const dmg = Math.min(predictDamage(s, id, t), defs[t].strength);
                 if (dmg > 0 && (!localBest || dmg > localBest.dmg)) localBest = { t, dmg };
             }
-            // logic bombs are delayed — value them at a discount so immediate hits win ties
-            if (localBest) consider(playT(id, localBest.t), c.effect === "logicBomb" ? localBest.dmg * 0.6 : localBest.dmg);
+            // logic bombs are delayed AND bypass ICE (reduceDefenseAt) — discount for delay
+            // but no ICE penalty; direct exploits get the ICE-discipline adjustment.
+            if (localBest) {
+                const val = c.effect === "logicBomb" ? localBest.dmg * 0.6 : iceAdjust(localBest.t, localBest.dmg, localBest.dmg);
+                consider(playT(id, localBest.t), val);
+            }
         } else if (c.effect === "precisionStrike") {
-            if (standing.length) consider(play(id), Math.min(predictDamage(s, id, weakest), defs[weakest].strength));
+            if (standing.length) consider(play(id), iceAdjust(weakest, Math.min(predictDamage(s, id, weakest), defs[weakest].strength), Math.min(predictDamage(s, id, weakest), defs[weakest].strength)));
         } else if (c.effect === "exploitAll") {
             const each = (c.power || 3);
             consider(play(id), standing.reduce((sum, i) => sum + Math.min(each, defs[i].strength), 0));

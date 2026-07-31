@@ -8,6 +8,11 @@ export type CardKind = "recon" | "exploit" | "stealth" | "utility";
 
 /** Defense archetypes. Exploits care which type they're up against. */
 export type DefenseType = "firewall" | "ids" | "auth" | "privilege" | "database";
+/** Active countermeasures ("ICE") — some defenses fight back when you attack them.
+    reactive = hardens (+1 str/max) on a non-lethal hit; blackIce = retaliates with
+    detection when struck; regen = self-heals at end of turn while it stands. Direct
+    exploits trigger these; logic-bomb rot bypasses them (a HEX advantage). */
+export type DefenseTrait = "reactive" | "blackIce" | "regen";
 
 export type EffectKind =
     | "revealOne"
@@ -87,6 +92,7 @@ export interface Defense {
     maxStrength: number;
     typeRevealed: boolean; // do we know WHAT it is?
     strengthRevealed: boolean; // do we know how strong?
+    trait?: DefenseTrait; // active countermeasure, if any (revealed with type)
 }
 
 export interface Layer {
@@ -103,7 +109,7 @@ export interface SystemDef {
     detectionMax: number;
     baselineCreep: number; // detection gained at end of each turn (time pressure)
     behavior?: SystemBehavior; // an intrinsic quirk that makes this target play distinctly
-    layers: { name: string; defenses: { type: DefenseType; strength: number }[] }[];
+    layers: { name: string; defenses: { type: DefenseType; strength: number; trait?: DefenseTrait }[] }[];
 }
 
 /** Intrinsic system behaviors — what makes a Black Site feel different from a

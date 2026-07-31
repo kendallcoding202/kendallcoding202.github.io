@@ -804,6 +804,13 @@ html.crt .wrap { padding-top: 24px; }
     animation: wormplant 0.4s cubic-bezier(.2,.9,.2,1.2), wormpulse 1.5s ease-in-out 0.4s infinite;
 }
 .dchip .worm-badge .worm-ico { color: #cf7bff; font-size: 11px; }
+/* ICE / active-countermeasure badge on a scanned defense */
+.dchip .dtrait { display: inline-flex; align-items: center; gap: 2px; font-size: 9.5px; font-weight: bold; letter-spacing: 0.4px; border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; line-height: 1.5; }
+.dchip .dtrait .tr-ico { font-size: 10.5px; }
+.dchip .dtrait.tr-reactive { color: #7fd0ff; }
+.dchip .dtrait.tr-blackIce { color: #ff5b6a; animation: iceflicker 1.6s steps(2) infinite; }
+.dchip .dtrait.tr-regen { color: #64e88a; }
+@keyframes iceflicker { 50% { opacity: 0.6; } }
 .dchip .worm-badge .worm-turns { color: #b48ad0; font-weight: normal; }
 .dchip .worm-badge .worm-x { color: #ff9be0; }
 @keyframes wormplant { 0% { transform: scale(0.5); opacity: 0; box-shadow: 0 0 16px #c86ff0; } 100% { transform: scale(1); opacity: 1; } }
