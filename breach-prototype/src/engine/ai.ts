@@ -121,6 +121,13 @@ function chooseClever(s: GameState): Action {
         if (has("socialEngineer")) return playT("socialEngineer", firstUnknown);
     }
 
+    // 5.5 Counter ICE — cold-boot a real active-defense wall before grinding into it
+    //     (only worth it on a chunky trait defense we can't just one-shot).
+    if (has("coldBoot") && safe("coldBoot")) {
+        const iced = opts.find((i) => defs[i].typeRevealed && defs[i].trait && defs[i].strength > 5);
+        if (iced != null) return playT("coldBoot", iced);
+    }
+
     // 6. Cash in planted worm bombs when the blast would breach or nearly clear
     //    a defense (Detonate hits for amt*turns each, immediately).
     if (has("detonate") && s.bombs.length && safe("detonate")) {

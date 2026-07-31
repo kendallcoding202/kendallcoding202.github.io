@@ -39,6 +39,16 @@ export const CARDS: Record<string, CardDef> = {
         id: "knownExploit", name: "Known Exploit", kind: "exploit", noise: 3, power: 4, effect: "knownExploit", needsTarget: true,
         text: "Reduce a REVEALED defense's Strength by 4. Against a hidden one: only 2 — and much louder.",
     },
+
+    /* ---------- ICE counters — answers to active countermeasures ---------- */
+    coldBoot: {
+        id: "coldBoot", name: "Cold Boot", kind: "utility", noise: 1, effect: "stripTrait", needsTarget: true,
+        text: "Cold-boot a defense — permanently strip its active countermeasure (Reactive / Black ICE / self-heal). Quiet, and reveals it.",
+    },
+    glassCutter: {
+        id: "glassCutter", name: "Glass Cutter", kind: "exploit", noise: 2, power: 6, effect: "pierce", needsTarget: true,
+        text: "A clean −6 that slips PAST active countermeasures — no reactive repair, no Black ICE sting, no matter what's guarding it.",
+    },
     scriptKiddie: {
         id: "scriptKiddie", name: "Script Kiddie", kind: "exploit", noise: 1, power: 2, effect: "knownExploit", needsTarget: true,
         text: "Cheap & quiet: reduce a REVEALED defense's Strength by 2. Hidden one: just 1, and louder.",

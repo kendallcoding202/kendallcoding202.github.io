@@ -493,6 +493,28 @@ function applyEffect(s: GameState, card: CardDef, target: number): number {
             log(s, `${card.name} reshapes to fit ${d.typeRevealed ? d.type : "the target"} — ${power} off.`);
             return 0;
         }
+        case "stripTrait": {
+            // ICE COUNTER: cold-boot a defense's active countermeasure so it stops fighting back
+            if (!d) return 0;
+            d.typeRevealed = true; // you probed it — you see what it is
+            if (d.trait) {
+                const was = d.trait === "blackIce" ? "Black ICE" : d.trait === "reactive" ? "Reactive Armor" : "self-healing ICE";
+                d.trait = undefined;
+                log(s, `${card.name} cold-boots ${d.type} — ${was} stripped. It fights back no more.`);
+            } else {
+                log(s, `${card.name} probes ${d.type} — no countermeasure to strip.`);
+            }
+            return 0;
+        }
+        case "pierce": {
+            // ICE COUNTER: a clean cut that BYPASSES active countermeasures (reduceDefenseAt
+            // skips the on-hit trait triggers, the same path worm-rot uses)
+            if (!d) return 0;
+            const power = (card.power || 5) + takeExploitBonus(s);
+            reduceDefenseAt(s, s.current, target, power);
+            log(s, `${card.name} slips a clean ${power} past the countermeasures on ${d.typeRevealed ? d.type : "the defense"}.`);
+            return 0;
+        }
         case "precisionStrike": {
             // auto-hits the weakest standing defense on the layer (no target needed)
             const idx = layer ? focusDefenseIndex(layer) : -1;
@@ -789,6 +811,8 @@ export function previewOnTarget(s: GameState, cardId: string, idx: number): stri
         case "zeroDay": return "SHATTER";
         case "bruteForce": return `−${(card.power || 6) + bonus} · loud`;
         case "backdoor": return `−${(card.power || 4) + bonus} · quiet`;
+        case "pierce": return `−${(card.power || 5) + bonus} · ignores ICE`;
+        case "stripTrait": return d.trait ? "strip ICE" : "no ICE here";
         default: return null;
     }
 }
@@ -824,6 +848,7 @@ export function predictDamage(s: GameState, cardId: string, idx: number): number
         case "zeroDay": return 999;
         case "bruteForce": return (card.power || 6) + bonus;
         case "backdoor": return (card.power || 4) + bonus;
+        case "pierce": return (card.power || 5) + bonus;
         case "revealAndWeaken": return card.power || 2;
         default: return 0;
     }

@@ -245,6 +245,17 @@ for (const id of CAMPAIGN_ORDER) {
     rg = applyAction(rg, { type: "endTurn" });
     check("self-healing ICE knits back at end of turn", rg.layers[rg.current].defenses[0].strength === Math.min(12, afterHit + 3));
     check("reactive/regen never exceed max strength", re.layers[re.current].defenses[0].strength <= 12 && rg.layers[rg.current].defenses[0].strength <= 12);
+
+    // ICE COUNTERS: Cold Boot strips the trait; Glass Cutter pierces past it.
+    let cb = mkIce("reactive"); cb.hand = ["coldBoot"];
+    cb = applyAction(cb, { type: "playCard", card: "coldBoot", target: 0 });
+    check("Cold Boot strips the active countermeasure", cb.layers[cb.current].defenses[0].trait === undefined);
+    let gc = mkIce("reactive"); gc.hand = ["glassCutter"];
+    gc = applyAction(gc, { type: "playCard", card: "glassCutter", target: 0 });
+    check("Glass Cutter pierces reactive without triggering repair", gc.layers[gc.current].defenses[0].strength === 6);
+    let gi = mkIce("blackIce"); const giBase = gi.detection; gi.hand = ["glassCutter"];
+    gi = applyAction(gi, { type: "playCard", card: "glassCutter", target: 0 });
+    check("Glass Cutter draws no Black ICE sting", gi.detection - giBase === 2);
 }
 
 /* 8. Per-run modifiers: rolled onto every breach, entries stay clean,

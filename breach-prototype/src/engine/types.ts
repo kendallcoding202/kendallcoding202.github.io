@@ -64,6 +64,8 @@ export type EffectKind =
     | "patchScanner"
     | "draw"
     | "payload"
+    | "stripTrait"
+    | "pierce"
     | "killSwitch";
 
 /** A card is DATA. The engine reads `effect` + tuning numbers; no logic here. */

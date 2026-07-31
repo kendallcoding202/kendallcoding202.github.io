@@ -25,6 +25,8 @@ export const REWARD_POOL: string[] = [
     "quickHack", "daisyChain", "scriptRunner", "macro", "overflow",
     "heuristicEngine", "bufferOverflow", "portKnock", "sqlmap", "dictionaryAttack",
     "wafBypass", "icePick", "privEsc", "tokenTheft", "honeypot",
+    // --- ICE counters: answers to active countermeasures ---
+    "coldBoot", "glassCutter",
 ];
 
 type Topo = { id: string; col: number; row: number; next: string[] }[];
