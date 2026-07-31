@@ -119,7 +119,24 @@ export const SYSTEMS: Record<string, SystemDef> = {
             { name: "Objective: Root Ledger", defenses: [{ type: "database", strength: 10 }, { type: "auth", strength: 7 }] },
         ],
     },
+    // ---- THE BOSS. Oracle-finale only. A living opponent, not a static wall. ----
+    theCore: {
+        key: "theCore",
+        name: "THE CORE",
+        flavor: "The rogue's heart — awake, and reading you. Every layer you cross, it learns and hardens. The deeper you go the faster the trace runs, and past the halfway mark it starts stitching its own wounds shut. The last door regenerates and bites back. Bring everything.",
+        difficulty: 6,
+        detectionMax: 170,
+        baselineCreep: 5,
+        behavior: "rogueAI",
+        layers: [
+            { name: "Outer Shell", defenses: [{ type: "firewall", strength: 9 }, { type: "ids", strength: 7, trait: "blackIce" }] },
+            { name: "Learned Perimeter", defenses: [{ type: "ids", strength: 9 }, { type: "auth", strength: 8 }] },
+            { name: "Deep Logic", defenses: [{ type: "privilege", strength: 10, trait: "reactive" }, { type: "firewall", strength: 7 }] },
+            { name: "The Rewrite", defenses: [{ type: "auth", strength: 9 }, { type: "ids", strength: 8 }] },
+            { name: "Objective: THE CORE", defenses: [{ type: "database", strength: 10, trait: "regen" }, { type: "privilege", strength: 8 }] },
+        ],
+    },
 };
 
-export const SYSTEM_ORDER = ["homeServer", "smallBusiness", "honeypotTrap", "corpNetwork", "liveOps", "meshGrid", "blackSite"];
+export const SYSTEM_ORDER = ["homeServer", "smallBusiness", "honeypotTrap", "corpNetwork", "liveOps", "meshGrid", "blackSite", "theCore"];
 export const DEFAULT_SYSTEM = "homeServer";

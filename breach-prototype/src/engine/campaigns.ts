@@ -253,7 +253,7 @@ const CAMPAIGN_LIST: Campaign[] = [
                 { label: "A key — a silent way in", outcome: "ORACLE folds itself into a stealth tool.", addCard: "trojan", heat: -8 },
                 { label: "A blade — raw force", outcome: "ORACLE hardens into a weapon for the last door.", addCard: "empBurst", heat: 4 },
             ] },
-            Z: { title: "The Core", blurb: "The rogue's heart — the hardest system in the net, defending itself with everything it has stolen. ORACLE goes silent. Just you and the thing in the wire.", systemKey: "blackSite", reward: 100 },
+            Z: { title: "The Core", blurb: "The rogue's heart — awake and reading you. It learns every door you cross, quickens the trace the deeper you cut, and stitches its own wounds shut. The last layer regenerates and bites back. ORACLE goes silent. Just you and the thing in the wire.", systemKey: "theCore", reward: 100 },
         }),
     },
 ];

@@ -78,6 +78,7 @@ const BEHAVIOR_META: Record<string, { icon: string; label: string; tip: string }
     honeypot: { icon: "🍯", label: "HONEYPOT", tip: "Bait. Cracking each layer trips a silent alarm (+detection). Get in and out FAST — don't linger." },
     liveClock: { icon: "📡", label: "LIVE-MONITORED", tip: "Watched in real time — the trace ACCELERATES every turn. Speed beats cleverness here." },
     selfHealing: { icon: "🕸", label: "SELF-HEALING", tip: "Damaged defenses knit back +2 at end of every turn. Overwhelm a whole layer in one push, or you lose the ground." },
+    rogueAI: { icon: "🧠", label: "THE ROGUE", tip: "A living opponent. It learns every door you cross (+1 to the next layer), the trace quickens the deeper you cut, and it stitches deep wounds shut — the last door regenerates. Bring your whole kit." },
 };
 // active-countermeasure (ICE) display — revealed with the defense type
 const TRAIT_META: Record<string, { icon: string; label: string; tip: string }> = {

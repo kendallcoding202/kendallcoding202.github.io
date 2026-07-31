@@ -417,6 +417,16 @@ function applyBehaviorOnBreach(s: GameState) {
         const spike = Math.round(s.detectionMax * 0.09);
         log(s, `🍯 Honeypot — cracking that layer tripped a silent alarm (+${spike} detection).`);
         addDetection(s, spike);
+    } else if (s.behavior === "rogueAI") {
+        // THE BOSS. It learns you: the layer you now face reinforces (adaptive), and the
+        // fight escalates in telegraphed phases the deeper you cut (handled in onTurn).
+        const l = s.layers[s.current];
+        let hardened = 0;
+        if (l && !l.breached) l.defenses.forEach((d) => { if (d.strength > 0) { d.strength += 1; d.maxStrength += 1; hardened++; } });
+        if (hardened) log(s, `🧠 It learns — the rogue rewrites the door ahead. ${hardened} defense${hardened === 1 ? "" : "s"} hardened (+1).`);
+        // phase call-outs so the escalation is never a surprise
+        if (s.current === 2) log(s, "🧠 THE ROGUE is awake now — the trace quickens the deeper you go.");
+        if (s.current === 3) log(s, "🧠 THE ROGUE starts stitching its wounds — damaged defenses here knit back each turn.");
     }
 }
 
@@ -433,6 +443,24 @@ function applyBehaviorOnTurn(s: GameState) {
         let healed = 0;
         layer.defenses.forEach((d) => { if (d.strength > 0 && d.strength < d.maxStrength) { d.strength = Math.min(d.maxStrength, d.strength + 2); healed++; } });
         if (healed) log(s, `🕸 Self-healing mesh — ${healed} damaged defense${healed === 1 ? "" : "s"} knit back +2. Finish a layer in one push.`);
+    } else if (s.behavior === "rogueAI") {
+        // THE BOSS, phased by how deep you've cut (s.current = current layer index):
+        //  · depth ≥2  → the trace accelerates, +depth each turn (it's awake and hunting)
+        //  · depth ≥3  → the current layer stitches itself back +2 (it heals the deep wounds)
+        //  · a fully SILENT turn past the halfway mark → it feels you holding still (+3)
+        // Everything is telegraphed above via onBreach call-outs; nothing here is a surprise.
+        const depth = s.current;
+        if (depth >= 2) {
+            const accel = Math.floor(depth / 2); // depth 2→+1, 3→+1, 4→+2 — present, not runaway
+            addDetection(s, accel);
+            log(s, `🧠 The rogue is hunting — the trace quickens (+${accel}).`);
+        }
+        if (depth >= 3 && layer && !layer.breached) {
+            // stitch NON-regen wounds only (regen-trait defenses already self-heal — no double-dip)
+            let healed = 0;
+            layer.defenses.forEach((d) => { if (d.trait !== "regen" && d.strength > 0 && d.strength < d.maxStrength) { d.strength = Math.min(d.maxStrength, d.strength + 2); healed++; } });
+            if (healed) log(s, `🧠 It stitches the wound — ${healed} defense${healed === 1 ? "" : "s"} knit back +2. Finish a layer in one push.`);
+        }
     }
 }
 

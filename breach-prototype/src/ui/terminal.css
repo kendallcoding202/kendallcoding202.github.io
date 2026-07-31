@@ -1186,6 +1186,8 @@ button.term.ghost:hover { background: var(--dim); color: #000; }
 .sysbehavior.beh-selfHealing { color: #9fd7b4; }
 .sysbehavior.beh-selfHealing b { color: #8fe6a8; }
 .sysbehavior.beh-honeypot b { color: #ffcf4a; }
+.sysbehavior.beh-rogueAI { color: #ff9a9a; }
+.sysbehavior.beh-rogueAI b { color: #ff5a5a; text-shadow: 0 0 8px #ff3a3a66; }
 .modbar {
     display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
     margin-top: 6px; padding: 5px 12px; border: 1px solid var(--line); background: var(--panel);

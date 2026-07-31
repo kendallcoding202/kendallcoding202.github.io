@@ -279,6 +279,33 @@ for (const id of CAMPAIGN_ORDER) {
     sh.layers[0].defenses[0].strength = 3; // damaged (max 7)
     sh = applyAction(sh, { type: "endTurn" });
     check("self-healing mesh knits damaged defenses back +2", sh.layers[0].defenses[0].strength === 5);
+
+    // THE BOSS — rogueAI: a living opponent that phases in every threat as you cut deeper.
+    let bz = createInitialState(3, "theCore");
+    check("boss carries the rogueAI behavior", bz.behavior === "rogueAI");
+    check("boss is the deepest system (6 layers not required, but 5+ layers)", bz.layers.length === 5);
+    // it LEARNS: breaching hardens the layer you now face (+1 each), like adaptive
+    let bl = createInitialState(5, "theCore", ["meltdown"]);
+    const nextMaxBefore = bl.layers[1].defenses[0].maxStrength;
+    bl.layers[0].defenses[1].strength = 0;   // clear the second outer-shell defense
+    bl.layers[0].defenses[0].strength = 1;    // leave one live defense meltdown can kill → breach
+    bl.layers[0].defenses[0].typeRevealed = true;
+    bl = applyAction(bl, { type: "playCard", card: "meltdown", target: 0 });
+    check("boss learns: the next layer hardens on breach (+1)", bl.layers[1].defenses[0].maxStrength === nextMaxBefore + 1);
+    // it HUNTS: past the midpoint the trace accelerates by floor(depth/2) each turn
+    let bh = createInitialState(3, "theCore", ["quietScan"]);
+    bh.current = 3; // simulate having cut deep → accel = floor(3/2) = 1
+    const bhCreep = bh.baselineCreep;
+    bh = applyAction(bh, { type: "endTurn" });
+    check("boss hunts: trace accelerates past the midpoint", bh.detection === bhCreep + 1);
+    // it HEALS deep NON-regen wounds +2 (regen defenses already self-heal — no double-dip)
+    let bhl = createInitialState(3, "theCore");
+    bhl.current = 3;
+    bhl.layers[3].defenses[1].strength = 4; // damaged ids (max 8, no regen trait — isolates the boss heal)
+    bhl = applyAction(bhl, { type: "endTurn" });
+    check("boss stitches deep non-regen wounds +2", bhl.layers[3].defenses[1].strength === 6);
+    // the objective bites back: a regenerating DB behind it — needs melt or burst, not chip
+    check("boss objective carries a regenerating database", bz.layers[4].defenses.some((d) => d.type === "database" && d.trait === "regen"));
 }
 
 /* 8. Per-run modifiers: rolled onto every breach, entries stay clean,
