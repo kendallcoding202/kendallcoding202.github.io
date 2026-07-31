@@ -256,6 +256,14 @@ for (const id of CAMPAIGN_ORDER) {
     let gi = mkIce("blackIce"); const giBase = gi.detection; gi.hand = ["glassCutter"];
     gi = applyAction(gi, { type: "playCard", card: "glassCutter", target: 0 });
     check("Glass Cutter draws no Black ICE sting", gi.detection - giBase === 2);
+
+    // CORRODE: stacks amplify every direct hit.
+    let co = mkIce(undefined); co.layers[co.current].defenses[0].corrode = 2; co.hand = ["knownExploit"];
+    co = applyAction(co, { type: "playCard", card: "knownExploit", target: 0 });
+    check("corroded armor takes amplified damage (+corrode per hit)", co.layers[co.current].defenses[0].strength === 12 - (4 + 2));
+    let ca = mkIce(undefined); ca.hand = ["corrosiveAgent"];
+    ca = applyAction(ca, { type: "playCard", card: "corrosiveAgent", target: 0 });
+    check("Corrosive Agent applies CORRODE ×2", (ca.layers[ca.current].defenses[0].corrode || 0) === 2);
 }
 
 /* 8. Per-run modifiers: rolled onto every breach, entries stay clean,

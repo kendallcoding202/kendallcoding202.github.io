@@ -27,6 +27,8 @@ export const REWARD_POOL: string[] = [
     "wafBypass", "icePick", "privEsc", "tokenTheft", "honeypot",
     // --- ICE counters: answers to active countermeasures ---
     "coldBoot", "glassCutter",
+    // --- CORRODE: armor-melting build-around ---
+    "corrosiveAgent", "acidWash",
 ];
 
 type Topo = { id: string; col: number; row: number; next: string[] }[];

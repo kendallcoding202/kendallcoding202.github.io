@@ -804,6 +804,9 @@ html.crt .wrap { padding-top: 24px; }
     animation: wormplant 0.4s cubic-bezier(.2,.9,.2,1.2), wormpulse 1.5s ease-in-out 0.4s infinite;
 }
 .dchip .worm-badge .worm-ico { color: #cf7bff; font-size: 11px; }
+/* CORRODE stacks on a defense — acid-green, armor-melting */
+.dchip .corrode-badge { display: inline-flex; align-items: center; gap: 1px; font-size: 10px; font-weight: bold; color: #a6e22e; border: 1px solid #6f9c1f; border-radius: 3px; padding: 0 3px; background: #1a2408; line-height: 1.5; }
+.dchip .corrode-badge .cr-ico { font-size: 11px; }
 /* ICE / active-countermeasure badge on a scanned defense */
 .dchip .dtrait { display: inline-flex; align-items: center; gap: 2px; font-size: 9.5px; font-weight: bold; letter-spacing: 0.4px; border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; line-height: 1.5; }
 .dchip .dtrait .tr-ico { font-size: 10.5px; }

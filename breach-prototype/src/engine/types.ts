@@ -66,6 +66,8 @@ export type EffectKind =
     | "payload"
     | "stripTrait"
     | "pierce"
+    | "corrode"
+    | "corrodeAll"
     | "killSwitch";
 
 /** A card is DATA. The engine reads `effect` + tuning numbers; no logic here. */
@@ -95,6 +97,7 @@ export interface Defense {
     typeRevealed: boolean; // do we know WHAT it is?
     strengthRevealed: boolean; // do we know how strong?
     trait?: DefenseTrait; // active countermeasure, if any (revealed with type)
+    corrode?: number; // CORRODE stacks — each adds +1 damage taken from every direct hit
 }
 
 export interface Layer {

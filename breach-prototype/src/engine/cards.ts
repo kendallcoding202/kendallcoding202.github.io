@@ -49,6 +49,16 @@ export const CARDS: Record<string, CardDef> = {
         id: "glassCutter", name: "Glass Cutter", kind: "exploit", noise: 2, power: 6, effect: "pierce", needsTarget: true,
         text: "A clean −6 that slips PAST active countermeasures — no reactive repair, no Black ICE sting, no matter what's guarding it.",
     },
+
+    /* ---------- CORRODE — melt the armor, then break it cheap ---------- */
+    corrosiveAgent: {
+        id: "corrosiveAgent", name: "Corrosive Agent", kind: "exploit", noise: 1, amount: 2, effect: "corrode", needsTarget: true, tag: "worm",
+        text: "Apply CORRODE ×2 to a defense — each stack makes it take +1 damage from EVERY hit. Stacks, lasts the whole breach. Quiet. Melts reactive/self-heal ICE.",
+    },
+    acidWash: {
+        id: "acidWash", name: "Acid Wash", kind: "exploit", noise: 3, amount: 1, effect: "corrodeAll", needsTarget: false, tag: "worm",
+        text: "Spray corrosion across the WHOLE layer — CORRODE +1 on every defense. Soften a multi-defense chokepoint, then tear through it.",
+    },
     scriptKiddie: {
         id: "scriptKiddie", name: "Script Kiddie", kind: "exploit", noise: 1, power: 2, effect: "knownExploit", needsTarget: true,
         text: "Cheap & quiet: reduce a REVEALED defense's Strength by 2. Hidden one: just 1, and louder.",

@@ -128,6 +128,15 @@ function chooseClever(s: GameState): Action {
         if (iced != null) return playT("coldBoot", iced);
     }
 
+    // 5.6 CORRODE setup — melt a chunky wall (or a multi-defense chokepoint) before hitting it
+    if (detFrac < 0.6) {
+        if (has("acidWash") && standing.filter((i) => defs[i].typeRevealed && defs[i].strength >= 6).length >= 2 && safe("acidWash")) return play("acidWash");
+        if (has("corrosiveAgent") && safe("corrosiveAgent")) {
+            const big = opts.find((i) => defs[i].typeRevealed && defs[i].strength >= 9 && (defs[i].corrode || 0) < 4);
+            if (big != null) return playT("corrosiveAgent", big);
+        }
+    }
+
     // 6. Cash in planted worm bombs when the blast would breach or nearly clear
     //    a defense (Detonate hits for amt*turns each, immediately).
     if (has("detonate") && s.bombs.length && safe("detonate")) {

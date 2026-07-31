@@ -70,7 +70,7 @@ export function createInitialState(seed: number, systemKey: string = DEFAULT_SYS
             breached: false,
             defenses: l.defenses.map((d): Defense => {
                 const strength = Math.max(1, d.strength + sDelta);
-                return { type: d.type, strength, maxStrength: strength, typeRevealed: false, strengthRevealed: false, trait: d.trait };
+                return { type: d.type, strength, maxStrength: strength, typeRevealed: false, strengthRevealed: false, trait: d.trait, corrode: 0 };
             }),
         })),
         current: 0,
@@ -291,8 +291,12 @@ function damageDefense(s: GameState, idx: number, amount: number) {
     if (!layer || layer.breached) return;
     const d = layer.defenses[idx];
     if (!d || d.strength <= 0) return;
-    const overkill = amount - d.strength;
-    d.strength = Math.max(0, d.strength - amount);
+    // CORRODE: each stack melts +1 more off this defense per direct hit (armor decay).
+    const amp = d.corrode || 0;
+    const total = amount + amp;
+    if (amp > 0 && amount > 0) log(s, `⚗ Corroded armor gives — the hit bites ${amp} deeper (${total}).`);
+    const overkill = total - d.strength;
+    d.strength = Math.max(0, d.strength - total);
     // ACTIVE COUNTERMEASURES (ICE): if a direct hit didn't kill it, it fights back.
     // (Logic-bomb rot uses reduceDefenseAt and bypasses this — a HEX advantage.)
     if (d.strength > 0 && amount > 0 && d.trait) {
@@ -513,6 +517,22 @@ function applyEffect(s: GameState, card: CardDef, target: number): number {
             const power = (card.power || 5) + takeExploitBonus(s);
             reduceDefenseAt(s, s.current, target, power);
             log(s, `${card.name} slips a clean ${power} past the countermeasures on ${d.typeRevealed ? d.type : "the defense"}.`);
+            return 0;
+        }
+        case "corrode": {
+            // stack CORRODE — each stack makes this defense take +1 from every hit
+            if (!d) return 0;
+            const n = card.amount || 2;
+            d.corrode = (d.corrode || 0) + n;
+            log(s, `${card.name} eats into ${d.typeRevealed ? d.type : "the defense"} — CORRODE ×${d.corrode} (+${d.corrode} damage taken per hit).`);
+            return 0;
+        }
+        case "corrodeAll": {
+            // spray corrosion across the whole layer
+            const n = card.amount || 1;
+            let hit = 0;
+            defs.forEach((x) => { if (x.strength > 0) { x.corrode = (x.corrode || 0) + n; hit++; } });
+            log(s, `${card.name} — corrosion spreads across ${hit} defense${hit === 1 ? "" : "s"} (+${n} each).`);
             return 0;
         }
         case "precisionStrike": {
@@ -783,7 +803,7 @@ export function previewOnTarget(s: GameState, cardId: string, idx: number): stri
     if (!card || !card.needsTarget || !layer) return null;
     const d = layer.defenses[idx];
     if (!d || d.strength <= 0) return null;
-    const bonus = s.exploitBonus + s.exploitFlatBonus;
+    const bonus = s.exploitBonus + s.exploitFlatBonus + (d.corrode || 0);
     const plus = bonus ? ` (+${bonus})` : "";
     switch (card.effect) {
         case "revealOne": return "reveal";
@@ -813,6 +833,8 @@ export function previewOnTarget(s: GameState, cardId: string, idx: number): stri
         case "backdoor": return `−${(card.power || 4) + bonus} · quiet`;
         case "pierce": return `−${(card.power || 5) + bonus} · ignores ICE`;
         case "stripTrait": return d.trait ? "strip ICE" : "no ICE here";
+        case "corrode": return `CORRODE +${card.amount || 2} → ×${(d.corrode || 0) + (card.amount || 2)}`;
+        case "corrodeAll": return `CORRODE +${card.amount || 1} · all`;
         default: return null;
     }
 }
@@ -825,7 +847,7 @@ export function predictDamage(s: GameState, cardId: string, idx: number): number
     if (!card || !layer) return 0;
     const d = layer.defenses[idx];
     if (!d || d.strength <= 0) return 0;
-    const bonus = s.exploitBonus + s.exploitFlatBonus;
+    const bonus = s.exploitBonus + s.exploitFlatBonus + (d.corrode || 0); // corroded armor takes more
     switch (card.effect) {
         case "knownExploit": return (d.typeRevealed ? card.power || 4 : Math.ceil((card.power || 4) / 2)) + bonus;
         case "typedExploit": return (d.type === card.matchType ? Math.round((card.power || 5) * 1.6) : Math.round((card.power || 5) * 0.4)) + bonus;

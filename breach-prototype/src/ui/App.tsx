@@ -139,6 +139,11 @@ function DefenseChip({ d, chipId, worm, targetable, preview, kbdNum, hit, onClic
                     ) : (<span className="snum">STR ??</span>)}
                 </span>
             )}
+            {!down && (d.corrode || 0) > 0 && (
+                <span className="corrode-badge" title={`Corroded ×${d.corrode} — this defense takes +${d.corrode} extra damage from every direct hit. Stacks; lasts the whole breach.`}>
+                    <span className="cr-ico" aria-hidden>⚗</span>×{d.corrode}
+                </span>
+            )}
             {worm && !down && (
                 <span className="worm-badge" title={`${worm.count > 1 ? worm.count + " worms" : "Worm"} eating this defense: −${worm.amt} strength at end of each turn, ${worm.turns} turn${worm.turns === 1 ? "" : "s"} left.`}>
                     <span className="worm-ico" aria-hidden>☣</span>−{worm.amt}/t<span className="worm-turns"> · {worm.turns}⟳</span>{worm.count > 1 ? <span className="worm-x"> ×{worm.count}</span> : null}
