@@ -238,12 +238,22 @@ function CommsPanel({ op, opState, feed, onPoke }: { op: string; opState: "calm"
     operator on the left (always with you), and the watcher/villain on the right
     that stays dormant while you're a ghost, then rises in and escalates as the
     trace climbs. Hidden on narrower screens (the inline CommsPanel covers those). */
-function CommsTowers({ op, opState, alert, feed, onPoke, onTaunt }: { op: string; opState: "calm" | "tense" | "alarmed"; alert: string; feed: { who: "op" | "watcher"; text: string; key: number }[]; onPoke: () => void; onTaunt: () => void }) {
+function CommsTowers({ op, opState, alert, detFrac, feed, onPoke, onTaunt }: { op: string; opState: "calm" | "tense" | "alarmed"; alert: string; detFrac: number; feed: { who: "op" | "watcher"; text: string; key: number }[]; onPoke: () => void; onTaunt: () => void }) {
     const opLines = feed.filter((f) => f.who === "op").slice(-7);
     const watcherLines = feed.filter((f) => f.who === "watcher").slice(-7);
     const vClass = alert === "LOCKDOWN" ? "lockdown" : alert === "ALERTED" ? "hunting" : alert === "SUSPICIOUS" ? "watching" : "dormant";
     const vState: "calm" | "tense" | "alarmed" = alert === "LOCKDOWN" ? "alarmed" : alert === "ALERTED" || alert === "SUSPICIOUS" ? "tense" : "calm";
     const vLabel = alert === "LOCKDOWN" ? "⌁ TRACE LOCKED" : alert === "ALERTED" ? "⌁ HUNTING YOU" : alert === "SUSPICIOUS" ? "⌁ ON YOUR TRAIL" : "⌁ TRACE DORMANT";
+    // live vitals fill the space under each portrait: the operator's signal drains
+    // as the trace climbs (with a pulse that races when things get hot); the watcher's
+    // lock fills toward you. Two mirrored bars — pressure you can feel at a glance.
+    const f = Math.max(0, Math.min(1, detFrac));
+    const signal = Math.round((1 - f) * 100);
+    const bpm = 60 + Math.round(f * 84); // 60 calm → ~144 in lockdown
+    const beat = (60 / bpm).toFixed(2) + "s";
+    const sigTone = f >= 0.62 ? "crit" : f >= 0.32 ? "warn" : "ok";
+    const lock = Math.round(f * 100);
+    const proximity = alert === "LOCKDOWN" ? "POSITION LOCKED" : alert === "ALERTED" ? "CLOSING IN" : alert === "SUSPICIOUS" ? "NARROWING" : "SWEEPING BLIND";
     return (
         <>
             <aside className={"comms-tower hero fx-" + opState} aria-hidden>
@@ -252,6 +262,11 @@ function CommsTowers({ op, opState, alert, feed, onPoke, onTaunt }: { op: string
                     <HeroFace op={op} state={opState} />
                     <span className="tower-tag">{opState === "alarmed" ? "ON EDGE" : opState === "tense" ? "FOCUSED" : "GHOST"}</span>
                 </button>
+                <div className={"tower-vitals sig-" + sigTone}>
+                    <div className="vrow"><span className="vheart" style={{ animationDuration: beat }}>♥</span> <b>{bpm}</b> <span className="vu">BPM</span></div>
+                    <div className="vbar"><i style={{ width: signal + "%" }} /></div>
+                    <div className="vlabel">SIGNAL INTEGRITY · {signal}%</div>
+                </div>
                 <div className="tower-feed">
                     {opLines.length ? opLines.map((l) => <div key={l.key} className="tline op">{l.text}</div>) : <div className="tline muted">…secure channel open…</div>}
                 </div>
@@ -260,6 +275,11 @@ function CommsTowers({ op, opState, alert, feed, onPoke, onTaunt }: { op: string
             <aside className={"comms-tower villain " + vClass} onClick={onTaunt} title="the watcher" aria-hidden>
                 <div className="tower-head"><span className="cdot" /> {vLabel}</div>
                 <div className="tower-face"><WatcherFace state={vState} /><span className="tower-tag">{alert}</span></div>
+                <div className="tower-vitals lock">
+                    <div className="vlabel">TRACE LOCK · {lock}%</div>
+                    <div className="vbar"><i style={{ width: lock + "%" }} /></div>
+                    <div className="vrow">◎ {proximity}</div>
+                </div>
                 <div className="tower-feed">
                     {vClass === "dormant"
                         ? <div className="tline muted">standby · no signal on you yet</div>
@@ -288,6 +308,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
     const [hits, setHits] = useState<Record<string, { amt: number; key: number }>>({});
     const [projectiles, setProjectiles] = useState<{ id: number; cls: string; glyph: string; x: number; y: number; dx: number; dy: number; dur: number; delay: number }[]>([]);
     const [shatterIdx, setShatterIdx] = useState<number | null>(null);
+    const [castKind, setCastKind] = useState<string | null>(null); // console recoil flash, coloured by the card just played
     const [punching, setPunching] = useState(false); // forward camera-lunge when you cross into the next layer
     const [feed, setFeed] = useState<{ who: "op" | "watcher"; text: string; key: number }[]>([]); // the live comms transcript
     const fxKey = useRef(0);
@@ -299,36 +320,44 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
     const say = (kind: string) => push("op", pickQuip(kind));
     const watcherSays = () => push("watcher", pickFrom(WATCHER_LINES));
 
-    // Kinetic attack FX: playing an attack sends something ACROSS the screen that
-    // penetrates the layer — an exploit fires a packet up from your console; a
-    // bug/worm crawls in from the edge and burrows in. Reserved for attacks so the
-    // motion reads as meaningful, not decoration. Skipped under reduced-motion.
-    const spawnAttackFx = (card: string, target?: number) => {
+    // Cast FX: EVERY card sends something into the system so a play always lands,
+    // not just attacks. An exploit fires a hard packet up from your console; a
+    // bug/worm crawls in from the edge and burrows; recon pings a scan pulse up;
+    // stealth breathes a soft ghost-ripple; utility sends a tool spark. The motion
+    // and colour read the card's kind. Skipped under reduced-motion.
+    const spawnCastFx = (card: string, target?: number) => {
         const c = CARDS[card];
         if (!c || typeof window === "undefined") return;
+        // the console recoils on EVERY play — a themed muzzle flash at the launch rail
+        setCastKind(c.kind); window.setTimeout(() => setCastKind((k) => (k === c.kind ? null : k)), 320);
         try { if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return; } catch { /* no matchMedia */ }
         const eff = c.effect || "";
         const isWorm = /bomb|parasite|contagion|trojan|necro|incubate|worm|detonate|blight|viral/i.test(eff);
-        const isAttack = isWorm || c.kind === "exploit" || eff === "backdoor";
-        if (!isAttack) return;
+        // where it lands: the aimed defense, else the current layer
         let tRect: DOMRect | null = null;
         if (target != null) { const el = document.querySelector(`[data-chip="${state.current}-${target}"]`); if (el) tRect = el.getBoundingClientRect(); }
         if (!tRect) { const el = document.querySelector(`[data-layer="${state.current}"]`); if (el) tRect = el.getBoundingClientRect(); }
         if (!tRect) return;
         const tx = tRect.left + tRect.width / 2, ty = tRect.top + tRect.height / 2;
+        // per-kind motion + glyph; worms always crawl in from the left edge
+        const FX: Record<string, { glyph: string; cls: string; dur: number }> = {
+            exploit: { glyph: "⟫", cls: "fx-exploit", dur: 300 },
+            recon: { glyph: "⊚", cls: "fx-recon", dur: 340 },
+            stealth: { glyph: "◌", cls: "fx-stealth", dur: 380 },
+            utility: { glyph: "◈", cls: "fx-utility", dur: 320 },
+        };
+        const kind = isWorm ? "worm" : (FX[c.kind] ? c.kind : "utility");
+        const spec = isWorm ? { glyph: "☣", cls: "fx-worm", dur: 520 } : FX[kind];
         const sx = isWorm ? -28 : window.innerWidth / 2;
         const sy = isWorm ? ty : window.innerHeight - 52;
-        const dur = isWorm ? 520 : 300;
         const id = ++fxKey.current, bid = id + 500000;
-        const glyph = isWorm ? "☣" : c.kind === "exploit" ? "⟫" : "◈";
-        const cls = isWorm ? "fx-worm" : "fx-packet";
         setProjectiles((p) => [...p,
-            { id, cls, glyph, x: sx, y: sy, dx: tx - sx, dy: ty - sy, dur, delay: 0 },
-            { id: bid, cls: cls + "-burst fx-burst", glyph: "", x: tx, y: ty, dx: 0, dy: 0, dur: 280, delay: dur - 40 },
+            { id, cls: spec.cls, glyph: spec.glyph, x: sx, y: sy, dx: tx - sx, dy: ty - sy, dur: spec.dur, delay: 0 },
+            { id: bid, cls: spec.cls + "-burst fx-burst", glyph: "", x: tx, y: ty, dx: 0, dy: 0, dur: 280, delay: spec.dur - 40 },
         ]);
-        window.setTimeout(() => setProjectiles((p) => p.filter((q) => q.id !== id && q.id !== bid)), dur + 320);
+        window.setTimeout(() => setProjectiles((p) => p.filter((q) => q.id !== id && q.id !== bid)), spec.dur + 320);
     };
-    const dispatch = (card: string, target?: number) => { spawnAttackFx(card, target); setState((s) => applyAction(s, { type: "playCard", card, target })); setArmed(null); };
+    const dispatch = (card: string, target?: number) => { spawnCastFx(card, target); setState((s) => applyAction(s, { type: "playCard", card, target })); setArmed(null); };
     const endTurn = () => {
         // telegraph the system's counter-move: sound the alarm right before it strikes
         const it = state.systemIntent;
@@ -469,7 +498,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
         <>
             {/* fixed-position towers live OUTSIDE .wrap so the breach shake/glitch
                 (a transform on .wrap) can't reparent them and fling them to center */}
-            <CommsTowers op={hackerId || "wraith"} opState={avatarState} alert={state.alert} feed={feed} onPoke={() => say("poke")} onTaunt={watcherSays} />
+            <CommsTowers op={hackerId || "wraith"} opState={avatarState} alert={state.alert} detFrac={detFrac} feed={feed} onPoke={() => say("poke")} onTaunt={watcherSays} />
         <div className={"wrap breachview" + (shaking ? " shaking" : "") + (glitch ? (glitch === 2 ? " glitching hard" : " glitching") : "")}>
             {breachFx && <div className="breach-flash"><div className="bd">LAYER DOWN</div></div>}
             {cascadeFx && <div className="cascade-flash"><div className="cd">⚡ SYSTEM CASCADE</div></div>}
@@ -481,6 +510,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                 </div>
             )}
             {glitch > 0 && <div className={"det-glitch" + (glitch === 2 ? " hard" : "")} />}
+            {castKind && <div className={"cast-recoil k-" + castKind} aria-hidden />}
             <div className="title">
                 BREACH <span className="sub">// {systemTitle}</span>
                 <button className="term ghost tiny" style={{ marginLeft: 14 }} onClick={() => onComplete({ won: false, detection: state.detectionMax, detectionMax: state.detectionMax })}>abort job</button>
