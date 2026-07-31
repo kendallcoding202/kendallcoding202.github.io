@@ -71,6 +71,14 @@ const layerEmblem = (i: number, total: number) => (i === total - 1 ? "⊛" : LAY
 // each defence type gets its OWN mark, so every layer reads as a distinct wall
 const TYPE_EMBLEM: Record<string, string> = { firewall: "▦", ids: "◎", auth: "⊟", privilege: "▲", database: "▤" };
 const typeEmblem = (t: string) => TYPE_EMBLEM[t] || "◈";
+// system archetype (behavior) — telegraphed on the breach header so you can adapt
+const BEHAVIOR_META: Record<string, { icon: string; label: string; tip: string }> = {
+    segmented: { icon: "▤", label: "SEGMENTED", tip: "Crossing into a layer exposes the next layer's defense types — recon comes free as you advance." },
+    adaptive: { icon: "◈", label: "ADAPTIVE", tip: "It learns — each layer you breach hardens the next fight (+1 to each of its defenses)." },
+    honeypot: { icon: "🍯", label: "HONEYPOT", tip: "Bait. Cracking each layer trips a silent alarm (+detection). Get in and out FAST — don't linger." },
+    liveClock: { icon: "📡", label: "LIVE-MONITORED", tip: "Watched in real time — the trace ACCELERATES every turn. Speed beats cleverness here." },
+    selfHealing: { icon: "🕸", label: "SELF-HEALING", tip: "Damaged defenses knit back +2 at end of every turn. Overwhelm a whole layer in one push, or you lose the ground." },
+};
 // active-countermeasure (ICE) display — revealed with the defense type
 const TRAIT_META: Record<string, { icon: string; label: string; tip: string }> = {
     reactive: { icon: "⛨", label: "REACTIVE", tip: "Reactive Armor — hardens (+1 Strength) each time you hit it without killing it. Burst it in one blow; don't chip away." },
@@ -476,7 +484,11 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                 BREACH <span className="sub">// {systemTitle}</span>
                 <button className="term ghost tiny" style={{ marginLeft: 14 }} onClick={() => onComplete({ won: false, detection: state.detectionMax, detectionMax: state.detectionMax })}>abort job</button>
             </div>
-            <div className="muted">turn {state.turn} · target: {state.system} · clear the objective before you're detected</div>
+            <div className="muted">turn {state.turn} · target: {state.system}
+                {state.behavior && BEHAVIOR_META[state.behavior]
+                    ? <span className={"sysbehavior beh-" + state.behavior} title={BEHAVIOR_META[state.behavior].tip}> · <span className="beh-ico" aria-hidden>{BEHAVIOR_META[state.behavior].icon}</span> <b>{BEHAVIOR_META[state.behavior].label}</b> <span className="beh-tip">({BEHAVIOR_META[state.behavior].tip})</span></span>
+                    : " · clear the objective before you're detected"}
+            </div>
             {state.modifierLabel && (
                 <div className={"modbar " + state.modifierTone}>
                     <span className="modtag">{state.modifierTone === "easier" ? "▽" : state.modifierTone === "harder" ? "⚠" : "◈"} {state.modifierLabel}</span>

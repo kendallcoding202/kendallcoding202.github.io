@@ -412,6 +412,27 @@ function applyBehaviorOnBreach(s: GameState) {
         let hardened = 0;
         if (l && !l.breached) l.defenses.forEach((d) => { if (d.strength > 0) { d.strength += 1; d.maxStrength += 1; hardened++; } });
         if (hardened) log(s, `Adaptive ICE — it learns. This layer's ${hardened} defense${hardened === 1 ? "" : "s"} hardened (+1).`);
+    } else if (s.behavior === "honeypot") {
+        // a trap: cracking a layer trips a silent alarm — the deeper you dig, the louder
+        const spike = Math.round(s.detectionMax * 0.09);
+        log(s, `🍯 Honeypot — cracking that layer tripped a silent alarm (+${spike} detection).`);
+        addDetection(s, spike);
+    }
+}
+
+/** Behaviors that fire at the CLOSE of each turn (time-based system quirks). */
+function applyBehaviorOnTurn(s: GameState) {
+    const layer = currentLayer(s);
+    if (s.behavior === "liveClock") {
+        // real-time monitored: the trace accelerates the longer you're inside
+        const extra = 1 + Math.floor((s.turn - 1) / 2);
+        addDetection(s, extra);
+        log(s, `📡 Live-monitored — the operator is watching; the trace accelerates (+${extra}).`);
+    } else if (s.behavior === "selfHealing" && layer && !layer.breached) {
+        // distributed mesh: every damaged (standing) defense on this layer knits back +2
+        let healed = 0;
+        layer.defenses.forEach((d) => { if (d.strength > 0 && d.strength < d.maxStrength) { d.strength = Math.min(d.maxStrength, d.strength + 2); healed++; } });
+        if (healed) log(s, `🕸 Self-healing mesh — ${healed} damaged defense${healed === 1 ? "" : "s"} knit back +2. Finish a layer in one push.`);
     }
 }
 
@@ -952,6 +973,7 @@ export function applyAction(prev: GameState, action: Action): GameState {
         s.hand = [];
         tickBombs(s); // planted logic bombs resolve as the turn closes
         regenDefenses(s); // self-healing ICE knits back up if you left it standing
+        applyBehaviorOnTurn(s); // time-based system quirks (live clock, self-healing mesh)
         systemReact(s);
         addDetection(s, s.baselineCreep);
         runSweep(s); // the intrusion scan periodically hunts for a too-quiet intruder

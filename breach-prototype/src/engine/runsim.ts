@@ -264,6 +264,21 @@ for (const id of CAMPAIGN_ORDER) {
     let ca = mkIce(undefined); ca.hand = ["corrosiveAgent"];
     ca = applyAction(ca, { type: "playCard", card: "corrosiveAgent", target: 0 });
     check("Corrosive Agent applies CORRODE ×2", (ca.layers[ca.current].defenses[0].corrode || 0) === 2);
+
+    // NEW TARGET ARCHETYPES: honeypot (breach spike), live clock (escalating), self-healing mesh.
+    let hp = createInitialState(3, "honeypotTrap", ["bruteForce", "bruteForce", "bruteForce"]);
+    hp.layers[0].defenses[0].typeRevealed = true;
+    const hpBefore = hp.detection;
+    hp = applyAction(hp, { type: "playCard", card: "bruteForce", target: 0 }); // kills the str-5 open port → breach
+    check("honeypot spikes detection when you crack a layer", hp.detection - hpBefore >= 10);
+    let lc = createInitialState(3, "liveOps", ["quietScan", "quietScan", "quietScan"]);
+    const lcCreep = lc.baselineCreep;
+    lc = applyAction(lc, { type: "endTurn" });
+    check("live-monitored system accelerates the trace each turn", lc.detection === lcCreep + 1);
+    let sh = createInitialState(3, "meshGrid", ["quietScan", "quietScan", "quietScan"]);
+    sh.layers[0].defenses[0].strength = 3; // damaged (max 7)
+    sh = applyAction(sh, { type: "endTurn" });
+    check("self-healing mesh knits damaged defenses back +2", sh.layers[0].defenses[0].strength === 5);
 }
 
 /* 8. Per-run modifiers: rolled onto every breach, entries stay clean,

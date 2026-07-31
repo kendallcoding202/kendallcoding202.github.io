@@ -72,7 +72,54 @@ export const SYSTEMS: Record<string, SystemDef> = {
             { name: "Objective: The Core", defenses: [{ type: "database", strength: 12 }, { type: "privilege", strength: 9 }] },
         ],
     },
+
+    honeypotTrap: {
+        key: "honeypotTrap",
+        name: "Honeypot",
+        flavor: "Looks like a soft, juicy target — because it's bait. Cracking each layer trips a silent alarm. Get in and out FAST, before the trap fills up.",
+        difficulty: 2,
+        detectionMax: 112,
+        baselineCreep: 6,
+        behavior: "honeypot",
+        layers: [
+            { name: "Open Port (too easy)", defenses: [{ type: "firewall", strength: 5 }] },
+            { name: "Decoy Fileshare", defenses: [{ type: "ids", strength: 6 }] },
+            { name: "Objective: Planted Bait", defenses: [{ type: "database", strength: 8 }] },
+        ],
+    },
+
+    liveOps: {
+        key: "liveOps",
+        name: "Live Ops Center",
+        flavor: "Someone is watching this network in real time. The trace accelerates every single turn — speed is everything. No time to get clever.",
+        difficulty: 3,
+        detectionMax: 122,
+        baselineCreep: 6,
+        behavior: "liveClock",
+        layers: [
+            { name: "Perimeter", defenses: [{ type: "firewall", strength: 8 }] },
+            { name: "Ops Floor", defenses: [{ type: "ids", strength: 8 }, { type: "auth", strength: 7 }] },
+            { name: "Privilege Escalation", defenses: [{ type: "privilege", strength: 9 }] },
+            { name: "Objective: Live Feed", defenses: [{ type: "database", strength: 10 }] },
+        ],
+    },
+
+    meshGrid: {
+        key: "meshGrid",
+        name: "Distributed Mesh",
+        flavor: "A self-healing grid with no single point of failure — damaged defenses knit back together at the end of every turn. You have to overwhelm a whole layer in one push.",
+        difficulty: 4,
+        detectionMax: 150,
+        baselineCreep: 7,
+        behavior: "selfHealing",
+        layers: [
+            { name: "Edge Nodes", defenses: [{ type: "firewall", strength: 7 }, { type: "ids", strength: 6 }] },
+            { name: "Relay Cluster", defenses: [{ type: "ids", strength: 8 }, { type: "auth", strength: 7 }] },
+            { name: "Control Plane", defenses: [{ type: "privilege", strength: 9 }] },
+            { name: "Objective: Root Ledger", defenses: [{ type: "database", strength: 10 }, { type: "auth", strength: 7 }] },
+        ],
+    },
 };
 
-export const SYSTEM_ORDER = ["homeServer", "smallBusiness", "corpNetwork", "blackSite"];
+export const SYSTEM_ORDER = ["homeServer", "smallBusiness", "honeypotTrap", "corpNetwork", "liveOps", "meshGrid", "blackSite"];
 export const DEFAULT_SYSTEM = "homeServer";

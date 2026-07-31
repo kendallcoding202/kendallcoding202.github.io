@@ -1176,6 +1176,16 @@ button.term.ghost:hover { background: var(--dim); color: #000; }
 .tbox .term:not(.ghost):hover { background: var(--red); color: #000; }
 
 /* ---- per-run system modifiers ---- */
+/* system archetype banner — tells you HOW this target fights */
+.sysbehavior { color: #cbb27a; }
+.sysbehavior b { color: #ffd76a; letter-spacing: 0.5px; }
+.sysbehavior .beh-ico { font-size: 12px; }
+.sysbehavior .beh-tip { color: #8a7a52; }
+.sysbehavior.beh-liveClock { color: #d89a86; }
+.sysbehavior.beh-liveClock b { color: #ff8a5a; }
+.sysbehavior.beh-selfHealing { color: #9fd7b4; }
+.sysbehavior.beh-selfHealing b { color: #8fe6a8; }
+.sysbehavior.beh-honeypot b { color: #ffcf4a; }
 .modbar {
     display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
     margin-top: 6px; padding: 5px 12px; border: 1px solid var(--line); background: var(--panel);

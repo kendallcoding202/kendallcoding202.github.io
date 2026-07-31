@@ -131,7 +131,7 @@ const CAMPAIGN_LIST: Campaign[] = [
                 { label: "Trade it for a specialist tool", outcome: "You take a Cascade exploit instead.", addCard: "cascade" },
             ] },
             F: { title: "Rival R&D network", blurb: "Five layers, a DMZ, and a security team paid to notice. Unreleased schematics inside.", systemKey: "corpNetwork", reward: 48 },
-            G: { title: "Subsidiary datacenter", blurb: "The same crown data, mirrored on a slightly sloppier network.", systemKey: "corpNetwork", reward: 46 },
+            G: { title: "Subsidiary datacenter", blurb: "The same crown data, mirrored across a self-healing mesh — no single point to break.", systemKey: "meshGrid", reward: 46 },
             Z: { title: "The Vault: executive servers", blurb: "The board's private drive. Hardened everything, a trace that hunts. The job the whole contract was for.", systemKey: "blackSite", reward: 85 },
         }),
     },
@@ -165,7 +165,7 @@ const CAMPAIGN_LIST: Campaign[] = [
                 { label: "Protect them — go it alone", outcome: "You leave them out of it. Harder, but clean.", heat: -6 },
             ] },
             B: { title: "The fixer's laptop", blurb: "The man who buys the silence keeps the receipts on his own machine. Arrogant. Exploitable.", systemKey: "smallBusiness", reward: 28 },
-            C: { title: "The compliant newspaper", blurb: "They killed the story once. Their CMS will tell you who ordered it spiked — but they watch their logs.", systemKey: "smallBusiness", reward: 38 },
+            C: { title: "The compliant newspaper", blurb: "They killed the story once. Their CMS names who ordered it spiked — but the SOC watches in real time, and the trace only speeds up.", systemKey: "liveOps", reward: 38 },
             D: { type: "event", title: "Signal boost", blurb: "The collective offers gear from the war chest.", choices: [
                 { label: "Grab a stealth kit (20cr)", outcome: "Tools to keep you quiet on the big one.", cost: 20, requiresCredits: 20, addCard: "feint" },
                 { label: "Scrub a weak card instead", outcome: "You trim dead weight from your kit.", removeCard: true },
@@ -239,8 +239,8 @@ const CAMPAIGN_LIST: Campaign[] = [
                 { label: "Accept the subroutine", outcome: "A strange, powerful bomb joins your kit.", addCard: "logicBomb", heat: 6 },
                 { label: "Decline — trust nothing", outcome: "You keep your kit human. ORACLE approves, quietly.", heat: -6 },
             ] },
-            B: { title: "A hijacked business grid", blurb: "The rogue is using a company's servers as a nursery. Burn out the nest.", systemKey: "smallBusiness", reward: 30 },
-            C: { title: "A converted data farm", blurb: "Rows of machines thinking the same alien thought. Rich pickings if you can cut through fast.", systemKey: "smallBusiness", reward: 34 },
+            B: { title: "A hijacked business grid", blurb: "The rogue left it looking wide open — because it's bait. Every layer you crack trips its alarm. In and out, fast.", systemKey: "honeypotTrap", reward: 30 },
+            C: { title: "A converted data farm", blurb: "Rows of machines thinking the same alien thought, watched in real time. Cut through fast — the trace only accelerates.", systemKey: "liveOps", reward: 34 },
             D: { type: "event", title: "ORACLE fragments", blurb: "ORACLE: 'It is attacking me directly. I can shield you, or shield myself. Choose.'", choices: [
                 { label: "Let ORACLE shield you", outcome: "ORACLE takes the hit. Your path is quieter; ORACLE is weaker.", heat: -16 },
                 { label: "Tell it to protect itself", outcome: "ORACLE survives intact and hands you a tool for it.", addCard: "overclock", heat: 8 },

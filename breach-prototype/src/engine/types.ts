@@ -121,7 +121,7 @@ export interface SystemDef {
     Home Server beyond bigger numbers.
     - segmented: breaching a layer reveals the NEXT layer's defense types (helpful)
     - adaptive: when a layer breaches, the remaining layers harden (+1 each) */
-export type SystemBehavior = "segmented" | "adaptive";
+export type SystemBehavior = "segmented" | "adaptive" | "honeypot" | "liveClock" | "selfHealing";
 
 /** The watcher's grip on you, derived from run Heat. The higher the trace,
     the more your targets are warned — so breaches start harder. Telegraphed
