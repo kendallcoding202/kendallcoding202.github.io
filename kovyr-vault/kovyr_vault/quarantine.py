@@ -155,13 +155,16 @@ def purge_eligible(qdir: Path, now: float | None = None,
                    retention_days: int = RETENTION_DAYS) -> list[Item]:
     """Permanently delete entries past the retention window. The only
     destructive operation in the module."""
+    from . import securedelete
     now = time.time() if now is None else now
     kept: list[Item] = []
     removed: list[Item] = []
     for entry in _load(qdir):
         if entry.age_days(now) >= retention_days:
             try:
-                (qdir / entry.stored).unlink(missing_ok=True)
+                stored = qdir / entry.stored
+                if stored.is_file():
+                    securedelete.secure_delete(stored)  # overwrite, not just unlink
                 removed.append(entry)
             except OSError:
                 kept.append(entry)

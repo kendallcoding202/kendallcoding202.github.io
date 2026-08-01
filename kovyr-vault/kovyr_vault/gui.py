@@ -475,7 +475,9 @@ class App:
             buttons, "Run check now", self.run_check)
         self.check_btn.pack(side="left", padx=(0, 10))
         self._secondary_button(buttons, "Open full report",
-                               self.open_report).pack(side="left")
+                               self.open_report).pack(side="left", padx=(0, 10))
+        self._secondary_button(buttons, "Scan for sensitive files",
+                               self.scan_sensitive).pack(side="left")
 
         self.activity = tk.Label(tab, text="", fg=MUTED, bg="white",
                                  font=("Segoe UI", 9), justify="left",
@@ -832,13 +834,14 @@ class App:
             return
         if not messagebox.askyesno(
                 "Kovyr Vault",
-                f"Permanently delete {len(eligible)} file(s) held longer "
+                f"Securely erase {len(eligible)} file(s) held longer "
                 f"than {quarantine_mod.RETENTION_DAYS} days?\n\n"
-                "THIS CANNOT BE UNDONE."):
+                "Each file is overwritten before deletion so it can't be "
+                "recovered. THIS CANNOT BE UNDONE."):
             return
         removed = quarantine_mod.purge_eligible(self._qdir())
         self.dupes_msg.config(
-            text=f"Permanently deleted {len(removed)} file(s); "
+            text=f"Securely erased {len(removed)} file(s); "
             f"{len(entries) - len(removed)} newer file(s) remain held.")
         self.refresh_quarantine()
 
@@ -1187,6 +1190,86 @@ class App:
                            text=f"{c.name}: {c.detail}",
                            fg=(BAD if c.status is False else TEXT))
             txt.pack(side="left", anchor="w")
+
+    def scan_sensitive(self) -> None:
+        """Scan the watched folders for unencrypted sensitive data (SSNs,
+        card numbers), off the UI thread. Local only; counts only."""
+        if getattr(self, "_scanning_sensitive", False) or not self.config:
+            return
+        from . import sensitive
+        paths = [Path(p) for p in self.config.get("paths", [])]
+        if not paths:
+            self.activity.config(text="No watched folders to scan — add "
+                                 "folders in Settings first.")
+            return
+        vault = self._vault_path()
+        self._scanning_sensitive = True
+        self.activity.config(text="Scanning for unencrypted sensitive files…")
+
+        def worker() -> None:
+            try:
+                findings = sensitive.scan_paths(paths, exclude=[vault])
+            except Exception:
+                findings = None
+            self.root.after(0, self._sensitive_done, findings)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _sensitive_done(self, findings) -> None:
+        from tkinter import messagebox
+        self._scanning_sensitive = False
+        if findings is None:
+            self.activity.config(text="Couldn't complete the sensitive-data "
+                                 "scan.")
+            return
+        if not findings:
+            self.activity.config(text="")
+            messagebox.showinfo(
+                "Kovyr Vault",
+                "No unencrypted SSNs or card numbers found in your watched "
+                "folders. (Scans text files; office documents aren't checked.)")
+            return
+        from . import sensitive
+        s = sensitive.summarize(findings)
+        self.activity.config(
+            text=f"⚠ {s['files']} file(s) hold unencrypted sensitive data — "
+            "consider moving them into the vault.", fg=BAD)
+        self._show_sensitive_results(findings, s)
+
+    def _show_sensitive_results(self, findings, summary) -> None:
+        tk = self.tk
+        ttk = self.ttk
+        win = tk.Toplevel(self.root)
+        win.title("Unencrypted sensitive files")
+        win.configure(bg="white")
+        win.geometry("640x420")
+        tk.Label(win, text="Unencrypted sensitive files", bg="white", fg=TEXT,
+                 font=("Segoe UI", 13, "bold")).pack(anchor="w",
+                                                     padx=16, pady=(14, 0))
+        tk.Label(win, bg="white", fg=MUTED, justify="left", wraplength=600,
+                 font=("Segoe UI", 9),
+                 text=f"{summary['ssns']} SSN(s) and {summary['cards']} card "
+                 f"number(s) across {summary['files']} file(s), sitting "
+                 "outside the vault. Only counts are shown — the actual "
+                 "numbers are never recorded or sent anywhere.").pack(
+                     anchor="w", padx=16, pady=(2, 8))
+        tree = ttk.Treeview(win, columns=("ssn", "card"),
+                            selectmode="browse")
+        tree.heading("#0", text="File")
+        tree.heading("ssn", text="SSNs")
+        tree.heading("card", text="Cards")
+        tree.column("#0", width=440)
+        tree.column("ssn", width=70, anchor="e")
+        tree.column("card", width=70, anchor="e")
+        for f in findings:
+            tree.insert("", "end", text=f.path,
+                        values=(f.ssn or "", f.card or ""))
+        tree.pack(fill="both", expand=True, padx=16, pady=(0, 8))
+        tk.Label(win, bg="white", fg=MUTED, justify="left", wraplength=600,
+                 font=("Segoe UI", 9),
+                 text="To protect these, move them into a Locked folder (see "
+                 "Settings) and run a sweep, or restore them into the vault.").pack(
+                     anchor="w", padx=16, pady=(0, 12))
 
     def refresh_status(self) -> None:
         if self.config is None:

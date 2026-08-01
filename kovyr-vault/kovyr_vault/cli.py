@@ -364,6 +364,63 @@ def cmd_device_check(args: argparse.Namespace) -> int:
     return 1 if any(c.status is False for c in checks) else 0
 
 
+def cmd_discover(args: argparse.Namespace) -> int:
+    """Scan files locally for unencrypted sensitive data (U.S. SSNs and
+    payment-card numbers) sitting outside the vault. Only counts are
+    reported — never the values themselves — and nothing leaves the machine."""
+    from . import sensitive
+    exclude = [Path(args.vault)] if args.vault else []
+    findings = sensitive.scan_paths([Path(p) for p in args.paths],
+                                    exclude=exclude)
+    summary = sensitive.summarize(findings)
+    if args.json:
+        print(json.dumps({"summary": summary,
+                          "findings": [f.as_dict() for f in findings]},
+                         indent=2))
+        return 1 if findings else 0
+    if not findings:
+        print("No unencrypted SSNs or card numbers found in the scanned "
+              "text files.")
+        return 0
+    print(f"Found sensitive data in {summary['files']} file(s): "
+          f"{summary['ssns']} SSN(s), {summary['cards']} card number(s).")
+    print("These files are NOT in the vault — consider encrypting them.\n")
+    for f in findings:
+        kinds = []
+        if f.ssn:
+            kinds.append(f"{f.ssn} SSN")
+        if f.card:
+            kinds.append(f"{f.card} card")
+        print(f"  [{', '.join(kinds)}]  {f.path}")
+    print("\n(Only counts are shown — the actual numbers are never recorded.)")
+    return 1 if findings else 0
+
+
+def cmd_shred(args: argparse.Namespace) -> int:
+    """Securely erase files: overwrite the bytes with random data, then
+    delete. Dry-run by default; pass --yes to actually erase."""
+    from . import securedelete
+    files = [Path(p) for p in args.paths if Path(p).is_file()]
+    if not files:
+        sys.exit("error: no existing files given")
+    if not args.yes:
+        print("Would securely erase (irreversible):")
+        for p in files:
+            print(f"  {p}")
+        print("\nRe-run with --yes to erase.")
+        return 0
+    erased = 0
+    for p in files:
+        try:
+            securedelete.secure_delete(p)
+            print(f"shredded: {p}")
+            erased += 1
+        except OSError as exc:
+            print(f"error: {p}: {exc}", file=sys.stderr)
+    print(f"\nSecurely erased {erased} file(s).")
+    return 0
+
+
 def cmd_verify(args: argparse.Namespace) -> int:
     vault = _open_vault(Path(args.vault), args.keyfile)
     problems = vault.verify()
@@ -584,6 +641,22 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true",
                    help="emit machine-readable JSON")
     p.set_defaults(func=cmd_device_check)
+
+    p = sub.add_parser("discover", help="scan files for unencrypted sensitive "
+                                        "data (SSNs, card numbers) — local, "
+                                        "counts only")
+    p.add_argument("paths", nargs="+", help="files or folders to scan")
+    p.add_argument("--vault", help="vault path to exclude from the scan")
+    p.add_argument("--json", action="store_true",
+                   help="emit machine-readable JSON")
+    p.set_defaults(func=cmd_discover)
+
+    p = sub.add_parser("shred", help="securely erase files (overwrite then "
+                                     "delete); dry-run unless --yes")
+    p.add_argument("paths", nargs="+", help="files to securely erase")
+    p.add_argument("--yes", action="store_true",
+                   help="actually erase (default: dry-run preview)")
+    p.set_defaults(func=cmd_shred)
 
     p = sub.add_parser("packet", help="generate an endpoint & encryption "
                                       "status report (encryption + device "
