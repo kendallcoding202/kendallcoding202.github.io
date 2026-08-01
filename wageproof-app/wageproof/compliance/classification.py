@@ -52,13 +52,18 @@ def unknown_classification(
             comp.worker.classification, determination.classification_names, n=3, cutoff=0.6
         )
         suggestion = f" Did you mean {', '.join(close)}?" if close else ""
+        source = (
+            f"determination {determination.number}"
+            if determination.number
+            else "your wage determination"
+        )
         yield Finding(
             rule_id="CLASS_NOT_ON_DETERMINATION",
             severity=Severity.BLOCKER,
             title=f"'{comp.worker.classification}' is not on the wage determination",
             detail=(
                 f"{name} is recorded under '{comp.worker.classification}', which does not "
-                f"appear on determination {determination.number}. There is no published rate "
+                f"appear on {source}. There is no published rate "
                 f"for it, so the payroll cannot be verified.{suggestion}"
             ),
             action=(

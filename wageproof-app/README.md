@@ -70,6 +70,19 @@ if result.is_filable:
     print(render_text(week))
 ```
 
+## The free checker
+
+A stateless web version of the same engine — paste a week of payroll, see the
+findings and the dollars at risk, no account:
+
+```bash
+pip install -e ".[web]"
+uvicorn web.app:app --reload
+```
+
+Nothing is written to disk. The input carries worker names and partial social
+security numbers, and the surest way not to leak those is never to store them.
+
 ## Input
 
 A payroll week is JSON — see `examples/week-12-problems.json`. Time sheets

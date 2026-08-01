@@ -90,6 +90,35 @@ def load_wage_determination(payload: dict[str, Any]) -> WageDetermination:
     )
 
 
+def parse_rate_lines(text: str) -> dict[str, Any]:
+    """Read wage rates typed one per line.
+
+    Accepts ``Electrician, 48.20, 31.15`` — classification, base rate, fringe
+    rate — with an optional fourth field for the apprentice ratio. This is how
+    people transcribe a determination by hand, so it is what the web form takes.
+    """
+    classifications: dict[str, Any] = {}
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = [p.strip() for p in re.split(r"\s*[,\t|]\s*", line)]
+        if len(parts) < 2 or not parts[0]:
+            continue
+        entry: dict[str, Any] = {"base_rate": parts[1]}
+        if len(parts) > 2 and parts[2]:
+            entry["fringe_rate"] = parts[2]
+        if len(parts) > 3 and parts[3] and ":" in parts[3]:
+            entry["apprentice_ratio"] = parts[3]
+        classifications[parts[0]] = entry
+    if not classifications:
+        raise ImportError_(
+            "No wage rates found. Use one line per classification, like: "
+            "Electrician, 48.20, 31.15"
+        )
+    return classifications
+
+
 def load_project(payload: dict[str, Any]) -> Project:
     determination = payload.get("wage_determination")
     return Project(

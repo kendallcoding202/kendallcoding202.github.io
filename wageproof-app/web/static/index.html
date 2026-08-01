@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%93%8B%3C/text%3E%3C/svg%3E">
+<title>Free WH-347 Checker — find certified payroll errors before you file</title>
+<meta name="description" content="Paste one week of payroll. See underpaid rates, missed fringes, overtime errors, and bad classifications before you sign the statement of compliance. Free, no account.">
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f6f7f9;
+    --border: #dfe3e8;
+    --text: #16191d;
+    --muted: #5c6470;
+    --accent: #14532d;
+    --accent-soft: #e7f2ec;
+    --blocker: #9f1239;
+    --blocker-soft: #fdf0f3;
+    --warning: #92500e;
+    --warning-soft: #fdf5e9;
+    --notice: #334155;
+    --notice-soft: #f1f5f9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171a;
+      --surface: #1c2126;
+      --border: #2e353d;
+      --text: #e9edf1;
+      --muted: #9aa4b0;
+      --accent: #6ee7a8;
+      --accent-soft: #16261d;
+      --blocker: #fb9aae;
+      --blocker-soft: #2a161c;
+      --warning: #f0c07a;
+      --warning-soft: #2a2015;
+      --notice: #b6c2cf;
+      --notice-soft: #1f252b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 0 20px; }
+  header { padding: 56px 0 32px; border-bottom: 1px solid var(--border); }
+  .brand { font-weight: 700; letter-spacing: -0.02em; font-size: 18px; }
+  h1 { font-size: clamp(28px, 5vw, 42px); line-height: 1.15; letter-spacing: -0.03em; margin: 20px 0 14px; }
+  .lede { font-size: 19px; color: var(--muted); margin: 0 0 8px; max-width: 40em; }
+  .stakes {
+    margin-top: 24px; padding: 14px 18px; border-left: 3px solid var(--accent);
+    background: var(--accent-soft); border-radius: 0 8px 8px 0; font-size: 15px;
+  }
+  section { padding: 36px 0; }
+  h2 { font-size: 22px; letter-spacing: -0.02em; margin: 0 0 6px; }
+  .sub { color: var(--muted); margin: 0 0 22px; font-size: 15px; }
+  form { display: grid; gap: 20px; }
+  .row { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  label { display: block; font-weight: 600; font-size: 13px; margin-bottom: 5px; }
+  .hint { font-weight: 400; color: var(--muted); }
+  input, textarea {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--bg); color: var(--text); font-size: 15px; font-family: inherit;
+  }
+  textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13.5px; line-height: 1.55; resize: vertical; }
+  input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+  .actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  button {
+    font: inherit; font-weight: 600; padding: 12px 22px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--accent); background: var(--accent); color: var(--bg);
+  }
+  button.ghost { background: transparent; color: var(--text); border-color: var(--border); }
+  button:disabled { opacity: 0.6; cursor: progress; }
+  .privacy { font-size: 13px; color: var(--muted); }
+  #results { display: none; padding-bottom: 56px; }
+  .verdict { border-radius: 12px; padding: 22px; border: 1px solid var(--border); background: var(--surface); margin-bottom: 24px; }
+  .verdict.bad { border-color: var(--blocker); background: var(--blocker-soft); }
+  .verdict.good { border-color: var(--accent); background: var(--accent-soft); }
+  .verdict h3 { margin: 0 0 6px; font-size: 21px; letter-spacing: -0.02em; }
+  .money { font-size: 34px; font-weight: 700; letter-spacing: -0.03em; margin: 10px 0 2px; }
+  .finding { border: 1px solid var(--border); border-left-width: 4px; border-radius: 8px; padding: 15px 17px; margin-bottom: 12px; background: var(--surface); }
+  .finding.blocker { border-left-color: var(--blocker); }
+  .finding.warning { border-left-color: var(--warning); }
+  .finding.notice { border-left-color: var(--notice); }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; padding: 2px 7px; border-radius: 4px; margin-bottom: 8px; }
+  .blocker .tag { background: var(--blocker-soft); color: var(--blocker); }
+  .warning .tag { background: var(--warning-soft); color: var(--warning); }
+  .notice .tag { background: var(--notice-soft); color: var(--notice); }
+  .finding h4 { margin: 0 0 6px; font-size: 16px; }
+  .finding p { margin: 0 0 8px; font-size: 14.5px; }
+  .finding .do { color: var(--text); font-weight: 600; font-size: 14.5px; }
+  .cite { font-size: 12.5px; color: var(--muted); font-family: ui-monospace, monospace; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 8px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .short { color: var(--blocker); font-weight: 600; }
+  .scroll { overflow-x: auto; }
+  .error { color: var(--blocker); font-weight: 600; }
+  details { margin-top: 20px; }
+  summary { cursor: pointer; font-weight: 600; }
+  pre { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px; font-size: 12.5px; line-height: 1.5; }
+  footer { border-top: 1px solid var(--border); padding: 28px 0 60px; color: var(--muted); font-size: 14px; }
+  .faq h3 { font-size: 16px; margin: 22px 0 4px; }
+  .faq p { margin: 0; color: var(--muted); font-size: 15px; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="brand">WageProof</div>
+    <h1>Check your certified payroll before you sign it</h1>
+    <p class="lede">
+      Paste one week of payroll. See underpaid rates, missing fringes, overtime
+      errors, and classifications that aren't on your wage determination — in
+      about ten seconds, free, without an account.
+    </p>
+    <div class="stakes">
+      <strong>Why it matters:</strong> page 2 of the WH-347 is a statement of
+      compliance signed under penalty of prosecution. Filing late is a problem.
+      Filing a clean-looking form built on wrong rates is a much bigger one.
+    </div>
+  </header>
+
+  <section>
+    <h2>Your wage determination</h2>
+    <p class="sub">One classification per line: name, base rate, fringe rate. Add an apprentice ratio at the end if the determination lists one.</p>
+    <form id="checker">
+      <div>
+        <label for="rates">Classifications and rates</label>
+        <textarea id="rates" rows="5" spellcheck="false" placeholder="Electrician, 48.20, 31.15, 1:2&#10;Laborer Group 1, 32.75, 24.40"></textarea>
+      </div>
+
+      <h2 style="margin-top:14px">Your week</h2>
+      <p class="sub" style="margin-bottom:0">
+        One row per worker. Columns: name, id, classification, rate, fringe, then
+        Mon–Sun hours. <span class="hint">"fringe" is cash paid in lieu of benefits — leave it 0 if you pay into plans.</span>
+      </p>
+      <div>
+        <label for="timesheet">Time sheet</label>
+        <textarea id="timesheet" rows="7" spellcheck="false" placeholder="name,id,classification,rate,fringe,mon,tue,wed,thu,fri,sat,sun&#10;Marcus Ellery,4417,Electrician,48.20,31.15,8,8,8,8,8,0,0"></textarea>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="week_ending">Week ending</label>
+          <input id="week_ending" type="date" required>
+        </div>
+        <div>
+          <label for="pay_date">Pay date <span class="hint">optional</span></label>
+          <input id="pay_date" type="date">
+        </div>
+        <div>
+          <label for="payroll_number">Payroll no. <span class="hint">optional</span></label>
+          <input id="payroll_number" type="text" placeholder="12">
+        </div>
+      </div>
+
+      <div class="actions">
+        <button type="submit" id="submit">Check this payroll</button>
+        <button type="button" class="ghost" id="example">Load an example</button>
+        <span class="privacy">Nothing is saved. The check runs and the data is gone.</span>
+      </div>
+      <div id="error" class="error"></div>
+    </form>
+  </section>
+
+  <section id="results">
+    <div id="verdict"></div>
+    <div id="workers"></div>
+    <h2 style="margin-top:30px">What to fix</h2>
+    <div id="findings"></div>
+    <div id="formOut"></div>
+  </section>
+
+  <section class="faq">
+    <h2>Questions</h2>
+    <h3>Is this really free?</h3>
+    <p>The check is. Saving projects so you don't retype rates every week, keeping the payroll series, and producing your state's format — that's the paid product.</p>
+    <h3>Do you store my payroll?</h3>
+    <p>No. It's processed in memory and discarded. That's why there's no account and no upload history. Use last-four SSNs only — the form asks for those, not full numbers.</p>
+    <h3>What if my rate covers base and fringe together?</h3>
+    <p>Split them. That single habit causes two errors at once: the fringe column on the form is wrong, and your overtime premium gets calculated on the fringe portion. This tool flags it when it sees it.</p>
+    <h3>Does this replace my payroll system?</h3>
+    <p>No. It reads what your payroll produced and checks it against the determination. It doesn't calculate or pay wages.</p>
+  </section>
+
+  <footer>
+    WageProof checks arithmetic against a wage determination you supply. It isn't
+    legal advice and doesn't replace reading your contract.
+  </footer>
+</div>
+
+<script>
+// Dates are relative to today so the example never looks overdue — a demo that
+// opens with a stale-deadline warning teaches the wrong thing about the tool.
+const iso = (d) => d.toISOString().slice(0, 10);
+const lastSunday = (() => {
+  const d = new Date();
+  d.setDate(d.getDate() - (d.getDay() || 7));
+  return d;
+})();
+const payDay = (() => {
+  const d = new Date(lastSunday);
+  d.setDate(d.getDate() + 5);
+  return d;
+})();
+
+const EXAMPLE = {
+  rates: "Electrician, 48.20, 31.15, 1:2\nLaborer Group 1, 32.75, 24.40, 1:4",
+  timesheet: [
+    "name,id,classification,rate,fringe,mon,tue,wed,thu,fri,sat,sun",
+    "Marcus Ellery,4417,Electrician,48.20,31.15,8,8,8,8,8,0,0",
+    "Priya Raghunathan,8802,Electrician,44.00,31.15,8,8,8,8,8,6,0",
+    "Tom Bright,1290,Laborer Group 1,57.15,0,8,8,8,8,8,4,0",
+    "Sam Odunayo,5510,Electricion,48.20,31.15,8,8,8,8,0,0,0"
+  ].join("\n"),
+  week_ending: iso(lastSunday),
+  pay_date: iso(payDay),
+  payroll_number: "12"
+};
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
+  (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const usd = (n) => "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+$("example").addEventListener("click", () => {
+  for (const [k, v] of Object.entries(EXAMPLE)) $(k).value = v;
+  $("error").textContent = "";
+});
+
+$("checker").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = $("submit");
+  $("error").textContent = "";
+  button.disabled = true;
+  button.textContent = "Checking…";
+
+  try {
+    const response = await fetch("/api/check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rates: $("rates").value,
+        timesheet: $("timesheet").value,
+        week_ending: $("week_ending").value,
+        pay_date: $("pay_date").value || null,
+        payroll_number: $("payroll_number").value || null
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Something went wrong.");
+    render(data);
+  } catch (err) {
+    $("error").textContent = err.message;
+    $("results").style.display = "none";
+  } finally {
+    button.disabled = false;
+    button.textContent = "Check this payroll";
+  }
+});
+
+function render(data) {
+  const risk = Number(data.total_at_risk);
+  const bad = !data.filable;
+
+  $("verdict").innerHTML = `
+    <div class="verdict ${bad ? "bad" : "good"}">
+      <h3>${bad
+        ? `Don't file this yet — ${data.counts.blockers} problem${data.counts.blockers === 1 ? "" : "s"} to fix`
+        : "This payroll looks ready to file"}</h3>
+      ${risk > 0 ? `<div class="money">${usd(risk)}</div>
+        <div>in back wages owed before this week can be certified.</div>` : ""}
+      <p style="margin:10px 0 0;font-size:14.5px">
+        ${data.counts.workers} worker${data.counts.workers === 1 ? "" : "s"},
+        ${data.week.total_hours} hours, ${usd(data.week.total_gross)} gross.
+        ${data.week.due ? `Due ${data.week.due}.` : ""}
+      </p>
+      ${data.checked_header ? "" : `<p style="margin:10px 0 0;font-size:13.5px;opacity:.85">
+        This checked rates, hours, and classifications. It did not check the form
+        header or the statement of compliance.
+      </p>`}
+    </div>`;
+
+  $("workers").innerHTML = `
+    <div class="scroll"><table>
+      <thead><tr>
+        <th>Worker</th><th>Classification</th><th class="num">Hours</th><th class="num">OT</th>
+        <th class="num">Paid</th><th class="num">Required base</th><th class="num">Short by</th>
+      </tr></thead>
+      <tbody>${data.workers.map((w) => `
+        <tr>
+          <td>${esc(w.name)}</td>
+          <td>${esc(w.classification)}</td>
+          <td class="num">${esc(w.hours)}</td>
+          <td class="num">${Number(w.overtime_hours) > 0 ? esc(w.overtime_hours) : "—"}</td>
+          <td class="num">${usd(w.rate)}</td>
+          <td class="num">${w.required_base ? usd(w.required_base) : "not on determination"}</td>
+          <td class="num ${Number(w.shortfall) > 0 ? "short" : ""}">${Number(w.shortfall) > 0 ? usd(w.shortfall) : "—"}</td>
+        </tr>`).join("")}</tbody>
+    </table></div>`;
+
+  $("findings").innerHTML = data.findings.length
+    ? data.findings.map((f) => `
+        <div class="finding ${f.severity}">
+          <span class="tag">${f.severity}</span>
+          <h4>${esc(f.title)}</h4>
+          <p>${esc(f.detail)}</p>
+          <p class="do">→ ${esc(f.action)}</p>
+          ${f.citation ? `<div class="cite">${esc(f.citation)}</div>` : ""}
+        </div>`).join("")
+    : `<p class="sub">Nothing to fix.</p>`;
+
+  $("formOut").innerHTML = data.form
+    ? `<details><summary>Your WH-347, ready to print</summary><pre>${esc(data.form)}</pre></details>`
+    : "";
+
+  $("results").style.display = "block";
+  $("results").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+</script>
+</body>
+</html>

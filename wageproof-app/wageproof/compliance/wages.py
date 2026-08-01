@@ -27,14 +27,20 @@ def underpaid_base_rate(
             continue
         gap = money((owed - paid) * comp.total_hours)
         determination = week.project.wage_determination
+        # The determination number is optional — the free checker never asks for
+        # it — so name it only when we actually have one.
+        source = (
+            f"wage determination {determination.number}"
+            if determination and determination.number
+            else "your wage determination"
+        )
         yield Finding(
             rule_id="WAGE_BASE_UNDERPAID",
             severity=Severity.BLOCKER,
             title=f"{name} is paid below the basic hourly rate",
             detail=(
                 f"{name} is classified as {comp.worker.classification}, which carries a basic "
-                f"hourly rate of ${owed} on wage determination "
-                f"{determination.number if determination else '—'}. "
+                f"hourly rate of ${owed} on {source}. "
                 f"The payroll shows ${paid} per hour. Across {comp.total_hours} hours that is "
                 f"${gap} of underpayment."
             ),
