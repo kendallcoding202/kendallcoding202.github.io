@@ -1,0 +1,18 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Never commit real patient data. Ever.
+uploads/
+*.local.csv
+*.local.json
+*.local.pdf
+data/real/

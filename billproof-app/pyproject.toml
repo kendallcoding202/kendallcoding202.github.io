@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "billproof"
+version = "0.1.0"
+description = "Find billing errors on itemized medical bills and draft the dispute letter."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+dependencies = []
+
+[project.optional-dependencies]
+pdf = ["pdfplumber>=0.11"]
+web = ["fastapi>=0.110", "uvicorn[standard]>=0.29", "python-multipart>=0.0.9"]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.5",
+  "pdfplumber>=0.11",
+  "fastapi>=0.110",
+  "httpx>=0.27",
+  "python-multipart>=0.0.9",
+]
+
+[project.scripts]
+billproof = "billproof.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["billproof"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
