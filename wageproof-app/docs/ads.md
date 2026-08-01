@@ -89,21 +89,52 @@ A high click-through with no completed checks is the most informative failure
 available: it means people search but the pasted-payroll format is too much
 friction — a product problem, not a channel one, and worth knowing early.
 
-## What still needs building for the test to be measurable
+## Running the test
 
-The checker is currently anonymous end to end, which is right for privacy and
-useless for measurement. Before spending on ads it needs:
+The instrumentation is built. Five funnel events are recorded per session —
+`landed`, `started_check`, `completed_check`, `save_shown`, `save_clicked` —
+each tagged with the `utm_*` and `gclid` parameters from the landing URL, so a
+conversion knows which keyword paid for it.
 
-1. **Funnel events** — landed, started a check, completed a check, clicked
-   through to save. Without these there is no denominator.
-2. **A "save this project" capture.** The single best intent signal, and it can
-   exist before the paid product does: someone who hands over an email to avoid
-   retyping rates next week is a real prospect.
+Point ads at the checker with tagged URLs:
 
-**A caveat that must not be glossed over.** The landing page currently promises
-"Nothing is saved," and that promise is doing real work — it is why a contractor
-will paste payroll containing worker names into a stranger's website. Adding
-email capture must not quietly break it. The honest version keeps payroll data
-unstored and says so precisely: *we never store your payroll; if you give us an
-email we store that*. Blurring the two would be the kind of thing that destroys
-trust in a small market where contractors talk to each other.
+```
+https://wageproof.com/?utm_source=google&utm_medium=cpc
+    &utm_campaign=trigger-terms&utm_term=certified+payroll+rejected
+```
+
+Read the numbers back, per campaign:
+
+```bash
+export WAGEPROOF_METRICS_TOKEN=<something long>
+curl -s "https://wageproof.com/api/funnel?campaign=trigger-terms" \
+     -H "X-Metrics-Token: $WAGEPROOF_METRICS_TOKEN"
+```
+
+`completed_checks` is the denominator. Divide the campaign's spend by it and
+compare against the table above. The endpoint returns 404 unless
+`WAGEPROOF_METRICS_TOKEN` is set, so it is off by default rather than quietly
+public.
+
+Counts are of **distinct sessions**, not raw events — one visitor who reloads
+is one visitor. Counting otherwise would flatter every result.
+
+### What is stored, and the promise that constrains it
+
+The landing page tells a contractor their payroll is never stored, and that
+promise is doing real work — it is why someone pastes a sheet with worker names
+into a stranger's website. It is kept structurally, not by good intentions:
+
+* **Never stored:** the time sheet. There is no column for it in the schema and
+  no function that accepts it. A test asserts that after a full check, no worker
+  name or identifier appears anywhere in the database.
+* **Stored only on request:** an email address and the wage rates typed above
+  it, when someone clicks *Save my rates*. Wage determinations are public
+  documents; nothing about a worker is involved.
+* **Stored always, anonymously:** the five funnel events and their campaign
+  tags, against an opaque per-browser id that identifies a session, not a
+  person.
+
+The FAQ says exactly this. Blurring "we don't store your payroll" into "we don't
+store anything" would be the kind of small dishonesty that destroys trust in a
+market where contractors talk to each other.

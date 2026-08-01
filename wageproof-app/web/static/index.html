@@ -107,6 +107,15 @@
   footer { border-top: 1px solid var(--border); padding: 28px 0 60px; color: var(--muted); font-size: 14px; }
   .faq h3 { font-size: 16px; margin: 22px 0 4px; }
   .faq p { margin: 0; color: var(--muted); font-size: 15px; }
+  .save { display: none; margin-top: 30px; padding: 22px; border: 1px solid var(--accent); border-radius: 12px; background: var(--accent-soft); }
+  .save h3 { margin: 0 0 6px; font-size: 19px; letter-spacing: -0.02em; }
+  .save > p { margin: 0 0 16px; font-size: 15px; max-width: 46em; }
+  .saverow { display: flex; gap: 10px; flex-wrap: wrap; }
+  .saverow input { flex: 1 1 240px; }
+  .saverow button { flex: 0 0 auto; }
+  #saveMsg { margin-top: 10px; font-weight: 600; font-size: 14.5px; }
+  #saveMsg.ok { color: var(--accent); }
+  #saveMsg.err { color: var(--blocker); }
 </style>
 </head>
 <body>
@@ -164,7 +173,7 @@
       <div class="actions">
         <button type="submit" id="submit">Check this payroll</button>
         <button type="button" class="ghost" id="example">Load an example</button>
-        <span class="privacy">Nothing is saved. The check runs and the data is gone.</span>
+        <span class="privacy">Your payroll is never stored — it's checked in memory and discarded.</span>
       </div>
       <div id="error" class="error"></div>
     </form>
@@ -176,6 +185,23 @@
     <h2 style="margin-top:30px">What to fix</h2>
     <div id="findings"></div>
     <div id="formOut"></div>
+
+    <div class="save" id="save">
+      <h3>Don't type these rates again next week</h3>
+      <p>Certified payroll is weekly. We'll keep this wage determination so next
+         Friday you only paste the hours.</p>
+      <form id="saveForm">
+        <div class="saverow">
+          <input id="email" type="email" required placeholder="you@company.com" aria-label="Email">
+          <button type="submit" id="saveBtn">Save my rates</button>
+        </div>
+        <p class="privacy" style="margin:10px 0 0">
+          This stores your email and the wage rates above. It does not store your
+          time sheet — that never leaves memory.
+        </p>
+        <div id="saveMsg"></div>
+      </form>
+    </div>
   </section>
 
   <section class="faq">
@@ -183,7 +209,9 @@
     <h3>Is this really free?</h3>
     <p>The check is. Saving projects so you don't retype rates every week, keeping the payroll series, and producing your state's format — that's the paid product.</p>
     <h3>Do you store my payroll?</h3>
-    <p>No. It's processed in memory and discarded. That's why there's no account and no upload history. Use last-four SSNs only — the form asks for those, not full numbers.</p>
+    <p>No. Your time sheet is processed in memory and discarded — it's never written to disk, and there's no upload history to leak. Use last-four SSNs only; the form asks for those, not full numbers.</p>
+    <h3>Then what <em>do</em> you store?</h3>
+    <p>Only if you ask us to save your rates: your email address and the wage determination you typed. Nothing about your workers, ever. We also count anonymous page events so we know whether this tool is worth running.</p>
     <h3>What if my rate covers base and fringe together?</h3>
     <p>Split them. That single habit causes two errors at once: the fringe column on the form is wrong, and your overtime premium gets calculated on the fringe portion. This tool flags it when it sees it.</p>
     <h3>Does this replace my payroll system?</h3>
@@ -226,6 +254,61 @@ const EXAMPLE = {
 };
 
 const $ = (id) => document.getElementById(id);
+
+// --- Funnel measurement -------------------------------------------------
+// An opaque id for this browser, so "one visitor who reloaded" is not counted
+// as two. It identifies a session, not a person, and is never sent anywhere
+// except alongside the funnel events below.
+const SESSION = (() => {
+  try {
+    let id = localStorage.getItem("wp_session");
+    if (!id) {
+      id = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random())).replace(/-/g, "");
+      localStorage.setItem("wp_session", id);
+    }
+    return id;
+  } catch {
+    return "nostorage";
+  }
+})();
+
+// Ad attribution, captured once on arrival and kept for the visit so a
+// conversion still knows which keyword paid for it.
+const CAMPAIGN = (() => {
+  const params = new URLSearchParams(location.search);
+  const fromUrl = {
+    source: params.get("utm_source"),
+    medium: params.get("utm_medium"),
+    campaign: params.get("utm_campaign"),
+    term: params.get("utm_term"),
+    gclid: params.get("gclid")
+  };
+  try {
+    if (Object.values(fromUrl).some(Boolean)) {
+      sessionStorage.setItem("wp_campaign", JSON.stringify(fromUrl));
+      return fromUrl;
+    }
+    return JSON.parse(sessionStorage.getItem("wp_campaign") || "null") || fromUrl;
+  } catch {
+    return fromUrl;
+  }
+})();
+
+function track(name) {
+  // Measurement must never break the product, so failures are ignored.
+  try {
+    fetch("/api/event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: SESSION, name, campaign: CAMPAIGN }),
+      keepalive: true
+    }).catch(() => {});
+  } catch {}
+}
+
+track("landed");
+// ------------------------------------------------------------------------
+
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
   (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const usd = (n) => "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -241,6 +324,7 @@ $("checker").addEventListener("submit", async (event) => {
   $("error").textContent = "";
   button.disabled = true;
   button.textContent = "Checking…";
+  track("started_check");
 
   try {
     const response = await fetch("/api/check", {
@@ -256,6 +340,7 @@ $("checker").addEventListener("submit", async (event) => {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || "Something went wrong.");
+    track("completed_check");
     render(data);
   } catch (err) {
     $("error").textContent = err.message;
@@ -322,8 +407,43 @@ function render(data) {
     : "";
 
   $("results").style.display = "block";
+  $("save").style.display = "block";
+  track("save_shown");
   $("results").scrollIntoView({ behavior: "smooth", block: "start" });
 }
+
+$("saveForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = $("saveBtn");
+  const msg = $("saveMsg");
+  msg.textContent = "";
+  msg.className = "";
+  button.disabled = true;
+
+  try {
+    const response = await fetch("/api/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: $("email").value,
+        // Rates only. The time sheet is deliberately not sent here.
+        rates: $("rates").value,
+        session_id: SESSION,
+        campaign: CAMPAIGN
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Could not save that.");
+    track("save_clicked");
+    msg.textContent = "Saved. We'll email you a link to next week's check.";
+    msg.className = "ok";
+    button.textContent = "Saved";
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = "err";
+    button.disabled = false;
+  }
+});
 </script>
 </body>
 </html>

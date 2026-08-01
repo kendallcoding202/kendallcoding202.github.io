@@ -10,11 +10,14 @@ the fastest way to never leak those is to never store them.
 
 from __future__ import annotations
 
+import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
@@ -29,6 +32,9 @@ from wageproof.importers import (
 )
 from wageproof.models import ZERO
 
+from . import analytics
+from .analytics import AnalyticsError, Attribution
+
 STATIC = Path(__file__).parent / "static"
 
 # A pasted week from a small sub is a few kilobytes. Anything far past that is
@@ -41,11 +47,54 @@ MAX_INPUT_CHARS = 200_000
 # These are suppressed unless the caller actually supplied the header.
 HEADER_RULES = {"FORM_MISSING_HEADER", "FORM_NO_SIGNATORY"}
 
+METRICS_TOKEN_ENV = "WAGEPROOF_METRICS_TOKEN"
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    analytics.init_db()
+    yield
+
+
 app = FastAPI(
     title="WageProof",
     description="Check a Davis-Bacon certified payroll before you file it.",
     version=__version__,
+    lifespan=lifespan,
 )
+
+
+class Campaign(BaseModel):
+    """Ad attribution as it arrived in the landing URL."""
+
+    source: str | None = None
+    medium: str | None = None
+    campaign: str | None = None
+    term: str | None = None
+    gclid: str | None = None
+
+    def to_attribution(self) -> Attribution:
+        return Attribution(
+            source=self.source,
+            medium=self.medium,
+            campaign=self.campaign,
+            term=self.term,
+            gclid=self.gclid,
+        )
+
+
+class EventRequest(BaseModel):
+    session_id: str
+    name: str
+    campaign: Campaign | None = None
+
+
+class SaveRequest(BaseModel):
+    email: str
+    rates: str | None = None
+    project_name: str | None = None
+    session_id: str | None = None
+    campaign: Campaign | None = None
 
 
 class CheckRequest(BaseModel):
@@ -169,6 +218,59 @@ def check(request: CheckRequest) -> JSONResponse:
             "form": render_text(week) if result.is_filable else None,
         }
     )
+
+
+@app.post("/api/event")
+def event(request: EventRequest) -> dict[str, bool]:
+    """Record one anonymous funnel step.
+
+    Measurement must never be able to break the product, so a bad event is
+    swallowed rather than surfaced — the visitor is mid-task and does not care.
+    """
+    try:
+        analytics.record_event(
+            request.session_id,
+            request.name,
+            request.campaign.to_attribution() if request.campaign else None,
+        )
+    except AnalyticsError:
+        return {"recorded": False}
+    return {"recorded": True}
+
+
+@app.post("/api/save")
+def save(request: SaveRequest) -> dict[str, str]:
+    """Keep an email and a rate list so next week is not a retype.
+
+    The time sheet is not accepted here and is not stored anywhere. That is the
+    promise the landing page makes, and this endpoint is where it would break if
+    it were going to.
+    """
+    try:
+        analytics.save_lead(
+            email=request.email,
+            rates=request.rates,
+            project_name=request.project_name,
+            session_id=request.session_id,
+            attribution=request.campaign.to_attribution() if request.campaign else None,
+        )
+    except AnalyticsError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"status": "saved"}
+
+
+@app.get("/api/funnel")
+def funnel(
+    campaign: str | None = None,
+    x_metrics_token: str | None = Header(default=None),
+) -> dict[str, object]:
+    """Internal metrics. Disabled unless a token is configured."""
+    expected = os.environ.get(METRICS_TOKEN_ENV)
+    if not expected:
+        raise HTTPException(status_code=404, detail="Not found.")
+    if x_metrics_token != expected:
+        raise HTTPException(status_code=401, detail="Bad metrics token.")
+    return analytics.funnel(campaign)
 
 
 @app.get("/api/health")
