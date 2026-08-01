@@ -39,6 +39,11 @@ GOOD = "#1a7f4e"
 BAD = "#b3261e"
 BORDER = "#dbe2ea"
 CANVAS = "#f0f3f7"  # window backdrop behind the white content area
+# Soft status tints for banner fills — light enough that dark text stays
+# legible on them, saturated enough to read as green/amber at a glance.
+GOOD_BG = "#eaf5ef"
+BAD_BG = "#fdeeec"
+HAIRLINE = "#eef2f6"  # lighter than BORDER, for inside-panel separators
 
 
 def app_support_config_path() -> Path:
@@ -392,9 +397,16 @@ class App:
                         fieldbackground="white", foreground=TEXT,
                         rowheight=26, borderwidth=0)
         style.configure("Treeview.Heading", foreground=MUTED,
-                        background=SURFACE, relief="flat",
+                        background=SURFACE, relief="flat", padding=(6, 5),
                         font=("Segoe UI", 9, "bold"))
         style.map("Treeview.Heading", background=[("active", SURFACE)])
+        # A soft selection instead of the OS default (which can be an
+        # unreadable saturated blue depending on platform/theme).
+        style.map("Treeview",
+                  background=[("selected", "#dbe7f3")],
+                  foreground=[("selected", NAVY)])
+        style.configure("Vertical.TScrollbar", background=SURFACE,
+                        troughcolor="white", borderwidth=0, arrowsize=12)
 
         notebook = ttk.Notebook(root)
         notebook.pack(fill="both", expand=True, padx=16, pady=(12, 0))
@@ -427,50 +439,76 @@ class App:
         tk = self.tk
         tab = self.status_tab
 
-        self.headline = tk.Label(tab, text="", bg="white", fg=TEXT,
-                                 font=("Segoe UI", 15, "bold"))
+        # Status banner: a tinted card with a colored spine, so the overall
+        # state reads at a glance before any text is parsed.
+        self.banner = tk.Frame(tab, bg=SURFACE)
+        self.banner.pack(fill="x")
+        self.banner_spine = tk.Frame(self.banner, bg=MUTED, width=4)
+        self.banner_spine.pack(side="left", fill="y")
+        banner_body = tk.Frame(self.banner, bg=SURFACE, padx=16, pady=13)
+        banner_body.pack(side="left", fill="both", expand=True)
+        self.banner_body = banner_body
+        self.headline = tk.Label(banner_body, text="", bg=SURFACE, fg=TEXT,
+                                 font=("Segoe UI", 15, "bold"),
+                                 justify="left", wraplength=740)
         self.headline.pack(anchor="w")
-        self.subline = tk.Label(tab, text="", fg=MUTED, bg="white",
+        self.subline = tk.Label(banner_body, text="", fg=MUTED, bg=SURFACE,
                                 font=("Segoe UI", 10), justify="left")
-        self.subline.pack(anchor="w", pady=(3, 18))
+        self.subline.pack(anchor="w", pady=(2, 0))
 
         tiles = tk.Frame(tab, bg="white")
-        tiles.pack(fill="x")
+        tiles.pack(fill="x", pady=(16, 0))
         self.tile_vars = {}
         specs = (("files", "Files watched"), ("dupes", "Redundant copies"),
                  ("exposure", "Excess exposure"))
         for col, (key, label) in enumerate(specs):
             tiles.columnconfigure(col, weight=1, uniform="tile")
-            frame = tk.Frame(tiles, bg=SURFACE, padx=18, pady=15,
+            frame = tk.Frame(tiles, bg="white", padx=16, pady=14,
                              highlightbackground=BORDER, highlightthickness=1)
             frame.grid(row=0, column=col, sticky="ew",
-                       padx=(0 if col == 0 else 6,
-                             0 if col == len(specs) - 1 else 6))
-            tk.Label(frame, text=label.upper(), fg=MUTED, bg=SURFACE,
+                       padx=(0 if col == 0 else 5,
+                             0 if col == len(specs) - 1 else 5))
+            tk.Label(frame, text=label.upper(), fg=MUTED, bg="white",
                      font=("Segoe UI", 8, "bold")).pack(anchor="w")
             var = tk.StringVar(value="—")
-            tk.Label(frame, textvariable=var, fg=TEXT, bg=SURFACE,
-                     font=("Segoe UI", 22, "bold")).pack(anchor="w",
-                                                         pady=(4, 0))
+            tk.Label(frame, textvariable=var, fg=NAVY, bg="white",
+                     font=("Segoe UI", 24, "bold")).pack(anchor="w",
+                                                         pady=(6, 0))
             self.tile_vars[key] = var
 
         # Baseline device-security checklist: the technical, machine-level
         # controls Kovyr can verify read-only (disk encryption, firewall,
         # auto screen lock, and — on Windows — antivirus). Policy/human
         # controls stay on the manual assessment.
-        posture = tk.Frame(tab, bg=SURFACE, padx=16, pady=12,
+        posture = tk.Frame(tab, bg="white", padx=16, pady=13,
                            highlightbackground=BORDER, highlightthickness=1)
-        posture.pack(fill="x", pady=(12, 0))
-        tk.Label(posture, text="DEVICE SECURITY", fg=MUTED, bg=SURFACE,
+        posture.pack(fill="x", pady=(10, 0))
+        tk.Label(posture, text="DEVICE SECURITY", fg=MUTED, bg="white",
                  font=("Segoe UI", 8, "bold")).pack(anchor="w")
-        self.posture_box = tk.Frame(posture, bg=SURFACE)
-        self.posture_box.pack(fill="x", pady=(5, 0))
-        tk.Label(self.posture_box, text="Checking…", fg=MUTED, bg=SURFACE,
+        self.posture_box = tk.Frame(posture, bg="white")
+        self.posture_box.pack(fill="x", pady=(7, 0))
+        tk.Label(self.posture_box, text="Checking…", fg=MUTED, bg="white",
                  font=("Segoe UI", 10)).pack(anchor="w")
         self._start_posture_check()
 
+        # A plain-English "what's going on" panel so a status like
+        # "Attention needed" always explains itself instead of leaving the
+        # client guessing. Tinted (not white) so it reads as explanatory
+        # copy rather than another data panel.
+        detail = tk.Frame(tab, bg=SURFACE, padx=16, pady=13,
+                          highlightbackground=BORDER, highlightthickness=1)
+        detail.pack(fill="x", pady=(10, 0))
+        self.detail_title = tk.Label(detail, text="WHAT'S GOING ON",
+                                     fg=NAVY, bg=SURFACE,
+                                     font=("Segoe UI", 8, "bold"))
+        self.detail_title.pack(anchor="w")
+        self.detail_text = tk.Label(detail, text="", fg=TEXT, bg=SURFACE,
+                                    font=("Segoe UI", 10), justify="left",
+                                    wraplength=750)
+        self.detail_text.pack(anchor="w", pady=(5, 0))
+
         buttons = tk.Frame(tab, bg="white")
-        buttons.pack(anchor="w", pady=(22, 0))
+        buttons.pack(anchor="w", pady=(18, 0))
         self.check_btn = self._primary_button(
             buttons, "Run check now", self.run_check)
         self.check_btn.pack(side="left", padx=(0, 10))
@@ -482,22 +520,7 @@ class App:
         self.activity = tk.Label(tab, text="", fg=MUTED, bg="white",
                                  font=("Segoe UI", 9), justify="left",
                                  wraplength=760)
-        self.activity.pack(anchor="w", pady=(16, 0))
-
-        # A plain-English "what's going on" panel so a status like
-        # "Attention needed" always explains itself instead of leaving the
-        # client guessing.
-        detail = tk.Frame(tab, bg=SURFACE, padx=16, pady=13,
-                          highlightbackground=BORDER, highlightthickness=1)
-        detail.pack(fill="x", pady=(18, 0))
-        self.detail_title = tk.Label(detail, text="WHAT'S GOING ON",
-                                     fg=MUTED, bg=SURFACE,
-                                     font=("Segoe UI", 8, "bold"))
-        self.detail_title.pack(anchor="w")
-        self.detail_text = tk.Label(detail, text="", fg=TEXT, bg=SURFACE,
-                                    font=("Segoe UI", 10), justify="left",
-                                    wraplength=760)
-        self.detail_text.pack(anchor="w", pady=(4, 0))
+        self.activity.pack(anchor="w", pady=(12, 0))
 
     def _build_vault_tab(self) -> None:
         tk = self.tk
@@ -518,7 +541,10 @@ class App:
         self.pass_entry = tk.Entry(row, show="•", width=32,
                                    font=("Segoe UI", 11), bg="white",
                                    fg=TEXT, insertbackground=TEXT,
-                                   highlightbackground=BORDER)
+                                   relief="flat", borderwidth=0,
+                                   highlightthickness=1,
+                                   highlightbackground=BORDER,
+                                   highlightcolor=NAVY_LIGHT)
         self.pass_entry.pack(side="left", padx=(0, 10))
         self.pass_entry.bind("<Return>", lambda _e: self.unlock())
         self.unlock_btn = self._primary_button(row, "Unlock", self.unlock)
@@ -528,14 +554,24 @@ class App:
         self.unlock_msg.pack(anchor="w", pady=(6, 0))
 
         self.files_frame = tk.Frame(tab, bg="white")
+        vault_head = tk.Frame(self.files_frame, bg="white")
+        vault_head.pack(fill="x", pady=(0, 8))
+        tk.Label(vault_head, text="Your encrypted files", bg="white", fg=TEXT,
+                 font=("Segoe UI", 12, "bold")).pack(side="left")
+        self.vault_summary = tk.Label(vault_head, text="", bg="white",
+                                      fg=MUTED, font=("Segoe UI", 9))
+        self.vault_summary.pack(side="right")
+        tree_row = tk.Frame(self.files_frame, bg="white",
+                            highlightbackground=BORDER, highlightthickness=1)
+        tree_row.pack(fill="both", expand=True)
         columns = ("size",)
-        self.tree = ttk.Treeview(self.files_frame, columns=columns,
+        self.tree = ttk.Treeview(tree_row, columns=columns,
                                  selectmode="extended")
         self.tree.heading("#0", text="File")
         self.tree.heading("size", text="Size")
         self.tree.column("#0", width=470)
         self.tree.column("size", width=90, anchor="e")
-        scroll = ttk.Scrollbar(self.files_frame, orient="vertical",
+        scroll = ttk.Scrollbar(tree_row, orient="vertical",
                                command=self.tree.yview)
         self.tree.configure(yscrollcommand=scroll.set)
         self.tree.pack(side="left", fill="both", expand=True)
@@ -620,7 +656,7 @@ class App:
                                self.refresh_dupes).pack(side="right")
 
         self.dupes_tree = ttk.Treeview(tab, columns=("size",),
-                                       selectmode="extended", height=8)
+                                       selectmode="extended", height=7)
         self.dupes_tree.heading("#0", text="File")
         self.dupes_tree.heading("size", text="Size")
         self.dupes_tree.column("#0", width=540)
@@ -645,7 +681,7 @@ class App:
                  font=("Segoe UI", 12, "bold")).pack(anchor="w",
                                                      pady=(18, 0))
         self.quarantine_tree = ttk.Treeview(tab, columns=("age",),
-                                            selectmode="extended", height=5)
+                                            selectmode="extended", height=4)
         self.quarantine_tree.heading("#0", text="Original location")
         self.quarantine_tree.heading("age", text="Days held")
         self.quarantine_tree.column("#0", width=540)
@@ -867,10 +903,18 @@ class App:
 
         folders = tk.Frame(tab, bg="white")
         folders.pack(fill="x")
+        # relief="flat" + a 1px highlight ring: the Tk default sunken
+        # border renders as a harsh dark box on both platforms.
         self.folders_list = tk.Listbox(folders, height=4,
                                        font=("Segoe UI", 10),
                                        bg="white", fg=TEXT,
+                                       relief="flat", borderwidth=0,
+                                       highlightthickness=1,
                                        highlightbackground=BORDER,
+                                       highlightcolor=NAVY_LIGHT,
+                                       selectbackground=SURFACE,
+                                       selectforeground=NAVY,
+                                       activestyle="none",
                                        selectmode="extended")
         self.folders_list.pack(side="left", fill="x", expand=True)
         btns = tk.Frame(folders, bg="white")
@@ -895,7 +939,13 @@ class App:
         self.protected_list = tk.Listbox(pfolders, height=3,
                                          font=("Segoe UI", 10),
                                          bg="white", fg=TEXT,
+                                         relief="flat", borderwidth=0,
+                                         highlightthickness=1,
                                          highlightbackground=BORDER,
+                                         highlightcolor=NAVY_LIGHT,
+                                         selectbackground=SURFACE,
+                                         selectforeground=NAVY,
+                                         activestyle="none",
                                          selectmode="extended")
         self.protected_list.pack(side="left", fill="x", expand=True)
         pbtns = tk.Frame(pfolders, bg="white")
@@ -913,7 +963,10 @@ class App:
         self.client_entry = tk.Entry(row, width=28, font=("Segoe UI", 10),
                                      bg="white", fg=TEXT,
                                      insertbackground=TEXT,
-                                     highlightbackground=BORDER)
+                                     relief="flat", borderwidth=0,
+                                   highlightthickness=1,
+                                   highlightbackground=BORDER,
+                                   highlightcolor=NAVY_LIGHT)
         self.client_entry.pack(side="left", padx=8)
 
         self.vault_status = tk.Label(tab, text="", bg="white", fg=MUTED,
@@ -1084,10 +1137,16 @@ class App:
                      anchor="w", pady=(4, 10))
         p1 = tk.Entry(dlg, show="•", width=30, font=("Segoe UI", 11),
                       bg="white", fg=TEXT, insertbackground=TEXT,
-                      highlightbackground=BORDER)
+                      relief="flat", borderwidth=0,
+                                   highlightthickness=1,
+                                   highlightbackground=BORDER,
+                                   highlightcolor=NAVY_LIGHT)
         p2 = tk.Entry(dlg, show="•", width=30, font=("Segoe UI", 11),
                       bg="white", fg=TEXT, insertbackground=TEXT,
-                      highlightbackground=BORDER)
+                      relief="flat", borderwidth=0,
+                                   highlightthickness=1,
+                                   highlightbackground=BORDER,
+                                   highlightcolor=NAVY_LIGHT)
         tk.Label(dlg, text="Passphrase:", bg="white", fg=TEXT,
                  font=("Segoe UI", 9)).pack(anchor="w")
         p1.pack(anchor="w", pady=(0, 6))
@@ -1174,21 +1233,27 @@ class App:
             child.destroy()
         if not checks:
             tk.Label(self.posture_box, text="Couldn't run device checks.",
-                     fg=MUTED, bg=SURFACE, font=("Segoe UI", 10)).pack(
+                     fg=MUTED, bg="white", font=("Segoe UI", 10)).pack(
                          anchor="w")
             return
         glyphs = {True: ("✓", GOOD), False: ("⚠", BAD), None: ("–", MUTED)}
-        for c in checks:
+        for i, c in enumerate(checks):
+            if i:  # hairline between rows, not above the first
+                tk.Frame(self.posture_box, bg=HAIRLINE, height=1).pack(
+                    fill="x", pady=1)
             mark, color = glyphs[c.status]
-            row = tk.Frame(self.posture_box, bg=SURFACE)
-            row.pack(fill="x", pady=1)
-            tk.Label(row, text=mark, fg=color, bg=SURFACE, width=2,
+            row = tk.Frame(self.posture_box, bg="white")
+            row.pack(fill="x", pady=3)
+            tk.Label(row, text=mark, fg=color, bg="white", width=2,
                      font=("Segoe UI", 11, "bold")).pack(side="left",
                                                          anchor="n")
-            txt = tk.Label(row, bg=SURFACE, justify="left", wraplength=740,
+            name = tk.Label(row, bg="white", font=("Segoe UI", 10, "bold"),
+                            text=c.name, fg=TEXT)
+            name.pack(side="left", anchor="n")
+            txt = tk.Label(row, bg="white", justify="left", wraplength=610,
                            font=("Segoe UI", 10),
-                           text=f"{c.name}: {c.detail}",
-                           fg=(BAD if c.status is False else TEXT))
+                           text=f"  {c.detail}",
+                           fg=(BAD if c.status is False else MUTED))
             txt.pack(side="left", anchor="w")
 
     def scan_sensitive(self) -> None:
@@ -1271,9 +1336,21 @@ class App:
                  "Settings) and run a sweep, or restore them into the vault.").pack(
                      anchor="w", padx=16, pady=(0, 12))
 
+    def _set_banner(self, state: str) -> None:
+        """Tint the status banner by state: good / bad / neutral. The
+        colored spine makes the overall state readable at a glance."""
+        fills = {"good": (GOOD, GOOD_BG), "bad": (BAD, BAD_BG),
+                 "neutral": (MUTED, SURFACE)}
+        spine, bg = fills.get(state, fills["neutral"])
+        self.banner_spine.config(bg=spine)
+        for widget in (self.banner, self.banner_body, self.headline,
+                       self.subline):
+            widget.config(bg=bg)
+
     def refresh_status(self) -> None:
         if self.config is None:
-            self.headline.config(text="Not set up yet", fg=MUTED)
+            self._set_banner("neutral")
+            self.headline.config(text="Not set up yet", fg=TEXT)
             self.subline.config(
                 text="Open the Settings tab to choose the folders to "
                 "protect and create your vault.")
@@ -1289,7 +1366,8 @@ class App:
             self.activity.config(text=f"Could not read history: {exc}")
         summary = status_summary(history)
         if not summary["configured"]:
-            self.headline.config(text="No checks recorded yet", fg=MUTED)
+            self._set_banner("neutral")
+            self.headline.config(text="No checks recorded yet", fg=TEXT)
             self.subline.config(text="Click “Run check now” to record "
                                 "the first snapshot.")
             self.detail_text.config(
@@ -1298,20 +1376,25 @@ class App:
                 "snapshot.")
             return
         if summary["clean"]:
+            self._set_banner("good")
             self.headline.config(text="✓ Protected", fg=GOOD)
         elif summary["alerts"]:
+            self._set_banner("bad")
             self.headline.config(
                 text="⚠ Attention needed — see details below", fg=BAD)
         elif summary["awaiting"]:
+            self._set_banner("bad")
             self.headline.config(
                 text=f"⚠ {summary['awaiting']} file(s) awaiting "
                 "encryption — unlock the vault to sweep them", fg=BAD)
         elif summary["new_groups"]:
+            self._set_banner("bad")
             self.headline.config(
                 text=f"⚠ {summary['new_groups']} new duplicate "
                 "group(s) found", fg=BAD)
         else:
             n = summary['duplicates']
+            self._set_banner("bad")
             self.headline.config(
                 text=f"⚠ {n:,} redundant cop{'y' if n == 1 else 'ies'} "
                 "present", fg=BAD)
@@ -1449,8 +1532,13 @@ class App:
     def _refresh_vault_list(self) -> None:
         self.tree.delete(*self.tree.get_children())
         if self.vault is None:
+            self.vault_summary.config(text="")
             return
         entries = sorted(self.vault.list_files().items())
+        total = sum(e.size for _n, e in entries)
+        self.vault_summary.config(
+            text=f"{len(entries):,} file{'' if len(entries) == 1 else 's'} "
+            f"encrypted · {human_size(total)}")
         for name, entry in entries[:self.VAULT_LIST_CAP]:
             self.tree.insert("", "end", iid=name, text=name,
                              values=(human_size(entry.size),))
