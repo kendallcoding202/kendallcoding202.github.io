@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,3 +24,7 @@ jobs:
         run: ruff check .
       - name: Test
         run: pytest -q
+      - name: Smoke test the CLI
+        run: |
+          wageproof check examples/week-13-clean.json
+          wageproof form examples/week-13-clean.json > /dev/null

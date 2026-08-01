@@ -1,0 +1,191 @@
+{
+  "week_ending": "2026-03-08",
+  "payroll_number": "13",
+  "pay_date": "2026-03-13",
+  "filed_date": "2026-03-16",
+  "project": {
+    "name": "Route 9 Bridge Rehabilitation",
+    "contract_number": "DOT-FHWA-2026-0417",
+    "location": "Kingston, NY",
+    "contracting_agency": "NYSDOT",
+    "wage_determination": {
+      "number": "NY20260012",
+      "effective_date": "2026-01-03",
+      "classifications": {
+        "Electrician": {
+          "base_rate": "48.20",
+          "fringe_rate": "31.15",
+          "apprentice_ratio": "1:2"
+        },
+        "Laborer Group 1": {
+          "base_rate": "32.75",
+          "fringe_rate": "24.40",
+          "apprentice_ratio": "1:4"
+        },
+        "Ironworker (Structural)": {
+          "base_rate": "44.05",
+          "fringe_rate": "38.90"
+        },
+        "Operating Engineer Group 2": {
+          "base_rate": "46.60",
+          "fringe_rate": "29.75"
+        },
+        "Carpenter": {
+          "base_rate": "41.30",
+          "fringe_rate": "27.85",
+          "apprentice_ratio": "1:3"
+        }
+      }
+    }
+  },
+  "contractor": {
+    "name": "Hollow Creek Electric LLC",
+    "address": "18 Mill Street, Kingston, NY 12401",
+    "is_subcontractor": true,
+    "signatory_name": "Dana Whitfield",
+    "signatory_title": "Owner"
+  },
+  "workers": [
+    {
+      "name": "Marcus Ellery",
+      "identifier": "4417",
+      "classification": "Electrician",
+      "cash_hourly_rate": "48.20",
+      "daily_hours": {
+        "monday": 8,
+        "tuesday": 8,
+        "wednesday": 8,
+        "thursday": 8,
+        "friday": 8
+      },
+      "fringe_credits": [
+        {
+          "plan_name": "IBEW Local 363 Health & Welfare",
+          "hourly_rate": "19.40"
+        },
+        {
+          "plan_name": "IBEW Local 363 Pension",
+          "hourly_rate": "11.75"
+        }
+      ],
+      "deductions": [
+        {
+          "name": "Federal withholding",
+          "amount": "241.00",
+          "kind": "payroll_tax"
+        },
+        {
+          "name": "FICA",
+          "amount": "147.49",
+          "kind": "payroll_tax"
+        }
+      ]
+    },
+    {
+      "name": "Priya Raghunathan",
+      "identifier": "8802",
+      "classification": "Electrician",
+      "cash_hourly_rate": "48.20",
+      "daily_hours": {
+        "monday": 8,
+        "tuesday": 8,
+        "wednesday": 8,
+        "thursday": 8,
+        "friday": 8,
+        "saturday": 6
+      },
+      "fringe_credits": [
+        {
+          "plan_name": "IBEW Local 363 Health & Welfare",
+          "hourly_rate": "19.40"
+        },
+        {
+          "plan_name": "IBEW Local 363 Pension",
+          "hourly_rate": "11.75"
+        }
+      ],
+      "deductions": [
+        {
+          "name": "Federal withholding",
+          "amount": "263.00",
+          "kind": "payroll_tax"
+        }
+      ]
+    },
+    {
+      "name": "Tom Bright",
+      "identifier": "1290",
+      "classification": "Laborer Group 1",
+      "cash_hourly_rate": "32.75",
+      "daily_hours": {
+        "monday": 8,
+        "tuesday": 8,
+        "wednesday": 8,
+        "thursday": 8,
+        "friday": 8,
+        "saturday": 4
+      },
+      "deductions": [
+        {
+          "name": "Federal withholding",
+          "amount": "402.00",
+          "kind": "payroll_tax"
+        }
+      ],
+      "cash_fringe_in_lieu": "24.40"
+    },
+    {
+      "name": "Jo Castellanos",
+      "identifier": "6631",
+      "classification": "Electrician",
+      "cash_hourly_rate": "48.20",
+      "daily_hours": {
+        "monday": 8,
+        "tuesday": 8,
+        "wednesday": 8,
+        "thursday": 8,
+        "friday": 8
+      },
+      "deductions": [
+        {
+          "name": "Federal withholding",
+          "amount": "112.00",
+          "kind": "payroll_tax"
+        }
+      ],
+      "fringe_credits": [
+        {
+          "plan_name": "IBEW Local 363 Health & Welfare",
+          "hourly_rate": "19.40"
+        },
+        {
+          "plan_name": "IBEW Local 363 Pension",
+          "hourly_rate": "11.75"
+        }
+      ]
+    },
+    {
+      "name": "Sam Odunayo",
+      "identifier": "5510",
+      "classification": "Electrician",
+      "cash_hourly_rate": "48.20",
+      "daily_hours": {
+        "monday": 8,
+        "tuesday": 8,
+        "wednesday": 8,
+        "thursday": 8
+      },
+      "fringe_credits": [
+        {
+          "plan_name": "IBEW Local 363 Health & Welfare",
+          "hourly_rate": "19.40"
+        },
+        {
+          "plan_name": "IBEW Local 363 Pension",
+          "hourly_rate": "11.75"
+        }
+      ],
+      "deductions": []
+    }
+  ]
+}

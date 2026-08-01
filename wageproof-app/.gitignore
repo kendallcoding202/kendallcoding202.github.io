@@ -10,9 +10,7 @@ dist/
 .coverage
 htmlcov/
 
-# Never commit real patient data. Ever.
-uploads/
-*.local.csv
+# Real payroll data holds names and partial SSNs. Keep it out of git.
 *.local.json
-*.local.pdf
-data/real/
+*.local.csv
+payrolls/
