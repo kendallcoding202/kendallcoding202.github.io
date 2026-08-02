@@ -42,7 +42,7 @@ function tone(o: ToneOpts) {
     osc.stop(t0 + o.dur + 0.03);
 }
 
-function noiseBurst(dur: number, gain: number) {
+function noiseBurst(dur: number, gain: number, delay = 0) {
     const c = ac();
     if (!c) return;
     const frames = Math.floor(c.sampleRate * dur);
@@ -57,16 +57,24 @@ function noiseBurst(dur: number, gain: number) {
     g.gain.value = gain;
     src.connect(g);
     g.connect(c.destination);
-    src.start();
+    src.start(c.currentTime + delay);
 }
 
-type SfxName = "card" | "select" | "hit" | "breach" | "turn" | "alert" | "win" | "fail" | "reward" | "transmission" | "cascade" | "alarm";
+type SfxName = "card" | "select" | "hit" | "breach" | "turn" | "alert" | "win" | "fail" | "reward" | "transmission" | "cascade" | "alarm"
+    | "castExploit" | "castRecon" | "castStealth" | "castUtility" | "castWorm"
+    | "stingWin" | "stingCaught" | "stingLockout";
 
 const SFX: Record<SfxName, () => void> = {
     card: () => tone({ freq: 430, dur: 0.05, type: "square", gain: 0.07 }),
     select: () => tone({ freq: 680, dur: 0.03, type: "square", gain: 0.05 }),
     hit: () => tone({ freq: 300, dur: 0.09, type: "sawtooth", gain: 0.1, sweepTo: 110 }),
-    breach: () => { tone({ freq: 440, dur: 0.08, type: "square", gain: 0.09 }); tone({ freq: 660, dur: 0.13, type: "square", gain: 0.09, delay: 0.075 }); },
+    // the breach BOOM — matches the shockwave: blip pair + a deep chest-thump + debris hiss
+    breach: () => {
+        tone({ freq: 440, dur: 0.08, type: "square", gain: 0.09 });
+        tone({ freq: 660, dur: 0.13, type: "square", gain: 0.09, delay: 0.075 });
+        tone({ freq: 82, dur: 0.4, type: "sine", gain: 0.16, sweepTo: 36 });
+        noiseBurst(0.14, 0.04, 0.02);
+    },
     turn: () => tone({ freq: 200, dur: 0.07, type: "triangle", gain: 0.07 }),
     alert: () => { tone({ freq: 880, dur: 0.11, type: "square", gain: 0.08, sweepTo: 620 }); },
     win: () => [523, 659, 784, 1046].forEach((f, i) => tone({ freq: f, dur: 0.15, type: "square", gain: 0.09, delay: i * 0.1 })),
@@ -77,6 +85,42 @@ const SFX: Record<SfxName, () => void> = {
     cascade: () => { [392, 587, 784, 1175, 1568].forEach((f, i) => tone({ freq: f, dur: 0.11, type: "square", gain: 0.075, delay: i * 0.045 })); tone({ freq: 196, dur: 0.3, type: "sawtooth", gain: 0.05 }); },
     // ALARM: an urgent descending klaxon just before the system strikes back
     alarm: () => { tone({ freq: 540, dur: 0.14, type: "sawtooth", gain: 0.1, sweepTo: 400 }); tone({ freq: 540, dur: 0.14, type: "sawtooth", gain: 0.1, sweepTo: 400, delay: 0.17 }); },
+
+    /* --- CAST SOUNDS: each card kind has its own voice at the moment you play it,
+       matched to its tracer — the click always answers back in character. --- */
+    // exploit: a hard zap that lands with a thunk
+    castExploit: () => { tone({ freq: 620, dur: 0.07, type: "square", gain: 0.09, sweepTo: 220 }); tone({ freq: 150, dur: 0.09, type: "sawtooth", gain: 0.07, sweepTo: 70, delay: 0.055 }); },
+    // recon: a sonar ping rising away, with a faint echo
+    castRecon: () => { tone({ freq: 980, dur: 0.09, type: "sine", gain: 0.07, sweepTo: 1480 }); tone({ freq: 1480, dur: 0.12, type: "sine", gain: 0.03, delay: 0.13 }); },
+    // stealth: barely there — a hush of static and a breath sliding down
+    castStealth: () => { noiseBurst(0.09, 0.016); tone({ freq: 330, dur: 0.16, type: "triangle", gain: 0.045, sweepTo: 205 }); },
+    // utility: a mechanical click-clack, the toolkit doing its job
+    castUtility: () => { tone({ freq: 380, dur: 0.04, type: "square", gain: 0.07 }); tone({ freq: 520, dur: 0.05, type: "square", gain: 0.06, delay: 0.055 }); },
+    // worm: a wet, detuned burrow chewing downward
+    castWorm: () => { tone({ freq: 190, dur: 0.16, type: "sawtooth", gain: 0.08, sweepTo: 62 }); tone({ freq: 245, dur: 0.14, type: "sawtooth", gain: 0.05, sweepTo: 82, delay: 0.04 }); },
+
+    /* --- FINALE STINGS: score the held cinematic, one per ending. --- */
+    // PAYLOAD SECURED — a dark-cyber triumph: minor world blooming into A major,
+    // sparkle notes climbing over the pad while a shimmer of static settles
+    stingWin: () => {
+        [110, 138.59, 164.81, 220].forEach((f) => tone({ freq: f, dur: 1.7, type: "sawtooth", gain: 0.045 }));
+        [440, 554.37, 659.25, 880, 1108.73].forEach((f, i) => tone({ freq: f, dur: 0.42, type: "triangle", gain: 0.06, delay: 0.28 + i * 0.15 }));
+        noiseBurst(0.5, 0.012, 0.12);
+    },
+    // CAUGHT IN THE ACT — triple klaxon, then the whole signal dives and slams
+    stingCaught: () => {
+        [0, 0.2, 0.4].forEach((d) => tone({ freq: 600, dur: 0.16, type: "sawtooth", gain: 0.11, sweepTo: 430, delay: d }));
+        tone({ freq: 320, dur: 1.2, type: "sawtooth", gain: 0.1, sweepTo: 42, delay: 0.55 });
+        tone({ freq: 64, dur: 0.5, type: "sine", gain: 0.16, sweepTo: 30, delay: 0.6 });
+        noiseBurst(0.3, 0.05, 0.58);
+    },
+    // TRACE COMPLETE — quieter defeat: two beating low tones sinking away
+    stingLockout: () => {
+        tone({ freq: 220, dur: 1.0, type: "sawtooth", gain: 0.09, sweepTo: 88 });
+        tone({ freq: 110, dur: 1.5, type: "sine", gain: 0.11, sweepTo: 52, delay: 0.15 });
+        tone({ freq: 261.63, dur: 0.4, type: "triangle", gain: 0.05, delay: 0.3 });
+        tone({ freq: 233.08, dur: 0.7, type: "triangle", gain: 0.05, delay: 0.75 });
+    },
 };
 
 // Mobile browsers keep the audio engine suspended until a user gesture, and

@@ -424,6 +424,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
     const [feed, setFeed] = useState<{ who: "op" | "watcher"; text: string; key: number }[]>([]); // the live comms transcript
     const fxKey = useRef(0);
     const feedKey = useRef(0);
+    const castVoiced = useRef(false); // a cast sound already spoke for this play
     const wasAlarmed = useRef(false);
     const wasSusp = useRef(false);
     const opened = useRef(false);
@@ -439,11 +440,16 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
     const spawnCastFx = (card: string, target?: number) => {
         const c = CARDS[card];
         if (!c || typeof window === "undefined") return;
+        const eff = c.effect || "";
+        const isWorm = /bomb|parasite|contagion|trojan|necro|incubate|worm|detonate|blight|viral/i.test(eff);
+        // the cast VOICE: every kind answers the click in character (plays even
+        // under reduced-motion — it replaces, not decorates, the visual tracer)
+        const CAST_SFX: Record<string, "castExploit" | "castRecon" | "castStealth" | "castUtility"> = { exploit: "castExploit", recon: "castRecon", stealth: "castStealth", utility: "castUtility" };
+        sfx.play(isWorm ? "castWorm" : CAST_SFX[c.kind] || "castUtility");
+        castVoiced.current = true; // the generic card blip stands down for this commit
         // the console recoils on EVERY play — a themed muzzle flash at the launch rail
         setCastKind(c.kind); window.setTimeout(() => setCastKind((k) => (k === c.kind ? null : k)), 320);
         try { if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return; } catch { /* no matchMedia */ }
-        const eff = c.effect || "";
-        const isWorm = /bomb|parasite|contagion|trojan|necro|incubate|worm|detonate|blight|viral/i.test(eff);
         // where it lands: the aimed defense, else the current layer
         let tRect: DOMRect | null = null;
         if (target != null) { const el = document.querySelector(`[data-chip="${state.current}-${target}"]`); if (el) tRect = el.getBoundingClientRect(); }
@@ -539,11 +545,12 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
             const total = (s: GameState) => s.layers.reduce((a, l) => a + l.defenses.reduce((b, d) => b + Math.max(0, d.strength), 0), 0);
             const brk = (s: GameState) => s.layers.filter((l) => l.breached).length;
             const rank: Record<string, number> = { IDLE: 0, SUSPICIOUS: 1, ALERTED: 2, LOCKDOWN: 3 };
-            if (state.outcome === "won" && prev.outcome === "playing") sfx.play("win");
-            else if (state.outcome === "lost" && prev.outcome === "playing") sfx.play("fail");
+            const voiced = castVoiced.current; castVoiced.current = false; // consume the cast-voice flag every commit
+            if (state.outcome === "won" && prev.outcome === "playing") sfx.play("stingWin"); // scores the held PAYLOAD SECURED card
+            else if (state.outcome === "lost" && prev.outcome === "playing") sfx.play(state.objectiveExposed ? "stingCaught" : "stingLockout");
             else if (brk(state) > brk(prev)) sfx.play("breach");
             else if (state.turn > prev.turn) sfx.play("turn");
-            else if (state.log.length > prev.log.length) sfx.play(total(state) < total(prev) ? "hit" : "card");
+            else if (state.log.length > prev.log.length && !voiced) sfx.play(total(state) < total(prev) ? "hit" : "card");
             if (state.outcome === "playing" && rank[state.alert] > rank[prev.alert]) sfx.play("alert");
 
             // --- the operator talks: one line per commit, by priority ---
