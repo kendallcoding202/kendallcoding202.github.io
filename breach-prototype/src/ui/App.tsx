@@ -310,6 +310,11 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
     const [shatterIdx, setShatterIdx] = useState<number | null>(null);
     const [castKind, setCastKind] = useState<string | null>(null); // console recoil flash, coloured by the card just played
     const [punching, setPunching] = useState(false); // forward camera-lunge when you cross into the next layer
+    const [shockwaves, setShockwaves] = useState<{ id: number; cls: string }[]>([]); // expanding rings on the big beats
+    const [shards, setShards] = useState<{ id: number; x: number; y: number; dx: number; dy: number; rot: number }[]>([]); // debris when a wall shatters
+    const [grabCine, setGrabCine] = useState<null | "secured" | "caught" | "lockout">(null); // the finale cinematic
+    const [lunge, setLunge] = useState(false); // hard camera push toward the core on the grab
+    const [resultReady, setResultReady] = useState(false); // hold the win/lose box until the cinematic has played
     const [feed, setFeed] = useState<{ who: "op" | "watcher"; text: string; key: number }[]>([]); // the live comms transcript
     const fxKey = useRef(0);
     const feedKey = useRef(0);
@@ -358,6 +363,29 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
         window.setTimeout(() => setProjectiles((p) => p.filter((q) => q.id !== id && q.id !== bid)), spec.dur + 320);
     };
     const dispatch = (card: string, target?: number) => { spawnCastFx(card, target); setState((s) => applyAction(s, { type: "playCard", card, target })); setArmed(null); };
+    const reducedMotion = () => { try { return typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
+    // an expanding shock ring on the big beats (breach / cascade / grab)
+    const spawnShockwave = (cls: string) => {
+        if (reducedMotion()) return;
+        const id = ++fxKey.current;
+        setShockwaves((w) => [...w, { id, cls }]);
+        window.setTimeout(() => setShockwaves((w) => w.filter((q) => q.id !== id)), 760);
+    };
+    // debris flung from a wall as it shatters, sourced from that layer's on-screen box
+    const spawnShards = (layerIdx: number, n = 12) => {
+        if (reducedMotion() || typeof window === "undefined") return;
+        const el = document.querySelector(`[data-layer="${layerIdx}"]`);
+        const r = el ? el.getBoundingClientRect() : { left: window.innerWidth / 2 - 200, top: window.innerHeight / 2, width: 400, height: 40 } as DOMRect;
+        const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        const batch = Array.from({ length: n }, () => {
+            const ang = (fxKey.current * 47 + Math.floor(Math.random() * 360)) * (Math.PI / 180);
+            const dist = 120 + Math.random() * 220;
+            return { id: ++fxKey.current, x: cx + (Math.random() - 0.5) * r.width, y: cy, dx: Math.cos(ang) * dist, dy: Math.sin(ang) * dist - 40, rot: (Math.random() - 0.5) * 540 };
+        });
+        setShards((s) => [...s, ...batch]);
+        const ids = new Set(batch.map((b) => b.id));
+        window.setTimeout(() => setShards((s) => s.filter((q) => !ids.has(q.id))), 720);
+    };
     const endTurn = () => {
         // telegraph the system's counter-move: sound the alarm right before it strikes
         const it = state.systemIntent;
@@ -440,19 +468,36 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
             // SYSTEM CASCADE fired — celebrate the power spike (banner + surge + shake + bed pulse)
             if (state.cascade && !prev.cascade) {
                 sfx.play("cascade"); sfx.setTension(1);
-                setCascadeFx(true); setShaking(true);
+                setCascadeFx(true); setShaking(true); spawnShockwave("sw-cascade");
                 window.setTimeout(() => setCascadeFx(false), 950);
                 window.setTimeout(() => setShaking(false), 340);
             }
-            if (brk(state) > brk(prev)) {
-                setShaking(true); setBreachFx(true);
+            // a mid-run layer breach (NOT the objective grab, handled as the finale below)
+            if (brk(state) > brk(prev) && state.outcome === "playing") {
+                setShaking(true); setBreachFx(true); spawnShockwave("sw-breach");
                 window.setTimeout(() => setShaking(false), 340);
                 window.setTimeout(() => setBreachFx(false), 560);
-                // the wall comes down: crack-sweep the layer that just breached
+                // the wall comes down: crack-sweep the layer that just breached + fling debris
                 const li = state.layers.findIndex((l, k) => l.breached && !prev.layers[k]?.breached);
-                if (li >= 0) { setShatterIdx(li); window.setTimeout(() => setShatterIdx((cur) => (cur === li ? null : cur)), 720); }
+                if (li >= 0) { setShatterIdx(li); spawnShards(li, 12); window.setTimeout(() => setShatterIdx((cur) => (cur === li ? null : cur)), 720); }
                 // crossing INWARD to a new layer: lunge the camera forward through the wall
                 if (state.current > prev.current) { setPunching(true); window.setTimeout(() => setPunching(false), 640); }
+            }
+            // THE FINALE — the objective cracks (win = clean grab; lost + objective = caught in
+            // the act; lost without it = traced out). A held cinematic before the result box.
+            if (state.outcome !== "playing" && prev.outcome === "playing") {
+                const won = state.outcome === "won";
+                const grabbed = state.objectiveExposed; // the objective layer was actually cracked
+                if (!reducedMotion()) {
+                    setGrabCine(won ? "secured" : grabbed ? "caught" : "lockout");
+                    setLunge(true); // hard camera push toward the core (own transform, not the shake)
+                    spawnShockwave(won ? "sw-grab" : "sw-lockout");
+                    if (grabbed) spawnShards(state.layers.length - 1, 20);
+                    window.setTimeout(() => setLunge(false), 720);
+                    window.setTimeout(() => setGrabCine(null), 1500);
+                }
+                const hold = reducedMotion() ? 0 : 1300; // hold the result box until the cinematic plays
+                window.setTimeout(() => setResultReady(true), hold);
             }
             // per-defense damage → floating numbers (keyed by defense, replays on new hit)
             const newHits: Record<string, { amt: number; key: number }> = {};
@@ -499,7 +544,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
             {/* fixed-position towers live OUTSIDE .wrap so the breach shake/glitch
                 (a transform on .wrap) can't reparent them and fling them to center */}
             <CommsTowers op={hackerId || "wraith"} opState={avatarState} alert={state.alert} detFrac={detFrac} feed={feed} onPoke={() => say("poke")} onTaunt={watcherSays} />
-        <div className={"wrap breachview" + (shaking ? " shaking" : "") + (glitch ? (glitch === 2 ? " glitching hard" : " glitching") : "")}>
+        <div className={"wrap breachview" + (shaking ? " shaking" : "") + (lunge ? " lunge" : "") + (glitch ? (glitch === 2 ? " glitching hard" : " glitching") : "")}>
             {breachFx && <div className="breach-flash"><div className="bd">LAYER DOWN</div></div>}
             {cascadeFx && <div className="cascade-flash"><div className="cd">⚡ SYSTEM CASCADE</div></div>}
             {projectiles.length > 0 && (
@@ -511,6 +556,24 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
             )}
             {glitch > 0 && <div className={"det-glitch" + (glitch === 2 ? " hard" : "")} />}
             {castKind && <div className={"cast-recoil k-" + castKind} aria-hidden />}
+            {shockwaves.length > 0 && <div className="fxfield" aria-hidden>{shockwaves.map((w) => <span key={w.id} className={"shockwave " + w.cls} />)}</div>}
+            {shards.length > 0 && (
+                <div className="fxfield" aria-hidden>
+                    {shards.map((s) => <span key={s.id} className="shard" style={{ left: s.x, top: s.y, ["--dx" as string]: s.dx + "px", ["--dy" as string]: s.dy + "px", ["--rot" as string]: s.rot + "deg" }} />)}
+                </div>
+            )}
+            {grabCine && (
+                <div className={"cinematic cine-" + grabCine} aria-hidden>
+                    <div className="cine-strobe" />
+                    <div className="cine-rays" />
+                    <div className="cine-title">
+                        {grabCine === "secured" ? <><span className="cine-mark">◈</span> PAYLOAD SECURED <span className="cine-mark">◈</span></>
+                            : grabCine === "caught" ? <><span className="cine-mark">⚠</span> CAUGHT IN THE ACT <span className="cine-mark">⚠</span></>
+                            : <><span className="cine-mark">⌁</span> TRACE COMPLETE <span className="cine-mark">⌁</span></>}
+                    </div>
+                    <div className="cine-sub">{grabCine === "secured" ? "you're a ghost — out clean" : grabCine === "caught" ? "they had you the second you took it" : "the system locked on — you bailed"}</div>
+                </div>
+            )}
             <div className="title">
                 BREACH <span className="sub">// {systemTitle}</span>
                 <button className="term ghost tiny" style={{ marginLeft: 14 }} onClick={() => onComplete({ won: false, detection: state.detectionMax, detectionMax: state.detectionMax })}>abort job</button>
@@ -667,7 +730,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
 
             {showIntro && <Intro onClose={closeIntro} />}
 
-            {state.outcome !== "playing" && (
+            {state.outcome !== "playing" && resultReady && (
                 <div className={"overlay " + state.outcome}>
                     <div className="box">
                         <h2>{state.outcome === "won" ? "ACCESS :: OBJECTIVE SECURED" : "TRACE COMPLETE :: LOCKED OUT"}</h2>
