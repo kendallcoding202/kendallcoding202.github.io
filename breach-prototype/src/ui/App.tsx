@@ -291,6 +291,82 @@ function CommsTowers({ op, opState, alert, detFrac, feed, onPoke, onTaunt }: { o
 }
 
 /* ============================================================
+   CORE SCENE — the target rendered as a living core you drill into.
+   Pure decoration (aria-hidden): the layer rows beside it stay the
+   interactive truth. Rings = layers (outermost first), arcs = defenses
+   draining as you cut them, the red trace ring is the watcher closing
+   in as detection rises, and the probe line is YOU, drilling inward.
+   ============================================================ */
+const TYPE_COLOR: Record<string, string> = { firewall: "#ff8a4a", ids: "#46d6e6", auth: "#ffd24a", privilege: "#c08cff", database: "#64e88a" };
+function CoreScene({ state, spark, shatterIdx, punching, detFrac }: { state: GameState; spark: number; shatterIdx: number | null; punching: boolean; detFrac: number }) {
+    const [bursts, setBursts] = useState<{ id: number; ang: number }[]>([]);
+    const burstKey = useRef(0);
+    useEffect(() => {
+        if (spark === 0) return;
+        const id = ++burstKey.current;
+        const ang = (spark * 137) % 360; // walk the ring so repeat hits don't stack in one spot
+        setBursts((b) => [...b, { id, ang }]);
+        const t = window.setTimeout(() => setBursts((b) => b.filter((q) => q.id !== id)), 520);
+        return () => window.clearTimeout(t);
+    }, [spark]);
+    const n = state.layers.length;
+    const C = 120;
+    const rOuter = 102, rInner = 34;
+    const stepR = n > 1 ? (rOuter - rInner) / (n - 1) : 0;
+    const rad = (i: number) => rOuter - i * stepR;
+    const cur = Math.min(state.current, n - 1);
+    const curR = rad(cur);
+    // the watcher's ring: starts at the boundary, closes onto the core as detection climbs
+    const traceR = 112 - Math.min(1, detFrac) * (112 - rInner + 6);
+    return (
+        <div className={"corescene" + (punching ? " punching" : "")} aria-hidden>
+            <svg viewBox="0 0 240 240" preserveAspectRatio="xMidYMid meet">
+                <circle className="cs-bound" cx={C} cy={C} r={112} />
+                {state.layers.map((l, i) => {
+                    const r = rad(i);
+                    if (l.breached) return <circle key={i} className={"cs-breached" + (shatterIdx === i ? " cs-shatter" : "")} cx={C} cy={C} r={r} />;
+                    const isCur = i === cur;
+                    const N = l.defenses.length;
+                    const gap = 3.5;
+                    const seg = 100 / N - gap;
+                    return (
+                        <g key={i} className={"cs-layer" + (isCur ? " cs-active" : "") + (shatterIdx === i ? " cs-shatter" : "")} style={{ opacity: isCur ? 1 : 0.5 }}>
+                            {l.defenses.map((d, di) => {
+                                const off = 25 - di * (100 / N); // segments start at 12 o'clock, walk clockwise
+                                const colr = d.typeRevealed ? TYPE_COLOR[d.type] : "#667870";
+                                const frac = d.strength > 0 ? d.strength / d.maxStrength : 0;
+                                return (
+                                    <g key={di}>
+                                        <circle className="cs-track" cx={C} cy={C} r={r} pathLength={100} strokeDasharray={`${seg} ${100 - seg}`} strokeDashoffset={off} style={{ stroke: colr }} />
+                                        {frac > 0 && <circle className="cs-fill" cx={C} cy={C} r={r} pathLength={100} strokeDasharray={`${seg * frac} ${100 - seg * frac}`} strokeDashoffset={off} style={{ stroke: colr }} />}
+                                    </g>
+                                );
+                            })}
+                            {isCur && <circle className="cs-reticle" cx={C} cy={C} r={r + 5.5} />}
+                        </g>
+                    );
+                })}
+                <circle className={"cs-trace" + (detFrac >= 0.8 ? " hot" : "")} cx={C} cy={C} r={Math.max(traceR, rInner - 6)} style={{ opacity: 0.14 + Math.min(1, detFrac) * 0.66 }} />
+                <line className="cs-probe" x1={C} y1={236} x2={C} y2={C + curR + 4} />
+                <polygon className="cs-probehead" points={`${C - 4},${C + curR + 9} ${C + 4},${C + curR + 9} ${C},${C + curR + 2}`} />
+                <g className={"cs-core" + (cur >= n - 1 ? " exposed" : "")}>
+                    <circle className="cs-corehalo" cx={C} cy={C} r={22} />
+                    <polygon points={`${C},${C - 13} ${C + 13},${C} ${C},${C + 13} ${C - 13},${C}`} />
+                </g>
+                {bursts.map((b) => (
+                    <g key={b.id} className="cs-sparks" transform={`rotate(${b.ang} ${C} ${C}) translate(${C} ${C - curR})`}>
+                        <line x1={0} y1={0} x2={0} y2={-10} />
+                        <line x1={0} y1={0} x2={8} y2={-6} />
+                        <line x1={0} y1={0} x2={-8} y2={-6} />
+                    </g>
+                ))}
+            </svg>
+            <div className="cs-caption">LIVE TARGET · TRACE {Math.round(detFrac * 100)}%</div>
+        </div>
+    );
+}
+
+/* ============================================================
    BREACH SCREEN (one job)
    ============================================================ */
 function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat, hackerId, onComplete }: { systemKey: string; systemTitle: string; deck: string[]; modifier?: SystemModifier | null; hunt?: HuntPressure | null; implants?: string[]; threat?: number; hackerId?: string; onComplete: (r: BreachResult) => void }) {
@@ -313,6 +389,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
     const [shockwaves, setShockwaves] = useState<{ id: number; cls: string }[]>([]); // expanding rings on the big beats
     const [shards, setShards] = useState<{ id: number; x: number; y: number; dx: number; dy: number; rot: number }[]>([]); // debris when a wall shatters
     const [grabCine, setGrabCine] = useState<null | "secured" | "caught" | "lockout">(null); // the finale cinematic
+    const [coreSpark, setCoreSpark] = useState(0); // bumps when a hit lands, so the core scene sparks
     const [lunge, setLunge] = useState(false); // hard camera push toward the core on the grab
     const [resultReady, setResultReady] = useState(false); // hold the win/lose box until the cinematic has played
     const [feed, setFeed] = useState<{ who: "op" | "watcher"; text: string; key: number }[]>([]); // the live comms transcript
@@ -509,7 +586,11 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                     if (b - a > 0) newHits[`${li}-${di}`] = { amt: b - a, key: ++fxKey.current };
                 }
             }
-            if (Object.keys(newHits).length) setHits((h) => ({ ...h, ...newHits }));
+            if (Object.keys(newHits).length) {
+                setHits((h) => ({ ...h, ...newHits }));
+                // a hit landed on the wall you were facing → the core scene sparks
+                if (Object.keys(newHits).some((k) => k.startsWith(prev.current + "-"))) setCoreSpark((c) => c + 1);
+            }
 
             prevRef.current = state;
         }
@@ -631,6 +712,8 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
             </div>
 
             <div className="schematic-head">▼ INTRUSION PATH · <b>depth {Math.min(state.current + 1, state.layers.length)}/{state.layers.length}</b> — punch inward to the core</div>
+            <div className="pathwrap">
+            <CoreScene state={state} spark={coreSpark} shatterIdx={shatterIdx} punching={punching} detFrac={detFrac} />
             <div className={"layers schematic depthstack" + (punching ? " punching" : "")}>
                 {punching && <div className="punch-banner" aria-hidden>▸▸ PUNCHING INWARD · DEPTH {Math.min(state.current + 1, state.layers.length)}/{state.layers.length}</div>}
                 {state.layers.map((l, i) => {
@@ -672,6 +755,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                         </div>
                     );
                 })}
+            </div>
             </div>
 
             <div className="last-action">▸ {state.log[state.log.length - 1]}</div>
