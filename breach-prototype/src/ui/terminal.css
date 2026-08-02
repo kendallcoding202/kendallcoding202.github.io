@@ -572,6 +572,8 @@ html.crt .wrap.breachview { padding-top: 14px; }
 @media (min-width: 721px) {
     .breachview .hand { flex-wrap: nowrap; gap: 8px; margin-top: 4px; }
     .breachview .hand .card { flex: 1 1 0; min-width: 0; width: auto; max-width: 210px; height: 92px; min-height: 0; padding: 5px 8px; overflow: visible; }
+    .breachview .hand .card .cart { display: none; } /* fixed-height cards keep just the watermark */
+    .breachview .hand .card .cart-bg { border-radius: inherit; }
     .breachview .hand .card .ctext { margin-top: 2px; font-size: 10px; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
     .breachview .hand .card .kind { font-size: 9px; }
     /* full card revealed in a popover above the card on hover/focus (the clamped
@@ -598,6 +600,7 @@ html.crt .wrap.breachview { padding-top: 14px; }
 @media (min-width: 1440px) {
     .breachview .hand { align-items: stretch; gap: 9px; }
     .breachview .hand .card { height: auto; min-height: 122px; padding: 7px 9px; }
+    .breachview .hand .card .cart { display: flex; } /* room for the art banner again */
     .breachview .hand .card .ctext { display: block; -webkit-line-clamp: unset; line-clamp: unset; overflow: visible; font-size: 11px; line-height: 1.3; margin-top: 4px; }
     .breachview .hand .card .kind { font-size: 10px; }
     .breachview .hand .card .card-full { display: none; } /* full text is already visible */
@@ -992,6 +995,20 @@ html.crt .wrap { padding-top: 24px; }
 
 /* build-archetype tags — so synergy families are visible when deckbuilding */
 /* specialist tag: makes typed exploits read AS specialists at a glance */
+/* --- CARD ART: every card carries its sigil — a glowing mark in the art banner
+   plus a big clipped watermark behind the text, tinted by the card's kind. --- */
+.card .cart-bg { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.card .cart-wm { position: absolute; right: -8px; bottom: -18px; font-size: 58px; line-height: 1; letter-spacing: -6px; color: var(--k, var(--fg)); opacity: 0.13; transform: rotate(-10deg); }
+.card .chead, .card .kind, .card .ctext { position: relative; z-index: 1; }
+.card .cart { position: relative; z-index: 1; height: 21px; margin: -1px 0 4px; display: flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 3px; overflow: hidden; }
+.card .cart-sigil { font-size: 13px; letter-spacing: 4px; padding-left: 4px; color: var(--k, var(--fg)); text-shadow: 0 0 9px var(--k, var(--fg)); }
+.card.kind-exploit .cart { background: linear-gradient(180deg, #ff9d3c26, #ff9d3c07); border-color: #ff9d3c33; }
+.card.kind-recon .cart { background: linear-gradient(180deg, #38d3cf24, #38d3cf07); border-color: #38d3cf33; }
+.card.kind-stealth .cart { background: linear-gradient(180deg, #b98cff24, #b98cff07); border-color: #b98cff33; }
+.card.kind-utility .cart { background: linear-gradient(180deg, #7bdc4e22, #7bdc4e06); border-color: #7bdc4e30; }
+.card:hover:not(.disabled) .cart-sigil { text-shadow: 0 0 12px var(--k, var(--fg)), 0 0 3px #fff8; }
+.card.mini .cart-wm { font-size: 38px; bottom: -12px; }
+
 .card .typetag { color: #ffb000; font-weight: bold; letter-spacing: 0.5px; }
 .card .synergy { font-weight: bold; letter-spacing: 0.5px; }
 .card .synergy.s-ghost { color: #8fd6ff; }

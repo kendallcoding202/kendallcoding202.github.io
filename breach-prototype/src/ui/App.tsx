@@ -48,6 +48,31 @@ function ImplantCard({ id, onClick, num }: { id: string; onClick?: () => void; n
 const nodeIcon = (n: MapNode) => (n.type === "breach" ? (isTerminal(n) ? "★" : "◈") : n.type === "safehouse" ? "☂" : "❋");
 // per-archetype card glyph, so the hand reads visually at a glance (colour comes from --k)
 const KIND_ICON: Record<string, string> = { exploit: "↯", recon: "⊙", stealth: "◐", utility: "❖" };
+/* Every card's hand-picked sigil — the glyph-mark that makes it recognisable at a
+   glance. Rendered big-and-glowing in the card's art banner and as a watermark. */
+const CARD_SIGIL: Record<string, string> = {
+    // recon — eyes on the target
+    portScan: "⌗⊚", passiveRecon: "◎⌇", enumerate: "≣⌗", socialEngineer: "⊙?", packetSniffer: "∿⊚",
+    analyze: "≡⚙", quietScan: "◌⌗", patchScanner: "⚙⌗", dataSiphon: "▼≋", portKnock: "∴⌂", honeypot: "◉∿",
+    // exploits — the cutting edge
+    knownExploit: "⟫≡", scriptKiddie: "»»", sqlInjection: "▤⚡", firewallBypass: "▦❯", idsEvasion: "◎⌀",
+    rainbowTable: "≣#", privEsc: "▲❯", zeroDay: "⌀⟫", bruteForce: "██", empBurst: "◉⌁", polymorph: "◇◆",
+    precisionStrike: "⌖❯", overload: "⚡⚡", momentum: "⟫⟫", meltdown: "≋▓", wreckingBall: "●▬",
+    powerSurge: "⚡❯", shortCircuit: "⌁✕", thermalRunaway: "≋≋", adrenalineRush: "❯❯❯", overflow: "≋█",
+    bufferOverflow: "[≋]", quickHack: "❯⌁", daisyChain: "◈◈", scriptRunner: "»⚙", macro: "≣»",
+    heuristicEngine: "⚙◎", sqlmap: "▤»", dictionaryAttack: "≣∴", wafBypass: "▦⌀", icePick: "❄▲",
+    tokenTheft: "⊛❮", coldBoot: "❄⌁", glassCutter: "◇╱", corrosiveAgent: "⚗▒", acidWash: "⚗≋",
+    phantomJab: "◌❯", ghostInTheShell: "◌⊙",
+    // stealth — the quiet arts
+    ghostProtocol: "◌⌁", blindSpot: "◎▒", goDark: "○●", coverTracks: "✕⌇", logWipe: "≣✕",
+    proxyChain: "◈┄◈", spoof: "◎≠", feint: "❮❯", vanish: "◌◌", cloak: "▒◌", misdirect: "❮⌁", deadDrop: "▼◌",
+    // worms & rot
+    logicBomb: "▚☣", parasite: "☣❮", blight: "☣▒", incubate: "◔☣", viralLoad: "☣≋", necroticTouch: "☠❯",
+    contagion: "☣∷", detonate: "▚⚡", trojan: "⌂☣", backdoor: "⌂❮", rootkit: "▼⚙",
+    // utility — the toolkit
+    killSwitch: "⊘❯", automate: "⚙»", overclock: "⚙⚡", cascade: "▼▼", chainReaction: "∞⚡",
+};
+const cardSigil = (id: string, kind: string) => CARD_SIGIL[id] || KIND_ICON[kind] || "◈";
 // the operator's voice — short lines fired at key beats (picked at random for variety)
 const HERO_QUIPS: Record<string, string[]> = {
     start: ["In and out. No trace.", "Let's keep this quiet.", "Clock's running — move.", "Doors are mine.", "Nice and slow. No noise.", "Patch me in. I'm going dark."],
@@ -168,6 +193,7 @@ function CardMini({ id, onClick, dim, num }: { id: string; onClick?: () => void;
     if (!def) return null;
     return (
         <div className={"card mini kind-" + def.kind + (onClick ? " playable" : "") + (dim ? " disabled" : "")} onClick={onClick} title={def.text}>
+            <div className="cart-bg" aria-hidden><span className="cart-wm">{cardSigil(id, def.kind)}</span></div>
             <div className="chead">
                 <span className="cname">{num ? <span className="kbd">{num}</span> : null}<span className="cicon" aria-hidden>{KIND_ICON[def.kind] || "◈"}</span>{def.name}{def.needsTarget ? <span className="muted"> ◎</span> : null}</span>
                 <span className="noise" style={{ color: def.noise === 0 ? "#35e0d8" : "#ffb000" }}>{def.noise === 0 ? "SILENT" : "◈" + def.noise}</span>
@@ -785,6 +811,8 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                     const blocked = needsT && targetOpts.length === 0;
                     return (
                         <div key={i} className={"card kind-" + def.kind + (playable && !blocked ? "" : " disabled") + (danger ? " danger" : "") + (armed === id ? " armed" : "")} onClick={() => !blocked && onCardClick(id)}>
+                            <div className="cart-bg" aria-hidden><span className="cart-wm">{cardSigil(id, def.kind)}</span></div>
+                            <div className="cart" aria-hidden><span className="cart-sigil">{cardSigil(id, def.kind)}</span></div>
                             <div className="chead">
                                 <span className="cname">{i < 9 && !armed ? <span className="kbd">{i + 1}</span> : null}<span className="cicon" aria-hidden>{KIND_ICON[def.kind] || "◈"}</span>{def.name}{needsT ? <span className="muted"> ◎</span> : null}</span>
                                 <span className="noise" style={{ color: danger ? "#ff4141" : noise === 0 ? "#35e0d8" : "#ffb000" }}>{noise === 0 ? "SILENT" : "◈" + noise}</span>
