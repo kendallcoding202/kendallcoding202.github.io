@@ -48,9 +48,12 @@ Clear a campaign to raise your Threat Level — escalating ascension-style diffi
 [*]Deckbuilding roguelike with a full intrusion theme — no filler, every card is a tactic
 [*]Branching campaign map with meaningful routes and a run-wide heat system
 [*]4 playable operators with distinct decks and passives
-[*]A reactive antagonist that hunts you mechanically, not just narratively
+[*]A reactive antagonist that hunts you mechanically, not just narratively — and a final boss, THE CORE, that learns, hunts, and stitches its own wounds shut
+[*]Active defenses (ICE) that bite back — reactive armor, black ICE, self-healing walls — and the counter-tools to crack them, including the armor-melting CORRODE keyword
+[*]Distinct target archetypes: honeypot traps, live-monitored networks on an accelerating clock, self-healing mesh grids
 [*]Per-run modifiers, an event deck, and collectible implants for high replayability
 [*]Threat Levels + Operator Profile meta-progression
+[*]A living interface: the target rendered as a ring-core you drill into, a backdrop that reddens as the trace closes in, and a scored cinematic finale on every job
 [*]Slick terminal aesthetic, fully synthesized sound, deterministic seeded runs
 [/list]
 
