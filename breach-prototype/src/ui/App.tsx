@@ -48,6 +48,9 @@ function ImplantCard({ id, onClick, num }: { id: string; onClick?: () => void; n
 const nodeIcon = (n: MapNode) => (n.type === "breach" ? (isTerminal(n) ? "★" : "◈") : n.type === "safehouse" ? "☂" : "❋");
 // per-archetype card glyph, so the hand reads visually at a glance (colour comes from --k)
 const KIND_ICON: Record<string, string> = { exploit: "↯", recon: "⊙", stealth: "◐", utility: "❖" };
+/* The living backdrop's mood — written by whichever screen is active, read by the
+   code-rain loop every frame. 0 = calm ghost-green drizzle, 1 = red lockdown torrent. */
+const RAIN_MOOD = { t: 0 };
 /* Every card's hand-picked sigil — the glyph-mark that makes it recognisable at a
    glance. Rendered big-and-glowing in the card's art banner and as a watermark. */
 const CARD_SIGIL: Record<string, string> = {
@@ -630,6 +633,8 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
     useEffect(() => {
         if (state.outcome === "playing") sfx.setTension(0.2 + 0.8 * Math.min(1, detFrac));
     }, [detFrac, state.outcome]);
+    // the living backdrop tracks the trace while a breach is live, then falls calm
+    useEffect(() => { RAIN_MOOD.t = Math.min(1, detFrac); return () => { RAIN_MOOD.t = 0; }; }, [detFrac]);
     const room = state.detectionMax - state.detection;
     // the corner avatar reads the danger: you stay a ghost, then get rattled, then made
     const avatarState: "calm" | "tense" | "alarmed" = detFrac >= 0.62 ? "alarmed" : detFrac >= 0.32 ? "tense" : "calm";
@@ -1403,14 +1408,20 @@ export function App() {
             if (t - last < 60) return; // ~16fps — alive but light
             last = t;
             ctx.fillStyle = "rgba(5,8,10,0.42)"; ctx.fillRect(0, 0, w, h); // shorter trails
+            // the backdrop breathes with the threat: green drizzle when you're a ghost,
+            // amber churn once suspicion builds, a fast red torrent in lockdown
+            const md = RAIN_MOOD.t;
+            const bright = md >= 0.8 ? "rgba(255,110,110,0.5)" : md >= 0.45 ? "rgba(255,190,90,0.4)" : "rgba(120,255,190,0.38)";
+            const dim = md >= 0.8 ? "rgba(220,60,60,0.26)" : md >= 0.45 ? "rgba(214,150,64,0.2)" : "rgba(46,196,124,0.20)";
+            const rush = 1 + md * 2.4; // the rain accelerates as the trace closes
             for (let i = 0; i < cols; i++) {
                 const y = drops[i] * FONT;
                 if (y > 0) {
-                    ctx.fillStyle = Math.random() > 0.97 ? "rgba(120,255,190,0.38)" : "rgba(46,196,124,0.20)";
+                    ctx.fillStyle = Math.random() > 0.97 ? bright : dim;
                     ctx.fillText(GLYPHS[(Math.random() * GLYPHS.length) | 0], i * COLW, y);
                 }
-                drops[i] += sp[i];
-                if (y > h && Math.random() > 0.975) drops[i] = Math.random() * -20;
+                drops[i] += sp[i] * rush;
+                if (y > h && Math.random() > (md >= 0.6 ? 0.93 : 0.975)) drops[i] = Math.random() * -20;
             }
         };
         raf = requestAnimationFrame(frame);
@@ -1420,8 +1431,8 @@ export function App() {
     // ambient bed: hum low on the map (scaled by Heat), let a breach drive its own
     // dread, and go silent in menus / after the run ends.
     useEffect(() => {
-        if (mode === "run" && run) sfx.setTension(0.1 + 0.55 * (run.heat / Math.max(1, run.heatMax)));
-        else if (mode !== "breach") sfx.stopBed();
+        if (mode === "run" && run) { sfx.setTension(0.1 + 0.55 * (run.heat / Math.max(1, run.heatMax))); RAIN_MOOD.t = 0.3 * (run.heat / Math.max(1, run.heatMax)); }
+        else if (mode !== "breach") { sfx.stopBed(); RAIN_MOOD.t = 0; }
     }, [mode, run?.heat, run?.heatMax]);
 
     const campaign = run ? getCampaign(run.campaignId) : null;
