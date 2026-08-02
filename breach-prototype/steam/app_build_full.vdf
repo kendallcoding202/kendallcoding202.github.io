@@ -3,7 +3,7 @@
 //   steamcmd +login <builder_account> +run_app_build <abs-path>\app_build_full.vdf +quit
 "appbuild"
 {
-	"appid"	"FULL_APP_ID"          // e.g. 1234560 — the full game's App ID
+	"appid"	"1272089"              // BREACH: Silence is a Signature (confirm on the app landing page)
 	"desc"	"BREACH full build"     // internal build label (shows in Steamworks build list)
 	"buildoutput"	".\output\"      // SteamPipe logs/chunks land here (git-ignored)
 	"contentroot"	"."
@@ -12,6 +12,6 @@
 
 	"depots"
 	{
-		"FULL_DEPOT_ID"	"depot_build_full.vdf"   // e.g. 1234561
+		"1272090"	"depot_build_full.vdf"   // default depot — confirm at SteamPipe → Depots
 	}
 }

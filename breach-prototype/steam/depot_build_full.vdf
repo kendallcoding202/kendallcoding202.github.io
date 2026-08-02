@@ -2,7 +2,7 @@
 // Ships everything under content_full\ (stage BREACH.exe there before uploading).
 "DepotBuildConfig"
 {
-	"DepotID"	"FULL_DEPOT_ID"
+	"DepotID"	"1272090"
 
 	// Folder whose contents become the depot. Put the built, runnable game here
 	// (at minimum BREACH.exe — the Tauri exe is self-contained on Windows).
