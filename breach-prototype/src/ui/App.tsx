@@ -597,9 +597,9 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                     spawnShockwave(won ? "sw-grab" : "sw-lockout");
                     if (grabbed) spawnShards(state.layers.length - 1, 20);
                     window.setTimeout(() => setLunge(false), 720);
-                    window.setTimeout(() => setGrabCine(null), 1500);
+                    window.setTimeout(() => setGrabCine(null), 2800);
                 }
-                const hold = reducedMotion() ? 0 : 1300; // hold the result box until the cinematic plays
+                const hold = reducedMotion() ? 0 : 2500; // hold the result box until the cinematic has REALLY landed
                 window.setTimeout(() => setResultReady(true), hold);
             }
             // per-defense damage → floating numbers (keyed by defense, replays on new hit)

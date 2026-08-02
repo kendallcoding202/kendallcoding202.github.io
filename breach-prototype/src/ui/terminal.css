@@ -365,26 +365,29 @@ body::before {
 .wrap.lunge { animation: camLunge 700ms cubic-bezier(.2,.7,.3,1); }
 @keyframes camLunge { 0% { transform: scale(1); } 26% { transform: scale(1.055); } 100% { transform: scale(1); } }
 
-/* the finale card — a held title sequence over rays + a strobe, colour by outcome */
-.cinematic { position: fixed; inset: 0; z-index: 62; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; overflow: hidden; animation: cineFade 1500ms ease-out forwards; }
-@keyframes cineFade { 0% { opacity: 0; } 8% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+/* the finale card — a held title sequence over rays + a strobe, colour by outcome.
+   Long hold: this is the climax of the whole job, it should LAND, not flicker by. */
+.cinematic { position: fixed; inset: 0; z-index: 62; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; overflow: hidden; animation: cineFade 2800ms ease-out forwards; }
+/* a dark vignette floor so the title pops off the busy board underneath */
+.cinematic::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 46%, #000000b8 0%, #00000088 55%, #00000055 100%); }
+@keyframes cineFade { 0% { opacity: 0; } 5% { opacity: 1; } 88% { opacity: 1; } 100% { opacity: 0; } }
 .cine-strobe { position: absolute; inset: 0; }
-.cine-secured .cine-strobe { background: radial-gradient(circle at 50% 46%, #12ffa022, transparent 62%); animation: strobeWin 1400ms ease-out forwards; }
-.cine-caught .cine-strobe, .cine-lockout .cine-strobe { animation: strobeAlarm 170ms steps(2) 5; }
-@keyframes strobeWin { 0% { background-color: #eafff230; } 100% { background-color: transparent; } }
+.cine-secured .cine-strobe { background: radial-gradient(circle at 50% 46%, #12ffa022, transparent 62%); animation: strobeWin 2600ms ease-out forwards; }
+.cine-caught .cine-strobe, .cine-lockout .cine-strobe { animation: strobeAlarm 190ms steps(2) 7; }
+@keyframes strobeWin { 0% { background-color: #eafff230; } 30% { background-color: transparent; } 100% { background-color: transparent; } }
 @keyframes strobeAlarm { 0% { background-color: #ff141400; } 50% { background-color: #ff14143a; } 100% { background-color: #ff141400; } }
-.cine-rays { position: absolute; width: 200vmax; height: 200vmax; top: 46%; left: 50%; transform: translate(-50%, -50%); background: repeating-conic-gradient(from 0deg, #ffffff00 0deg 6deg, var(--ray, #35ffb022) 6deg 7deg); opacity: 0; mix-blend-mode: screen; animation: rayFlare 1300ms ease-out forwards; }
+.cine-rays { position: absolute; width: 200vmax; height: 200vmax; top: 46%; left: 50%; transform: translate(-50%, -50%); background: repeating-conic-gradient(from 0deg, #ffffff00 0deg 6deg, var(--ray, #35ffb022) 6deg 7deg); opacity: 0; mix-blend-mode: screen; animation: rayFlare 2600ms ease-out forwards; }
 .cine-secured .cine-rays { --ray: #35ffb028; }
 .cine-caught .cine-rays, .cine-lockout .cine-rays { --ray: #ff414128; }
-@keyframes rayFlare { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.4) rotate(0deg); } 20% { opacity: 0.75; } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1) rotate(24deg); } }
-.cine-title { position: relative; font-size: clamp(28px, 6vw, 66px); font-weight: 800; letter-spacing: 6px; text-align: center; line-height: 1.05; animation: cineTitle 1300ms cubic-bezier(.16,.9,.3,1) forwards; }
-.cine-secured .cine-title { color: #d6ffe8; text-shadow: 0 0 26px #35ffb0, 0 0 7px #eafff2; }
-.cine-caught .cine-title, .cine-lockout .cine-title { color: #ffd0d0; text-shadow: 0 0 26px var(--red), 0 0 7px #ff8a8a; }
-.cine-sub { position: relative; font-size: clamp(11px, 1.6vw, 16px); letter-spacing: 2px; color: #cfeee0; animation: cineSub 1300ms ease-out forwards; }
+@keyframes rayFlare { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.4) rotate(0deg); } 12% { opacity: 0.8; } 70% { opacity: 0.45; } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1.05) rotate(30deg); } }
+.cine-title { position: relative; font-size: clamp(30px, 6.4vw, 72px); font-weight: 800; letter-spacing: 6px; text-align: center; line-height: 1.05; animation: cineTitle 2500ms cubic-bezier(.16,.9,.3,1) forwards; }
+.cine-secured .cine-title { color: #d6ffe8; text-shadow: 0 0 30px #35ffb0, 0 0 8px #eafff2; }
+.cine-caught .cine-title, .cine-lockout .cine-title { color: #ffd0d0; text-shadow: 0 0 30px var(--red), 0 0 8px #ff8a8a; }
+.cine-sub { position: relative; font-size: clamp(12px, 1.7vw, 18px); letter-spacing: 2.5px; color: #cfeee0; animation: cineSub 2500ms ease-out forwards; }
 .cine-caught .cine-sub, .cine-lockout .cine-sub { color: #ffb3b3; }
 .cine-mark { opacity: 0.75; }
-@keyframes cineTitle { 0% { opacity: 0; transform: scale(1.5); letter-spacing: 26px; filter: blur(6px); } 22% { opacity: 1; transform: scale(1); letter-spacing: 6px; filter: blur(0); } 80% { opacity: 1; } 100% { opacity: 0; transform: scale(0.985); } }
-@keyframes cineSub { 0%, 20% { opacity: 0; } 42% { opacity: 0.85; } 80% { opacity: 0.85; } 100% { opacity: 0; } }
+@keyframes cineTitle { 0% { opacity: 0; transform: scale(1.5); letter-spacing: 26px; filter: blur(6px); } 12% { opacity: 1; transform: scale(1); letter-spacing: 6px; filter: blur(0); } 88% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(0.985); } }
+@keyframes cineSub { 0%, 10% { opacity: 0; } 24% { opacity: 0.9; } 88% { opacity: 0.9; } 100% { opacity: 0; } }
 
 /* ============================================================
    CORE SCENE — the target as a living core beside the intrusion path
@@ -599,10 +602,14 @@ html.crt .wrap.breachview { padding-top: 14px; }
    room — so show the WHOLE card (no clamp, no hover needed) and relax spacing. */
 @media (min-width: 1440px) {
     .breachview .hand { align-items: stretch; gap: 9px; }
-    .breachview .hand .card { height: auto; min-height: 122px; padding: 7px 9px; }
-    .breachview .hand .card .cart { display: flex; } /* room for the art banner again */
-    .breachview .hand .card .ctext { display: block; -webkit-line-clamp: unset; line-clamp: unset; overflow: visible; font-size: 11px; line-height: 1.3; margin-top: 4px; }
-    .breachview .hand .card .kind { font-size: 10px; }
+    /* stretch into the free vertical room: tall, readable cards with real presence */
+    .breachview .hand .card { height: auto; min-height: 172px; padding: 9px 10px; }
+    .breachview .hand .card .cart { display: flex; height: 27px; margin-bottom: 6px; } /* room for the art banner again */
+    .breachview .hand .card .cart-sigil { font-size: 16px; letter-spacing: 5px; }
+    .breachview .hand .card .cart-wm { font-size: 74px; bottom: -22px; right: -10px; }
+    .breachview .hand .card .cname { font-size: 14px; }
+    .breachview .hand .card .ctext { display: block; -webkit-line-clamp: unset; line-clamp: unset; overflow: visible; font-size: 12px; line-height: 1.42; margin-top: 6px; }
+    .breachview .hand .card .kind { font-size: 10.5px; }
     .breachview .hand .card .card-full { display: none; } /* full text is already visible */
     /* a little more air now that there's space */
     .breachview .layers.schematic .layer { padding: 3px 12px; margin: 3px 0; }
