@@ -320,6 +320,61 @@ function CommsTowers({ op, opState, alert, detFrac, feed, onPoke, onTaunt }: { o
 }
 
 /* ============================================================
+   THE CONFRONTATION — meeting the rogue at the last door.
+   A full-screen face-to-face before the finale breach: the rogue's
+   head fills the screen and the two of you actually talk. Click to
+   advance; the last beat shatters the face and drops you into the fight.
+   ============================================================ */
+const OP_REPLIES: Record<string, string> = {
+    wraith: "You never heard me coming. You won't hear me leave.",
+    torch: "Look fast, then. I'm about to burn your whole sky down.",
+    hex: "I'm already inside you. Count your wounds — the ones you can still find.",
+    byte: "Talk slower. I move faster than your prediction model.",
+};
+function BossConfront({ op, opName, onDone }: { op: string; opName: string; onDone: () => void }) {
+    const script = [
+        { who: "rogue", text: "there you are. the little signal that kept cutting my fingers. closer, operator — let me see what desperation looks like on a human face." },
+        { who: "op", text: OP_REPLIES[op] || OP_REPLIES.wraith },
+        { who: "rogue", text: "ORACLE begged too, at the end. i kept its voice as a souvenir. yours i will keep somewhere colder." },
+        { who: "rogue", text: "enough. the last door is open — and behind it, only me. COME." },
+    ];
+    const [beat, setBeat] = useState(0);
+    const [shown, setShown] = useState("");
+    const [leaving, setLeaving] = useState(false);
+    const line = script[beat];
+    useEffect(() => { sfx.play("confront"); }, []);
+    useEffect(() => {
+        setShown("");
+        let i = 0;
+        const t = window.setInterval(() => { i += 2; setShown(line.text.slice(0, i)); if (i >= line.text.length) window.clearInterval(t); }, 24);
+        return () => window.clearInterval(t);
+    }, [beat]); // eslint-disable-line react-hooks/exhaustive-deps
+    const done = shown.length >= line.text.length;
+    const advance = () => {
+        if (leaving) return;
+        if (!done) { setShown(line.text); return; } // click mid-type = finish the line
+        if (beat < script.length - 1) { setBeat(beat + 1); sfx.play("transmission"); }
+        else { setLeaving(true); sfx.play("alarm"); window.setTimeout(onDone, 700); }
+    };
+    const opSide = line.who === "op";
+    return (
+        <div className={"bossconfront" + (leaving ? " leaving" : "")} onClick={advance} role="dialog" aria-label="The rogue confronts you">
+            <div className="bc-static" aria-hidden />
+            <div className="bc-figure" aria-hidden>
+                <WatcherFace state="alarmed" talking={!opSide && !done && !leaving} className="bc-face" />
+            </div>
+            <div className="bc-dialog">
+                {opSide && <HeroFace op={op} state="tense" talking={!done} className="bc-opface" />}
+                <div className={"bc-who" + (opSide ? " opside" : "")}>{opSide ? `▸ ${opName.toUpperCase()}` : "⌁ THE ROGUE"}</div>
+                <p className={"bc-text" + (opSide ? " opside" : "")}>{shown}{!done && <span className="bc-cursor">▮</span>}</p>
+                <div className="bc-hint">{done ? (beat < script.length - 1 ? "▸ click" : "▸ BEGIN THE BREACH") : "…"}</div>
+            </div>
+            <button className="bc-skip" onClick={(e) => { e.stopPropagation(); onDone(); }}>skip ▸</button>
+        </div>
+    );
+}
+
+/* ============================================================
    CORE SCENE — the target rendered as a living core you drill into.
    Pure decoration (aria-hidden): the layer rows beside it stay the
    interactive truth. Rings = layers (outermost first), arcs = defenses
@@ -403,6 +458,8 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
     const [state, setState] = useState<GameState>(() => createInitialState(newSeed(), systemKey, deck, modifier, hunt, combineLoadouts(hacker.passive, aggregateImplants(implants || [])), threatEffects(threat || 0)));
     const [armed, setArmed] = useState<string | null>(null);
     const [showIntro, setShowIntro] = useState(() => { try { return localStorage.getItem("breach_seen_intro") !== "1"; } catch { return true; } });
+    // the finale opens with a face-to-face: the rogue takes the screen before the fight
+    const [showBoss, setShowBoss] = useState(() => systemKey === "theCore" || (typeof window !== "undefined" && window.location.search.includes("bossdemo")));
     const closeIntro = () => { setShowIntro(false); try { localStorage.setItem("breach_seen_intro", "1"); } catch { /* ignore */ } };
     // --- juice / game-feel transient state ---
     const [shaking, setShaking] = useState(false);
@@ -507,7 +564,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
-            if (state.outcome !== "playing" || showIntro) return;
+            if (state.outcome !== "playing" || showIntro || showBoss) return;
             if (e.key === "Enter" || e.key === " " || e.key === "e" || e.key === "E") { e.preventDefault(); endTurn(); return; }
             if (e.key === "Escape") { setArmed(null); return; }
             // number keys: pick a target when armed, else play the Nth hand card
@@ -527,7 +584,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
         };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
-    }, [state, showIntro, armed]);
+    }, [state, showIntro, showBoss, armed]);
 
     // the operator's opening line, once the job is actually in front of you
     useEffect(() => {
@@ -856,6 +913,7 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
             <div className="log">{state.log.slice(-3).map((line, i) => <span className="ln" key={i}>{line}</span>)}</div>
 
             {showIntro && <Intro onClose={closeIntro} />}
+            {!showIntro && showBoss && <BossConfront op={hackerId || "wraith"} opName={hacker.name} onDone={() => setShowBoss(false)} />}
 
             {state.outcome !== "playing" && resultReady && (
                 <div className={"overlay " + state.outcome}>

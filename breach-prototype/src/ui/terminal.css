@@ -390,6 +390,42 @@ body::before {
 @keyframes cineSub { 0%, 10% { opacity: 0; } 24% { opacity: 0.9; } 88% { opacity: 0.9; } 100% { opacity: 0; } }
 
 /* ============================================================
+   THE CONFRONTATION — the rogue takes the whole screen at the last door
+   ============================================================ */
+.bossconfront {
+    position: fixed; inset: 0; z-index: 90; cursor: pointer; overflow: hidden;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 36%, #2a0808 0%, #0c0304 55%, #050203 100%);
+    animation: bcIn 700ms ease-out;
+}
+.bossconfront.leaving { animation: bcOut 700ms ease-in forwards; }
+@keyframes bcIn { 0% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes bcOut { 100% { opacity: 0; } }
+.bc-static { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: screen;
+    background-image: repeating-linear-gradient(0deg, #ff2a2a0a 0 1px, transparent 1px 3px);
+    animation: bcFlicker 140ms steps(2) infinite; }
+@keyframes bcFlicker { 50% { opacity: 0.5; } }
+.bc-figure { width: min(50vh, 74vw); filter: drop-shadow(0 0 70px #ff2a2a55) drop-shadow(0 0 20px #ff2a2a88);
+    animation: bcLoom 900ms cubic-bezier(.16,.9,.3,1), bcBreathe 4.5s ease-in-out 1s infinite; }
+.bc-figure .face { width: 100%; height: auto; }
+@keyframes bcLoom { 0% { transform: scale(0.22); opacity: 0; filter: blur(12px); } 55% { opacity: 1; } 100% { transform: scale(1); filter: blur(0); } }
+@keyframes bcBreathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.03); } }
+.bossconfront.leaving .bc-figure { animation: bcShatter 700ms ease-in forwards; }
+@keyframes bcShatter { 35% { transform: scale(1.12); opacity: 1; filter: blur(0); } 100% { transform: scale(2); opacity: 0; filter: blur(16px); } }
+.bc-dialog { position: relative; width: min(760px, 92vw); margin-top: 3vh;
+    border: 1px solid #5a1414; border-radius: 6px; background: #120404cc; padding: 15px 20px 11px; }
+.bc-who { font-size: 12px; letter-spacing: 2.5px; color: #ff5a5a; margin-bottom: 7px; }
+.bc-who.opside { color: var(--cyan); }
+.bc-text { margin: 0; font-size: clamp(14px, 1.9vw, 19px); line-height: 1.5; color: #ffd9d9; min-height: 3em; }
+.bc-text.opside { color: #dcfff5; }
+.bc-cursor { animation: blink 0.8s steps(2) infinite; }
+.bc-hint { text-align: right; font-size: 11px; letter-spacing: 1.5px; color: #a05252; margin-top: 8px; }
+.bc-dialog .bc-opface { position: absolute; right: 16px; top: -52px; width: 62px; height: 80px; filter: drop-shadow(0 0 10px #35e0d866); }
+.bc-skip { position: absolute; top: 16px; right: 18px; background: none; border: 1px solid #5a1414; border-radius: 4px;
+    color: #a05252; font: inherit; font-size: 12px; letter-spacing: 1px; padding: 5px 12px; cursor: pointer; }
+.bc-skip:hover, .bc-skip:focus-visible { color: #ffb3b3; border-color: #a03030; outline: none; }
+
+/* ============================================================
    CORE SCENE — the target as a living core beside the intrusion path
    ============================================================ */
 .pathwrap { display: flex; gap: 12px; align-items: stretch; }
@@ -677,7 +713,8 @@ html.crt .wrap.breachview { padding-top: 14px; }
 @media (prefers-reduced-motion: reduce) {
     .wrap.shaking, .wrap.glitching, .det-glitch, .budget-turn .cyan, .breach-flash, .breach-flash .bd, .cascade-flash, .cascade-flash .cd, .dmg-float, .meter.spike, .meter.hot .fill,
     .fxproj, .fx-burst, .cast-recoil, .tower-vitals .vheart, .shockwave, .shard, .wrap.lunge, .cinematic, .cine-strobe, .cine-rays, .cine-title, .cine-sub,
-    .cs-reticle, .cs-trace, .cs-probe, .cs-core polygon, .cs-sparks, .cs-shatter, .corescene.punching svg, .layer.current .barrier-activate, .layer.current .barrier-frame i, .layer.current .lstatus, .layer.shatter, .layer.shatter::after,
+    .cs-reticle, .cs-trace, .cs-probe, .cs-core polygon, .cs-sparks, .cs-shatter, .corescene.punching svg,
+    .bossconfront, .bc-static, .bc-figure, .bossconfront.leaving .bc-figure, .layer.current .barrier-activate, .layer.current .barrier-frame i, .layer.current .lstatus, .layer.shatter, .layer.shatter::after,
     .layers.schematic.depthstack.punching, .punch-banner, .barrier-tex,
     #root::before, body::before, .transmission .tbox, .transmission .ttext, .log .ln:last-child, .layers.schematic .layer.current .lnode { animation: none; }
     .layer.current .barrier-activate { display: none; }

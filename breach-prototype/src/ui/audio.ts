@@ -62,7 +62,7 @@ function noiseBurst(dur: number, gain: number, delay = 0) {
 
 type SfxName = "card" | "select" | "hit" | "breach" | "turn" | "alert" | "win" | "fail" | "reward" | "transmission" | "cascade" | "alarm"
     | "castExploit" | "castRecon" | "castStealth" | "castUtility" | "castWorm"
-    | "stingWin" | "stingCaught" | "stingLockout";
+    | "stingWin" | "stingCaught" | "stingLockout" | "confront";
 
 const SFX: Record<SfxName, () => void> = {
     card: () => tone({ freq: 430, dur: 0.05, type: "square", gain: 0.07 }),
@@ -113,6 +113,14 @@ const SFX: Record<SfxName, () => void> = {
         tone({ freq: 320, dur: 1.2, type: "sawtooth", gain: 0.1, sweepTo: 42, delay: 0.55 });
         tone({ freq: 64, dur: 0.5, type: "sine", gain: 0.16, sweepTo: 30, delay: 0.6 });
         noiseBurst(0.3, 0.05, 0.58);
+    },
+    // THE CONFRONTATION — the rogue fills the screen: a deep dual-saw swell that
+    // beats against itself, with a static crack as the face materialises
+    confront: () => {
+        tone({ freq: 55, dur: 2.2, type: "sawtooth", gain: 0.11 });
+        tone({ freq: 58, dur: 2.2, type: "sawtooth", gain: 0.09 });
+        tone({ freq: 220, dur: 1.4, type: "sine", gain: 0.045, sweepTo: 110, delay: 0.15 });
+        noiseBurst(0.22, 0.05);
     },
     // TRACE COMPLETE — quieter defeat: two beating low tones sinking away
     stingLockout: () => {
