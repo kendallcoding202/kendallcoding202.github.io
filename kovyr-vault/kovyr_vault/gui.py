@@ -1449,7 +1449,7 @@ class App:
                  "numbers are never recorded or sent anywhere.").pack(
                      anchor="w", padx=16, pady=(2, 8))
         tree = ttk.Treeview(win, columns=("ssn", "card"),
-                            selectmode="browse")
+                            selectmode="extended")
         tree.heading("#0", text="File")
         tree.heading("ssn", text="SSNs")
         tree.heading("card", text="Cards")
@@ -1457,7 +1457,9 @@ class App:
         tree.column("ssn", width=70, anchor="e")
         tree.column("card", width=70, anchor="e")
         for f in findings:
-            tree.insert("", "end", text=f.path,
+            # iid is the path itself, so a selection maps straight back to
+            # the files to encrypt without a parallel lookup table.
+            tree.insert("", "end", iid=f.path, text=f.path,
                         values=(f.ssn or "", f.card or ""))
         tree.pack(fill="both", expand=True, padx=16, pady=(0, 8))
         if coverage:
@@ -1466,9 +1468,109 @@ class App:
                      text=coverage).pack(anchor="w", padx=16, pady=(0, 4))
         tk.Label(win, bg="white", fg=MUTED, justify="left", wraplength=600,
                  font=("Segoe UI", 9),
-                 text="To protect these, move them into a Locked folder (see "
-                 "Settings) and run a sweep, or restore them into the vault.").pack(
-                     anchor="w", padx=16, pady=(0, 12))
+                 text="Select the files you want protected and click "
+                 "“Encrypt selected”. Each one is copied into your vault and "
+                 "the original is replaced by a .kovyr receipt — retrieving it "
+                 "afterwards needs your passphrase. Nothing is encrypted "
+                 "until you choose it.").pack(
+                     anchor="w", padx=16, pady=(0, 8))
+
+        row = tk.Frame(win, bg="white")
+        row.pack(fill="x", padx=16, pady=(0, 12))
+        msg = tk.Label(row, bg="white", fg=MUTED, font=("Segoe UI", 9),
+                       anchor="w")
+        button = self._primary_button(
+            row, "Encrypt selected",
+            lambda: self._encrypt_selected(win, tree, msg, button))
+        button.pack(side="left")
+        msg.pack(side="left", padx=(12, 0), fill="x", expand=True)
+
+    def _encrypt_selected(self, win, tree, msg, button) -> None:
+        """Encrypt the files picked in the sensitive-scan results.
+
+        Deliberately manual: watched folders hold files in active use, and
+        the scan is pattern-based, so it can flag a document that merely
+        discusses an SSN format. Encrypting silently would be both
+        disruptive and indistinguishable from ransomware to a client.
+        """
+        from tkinter import messagebox
+        if getattr(self, "_encrypting_selected", False):
+            return
+        if self.vault is None:
+            messagebox.showinfo(
+                "Kovyr Vault",
+                "Unlock your vault first.\n\nOpen the “My encrypted files” "
+                "tab and enter your passphrase — only your passphrase can "
+                "open the vault, so encryption can never run without you.",
+                parent=win)
+            return
+        paths = [Path(p) for p in tree.selection()]
+        if not paths:
+            msg.config(text="Select one or more files in the list first.",
+                       fg=BAD)
+            return
+        if not messagebox.askyesno(
+                "Kovyr Vault",
+                f"Encrypt {len(paths)} file(s) into the vault?\n\n"
+                "Each original is replaced by a .kovyr receipt. The content "
+                "will only be readable through this app, after unlocking "
+                "with your passphrase.",
+                parent=win):
+            return
+
+        self._encrypting_selected = True
+        button.set_enabled(False)
+        msg.config(text="Encrypting…", fg=MUTED)
+        vault = self.vault
+
+        def progress(done: int, total: int) -> None:
+            self.root.after(0, lambda: self._selected_progress(
+                msg, done, total))
+
+        def worker() -> None:
+            try:
+                encrypted, errors = protect_mod.encrypt_paths(
+                    vault, paths, on_progress=progress)
+            except Exception as exc:            # noqa: BLE001
+                encrypted, errors = 0, [str(exc)]
+            self.root.after(0, self._encrypt_selected_done,
+                            win, tree, msg, button, paths, encrypted, errors)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _selected_progress(self, msg, done: int, total: int) -> None:
+        """Progress can arrive after the results window is closed."""
+        try:
+            if msg.winfo_exists():
+                msg.config(text=f"Encrypting {done:,} of {total:,}…", fg=MUTED)
+        except Exception:                       # noqa: BLE001
+            pass
+
+    def _encrypt_selected_done(self, win, tree, msg, button, paths,
+                               encrypted: int, errors: list[str]) -> None:
+        from tkinter import messagebox
+        self._encrypting_selected = False
+        self._refresh_vault_list()
+        try:
+            alive = win.winfo_exists()
+        except Exception:                       # noqa: BLE001
+            alive = False
+        if alive:
+            button.set_enabled(True)
+            # Drop the rows whose plaintext is gone; anything that failed or
+            # was skipped stays visible so it is not quietly forgotten.
+            for path in paths:
+                if not path.exists() and tree.exists(str(path)):
+                    tree.delete(str(path))
+            msg.config(text=f"Encrypted {encrypted:,} file(s).",
+                       fg=GOOD if not errors else BAD)
+        message = (f"Encrypted {encrypted:,} file(s) into the vault. "
+                   "Receipts mark where each one came from.")
+        if errors:
+            message += f"\n\n{len(errors)} could not be encrypted:\n"
+            message += "\n".join(errors[:5])
+        messagebox.showinfo("Kovyr Vault", message,
+                            **({"parent": win} if alive else {}))
 
     def _set_banner(self, state: str) -> None:
         """Tint the status banner by state: good / bad / neutral. The
@@ -1809,6 +1911,14 @@ class App:
             messagebox.showinfo("Kovyr Vault", message)
 
 
+class _SelftestFinding:
+    """Stand-in for sensitive.Finding so --selftest can render the results
+    window without touching a real file."""
+
+    def __init__(self, path: str, ssn: int, card: int) -> None:
+        self.path, self.ssn, self.card = path, ssn, card
+
+
 def run_app(config_path: Path | None = None, selftest: bool = False,
             receipt: str | None = None) -> int:
     import tkinter as tk
@@ -1828,6 +1938,15 @@ def run_app(config_path: Path | None = None, selftest: bool = False,
     if receipt:
         app.handle_receipt(receipt)
     if selftest:
+        root.update_idletasks()
+        root.update()
+        # Also build the secondary windows, which the main-window pass
+        # never touches. The sensitive-scan results window is the one a
+        # client acts on, so a typo in it should fail the build, not ship.
+        app._show_sensitive_results(
+            [_SelftestFinding("/tmp/selftest/intake.pdf", 1, 0)],
+            {"files": 1, "ssns": 1, "cards": 0},
+            coverage="Looked inside 1 file; 0 could not be read inside.")
         root.update_idletasks()
         root.update()
         root.destroy()

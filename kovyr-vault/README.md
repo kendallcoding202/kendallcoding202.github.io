@@ -88,6 +88,12 @@ their protection without Kovyr present:
   plain-English fix; a "What's going on" panel that explains the current
   status; and buttons to run a check on demand, open the full HTML report,
   or scan for unencrypted sensitive files.
+- **Sensitive-scan results** — the flagged files, with an **Encrypt
+  selected** action: the client picks which ones to protect and each is
+  encrypted into the vault, its original replaced by a `.kovyr` receipt.
+  Deliberately never automatic — watched folders hold files in active
+  use, and the scan is pattern-based, so it can flag a document that
+  merely discusses an SSN format. Requires the vault to be unlocked.
 - **My encrypted files tab** — the client enters *their* passphrase to
   unlock the vault, browse their encrypted files, and restore any of
   them to a folder of their choice. Locking clears the key from memory.
