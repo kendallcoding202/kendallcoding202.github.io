@@ -865,6 +865,7 @@ html.crt .wrap { padding-top: 24px; }
 /* in-context reminder that recon reveals hidden defenses (only while any are unscanned) */
 .layer .scan-hint { flex-basis: 100%; text-align: right; font-size: 10.5px; color: var(--amber); opacity: 0.75; margin-top: 3px; }
 .layer .scan-hint b { color: var(--cyan); }
+.layer .scan-hint.reroute { color: #ff8a5a; opacity: 0.95; font-weight: bold; letter-spacing: 0.4px; }
 /* EXFIL RISK telegraph on the objective layer — grabbing trips a hard alarm.
    Always shown so the worry builds on the approach; escalates to red near LOCKDOWN. */
 .layer .grab-tell { flex-basis: 100%; font-size: 11px; margin-top: 4px; letter-spacing: 0.3px; color: #ffb000; display: flex; align-items: baseline; gap: 5px; flex-wrap: wrap; }

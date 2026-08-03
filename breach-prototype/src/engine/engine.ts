@@ -83,6 +83,8 @@ export function createInitialState(seed: number, systemKey: string = DEFAULT_SYS
         turnNoise: 0,
         sweepIn: SWEEP_INTERVAL,
         noiseSinceSweep: 0,
+        breachedThisTurn: 0,
+        rerouteLock: false,
         huntTier: h ? h.tier : 0,
         cardsThisTurn: 0,
         silentThisTurn: 0,
@@ -289,6 +291,8 @@ function systemReact(s: GameState) {
 function damageDefense(s: GameState, idx: number, amount: number) {
     const layer = currentLayer(s);
     if (!layer || layer.breached) return;
+    // SYSTEM REROUTE: the freshly-exposed wall is cycling — damage bounces until next turn
+    if (s.rerouteLock) { log(s, "🔀 The wall is still rerouting — the hit finds nothing solid. Wait for your next turn."); return; }
     const d = layer.defenses[idx];
     if (!d || d.strength <= 0) return;
     // CORRODE: each stack melts +1 more off this defense per direct hit (armor decay).
@@ -334,10 +338,13 @@ function regenDefenses(s: GameState) {
 }
 
 /** Reduce a specific defense on a specific layer (used by logic bombs that
-    may resolve on a layer other than the one currently in focus). */
-function reduceDefenseAt(s: GameState, layerIdx: number, defIdx: number, amount: number) {
+    may resolve on a layer other than the one currently in focus).
+    ignoreLock: bombs resolve on the system's own clock and chew straight
+    through a SYSTEM REROUTE — a deliberate HEX identity perk. */
+function reduceDefenseAt(s: GameState, layerIdx: number, defIdx: number, amount: number, ignoreLock = false) {
     const layer = s.layers[layerIdx];
     if (!layer || layer.breached) return;
+    if (!ignoreLock && s.rerouteLock && layerIdx === s.current) { log(s, "🔀 The wall is still rerouting — nothing solid to cut yet."); return; }
     const d = layer.defenses[defIdx];
     if (!d || d.strength <= 0) return;
     d.strength = Math.max(0, d.strength - amount);
@@ -348,7 +355,7 @@ function reduceDefenseAt(s: GameState, layerIdx: number, defIdx: number, amount:
 function tickBombs(s: GameState) {
     if (s.bombs.length === 0) return;
     for (const b of s.bombs) {
-        reduceDefenseAt(s, b.layer, b.def, b.amt + s.bombBonus);
+        reduceDefenseAt(s, b.layer, b.def, b.amt + s.bombBonus, true); // bombs chew through a reroute
         b.turns -= 1;
     }
     const before = s.bombs.length;
@@ -392,6 +399,16 @@ function afterBreachCheck(s: GameState) {
             if (s.breachDraw) { draw(s, 1); log(s, "Auto-Exfil — breaching pulled you a card."); } // implant
             if (s.breachHeal > 0) { reduceDetection(s, s.breachHeal); log(s, `Regen Mesh — crossing in cooled the trace by ${s.breachHeal}.`); } // implant
             applyBehaviorOnBreach(s);
+            // SYSTEM REROUTE: crack a 3rd layer in one turn and the system slams the
+            // next door shut — no damage to it until your next turn (recon still works,
+            // and logic bombs still chew through on the system's own clock). Two-wall
+            // punches stay free so speed decks keep their tempo; what dies is clearing
+            // a whole 4-layer job in a single blind hand — the system always gets a move.
+            s.breachedThisTurn += 1;
+            if (s.breachedThisTurn >= 3 && !s.rerouteLock) {
+                s.rerouteLock = true;
+                log(s, "🔀 SYSTEM REROUTE — three walls down in one push is too loud. The next wall cycles its defenses: no damage until next turn.");
+            }
         }
     }
 }
@@ -647,7 +664,7 @@ function applyEffect(s: GameState, card: CardDef, target: number): number {
             if (s.bombs.length === 0) { log(s, "Detonate — nothing planted to blow."); return 0; }
             let total = 0;
             const count = s.bombs.length;
-            for (const b of s.bombs) { const dmg = b.amt * b.turns; reduceDefenseAt(s, b.layer, b.def, dmg); total += dmg; }
+            for (const b of s.bombs) { const dmg = b.amt * b.turns; reduceDefenseAt(s, b.layer, b.def, dmg, true); total += dmg; } // bomb damage ignores a reroute
             s.bombs = [];
             log(s, `Detonate — ${count} bomb${count === 1 ? "" : "s"} blown at once for ${total} total.`);
             return 0;
@@ -852,6 +869,8 @@ export function previewOnTarget(s: GameState, cardId: string, idx: number): stri
     if (!card || !card.needsTarget || !layer) return null;
     const d = layer.defenses[idx];
     if (!d || d.strength <= 0) return null;
+    // recon still reads a rerouting wall; damage bounces until next turn
+    if (s.rerouteLock && card.kind !== "recon") return "🔀 rerouting — no damage this turn";
     const bonus = s.exploitBonus + s.exploitFlatBonus + (d.corrode || 0);
     const plus = bonus ? ` (+${bonus})` : "";
     switch (card.effect) {
@@ -894,6 +913,7 @@ export function predictDamage(s: GameState, cardId: string, idx: number): number
     const card = CARDS[cardId];
     const layer = currentLayer(s);
     if (!card || !layer) return 0;
+    if (s.rerouteLock) return 0; // rerouting wall — damage bounces, so the AI holds fire too
     const d = layer.defenses[idx];
     if (!d || d.strength <= 0) return 0;
     const bonus = s.exploitBonus + s.exploitFlatBonus + (d.corrode || 0); // corroded armor takes more
@@ -1007,6 +1027,8 @@ export function applyAction(prev: GameState, action: Action): GameState {
         runSweep(s); // the intrusion scan periodically hunts for a too-quiet intruder
         s.rootkitReady = false;
         s.turnNoise = 0; // reset the per-turn noise budget
+        s.breachedThisTurn = 0;
+        if (s.rerouteLock) { s.rerouteLock = false; if (s.outcome === "playing") log(s, "🔀 Reroute complete — the wall settles. It can be cut again."); }
         s.exploitBonus = 0; // Overclock lasts only for the turn it was played
         s.exploitsThisTurn = 0;
         s.cardsThisTurn = 0;

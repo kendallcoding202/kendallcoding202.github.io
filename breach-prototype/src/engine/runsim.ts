@@ -5,7 +5,7 @@ import type { BreachResult, MapNode, RunState } from "./types.ts";
 import { CAMPAIGNS, CAMPAIGN_ORDER, REWARD_POOL } from "./campaigns.ts";
 import { satisfiedAchievements } from "./achievements.ts";
 import { createRun, currentOptions, isTerminal, resolveBreach, resolveEvent, resolveSafehouse, addCard, addImplant, getCampaign, huntPressure, HUNT_ACTION_LINES } from "./run.ts";
-import { createInitialState, applyAction, projectedNoise, sweepForecast, grabForecast } from "./engine.ts";
+import { createInitialState, applyAction, projectedNoise, sweepForecast, grabForecast, predictDamage } from "./engine.ts";
 import { SYSTEMS } from "./systems.ts";
 import { MODIFIERS, getModifier } from "./modifiers.ts";
 import { aggregateImplants, combineLoadouts } from "./implants.ts";
@@ -306,6 +306,30 @@ for (const id of CAMPAIGN_ORDER) {
     check("boss stitches deep non-regen wounds +2", bhl.layers[3].defenses[1].strength === 6);
     // the objective bites back: a regenerating DB behind it — needs melt or burst, not chip
     check("boss objective carries a regenerating database", bz.layers[4].defenses.some((d) => d.type === "database" && d.trait === "regen"));
+
+    // SYSTEM REROUTE: no more one-hand blind clears — the 3rd breach in a turn locks
+    // the next wall until the system gets its move. Two-wall punches stay free
+    // (speed-deck tempo), and bombs chew through the lock (HEX perk).
+    let rr = createInitialState(1, "homeServer", ["bruteForce", "bruteForce", "bruteForce", "bruteForce", "quietScan", "quietScan"]);
+    rr.layers[0].defenses[0].strength = 1;
+    rr.layers[1].defenses[0].strength = 1;
+    rr.layers[2].defenses[0].strength = 1;
+    rr = applyAction(rr, { type: "playCard", card: "bruteForce", target: 0 }); // breach #1
+    rr = applyAction(rr, { type: "playCard", card: "bruteForce", target: 0 }); // breach #2
+    check("two breaches in one turn stay free (no reroute)", !rr.rerouteLock && rr.current === 2);
+    rr = applyAction(rr, { type: "playCard", card: "bruteForce", target: 0 }); // breach #3 → reroute
+    check("third breach in one turn triggers SYSTEM REROUTE", rr.rerouteLock === true && rr.current === 3);
+    const rrBefore = rr.layers[3].defenses[0].strength;
+    rr = applyAction(rr, { type: "playCard", card: "bruteForce", target: 0 }); // bounces off the objective
+    check("damage bounces off a rerouting wall", rr.layers[3].defenses[0].strength === rrBefore);
+    rr = applyAction(rr, { type: "endTurn" });
+    check("reroute clears at end of turn", rr.rerouteLock === false && predictDamage(rr, "bruteForce", 0) > 0);
+    let rb = createInitialState(2, "homeServer", ["quietScan"]);
+    rb.bombs.push({ layer: 0, def: 0, amt: 3, turns: 2 });
+    rb.rerouteLock = true;
+    const rbBefore = rb.layers[0].defenses[0].strength;
+    rb = applyAction(rb, { type: "endTurn" });
+    check("logic bombs tick through a reroute", rb.layers[0].defenses[0].strength === rbBefore - 3);
 }
 
 /* 8. Per-run modifiers: rolled onto every breach, entries stay clean,

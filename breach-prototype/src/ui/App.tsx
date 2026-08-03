@@ -775,7 +775,10 @@ function Breach({ systemKey, systemTitle, deck, modifier, hunt, implants, threat
                                     <DefenseChip key={di} d={d} chipId={`${i}-${di}`} worm={wormOn(state, i, di)} targetable={isCurrent && !!armed && d.strength > 0} preview={isCurrent && armed && d.strength > 0 ? previewOnTarget(state, armed, di) : null} kbdNum={isCurrent && armed ? targetOpts.indexOf(di) + 1 : undefined} hit={hits[`${i}-${di}`]} onClick={() => dispatch(armed!, di)} />
                                 ))}
                             </span>
-                            {isCurrent && l.defenses.some((d) => !d.typeRevealed && d.strength > 0) && (
+                            {isCurrent && state.rerouteLock && (
+                                <span className="scan-hint reroute">🔀 SYSTEM REROUTING — this wall can't be damaged until next turn · recon still works, logic bombs still tick</span>
+                            )}
+                            {isCurrent && !state.rerouteLock && l.defenses.some((d) => !d.typeRevealed && d.strength > 0) && (
                                 <span className="scan-hint">🔍 unscanned — play a <b>recon</b> card to reveal <b>Strength</b> &amp; lock in matched exploits</span>
                             )}
                             {isObjective && !l.breached && (() => {
