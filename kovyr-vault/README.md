@@ -143,6 +143,35 @@ still wins if both exist, so old installs keep working.)
 **macOS scheduling:** use the cron line above (`crontab -e`) or a
 launchd agent.
 
+### Updating a client machine
+
+**macOS (signed builds): one click.** Settings → *Check for updates* → the
+app downloads the new release, verifies it, installs it and restarts. The
+client never visits a download page.
+
+The update path is a code-execution channel, so three checks stand between
+a download and running code, none optional:
+
+1. The asset URL must be a release asset **of this project** — the GitHub
+   API response is treated as untrusted input.
+2. HTTPS with real certificate verification (certifi, so the frozen app
+   validates without the OS trust store).
+3. The downloaded app must carry the **same signing Team ID as the copy
+   currently running**, its signature must verify, and Gatekeeper must
+   accept it (which requires notarization). The running bundle is the
+   trust anchor, so there is no hard-coded Team ID to drift, and renewing
+   the Developer ID certificate keeps working.
+
+If any check fails the update is refused, the installed version is left
+untouched, and the client is told to install manually. A failed install
+rolls the previous bundle back rather than leaving nothing in place.
+
+**Windows: manual for now.** In-app update is deliberately disabled there
+until the installer is Authenticode-signed — without a signature there is
+nothing to verify, so the app hands off to the download page instead. See
+*Windows code signing* below; adding the certificate is what unlocks
+one-click updates on Windows too.
+
 ### macOS code signing & notarization
 
 The macOS job signs and notarizes automatically when five repository
