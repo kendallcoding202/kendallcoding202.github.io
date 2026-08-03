@@ -99,9 +99,17 @@ Setup during the engagement is one `config.json` next to the exe:
   "paths": ["C:\\ClientData"],
   "state": "C:\\Kovyr\\state.json",
   "html": "C:\\Kovyr\\latest-report.html",
-  "vault": "C:\\KovyrVault"
+  "vault": "C:\\KovyrVault",
+  "dashboard_url": "https://kovyr.com"
 }
 ```
+
+`dashboard_url` is optional — it is where the app's **Open Kovyr
+dashboard** button sends the client, defaulting to the main site. Only
+`https://` URLs are accepted; anything else falls back to the default, so
+a typo can never hand the browser a local path. The app opens no
+connection itself: it hands the URL to the system browser, which is why
+this does not change what Kovyr Vault transmits (nothing).
 
 ## Standalone executables (Windows and macOS)
 

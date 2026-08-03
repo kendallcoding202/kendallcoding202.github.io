@@ -120,6 +120,12 @@ def build_default_config(client: str, paths: list[str],
 UPDATE_API = ("https://api.github.com/repos/kendallcoding202/"
               "kendallcoding202.github.io/releases/latest")
 
+# Where "Open Kovyr dashboard" sends the client. Overridable per client
+# with a "dashboard_url" key in config.json. Note this is handed to the
+# system browser — the app itself opens no connection, so this does not
+# change what Kovyr Vault transmits (which is nothing).
+KOVYR_SITE = "https://kovyr.com"
+
 
 def version_tuple(text: str) -> tuple[int, ...]:
     import re
@@ -199,6 +205,15 @@ def status_summary(history: list[dict]) -> dict:
         "clean": (current["duplicate_files"] == 0 and not drift.has_new
                   and not alerts and not awaiting),
     }
+
+
+def resolve_dashboard_url(config: dict | None) -> str:
+    """Which URL the dashboard button opens: a per-client `dashboard_url`
+    from config, else the default site. Anything that is not an https URL
+    is refused and falls back — a typo'd or tampered config must never
+    hand the browser a file:// path or a plain-http endpoint."""
+    url = str((config or {}).get("dashboard_url") or "").strip()
+    return url if url.startswith("https://") else KOVYR_SITE
 
 
 def status_detail(summary: dict) -> str:
@@ -982,7 +997,10 @@ class App:
                              self.save_settings).pack(side="left",
                                                       padx=(0, 10))
         self._secondary_button(actions, "Check for updates",
-                               self.check_updates).pack(side="left")
+                               self.check_updates).pack(side="left",
+                                                        padx=(0, 10))
+        self._secondary_button(actions, "Open Kovyr dashboard",
+                               self.open_dashboard).pack(side="left")
         self.settings_msg = tk.Label(tab, text="", bg="white", fg=MUTED,
                                      font=("Segoe UI", 9))
         self.settings_msg.pack(anchor="w", pady=(6, 0))
@@ -1062,6 +1080,22 @@ class App:
             text=f"Saved to {self.save_path}", fg=GOOD)
         self._refresh_vault_status()
         self.refresh_status()
+
+    def dashboard_url(self) -> str:
+        return resolve_dashboard_url(self.config)
+
+    def open_dashboard(self) -> None:
+        """Open the Kovyr dashboard in the system browser. The app makes
+        no connection of its own — it hands the URL to the browser."""
+        url = self.dashboard_url()
+        try:
+            webbrowser.open(url)
+            self.settings_msg.config(
+                text=f"Opened {url} in your browser.", fg=MUTED)
+        except Exception:
+            self.settings_msg.config(
+                text=f"Couldn't open a browser. Go to {url} manually.",
+                fg=BAD)
 
     def check_updates(self) -> None:
         import ssl
