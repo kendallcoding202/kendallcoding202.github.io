@@ -137,16 +137,43 @@ def test_firewall_check_tool_fail_unknown():
     assert c.status is None and not c.known
 
 
-def test_antivirus_only_on_windows():
-    # macOS has no antivirus check in the aggregate list
+def test_check_all_key_set_is_identical_on_every_platform():
+    """A report or aggregator must see one stable shape — a control that
+    doesn't apply here is reported as not-applicable, never omitted."""
+    expected = list(posture.CONTROL_KEYS)
+    for plat in ("darwin", "win32", "linux"):
+        checks = posture.check_all(run=lambda cmd: (1, ""), platform=plat)
+        assert [c.key for c in checks] == expected, plat
+
+
+def test_antivirus_not_applicable_on_macos_not_unknown():
+    """'Doesn't apply on a Mac' must be distinguishable from 'we tried and
+    couldn't tell' — otherwise a Mac looks like it failed a check."""
     mac = posture.check_all(run=lambda cmd: (1, ""), platform="darwin")
-    keys_mac = [c.key for c in mac]
-    assert "antivirus" not in keys_mac
-    assert keys_mac == ["disk", "firewall", "screenlock"]
+    av = next(c for c in mac if c.key == "antivirus")
+    assert av.status is None
+    assert av.applicable is False
+    assert "macos" in av.detail.lower()
 
     win = posture.check_all(run=lambda cmd: (1, ""), platform="win32")
-    keys_win = [c.key for c in win]
-    assert keys_win == ["disk", "firewall", "screenlock", "antivirus"]
+    av_win = next(c for c in win if c.key == "antivirus")
+    assert av_win.applicable is True   # applies; this run just couldn't tell
+    assert av_win.status is None
+
+
+def test_applicable_flag_serialized():
+    mac = posture.check_all(run=lambda cmd: (1, ""), platform="darwin")
+    assert all("applicable" in c.as_dict() for c in mac)
+
+
+def test_not_applicable_never_counts_as_a_failure():
+    """Exit-code / alerting logic keys off `status is False`; a control
+    that doesn't apply must never look like a control that is off."""
+    for plat in ("darwin", "win32", "linux"):
+        checks = posture.check_all(run=lambda cmd: (1, ""), platform=plat)
+        for c in checks:
+            if not c.applicable:
+                assert c.status is not False, (plat, c.key)
 
 
 def test_check_all_returns_check_objects():
