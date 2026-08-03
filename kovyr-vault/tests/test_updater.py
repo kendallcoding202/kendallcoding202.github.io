@@ -5,6 +5,8 @@ than the happy path. Every check is exercised with an injected command
 runner — no real Mac required.
 """
 
+from pathlib import Path
+
 import pytest
 
 from kovyr_vault import updater
@@ -154,7 +156,9 @@ def test_attach_dmg_parses_mount_point():
            "/Volumes/Kovyr Vault\n")
     mount = updater.attach_dmg("/tmp/x.dmg",
                                run=runner({"hdiutil": (0, out)}))
-    assert str(mount) == "/Volumes/Kovyr Vault"
+    # Compare via Path: the test suite also runs on Windows, where a
+    # POSIX string round-trips through Path with backslashes.
+    assert mount == Path("/Volumes/Kovyr Vault")
 
 
 def test_attach_dmg_errors():
@@ -173,8 +177,9 @@ def test_app_in_mount(tmp_path):
 
 def test_current_app_bundle_finds_enclosing_bundle():
     exe = "/Applications/Kovyr Vault.app/Contents/MacOS/Kovyr Vault"
-    assert str(updater.current_app_bundle(exe)) == \
-        "/Applications/Kovyr Vault.app"
+    # Compare via Path, not str: this suite also runs on Windows.
+    assert updater.current_app_bundle(exe) == \
+        Path("/Applications/Kovyr Vault.app")
     # running from source: no bundle
     assert updater.current_app_bundle("/usr/bin/python3") is None
 
@@ -190,7 +195,6 @@ def test_replace_bundle_swaps_and_clears_backup(tmp_path):
 
     def run(cmd, timeout=120):
         if cmd[0] == "ditto":
-            Path = type(tmp_path)
             dst = Path(cmd[2])
             dst.mkdir(parents=True, exist_ok=True)
             (dst / "new").write_text("v2")
