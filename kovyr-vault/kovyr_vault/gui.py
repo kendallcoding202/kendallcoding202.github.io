@@ -1236,12 +1236,20 @@ class App:
                      fg=MUTED, bg="white", font=("Segoe UI", 10)).pack(
                          anchor="w")
             return
-        glyphs = {True: ("✓", GOOD), False: ("⚠", BAD), None: ("–", MUTED)}
         for i, c in enumerate(checks):
             if i:  # hairline between rows, not above the first
                 tk.Frame(self.posture_box, bg=HAIRLINE, height=1).pack(
                     fill="x", pady=1)
-            mark, color = glyphs[c.status]
+            # "–" = doesn't apply on this platform (expected, not a gap);
+            # "?" = applies but we couldn't determine it (worth a look).
+            if c.status is True:
+                mark, color = "✓", GOOD
+            elif c.status is False:
+                mark, color = "⚠", BAD
+            elif not getattr(c, "applicable", True):
+                mark, color = "–", MUTED
+            else:
+                mark, color = "?", MUTED
             row = tk.Frame(self.posture_box, bg="white")
             row.pack(fill="x", pady=3)
             tk.Label(row, text=mark, fg=color, bg="white", width=2,
@@ -1273,35 +1281,37 @@ class App:
 
         def worker() -> None:
             try:
-                findings = sensitive.scan_paths(paths, exclude=[vault])
+                report = sensitive.scan_paths(paths, exclude=[vault])
             except Exception:
-                findings = None
-            self.root.after(0, self._sensitive_done, findings)
+                report = None
+            self.root.after(0, self._sensitive_done, report)
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _sensitive_done(self, findings) -> None:
+    def _sensitive_done(self, report) -> None:
         from tkinter import messagebox
+        from . import sensitive
         self._scanning_sensitive = False
-        if findings is None:
+        if report is None:
             self.activity.config(text="Couldn't complete the sensitive-data "
                                  "scan.")
             return
-        if not findings:
-            self.activity.config(text="")
+        coverage = sensitive.coverage_note(report.read, report.skipped)
+        if not report.findings:
+            self.activity.config(text=coverage, fg=MUTED)
             messagebox.showinfo(
                 "Kovyr Vault",
                 "No unencrypted SSNs or card numbers found in your watched "
-                "folders. (Scans text files; office documents aren't checked.)")
+                f"folders.\n\n{coverage}")
             return
-        from . import sensitive
-        s = sensitive.summarize(findings)
+        s = sensitive.summarize(report)
         self.activity.config(
             text=f"⚠ {s['files']} file(s) hold unencrypted sensitive data — "
             "consider moving them into the vault.", fg=BAD)
-        self._show_sensitive_results(findings, s)
+        self._show_sensitive_results(report.findings, s, coverage)
 
-    def _show_sensitive_results(self, findings, summary) -> None:
+    def _show_sensitive_results(self, findings, summary,
+                                coverage: str = "") -> None:
         tk = self.tk
         ttk = self.ttk
         win = tk.Toplevel(self.root)
@@ -1330,6 +1340,10 @@ class App:
             tree.insert("", "end", text=f.path,
                         values=(f.ssn or "", f.card or ""))
         tree.pack(fill="both", expand=True, padx=16, pady=(0, 8))
+        if coverage:
+            tk.Label(win, bg="white", fg=MUTED, justify="left",
+                     wraplength=600, font=("Segoe UI", 9),
+                     text=coverage).pack(anchor="w", padx=16, pady=(0, 4))
         tk.Label(win, bg="white", fg=MUTED, justify="left", wraplength=600,
                  font=("Segoe UI", 9),
                  text="To protect these, move them into a Locked folder (see "

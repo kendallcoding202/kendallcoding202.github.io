@@ -35,6 +35,11 @@ class Check:
     name: str                # human label, e.g. "Firewall"
     status: bool | None      # True = on, False = off, None = couldn't tell
     detail: str              # plain-English result + how to fix when off
+    # False when the control has no meaning on this platform (e.g. the
+    # Windows antivirus registry on a Mac). "Doesn't apply here" and "we
+    # tried and couldn't tell" are different facts: conflating them makes
+    # a Mac look like it failed a check it was never supposed to run.
+    applicable: bool = True
 
     @property
     def known(self) -> bool:
@@ -42,7 +47,8 @@ class Check:
 
     def as_dict(self) -> dict:
         return {"key": self.key, "name": self.name,
-                "status": self.status, "detail": self.detail}
+                "status": self.status, "detail": self.detail,
+                "applicable": self.applicable}
 
 
 def _default_run(cmd: list[str]) -> tuple[int, str]:
@@ -58,7 +64,10 @@ def _default_run(cmd: list[str]) -> tuple[int, str]:
 
 def disk_check(run=None, platform: str | None = None) -> Check:
     ds = diskcrypto.check(run=run, platform=platform)
-    return Check("disk", "Disk encryption", ds.encrypted, ds.detail)
+    # diskcrypto leaves `tool` empty when the platform has no checker at
+    # all — that's "doesn't apply", not "we tried and failed".
+    return Check("disk", "Disk encryption", ds.encrypted, ds.detail,
+                 applicable=bool(ds.tool))
 
 
 # ---------- firewall ----------
@@ -103,7 +112,8 @@ def firewall_check(run=None, platform: str | None = None) -> Check:
                "protection.")
     else:
         return Check("firewall", "Firewall", None,
-                     "Firewall status isn't checked on this platform.")
+                     "Firewall status isn't checked on this platform.",
+                     applicable=False)
     if on is True:
         detail = "The firewall is on."
     elif on is False:
@@ -180,7 +190,8 @@ def screenlock_check(run=None, platform: str | None = None) -> Check:
                "and a short wait in Screen Saver Settings.")
     else:
         return Check("screenlock", "Automatic screen lock", None,
-                     "Screen-lock status isn't checked on this platform.")
+                     "Screen-lock status isn't checked on this platform.",
+                     applicable=False)
     if on is True:
         detail = on_detail
     elif on is False:
@@ -221,9 +232,15 @@ def parse_secautivirus(text: str) -> tuple[bool | None, str | None]:
 def antivirus_check(run=None, platform: str | None = None) -> Check:
     run = run or _default_run
     plat = platform or sys.platform
+    if plat == "darwin":
+        return Check("antivirus", "Antivirus", None,
+                     "Not applicable on macOS — malware protection is built "
+                     "into the operating system and isn't a separate product "
+                     "to check.", applicable=False)
     if not (plat.startswith("win") or plat == "cygwin"):
         return Check("antivirus", "Antivirus", None,
-                     "Antivirus status isn't checked on this platform.")
+                     "Antivirus status isn't checked on this platform.",
+                     applicable=False)
     code, out = run([
         "powershell", "-NoProfile", "-Command",
         "Get-CimInstance -Namespace root/SecurityCenter2 "
@@ -242,13 +259,15 @@ def antivirus_check(run=None, platform: str | None = None) -> Check:
 
 # ---------- aggregate ----------
 
+CONTROL_KEYS = ("disk", "firewall", "screenlock", "antivirus")
+
+
 def check_all(run=None, platform: str | None = None) -> list[Check]:
-    """Every baseline check that applies to this platform, in display
-    order. Antivirus is Windows-only; the rest run on macOS and Windows."""
-    plat = platform or sys.platform
-    checks = [disk_check(run=run, platform=platform),
-              firewall_check(run=run, platform=platform),
-              screenlock_check(run=run, platform=platform)]
-    if plat.startswith("win") or plat == "cygwin":
-        checks.append(antivirus_check(run=run, platform=platform))
-    return checks
+    """Every baseline control, in display order — always the same four keys
+    on every platform. A control that has no meaning here comes back with
+    applicable=False rather than being omitted, so a report or an
+    aggregator sees one stable shape instead of a per-platform one."""
+    return [disk_check(run=run, platform=platform),
+            firewall_check(run=run, platform=platform),
+            screenlock_check(run=run, platform=platform),
+            antivirus_check(run=run, platform=platform)]

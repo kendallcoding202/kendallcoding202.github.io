@@ -147,12 +147,16 @@ def render_posture_section(checks: list) -> str:
     rows = []
     for c in checks:
         status = c.get("status")
+        # Older snapshots predate the flag; treat them as applicable.
+        applicable = c.get("applicable", True)
         if status is True:
             mark, cls = "&#10003;", "status-good"
         elif status is False:
             mark, cls = "&#9888;", "status-bad"
+        elif not applicable:
+            mark, cls = "&ndash;", ""      # doesn't apply on this platform
         else:
-            mark, cls = "&ndash;", ""
+            mark, cls = "?", ""            # applies, couldn't determine
         rows.append(
             f'<tr><td class="{cls}" style="width:1.5em">{mark}</td>'
             f'<td><strong>{html.escape(str(c.get("name", "")))}</strong></td>'

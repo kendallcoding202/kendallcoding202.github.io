@@ -69,10 +69,11 @@ def test_scan_paths_finds_and_sorts(tmp_path):
     (tmp_path / "a.txt").write_text("123-45-6789")
     (tmp_path / "b.txt").write_text("123-45-6789 and 234-56-7890")
     (tmp_path / "clean.txt").write_text("nothing")
-    findings = sensitive.scan_paths([tmp_path])
-    assert len(findings) == 2
-    assert findings[0].total >= findings[1].total   # sorted most-exposed first
-    summary = sensitive.summarize(findings)
+    report = sensitive.scan_paths([tmp_path])
+    assert len(report.findings) == 2
+    # sorted most-exposed first
+    assert report.findings[0].total >= report.findings[1].total
+    summary = sensitive.summarize(report)
     assert summary["files"] == 2
     assert summary["ssns"] == 3
 
@@ -82,6 +83,45 @@ def test_scan_paths_excludes_vault(tmp_path):
     vault = tmp_path / "vault"; vault.mkdir()
     (data / "x.txt").write_text("123-45-6789")
     (vault / "blob.txt").write_text("123-45-6789")  # inside vault: ignore
-    findings = sensitive.scan_paths([tmp_path], exclude=[vault])
-    assert len(findings) == 1
-    assert "data" in findings[0].path
+    report = sensitive.scan_paths([tmp_path], exclude=[vault])
+    assert len(report.findings) == 1
+    assert "data" in report.findings[0].path
+
+
+# ---------- coverage honesty ----------
+
+def test_report_counts_unreadable_files_separately(tmp_path):
+    """A clean result means little if most files couldn't be opened —
+    'looked and found nothing' must be distinguishable from 'never looked'."""
+    (tmp_path / "readable.txt").write_text("nothing sensitive")
+    (tmp_path / "hit.txt").write_text("123-45-6789")
+    (tmp_path / "blob.bin").write_bytes(b"\x00\x01\x02binary")
+    (tmp_path / "doc.docx").write_bytes(b"PK\x03\x04\x00\x00fake office")
+    report = sensitive.scan_paths([tmp_path])
+    assert report.read == 2          # the two text files
+    assert report.skipped == 2       # binary + office
+    assert report.total == 4
+    assert len(report.findings) == 1
+
+
+def test_summarize_carries_coverage(tmp_path):
+    (tmp_path / "a.txt").write_text("123-45-6789")
+    (tmp_path / "b.bin").write_bytes(b"\x00\x00\x00")
+    summary = sensitive.summarize(sensitive.scan_paths([tmp_path]))
+    assert summary["read"] == 1
+    assert summary["skipped"] == 1
+
+
+def test_coverage_note_states_the_gap():
+    note = sensitive.coverage_note(read=412, skipped=1203)
+    assert "412" in note and "1,203" in note
+    assert "would not be found" in note   # states the consequence plainly
+    clean = sensitive.coverage_note(read=5, skipped=0)
+    assert "5" in clean and "could not be read" not in clean
+
+
+def test_summarize_still_accepts_a_bare_findings_list(tmp_path):
+    (tmp_path / "a.txt").write_text("123-45-6789")
+    findings = sensitive.scan_paths([tmp_path]).findings
+    summary = sensitive.summarize(findings)
+    assert summary["files"] == 1 and summary["read"] == 0

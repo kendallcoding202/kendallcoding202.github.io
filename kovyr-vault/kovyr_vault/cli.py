@@ -350,17 +350,25 @@ def cmd_disk_check(args: argparse.Namespace) -> int:
 
 def cmd_device_check(args: argparse.Namespace) -> int:
     """Report the baseline device-security controls on this machine — disk
-    encryption, firewall, automatic screen lock, and (Windows) antivirus.
-    Read-only. Run it on the client's machine. Exits non-zero if any check
-    is positively OFF."""
+    encryption, firewall, automatic screen lock, and antivirus. Read-only,
+    and always reports the same four controls: one that has no meaning on
+    this platform comes back 'n/a' rather than being left out. Run it on the
+    client's machine. Exits non-zero if any check is positively OFF."""
     from . import posture
     checks = posture.check_all()
     if args.json:
         print(json.dumps([c.as_dict() for c in checks], indent=2))
     else:
-        mark = {True: "ON ", False: "OFF", None: "???"}
         for c in checks:
-            print(f"[{mark[c.status]}] {c.name}: {c.detail}")
+            if c.status is True:
+                mark = "ON "
+            elif c.status is False:
+                mark = "OFF"
+            elif not c.applicable:
+                mark = "n/a"
+            else:
+                mark = "???"
+            print(f"[{mark}] {c.name}: {c.detail}")
     return 1 if any(c.status is False for c in checks) else 0
 
 
@@ -370,17 +378,19 @@ def cmd_discover(args: argparse.Namespace) -> int:
     reported — never the values themselves — and nothing leaves the machine."""
     from . import sensitive
     exclude = [Path(args.vault)] if args.vault else []
-    findings = sensitive.scan_paths([Path(p) for p in args.paths],
-                                    exclude=exclude)
-    summary = sensitive.summarize(findings)
+    report = sensitive.scan_paths([Path(p) for p in args.paths],
+                                  exclude=exclude)
+    findings = report.findings
+    summary = sensitive.summarize(report)
+    coverage = sensitive.coverage_note(report.read, report.skipped)
     if args.json:
         print(json.dumps({"summary": summary,
                           "findings": [f.as_dict() for f in findings]},
                          indent=2))
         return 1 if findings else 0
     if not findings:
-        print("No unencrypted SSNs or card numbers found in the scanned "
-              "text files.")
+        print("No unencrypted SSNs or card numbers found.")
+        print(coverage)
         return 0
     print(f"Found sensitive data in {summary['files']} file(s): "
           f"{summary['ssns']} SSN(s), {summary['cards']} card number(s).")
@@ -392,7 +402,8 @@ def cmd_discover(args: argparse.Namespace) -> int:
         if f.card:
             kinds.append(f"{f.card} card")
         print(f"  [{', '.join(kinds)}]  {f.path}")
-    print("\n(Only counts are shown — the actual numbers are never recorded.)")
+    print(f"\n{coverage}")
+    print("(Only counts are shown — the actual numbers are never recorded.)")
     return 1 if findings else 0
 
 

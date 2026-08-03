@@ -18,7 +18,7 @@ version — a documented limitation, not a silent gap.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 # SSN with dashes only — high precision. Bare 9-digit runs are too
@@ -98,21 +98,43 @@ def _read_text(path: Path) -> str | None:
     return None
 
 
+def _scan_one(path: Path) -> tuple[bool, "Finding | None"]:
+    """(readable, finding). `readable` is False when we could not look
+    inside the file at all — a binary/office/PDF format or an unreadable
+    file — which is NOT the same as 'we looked and it was clean'."""
+    text = _read_text(Path(path))
+    if text is None:
+        return False, None
+    ssn, card = count_ssns(text), count_cards(text)
+    if ssn or card:
+        return True, Finding(str(path), ssn, card)
+    return True, None
+
+
 def scan_file(path: Path) -> Finding | None:
     """Return a Finding if the file contains SSNs or card numbers, else None.
     Never includes the matched values — only counts."""
-    text = _read_text(Path(path))
-    if text is None:
-        return None
-    ssn, card = count_ssns(text), count_cards(text)
-    if ssn or card:
-        return Finding(str(path), ssn, card)
-    return None
+    return _scan_one(path)[1]
 
 
-def scan_paths(paths, on_progress=None, exclude=None) -> list[Finding]:
+@dataclass
+class ScanReport:
+    """Findings plus how much of the estate we could actually look inside.
+    `skipped` is the honest counterpart to `findings`: a clean result over
+    400 readable files means much less when 1,200 were unreadable."""
+    findings: list[Finding] = field(default_factory=list)
+    read: int = 0        # files we could decode and search
+    skipped: int = 0     # files we could not look inside at all
+
+    @property
+    def total(self) -> int:
+        return self.read + self.skipped
+
+
+def scan_paths(paths, on_progress=None, exclude=None) -> ScanReport:
     """Scan every regular file under the given paths. `exclude` is an
-    optional set of directory Paths to skip (e.g. the vault itself)."""
+    optional set of directory Paths to skip (e.g. the vault itself).
+    Returns a ScanReport carrying both the findings and the coverage."""
     exclude = {Path(e).resolve() for e in (exclude or [])}
     files: list[Path] = []
     for root in paths:
@@ -121,7 +143,7 @@ def scan_paths(paths, on_progress=None, exclude=None) -> list[Finding]:
             files.append(root)
         else:
             files.extend(p for p in root.rglob("*") if p.is_file())
-    findings: list[Finding] = []
+    report = ScanReport()
     total = len(files)
     for i, path in enumerate(files, 1):
         try:
@@ -129,18 +151,39 @@ def scan_paths(paths, on_progress=None, exclude=None) -> list[Finding]:
                 continue
         except OSError:
             pass
-        finding = scan_file(path)
+        readable, finding = _scan_one(path)
+        if readable:
+            report.read += 1
+        else:
+            report.skipped += 1
         if finding:
-            findings.append(finding)
+            report.findings.append(finding)
         if on_progress:
             on_progress(i, total)
-    findings.sort(key=lambda f: f.total, reverse=True)
-    return findings
+    report.findings.sort(key=lambda f: f.total, reverse=True)
+    return report
 
 
-def summarize(findings: list[Finding]) -> dict:
+def summarize(report: "ScanReport | list[Finding]") -> dict:
+    """Accepts a ScanReport (preferred) or a bare findings list."""
+    if isinstance(report, ScanReport):
+        findings, read, skipped = report.findings, report.read, report.skipped
+    else:
+        findings, read, skipped = list(report), 0, 0
     return {
         "files": len(findings),
         "ssns": sum(f.ssn for f in findings),
         "cards": sum(f.card for f in findings),
+        "read": read,
+        "skipped": skipped,
     }
+
+
+def coverage_note(read: int, skipped: int) -> str:
+    """One plain sentence stating what was and wasn't examined."""
+    base = f"Looked inside {read:,} file{'' if read == 1 else 's'}"
+    if not skipped:
+        return base + "."
+    return (f"{base}; {skipped:,} could not be read inside "
+            "(office documents, PDFs, images and other non-text files). "
+            "Sensitive data in those files would not be found.")

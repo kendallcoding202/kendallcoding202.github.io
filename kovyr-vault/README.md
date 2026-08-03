@@ -21,8 +21,8 @@ Kovyr Vault shrinks that exposure surface, then locks down what's left.
 | `report` | Generate a branded, self-contained HTML engagement report from before/after scan data and vault stats (with a live integrity check). |
 | `monitor` | Recurring scan that records a snapshot and reports drift — new duplicate content appearing since the last run. With `--vault PATH` it also counts failed unlock attempts and checks the vault's immutable blobs for tamper evidence (no passphrase needed), and a conservative canary flags the mass-change footprint of ransomware. Captures the machine's baseline device-security controls into the snapshot so `--html` shows them in the report. Exit codes: 2 = alert (canary/failed unlocks), 1 = new drift, 0 = quiet. `--html` writes a branded monitoring report with an alert banner when attention is needed. |
 | `disk-check` | Report whole-disk encryption (FileVault/BitLocker) on this machine. Read-only. `--json` for machine-readable output; exits non-zero when positively off. |
-| `device-check` | Report the baseline device-security controls on this machine — disk encryption, firewall, automatic screen lock, and (Windows) antivirus. Read-only, on/off/unknown per check. `--json` supported; exits non-zero if any check is positively off. |
-| `discover` | Scan files locally for unencrypted sensitive data — U.S. SSNs and payment-card numbers — sitting outside the vault. Strictly local; reports only counts, types, and paths (never the values), so the report can't leak what it flags. Scans text-decodable files (office/PDF formats not parsed). `--vault PATH` to exclude the vault; `--json` supported. |
+| `device-check` | Report the baseline device-security controls on this machine — disk encryption, firewall, automatic screen lock, antivirus. Read-only. Always reports the same four controls on every platform: `on` / `off` / `unknown` (applies here, couldn't determine) / `n/a` (no meaning on this platform), so a report never confuses "doesn't apply" with "failed". `--json` supported; exits non-zero only if a check is positively off. |
+| `discover` | Scan files locally for unencrypted sensitive data — U.S. SSNs and payment-card numbers — sitting outside the vault. Strictly local; reports only counts, types, and paths (never the values), so the report can't leak what it flags. Scans text-decodable files and **states its own coverage** — how many files it read and how many it could not look inside (office documents, PDFs, images), so a clean result is never mistaken for full coverage. `--vault PATH` to exclude the vault; `--json` supported. |
 | `shred` | Securely erase files: overwrite the bytes with random data, then delete, so casual undelete tools can't recover the plaintext. Dry-run by default; `--yes` to act. (Best-effort — full-disk encryption remains the backstop on SSDs.) |
 | `gui` | Open the client-side desktop app (also shipped as its own windowed `kovyr-vault-app.exe`). |
 
@@ -81,11 +81,12 @@ their protection without Kovyr present:
 
 - **Protection status tab** — last check time, files watched, redundant
   copies, excess exposure, and a green ✓ / red ⚠ headline; a **Device
-  security** checklist showing the machine's baseline controls (disk
-  encryption, firewall, automatic screen lock, and — on Windows —
-  antivirus) as ✓ on / ⚠ off / – unknown with a plain-English fix; a
-  "What's going on" panel that explains the current status; and buttons to
-  run a check on demand and open the full HTML report.
+  security** checklist showing the machine's four baseline controls (disk
+  encryption, firewall, automatic screen lock, antivirus) as ✓ on / ⚠ off /
+  ? couldn't determine / – doesn't apply on this platform, each with a
+  plain-English fix; a "What's going on" panel that explains the current
+  status; and buttons to run a check on demand, open the full HTML report,
+  or scan for unencrypted sensitive files.
 - **My encrypted files tab** — the client enters *their* passphrase to
   unlock the vault, browse their encrypted files, and restore any of
   them to a folder of their choice. Locking clears the key from memory.
