@@ -187,3 +187,25 @@ def test_version_comparison():
     assert not gui.is_newer_version("kovyr-vault-v0.5.2", "0.5.2")
     assert not gui.is_newer_version("v0.5.1", "0.5.2")
     assert not gui.is_newer_version("", "0.5.2")
+
+
+def test_dashboard_url_defaults_to_kovyr_site():
+    assert gui.resolve_dashboard_url(None) == gui.KOVYR_SITE
+    assert gui.resolve_dashboard_url({}) == gui.KOVYR_SITE
+
+
+def test_dashboard_url_honours_per_client_override():
+    cfg = {"dashboard_url": "https://app.kovyr.com/c/acme"}
+    assert gui.resolve_dashboard_url(cfg) == "https://app.kovyr.com/c/acme"
+    # surrounding whitespace in a hand-edited config shouldn't break it
+    assert gui.resolve_dashboard_url(
+        {"dashboard_url": "  https://x.example  "}) == "https://x.example"
+
+
+def test_dashboard_url_refuses_non_https():
+    """A typo'd or tampered config must never hand the browser a local
+    path or a plain-http endpoint — fall back to the known-good site."""
+    for bad in ("file:///etc/passwd", "http://kovyr.com",
+                "javascript:alert(1)", "/Users/me/secrets", "", None, 42):
+        assert gui.resolve_dashboard_url(
+            {"dashboard_url": bad}) == gui.KOVYR_SITE
