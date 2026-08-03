@@ -372,6 +372,67 @@ def cmd_device_check(args: argparse.Namespace) -> int:
     return 1 if any(c.status is False for c in checks) else 0
 
 
+def cmd_briefing(args: argparse.Namespace) -> int:
+    """Build and print the de-identified briefing — the only object a
+    later generation step would ever be given. Printing it is the point:
+    the operator reads exactly what would be sent before trusting
+    anything downstream. Everything here is local; nothing is sent."""
+    from . import briefing as briefing_mod
+    from . import posture, sensitive
+
+    paths = [Path(p) for p in args.paths]
+    vault_path = Path(args.vault) if args.vault else None
+    result = scanner.scan(paths)
+    report = sensitive.scan_paths(
+        paths, exclude=[vault_path] if vault_path else [])
+
+    drift = None
+    if args.state and Path(args.state).exists():
+        try:
+            history = monitor_mod.load_history(Path(args.state))
+            if len(history) > 1:
+                drift = monitor_mod.diff(history[-2], history[-1])
+        except (OSError, ValueError, KeyError):
+            drift = None
+
+    alerts = {}
+    vault_stats = {}
+    if vault_path:
+        # Keyless reads only — this must run unattended, so no passphrase
+        # and therefore no vault file count (the index is encrypted).
+        vault_stats["present"] = (vault_path / "vault.json").exists()
+        try:
+            alerts["failed_unlocks"] = monitor_mod.count_failed_unlocks(
+                vault_path)
+        except OSError:
+            pass
+
+    obj = briefing_mod.build(
+        period=args.period or now_stamp()[:7],
+        scan_summary=monitor_mod.snapshot_from_scan(result, now_stamp()),
+        sensitive_report=report,
+        controls=posture.check_all(),
+        drift=drift,
+        vault_stats=vault_stats,
+        alerts=alerts,
+    )
+    problems = briefing_mod.validate(obj, client_name=args.client)
+    if args.json:
+        print(briefing_mod.to_json(obj))
+    else:
+        print(briefing_mod.to_json(obj))
+        print("\nThis is the complete object a later generation step "
+              "would receive — no paths, no filenames, no client name.")
+    if problems:
+        print("\nBRIEFING FAILED VALIDATION:", file=sys.stderr)
+        for problem in problems:
+            print(f"  - {problem}", file=sys.stderr)
+        return 1
+    if not args.json:
+        print("Validated: safe to send.")
+    return 0
+
+
 def cmd_discover(args: argparse.Namespace) -> int:
     """Scan files locally for unencrypted sensitive data (U.S. SSNs and
     payment-card numbers) sitting outside the vault. Only counts are
@@ -652,6 +713,22 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true",
                    help="emit machine-readable JSON")
     p.set_defaults(func=cmd_device_check)
+
+    p = sub.add_parser("briefing", help="print the de-identified briefing "
+                                        "object (no paths, no names) that a "
+                                        "later narrative step would receive")
+    p.add_argument("paths", nargs="+", help="files or folders to summarize")
+    p.add_argument("--vault", help="vault path (excluded from the scan; "
+                                   "keyless reads only)")
+    p.add_argument("--state", metavar="JSON",
+                   help="monitor state file, to include drift counts")
+    p.add_argument("--period", help="YYYY-MM label (default: current month)")
+    p.add_argument("--client", help="real client name — checked for and "
+                                    "never included, only used to prove "
+                                    "it is absent")
+    p.add_argument("--json", action="store_true",
+                   help="print only the object")
+    p.set_defaults(func=cmd_briefing)
 
     p = sub.add_parser("discover", help="scan files for unencrypted sensitive "
                                         "data (SSNs, card numbers) — local, "
