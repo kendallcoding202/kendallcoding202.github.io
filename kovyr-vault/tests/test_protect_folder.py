@@ -104,3 +104,112 @@ def test_original_from_receipt():
         Path("/data/Smith/w2.pdf")
     plain = Path("/data/Smith/w2.pdf")
     assert protect_folder.original_from_receipt(plain) == plain
+
+
+# ---------- encrypt_paths: the "Encrypt selected" action ----------
+
+def test_encrypt_paths_encrypts_only_what_was_picked(tmp_path):
+    """The sensitive scan flags specific files; only those get encrypted,
+    and the rest of the folder is left untouched."""
+    watched = tmp_path / "watched"
+    watched.mkdir()
+    picked = watched / "intake.pdf"
+    picked.write_bytes(b"ssn lives here")
+    untouched = watched / "notes.txt"
+    untouched.write_bytes(b"nothing sensitive")
+    vault = Vault.create(tmp_path / "vault", PASS)
+
+    encrypted, errors = protect_folder.encrypt_paths(vault, [picked])
+    assert (encrypted, errors) == (1, [])
+
+    # Picked file: plaintext replaced by a receipt, content in the vault.
+    assert not picked.exists()
+    assert "encrypted in your Kovyr vault" in \
+        (watched / "intake.pdf.kovyr").read_text()
+    assert vault.read_file(str(picked)) == b"ssn lives here"
+
+    # Everything else in the folder is exactly as it was.
+    assert untouched.read_bytes() == b"nothing sensitive"
+    assert str(untouched) not in vault.list_files()
+
+
+def test_encrypt_paths_reports_progress(tmp_path):
+    watched = tmp_path / "watched"
+    watched.mkdir()
+    paths = []
+    for i in range(3):
+        path = watched / f"f{i}.txt"
+        path.write_bytes(f"file {i}".encode())
+        paths.append(path)
+    vault = Vault.create(tmp_path / "vault", PASS)
+
+    seen = []
+    encrypted, errors = protect_folder.encrypt_paths(
+        vault, paths, on_progress=lambda done, total: seen.append((done, total)))
+    assert (encrypted, errors) == (3, [])
+    assert seen == [(1, 3), (2, 3), (3, 3)]
+
+
+def test_encrypt_paths_skips_receipts_missing_and_the_vault(tmp_path):
+    """Stale selections and self-ingestion are skipped, not errors — the
+    list comes from a scan that may be minutes old."""
+    watched = tmp_path / "watched"
+    watched.mkdir()
+    vault = Vault.create(tmp_path / "vault", PASS)
+    receipt = watched / "already.pdf.kovyr"
+    receipt.write_text("receipt")
+    gone = watched / "deleted-since-the-scan.txt"
+    folder = watched / "subfolder"
+    folder.mkdir()
+    in_vault = vault.root / "blob.kvb"
+    in_vault.write_bytes(b"ciphertext")
+
+    encrypted, errors = protect_folder.encrypt_paths(
+        vault, [receipt, gone, folder, in_vault])
+    assert (encrypted, errors) == (0, [])
+    assert receipt.exists() and in_vault.exists()
+    assert vault.list_files() == {}
+
+
+def test_encrypt_paths_persists_index_before_removing_plaintext(tmp_path):
+    """The crash-safety guarantee: if the process dies after the index is
+    written, the file is retrievable from a freshly-opened vault. It must
+    never be removed while only in memory."""
+    watched = tmp_path / "watched"
+    watched.mkdir()
+    path = watched / "w2.pdf"
+    path.write_bytes(b"payroll")
+    vault = Vault.create(tmp_path / "vault", PASS)
+
+    protect_folder.encrypt_paths(vault, [path])
+
+    reopened = Vault.open(tmp_path / "vault", PASS)
+    assert reopened.read_file(str(path)) == b"payroll"
+
+
+def test_encrypt_paths_keeps_plaintext_when_encryption_fails(tmp_path):
+    """A file that cannot be added to the vault keeps its plaintext — the
+    failure is reported, never silently traded for data loss."""
+    watched = tmp_path / "watched"
+    watched.mkdir()
+    good = watched / "good.txt"
+    good.write_bytes(b"fine")
+    bad = watched / "bad.txt"
+    bad.write_bytes(b"unreadable")
+    vault = Vault.create(tmp_path / "vault", PASS)
+
+    real_add = vault.add_file
+
+    def add_file(path, name, save_index=True):
+        if Path(path).name == "bad.txt":
+            raise OSError("permission denied")
+        return real_add(path, name, save_index=save_index)
+
+    vault.add_file = add_file
+    encrypted, errors = protect_folder.encrypt_paths(vault, [good, bad])
+
+    assert encrypted == 1
+    assert len(errors) == 1 and "bad.txt" in errors[0]
+    assert bad.read_bytes() == b"unreadable"       # plaintext preserved
+    assert not (watched / "bad.txt.kovyr").exists()
+    assert not good.exists()                       # the good one still went

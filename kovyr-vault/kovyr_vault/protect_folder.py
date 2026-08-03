@@ -40,6 +40,71 @@ def original_from_receipt(receipt: Path) -> Path:
     return receipt.with_name(name)
 
 
+def _replace_with_receipt(path: Path, stamp: str) -> None:
+    """Leave a receipt where the plaintext was, then remove the original.
+
+    Callers MUST have persisted the vault index first: the receipt and
+    the unlink only happen once the encrypted copy is durable, so an
+    interruption leaves the file either retrievable from the vault or
+    still present in plaintext — never neither.
+    """
+    receipt_path(path).write_text(
+        f"This file is encrypted in your Kovyr vault "
+        f"(since {stamp}).\n"
+        f"Open the Kovyr Vault app and unlock with your "
+        f"passphrase to retrieve it.\n"
+        f"Original name: {path.name}\n",
+        encoding="utf-8")
+    path.unlink()
+
+
+def encrypt_paths(vault: Vault, paths: list[Path],
+                  on_progress=None) -> tuple[int, list[str]]:
+    """Encrypt an explicit list of files into the vault, replacing each
+    with a receipt. Returns (encrypted_count, errors).
+
+    The folder sweep encrypts everything in a protected folder; this
+    encrypts only files the operator or client picked — the action behind
+    "Encrypt selected" on a sensitive-data scan result. It follows the
+    same ordering guarantee as sweep(): every index entry is persisted
+    before any original is removed.
+
+    Files that are already receipts, or that have vanished since the
+    scan, are skipped rather than treated as errors.
+    """
+    encrypted = 0
+    errors: list[str] = []
+    done: list[Path] = []
+    total = len(paths)
+
+    for index, path in enumerate(paths, 1):
+        path = Path(path)
+        try:
+            if not path.is_file() or is_receipt(path):
+                continue
+            if vault.root in path.parents:      # never ingest the vault
+                continue
+            vault.add_file(path, str(path), save_index=False)
+            done.append(path)
+        except Exception as exc:                # noqa: BLE001
+            errors.append(f"{path}: {exc}")
+        if on_progress:
+            on_progress(index, total)
+
+    if not done:
+        return 0, errors
+
+    vault.flush_index()   # durable BEFORE any plaintext is removed
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    for path in done:
+        try:
+            _replace_with_receipt(path, stamp)
+            encrypted += 1
+        except OSError as exc:
+            errors.append(f"{path}: {exc}")
+    return encrypted, errors
+
+
 def waiting_files(folders: list[Path],
                  exclude: Path | None = None) -> list[Path]:
     """Files (any depth) not yet encrypted: everything except receipts,
@@ -88,14 +153,7 @@ def sweep(vault: Vault, folders: list[Path],
         stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         for done_path in pending:
             try:
-                receipt_path(done_path).write_text(
-                    f"This file is encrypted in your Kovyr vault "
-                    f"(since {stamp}).\n"
-                    f"Open the Kovyr Vault app and unlock with your "
-                    f"passphrase to retrieve it.\n"
-                    f"Original name: {done_path.name}\n",
-                    encoding="utf-8")
-                done_path.unlink()
+                _replace_with_receipt(done_path, stamp)
                 encrypted += 1
             except OSError as exc:
                 errors.append(f"{done_path}: {exc}")
