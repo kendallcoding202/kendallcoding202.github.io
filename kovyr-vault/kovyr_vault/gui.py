@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -1121,9 +1122,11 @@ class App:
                     data = json.load(resp)
                 tag = data.get("tag_name", "")
                 url = data.get("html_url", "")
+                self._release_assets = data.get("assets") or []
                 self.root.after(0, self._updates_done, tag, url,
                                 is_newer_version(tag, __version__), None)
             except Exception as exc:
+                self._release_assets = []
                 self.root.after(0, self._updates_done, "", "", False,
                                 str(exc))
 
@@ -1136,16 +1139,99 @@ class App:
             self.settings_msg.config(
                 text=f"Could not check for updates: {error}", fg=BAD)
             return
-        if newer:
-            self.settings_msg.config(text="", fg=MUTED)
+        if not newer:
+            self.settings_msg.config(
+                text=f"You're up to date (v{__version__}).", fg=GOOD)
+            return
+        self.settings_msg.config(text="", fg=MUTED)
+
+        from . import updater
+        asset = updater.pick_asset(getattr(self, "_release_assets", []))
+        bundle = updater.current_app_bundle()
+        # One-click only where we can actually verify what we downloaded:
+        # a signed macOS bundle. Everywhere else, hand off to the browser.
+        if updater.supported() and asset and bundle:
             if messagebox.askyesno(
                     "Kovyr Vault",
                     f"A newer version is available ({tag}).\n\n"
-                    "Open the download page?"):
-                webbrowser.open(url)
-        else:
-            self.settings_msg.config(
-                text=f"You're up to date (v{__version__}).", fg=GOOD)
+                    "Download and install it now? Kovyr Vault will "
+                    "restart when it's done."):
+                self._install_update(asset, bundle)
+            return
+        if messagebox.askyesno(
+                "Kovyr Vault",
+                f"A newer version is available ({tag}).\n\n"
+                "Open the download page?"):
+            webbrowser.open(url)
+
+    def _install_update(self, asset_url: str, bundle) -> None:
+        """Download, verify and install a new version, then relaunch.
+        Everything happens off the UI thread; the verification gate lives
+        in updater.verify_update and is never bypassed here."""
+        import tempfile
+        from . import updater
+        if getattr(self, "_updating", False):
+            return
+        self._updating = True
+        self.settings_msg.config(text="Downloading update…", fg=MUTED)
+
+        def progress(got: int, total: int) -> None:
+            pct = f"{got * 100 // total}%" if total else human_size(got)
+            self.root.after(0, lambda: self.settings_msg.config(
+                text=f"Downloading update… {pct}", fg=MUTED))
+
+        def worker() -> None:
+            tmpdir = Path(tempfile.mkdtemp(prefix="kovyr-update-"))
+            mount = None
+            try:
+                dmg = updater.download(asset_url, tmpdir / "update.dmg",
+                                       on_progress=progress)
+                self.root.after(0, lambda: self.settings_msg.config(
+                    text="Verifying the download…", fg=MUTED))
+                mount = updater.attach_dmg(dmg)
+                new_app = updater.app_in_mount(mount)
+                if new_app is None:
+                    raise updater.UpdateError(
+                        "the disk image didn't contain the app")
+                updater.verify_update(new_app, bundle)
+                self.root.after(0, lambda: self.settings_msg.config(
+                    text="Installing…", fg=MUTED))
+                updater.replace_bundle(new_app, bundle)
+            except updater.UpdateError as exc:
+                self.root.after(0, self._update_failed, str(exc))
+                return
+            except Exception as exc:                       # noqa: BLE001
+                self.root.after(0, self._update_failed, str(exc))
+                return
+            finally:
+                if mount is not None:
+                    updater.detach_dmg(mount)
+                shutil.rmtree(tmpdir, ignore_errors=True)
+            self.root.after(0, self._update_installed, bundle)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _update_failed(self, message: str) -> None:
+        from tkinter import messagebox
+        self._updating = False
+        self.settings_msg.config(text="Update failed.", fg=BAD)
+        messagebox.showwarning(
+            "Kovyr Vault",
+            f"The update could not be installed:\n\n{message}\n\n"
+            "Your current version is unchanged and still works. You can "
+            "download the new version manually from the Kovyr releases "
+            "page.")
+
+    def _update_installed(self, bundle) -> None:
+        from tkinter import messagebox
+        from . import updater
+        self._updating = False
+        self.settings_msg.config(text="Update installed.", fg=GOOD)
+        messagebox.showinfo(
+            "Kovyr Vault",
+            "The update is installed. Kovyr Vault will now restart.")
+        updater.relaunch(bundle)
+        self.root.after(200, self.root.destroy)
 
     def create_vault_dialog(self) -> None:
         tk = self.tk
