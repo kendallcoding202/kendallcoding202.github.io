@@ -5,7 +5,7 @@ than the happy path. Every check is exercised with an injected command
 runner — no real Mac required.
 """
 
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import pytest
 
@@ -243,6 +243,20 @@ def test_install_location_names_the_disk_image():
         "/Volumes/Kovyr Vault/Kovyr Vault.app", writable=lambda _p: False)
     assert "disk image" in problem
     assert "Applications" in problem
+
+
+def test_install_location_survives_windows_path_semantics(monkeypatch):
+    """Reproduce the Windows runner on any host.
+
+    Path("/Volumes/x") on Windows is "\\Volumes\\x". Twice now that has
+    silently disabled the disk-image branch and failed the build only
+    after merge, so pin it: forcing Path to Windows behavior must not
+    change the answer.
+    """
+    monkeypatch.setattr(updater, "Path", PureWindowsPath)
+    problem = updater.install_location_problem(
+        "/Volumes/Kovyr Vault/Kovyr Vault.app", writable=lambda _p: False)
+    assert "disk image" in problem
 
 
 def test_install_location_read_only_elsewhere():
