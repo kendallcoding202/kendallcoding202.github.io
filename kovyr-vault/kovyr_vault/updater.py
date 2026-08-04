@@ -36,7 +36,7 @@ import ssl
 import subprocess
 import sys
 import urllib.request
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 # Release assets for this project, and nothing else.
 ALLOWED_ASSET_PREFIX = ("https://github.com/kendallcoding202/"
@@ -161,8 +161,15 @@ def current_app_bundle(executable: str | None = None) -> Path | None:
 
 def on_mounted_volume(bundle) -> bool:
     """Whether the bundle lives under /Volumes — i.e. on a mounted disk
-    image or external drive rather than the startup disk."""
-    parts = Path(bundle).parts
+    image or external drive rather than the startup disk.
+
+    Parsed as POSIX explicitly rather than with Path(). `/Volumes` only
+    means anything on macOS, but this test suite also runs on Windows,
+    where Path() splits the same string on backslashes, yields a leading
+    part of "\\", and never matches. PurePosixPath gives one answer on
+    every host, so the behavior under test is the behavior that ships.
+    """
+    parts = PurePosixPath(str(bundle)).parts
     return len(parts) > 2 and parts[0] == "/" and parts[1] == "Volumes"
 
 

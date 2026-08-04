@@ -223,6 +223,8 @@ def test_replace_bundle_restores_original_on_failure(tmp_path):
 # ---------- where the app is installed ----------
 
 def test_on_mounted_volume():
+    # macOS paths are passed as text on purpose: Path("/Volumes/x") on a
+    # Windows runner becomes "\Volumes\x" and would test nothing real.
     assert updater.on_mounted_volume("/Volumes/Kovyr Vault/Kovyr Vault.app")
     assert not updater.on_mounted_volume("/Applications/Kovyr Vault.app")
     assert not updater.on_mounted_volume("/Volumes")
@@ -234,19 +236,18 @@ def test_install_location_ok_when_parent_writable(tmp_path):
     assert updater.install_location_problem(bundle) is None
 
 
-def test_install_location_names_the_disk_image(tmp_path):
+def test_install_location_names_the_disk_image():
     """The real failure a client hits: they ran the app straight from the
     DMG. The message must say that, not "Read-only file system"."""
-    bundle = Path("/Volumes/Kovyr Vault/Kovyr Vault.app")
-    problem = updater.install_location_problem(bundle,
-                                               writable=lambda _p: False)
+    problem = updater.install_location_problem(
+        "/Volumes/Kovyr Vault/Kovyr Vault.app", writable=lambda _p: False)
     assert "disk image" in problem
     assert "Applications" in problem
 
 
 def test_install_location_read_only_elsewhere():
     problem = updater.install_location_problem(
-        Path("/opt/kovyr/Kovyr Vault.app"), writable=lambda _p: False)
+        "/opt/kovyr/Kovyr Vault.app", writable=lambda _p: False)
     assert "disk image" not in problem
     assert "read-only for this user" in problem
 
