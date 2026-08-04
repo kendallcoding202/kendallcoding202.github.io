@@ -189,10 +189,15 @@ def install_location_problem(bundle, writable=None) -> str | None:
     Applications.
     """
     writable = writable or _is_writable
+    # Keep the caller's own text for the /Volumes test. Path() must not do
+    # it: on a Windows runner Path("/Volumes/x") is "\\Volumes\\x", so
+    # routing the check through Path would destroy the separators before
+    # on_mounted_volume ever sees them.
+    raw = str(bundle)
     bundle = Path(bundle)
     if writable(bundle.parent):
         return None
-    if on_mounted_volume(bundle):
+    if on_mounted_volume(raw):
         return ("Kovyr Vault is running from the installer disk image, "
                 "which macOS keeps read-only, so it can't update itself "
                 "there.\n\n"

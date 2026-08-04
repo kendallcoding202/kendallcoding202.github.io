@@ -1,3 +1,3 @@
 """Kovyr Vault — encryption at rest + duplicate elimination for client data."""
 
-__version__ = "0.19.2"
+__version__ = "0.19.3"
