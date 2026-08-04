@@ -1151,6 +1151,21 @@ class App:
         # One-click only where we can actually verify what we downloaded:
         # a signed macOS bundle. Everywhere else, hand off to the browser.
         if updater.supported() and asset and bundle:
+            # Ask where the app lives before spending an 18 MB download on
+            # an install that cannot succeed — running from the mounted
+            # disk image is the common case, and it is fixable in seconds
+            # once the client is told what to do.
+            problem = updater.install_location_problem(bundle)
+            if problem:
+                self.settings_msg.config(
+                    text="Update available — see the message.", fg=BAD)
+                if messagebox.askyesno(
+                        "Kovyr Vault",
+                        f"A newer version is available ({tag}), but this "
+                        f"copy can't install it itself.\n\n{problem}\n\n"
+                        "Open the download page now?"):
+                    webbrowser.open(url)
+                return
             if messagebox.askyesno(
                     "Kovyr Vault",
                     f"A newer version is available ({tag}).\n\n"

@@ -218,3 +218,50 @@ def test_replace_bundle_restores_original_on_failure(tmp_path):
         updater.replace_bundle(new, target,
                                run=runner({"ditto": (1, "disk full")}))
     assert (target / "original").exists()   # rolled back
+
+
+# ---------- where the app is installed ----------
+
+def test_on_mounted_volume():
+    assert updater.on_mounted_volume("/Volumes/Kovyr Vault/Kovyr Vault.app")
+    assert not updater.on_mounted_volume("/Applications/Kovyr Vault.app")
+    assert not updater.on_mounted_volume("/Volumes")
+
+
+def test_install_location_ok_when_parent_writable(tmp_path):
+    bundle = tmp_path / "Kovyr Vault.app"
+    bundle.mkdir()
+    assert updater.install_location_problem(bundle) is None
+
+
+def test_install_location_names_the_disk_image(tmp_path):
+    """The real failure a client hits: they ran the app straight from the
+    DMG. The message must say that, not "Read-only file system"."""
+    bundle = Path("/Volumes/Kovyr Vault/Kovyr Vault.app")
+    problem = updater.install_location_problem(bundle,
+                                               writable=lambda _p: False)
+    assert "disk image" in problem
+    assert "Applications" in problem
+
+
+def test_install_location_read_only_elsewhere():
+    problem = updater.install_location_problem(
+        Path("/opt/kovyr/Kovyr Vault.app"), writable=lambda _p: False)
+    assert "disk image" not in problem
+    assert "read-only for this user" in problem
+
+
+def test_replace_bundle_refuses_read_only_location(monkeypatch, tmp_path):
+    """The install must fail before anything is renamed — a half-swapped
+    bundle on a volume we cannot write is the worst outcome."""
+    target = tmp_path / "Kovyr Vault.app"
+    target.mkdir()
+    (target / "original").write_text("v1")
+    new = tmp_path / "new.app"
+    new.mkdir()
+    monkeypatch.setattr(updater, "_is_writable", lambda _p: False)
+
+    with pytest.raises(UpdateError, match="read-only"):
+        updater.replace_bundle(new, target, run=runner({"ditto": (0, "")}))
+    assert (target / "original").exists()
+    assert not target.with_name(target.name + ".old").exists()

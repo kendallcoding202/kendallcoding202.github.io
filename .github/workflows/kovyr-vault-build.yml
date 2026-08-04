@@ -240,6 +240,17 @@ jobs:
           mkdir dmg-staging
           cp -R "dist/Kovyr Vault.app" dmg-staging/
           ln -s /Applications dmg-staging/Applications
+          # Opening the app from the mounted image "works", so clients do
+          # it and then can't update (a DMG is read-only). Say so in the
+          # window itself.
+          printf '%s\n' \
+            'Drag "Kovyr Vault" onto the Applications folder here, then' \
+            'eject "Kovyr Vault" from the Finder sidebar and open the app' \
+            'from Applications.' \
+            '' \
+            'Running it straight from this window works, but the app is' \
+            'read-only there and will not be able to update itself.' \
+            > "dmg-staging/READ ME FIRST.txt"
           hdiutil create -volname "Kovyr Vault" -srcfolder dmg-staging -ov -format UDZO "dist/KovyrVault.dmg"
           if [ -n "${SIGN_IDENTITY:-}" ]; then
             codesign --force --sign "$SIGN_IDENTITY" "dist/KovyrVault.dmg"
