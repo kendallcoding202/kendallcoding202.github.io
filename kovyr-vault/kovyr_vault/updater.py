@@ -29,6 +29,7 @@ is unit-tested without a real Mac.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import ssl
@@ -158,6 +159,46 @@ def current_app_bundle(executable: str | None = None) -> Path | None:
     return None
 
 
+def on_mounted_volume(bundle) -> bool:
+    """Whether the bundle lives under /Volumes — i.e. on a mounted disk
+    image or external drive rather than the startup disk."""
+    parts = Path(bundle).parts
+    return len(parts) > 2 and parts[0] == "/" and parts[1] == "Volumes"
+
+
+def _is_writable(path) -> bool:
+    return os.access(path, os.W_OK)
+
+
+def install_location_problem(bundle, writable=None) -> str | None:
+    """Why this copy can't update itself in place, or None if it can.
+
+    Checked BEFORE downloading. Without it, a client runs the app straight
+    from the installer disk image, waits through an 18 MB download and a
+    signature check, and only then hits "Read-only file system" — an error
+    that names the true cause nowhere in it. macOS mounts a DMG read-only,
+    so this is the single most likely way to end up with an app that
+    cannot update itself: the client simply never dragged it to
+    Applications.
+    """
+    writable = writable or _is_writable
+    bundle = Path(bundle)
+    if writable(bundle.parent):
+        return None
+    if on_mounted_volume(bundle):
+        return ("Kovyr Vault is running from the installer disk image, "
+                "which macOS keeps read-only, so it can't update itself "
+                "there.\n\n"
+                "Drag Kovyr Vault into your Applications folder, eject "
+                "“Kovyr Vault” in the Finder sidebar, then open it from "
+                "Applications. Updates will work from then on.")
+    return (f"Kovyr Vault can't modify itself where it's installed "
+            f"({bundle.parent}) — the folder is read-only for this user "
+            f"account.\n\n"
+            f"Move Kovyr Vault into your Applications folder, or ask "
+            f"whoever administers this Mac to install the update.")
+
+
 # ---------- download ----------
 
 def _ssl_context():
@@ -235,6 +276,11 @@ def replace_bundle(new_app: Path, target: Path, run=None) -> None:
     preserves the signature and extended attributes; `cp -r` does not."""
     run = run or _run
     target = Path(target)
+    # Re-checked here, not just before the download: this is the last
+    # point where refusing still costs the client nothing.
+    problem = install_location_problem(target)
+    if problem:
+        raise UpdateError(problem)
     backup = target.with_name(target.name + ".old")
     shutil.rmtree(backup, ignore_errors=True)
     try:
