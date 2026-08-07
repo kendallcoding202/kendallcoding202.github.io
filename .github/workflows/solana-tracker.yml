@@ -1,0 +1,65 @@
+name: Solana tracker
+
+on:
+  schedule:
+    # Every 5 minutes. GitHub's scheduler is best-effort and drifts under load —
+    # expect roughly 5-15 minute spacing in practice, not exact 5-minute ticks.
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Print alerts instead of sending them'
+        type: boolean
+        default: false
+
+# Never let two scans overlap: they would double-alert and fight over the state cache.
+concurrency:
+  group: solana-tracker
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: solana-tracker
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # State (which coins were already alerted, last seen prices) lives in the Actions
+      # cache. Restore the newest entry by prefix; a miss just means a fresh start.
+      - name: Restore tracker state
+        uses: actions/cache/restore@v4
+        with:
+          path: solana-tracker/.state
+          key: solana-tracker-state-${{ github.run_id }}
+          restore-keys: |
+            solana-tracker-state-
+
+      - name: Run scan and position check
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          WALLET_ADDRESS: ${{ secrets.WALLET_ADDRESS }}
+          SOLANA_RPC_URL: ${{ secrets.SOLANA_RPC_URL }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+          LOG_LEVEL: info
+        run: node src/index.js scan
+
+      # Always save, even if the scan failed partway — the state file is written in a
+      # finally block, so partial progress is still worth keeping.
+      - name: Save tracker state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: solana-tracker/.state
+          key: solana-tracker-state-${{ github.run_id }}

@@ -1,0 +1,19 @@
+{
+  "name": "solana-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Screens new Solana meme coins against automated rug/scam filters and tracks a read-only wallet's positions, alerting over Telegram.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node test/run.js",
+    "start": "node src/index.js scan",
+    "scan": "node src/index.js scan",
+    "positions": "node src/index.js positions",
+    "check": "node src/index.js check",
+    "test-alert": "node src/index.js test-alert",
+    "loop": "node src/index.js loop"
+  }
+}
