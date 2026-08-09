@@ -443,7 +443,8 @@ def cmd_discover(args: argparse.Namespace) -> int:
                                   exclude=exclude)
     findings = report.findings
     summary = sensitive.summarize(report)
-    coverage = sensitive.coverage_note(report.read, report.skipped)
+    coverage = sensitive.coverage_note(
+        report.read, report.skipped, report.image_pdfs)
     if args.json:
         print(json.dumps({"summary": summary,
                           "findings": [f.as_dict() for f in findings]},
