@@ -1431,7 +1431,8 @@ class App:
             self.activity.config(text="Couldn't complete the sensitive-data "
                                  "scan.")
             return
-        coverage = sensitive.coverage_note(report.read, report.skipped)
+        coverage = sensitive.coverage_note(
+            report.read, report.skipped, report.image_pdfs)
         if not report.findings:
             self.activity.config(text=coverage, fg=MUTED)
             messagebox.showinfo(
