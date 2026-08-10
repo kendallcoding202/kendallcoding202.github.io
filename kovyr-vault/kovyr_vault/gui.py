@@ -531,7 +531,13 @@ class App:
         self._secondary_button(buttons, "Open full report",
                                self.open_report).pack(side="left", padx=(0, 10))
         self._secondary_button(buttons, "Scan for sensitive files",
-                               self.scan_sensitive).pack(side="left")
+                               self.scan_sensitive).pack(side="left",
+                                                         padx=(0, 10))
+        # Appears once a scan has found something. Closing the results
+        # window used to mean re-running the whole scan to get the list
+        # back, which on a real client estate is minutes of waiting.
+        self.show_flagged_btn = self._secondary_button(
+            buttons, "Show flagged files", self.show_last_sensitive)
 
         self.activity = tk.Label(tab, text="", fg=MUTED, bg="white",
                                  font=("Segoe UI", 9), justify="left",
@@ -1444,7 +1450,17 @@ class App:
         self.activity.config(
             text=f"⚠ {s['files']} file(s) hold unencrypted sensitive data — "
             "consider moving them into the vault.", fg=BAD)
+        self._last_sensitive = (report.findings, s, coverage)
+        if hasattr(self, "show_flagged_btn"):
+            self.show_flagged_btn.pack(side="left")
         self._show_sensitive_results(report.findings, s, coverage)
+
+    def show_last_sensitive(self) -> None:
+        """Re-open the most recent scan's results without re-scanning."""
+        last = getattr(self, "_last_sensitive", None)
+        if last is None:
+            return
+        self._show_sensitive_results(*last)
 
     def _show_sensitive_results(self, findings, summary,
                                 coverage: str = "") -> None:
@@ -1567,6 +1583,14 @@ class App:
         from tkinter import messagebox
         self._encrypting_selected = False
         self._refresh_vault_list()
+        # Drop encrypted files from the remembered results too, or
+        # "Show flagged files" would resurrect a list of files that are
+        # already in the vault.
+        last = getattr(self, "_last_sensitive", None)
+        if last is not None:
+            gone = {str(p) for p in paths if not p.exists()}
+            kept = [f for f in last[0] if f.path not in gone]
+            self._last_sensitive = (kept, last[1], last[2])
         try:
             alive = win.winfo_exists()
         except Exception:                       # noqa: BLE001

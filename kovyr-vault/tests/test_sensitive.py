@@ -125,3 +125,93 @@ def test_summarize_still_accepts_a_bare_findings_list(tmp_path):
     findings = sensitive.scan_paths([tmp_path]).findings
     summary = sensitive.summarize(findings)
     assert summary["files"] == 1 and summary["read"] == 0
+
+
+# ---------- issuer prefixes: precision over a bare Luhn check ----------
+
+def luhn_complete(prefix: str) -> str:
+    """Append the check digit that makes `prefix` Luhn-valid.
+
+    Used to build test data that WOULD have matched before this check
+    existed — otherwise the test proves nothing.
+    """
+    total = 0
+    for i, ch in enumerate(reversed(prefix + "0")):
+        d = int(ch)
+        if i % 2 == 1:
+            d *= 2
+            if d > 9:
+                d -= 9
+        total += d
+    return prefix + str((10 - total % 10) % 10)
+
+
+REAL_CARDS = [
+    "4111111111111111",   # Visa, 16
+    "4012888888881881",   # Visa, 16
+    "4222222222222",      # Visa, 13
+    "5555555555554444",   # Mastercard, 51-55
+    "5105105105105100",   # Mastercard
+    "2223003122003222",   # Mastercard, 2-series
+    "378282246310005",    # American Express, 15
+    "371449635398431",    # American Express
+    "6011111111111117",   # Discover
+    "6011000990139424",   # Discover
+]
+
+
+def test_every_real_brand_still_matches():
+    for number in REAL_CARDS:
+        assert sensitive.luhn_valid(number), number
+        assert sensitive.looks_like_card(number), number
+        assert sensitive.count_cards(f"on file: {number}") == 1, number
+
+
+def test_equipment_part_numbers_are_not_cards():
+    """The real-world miss: a folder of Canon copier service manuals
+    reported 30 card numbers, none of them real. Parts lists are full of
+    long digit runs and about one in ten passes Luhn by chance."""
+    part_numbers = [luhn_complete(p) for p in
+                    ("870112233445566",    # 8-prefix, no issuer uses it
+                     "993001122334455",    # 9-prefix
+                     "100200300400500",    # 1-prefix
+                     "722100045500123",    # 7-prefix
+                     "015566778899001")]   # leading zero
+    for number in part_numbers:
+        assert sensitive.luhn_valid(number), f"{number} should pass Luhn"
+        assert not sensitive.looks_like_card(number), number
+        assert sensitive.count_cards(f"Part No. {number}") == 0, number
+
+
+def test_right_prefix_wrong_length_is_rejected():
+    """A Visa prefix on a 15-digit run is not a Visa — length is part of
+    the brand, and this is where serial numbers sneak through."""
+    for prefix, length in (("4", 15), ("4", 17), ("34", 16), ("55", 15)):
+        number = luhn_complete(prefix + "1" * (length - len(prefix) - 1))
+        # Setup must be genuinely tempting, or the assertion below is free.
+        assert len(number) == length and sensitive.luhn_valid(number), number
+        assert not sensitive.looks_like_card(number), number
+
+
+def test_a_service_manual_page_stays_quiet():
+    """The scan that started this: a folder of Canon copier manuals.
+
+    Every number below is Luhn-valid on purpose — before the issuer-prefix
+    check each one counted as a payment card, and a page like this is why
+    four service manuals were reported as holding 30 of them.
+    """
+    drum = luhn_complete("870112233445566")
+    fuser = luhn_complete("993001122334455")
+    counter = luhn_complete("355001284001")
+    for number in (drum, fuser, counter):
+        assert sensitive.luhn_valid(number), number
+
+    page = f"""
+    imageRUNNER ADVANCE DX C5700 Series Service Manual
+    Parts list: FM1-2345-000  FC5-1234-020  WT2-5810-000
+    Firmware 12.07.0001  Serial QRT04821  Counter {counter}
+    Drum unit {drum}  Fuser assembly {fuser}
+    """
+    assert sensitive.count_cards(page) == 0
+    # ...but a real card on the same page is still caught.
+    assert sensitive.count_cards(page + "\nRefund to 4111111111111111") == 1

@@ -64,11 +64,44 @@ def count_ssns(text: str) -> int:
                if _valid_ssn(m.group(1), m.group(2), m.group(3)))
 
 
+def looks_like_card(digits: str) -> bool:
+    """Whether a digit run could actually be a payment card number.
+
+    Luhn on its own is close to a coin flip — roughly one arbitrary digit
+    string in ten passes it — so equipment manuals, parts lists and serial
+    numbers generate a steady stream of false alarms. A scan of a folder of
+    copier service manuals reported thirty "card numbers" and not one was
+    real.
+
+    Real cards also carry an issuer prefix and a brand-specific length.
+    Requiring all three turns a coin flip into a usable signal. Covers the
+    brands a U.S. small business actually takes: Visa, Mastercard, American
+    Express and Discover. Diners, JCB and UnionPay are deliberately left
+    out — their prefixes (36, 38, 62) are common enough in ordinary numbers
+    that including them would undo most of the precision gained here.
+    """
+    if not digits.isdigit() or not (13 <= len(digits) <= 19):
+        return False
+    size = len(digits)
+    if digits[0] == "4":                                    # Visa
+        return size in (13, 16, 19)
+    two, three = int(digits[:2]), int(digits[:3])
+    four, six = int(digits[:4]), int(digits[:6])
+    if 51 <= two <= 55 or 2221 <= four <= 2720:             # Mastercard
+        return size == 16
+    if two in (34, 37):                                     # American Express
+        return size == 15
+    if (four == 6011 or two == 65 or 644 <= three <= 649
+            or 622126 <= six <= 622925):                    # Discover
+        return size in (16, 19)
+    return False
+
+
 def count_cards(text: str) -> int:
     count = 0
     for m in _CARD_RE.finditer(text):
         digits = m.group().replace(" ", "").replace("-", "")
-        if luhn_valid(digits):
+        if luhn_valid(digits) and looks_like_card(digits):
             count += 1
     return count
 
