@@ -27,7 +27,7 @@ import threading
 import webbrowser
 from pathlib import Path
 
-from . import __version__, crypto, monitor as monitor_mod, notify as notify_mod, protect_folder as protect_mod, quarantine as quarantine_mod, report as report_mod, scanner
+from . import __version__, crypto, monitor as monitor_mod, notify as notify_mod, passphrase as passphrase_mod, protect_folder as protect_mod, quarantine as quarantine_mod, report as report_mod, scanner
 from .util import human_size, mirror_path, now_stamp
 from .vault import generate_keyfile, Vault, VaultError
 
@@ -1275,7 +1275,10 @@ class App:
                  "means the encrypted files are gone forever.\nSave it in "
                  "a password manager now.", bg="white", fg=MUTED,
                  justify="left", font=("Segoe UI", 9)).pack(
-                     anchor="w", pady=(4, 10))
+                     anchor="w", pady=(4, 8))
+        tk.Label(dlg, text=passphrase_mod.HINT, bg="white", fg=NAVY,
+                 justify="left", wraplength=330,
+                 font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 10))
         p1 = tk.Entry(dlg, show="•", width=30, font=("Segoe UI", 11),
                       bg="white", fg=TEXT, insertbackground=TEXT,
                       relief="flat", borderwidth=0,
@@ -1313,11 +1316,15 @@ class App:
         def do_create() -> None:
             from tkinter import filedialog
             phrase, confirm = p1.get(), p2.get()
-            if not phrase:
-                msg.config(text="Passphrase must not be empty.")
-                return
             if phrase != confirm:
                 msg.config(text="Passphrases do not match.")
+                return
+            # Checked only at creation: an existing vault made under
+            # looser rules must always still open.
+            weak = passphrase_mod.problems(
+                phrase, self.client_entry.get().strip())
+            if weak:
+                msg.config(text=weak[0])
                 return
             keyfile_path = None
             if use_keyfile.get():
