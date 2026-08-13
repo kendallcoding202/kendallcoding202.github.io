@@ -8,16 +8,24 @@ import json
 import sys
 from pathlib import Path
 
-from . import __version__, crypto, dedupe as dedupe_mod, monitor as monitor_mod, report as report_mod, scanner
+from . import __version__, crypto, dedupe as dedupe_mod, monitor as monitor_mod, passphrase, report as report_mod, scanner
 from .util import human_size, mirror_path, now_stamp
 from .vault import Vault, VaultError
 
 
 def _prompt_passphrase(confirm: bool = False) -> str:
+    """Read a passphrase. `confirm` marks this as a NEW vault, which is
+    the only time strength rules apply — an existing vault created under
+    looser rules must always still open."""
+    if confirm:
+        print(passphrase.HINT)
     phrase = getpass.getpass("Vault passphrase: ")
     if not phrase:
         sys.exit("error: passphrase must not be empty")
     if confirm:
+        weak = passphrase.problems(phrase)
+        if weak:
+            sys.exit("error: " + "\n       ".join(weak))
         again = getpass.getpass("Confirm passphrase: ")
         if phrase != again:
             sys.exit("error: passphrases do not match")
