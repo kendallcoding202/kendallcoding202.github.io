@@ -45,7 +45,7 @@ Believe the numbers it gives you over the numbers you hoped for.
 ```bash
 cd pumpbot
 npm install
-npm test                     # 269 offline checks, no network or keys needed
+npm test                     # 286 offline checks, no network or keys needed
 
 cp .env.example .env
 npm run keygen               # creates the burner, prints the address to fund
@@ -454,7 +454,7 @@ verification above.
 
 | Command | Does |
 |---|---|
-| `npm test` | 269 offline checks |
+| `npm test` | 286 offline checks |
 | `npm run keygen` | Create the burner wallet |
 | `npm run balance` | Address, balance, current size tier |
 | `npm run paper` | Paper instance, dashboard on :8081 |
@@ -490,7 +490,7 @@ src/
   commands.js   Telegram /status, /pause, /panic
   summary.js    shared status + digest text
 deploy/         systemd units for live and paper
-test/run.js     269 checks
+test/run.js     286 checks
 ```
 
 ## What is unverified

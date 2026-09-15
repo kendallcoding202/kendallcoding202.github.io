@@ -500,6 +500,64 @@ console.log('\nBonding curve account')
   check('PDA is stable across calls', bondingCurveAddress('So11111111111111111111111111111111111111112').toBase58() === addr)
 }
 
+// ------------------------------------------------- graduation / venue routing
+console.log('\nGraduation handling')
+{
+  const execSrc = fs.readFileSync(new URL('../src/exec.js', import.meta.url), 'utf8')
+  const botSrc = fs.readFileSync(new URL('../src/bot.js', import.meta.url), 'utf8')
+  const feedSrc = fs.readFileSync(new URL('../src/feed.js', import.meta.url), 'utf8')
+
+  /**
+   * Audit finding: pool was frozen at token creation, so a graduated token — whose
+   * bonding curve is CLOSED and liquidity moved to PumpSwap — could not be sold. That
+   * lands on winners only: entries cap at 120 SOL mcap and the +200%/+400% rungs sit
+   * past graduation, so the trades that run furthest were the unsellable ones.
+   */
+  check('sells resolve the venue instead of assuming it',
+    execSrc.includes("action === 'sell' ? 'auto' : 'pump'"))
+  check('buys still take the fast path', execSrc.includes("'pump'"))
+  check('exit path does not reuse a stale pump venue',
+    (botSrc.match(/position\.pool === 'pump' \? 'auto' : position\.pool/g) || []).length >= 2,
+    'both the ladder exit and the panic sell must re-resolve')
+
+  check('migration events are subscribed to', feedSrc.includes('subscribeMigration'))
+  check('migration events are routed', feedSrc.includes("'migrate'"))
+  check('a graduation updates the position venue', botSrc.includes('#onMigrate'))
+  check('trade ticks refresh the venue too', botSrc.includes('venue moved'))
+
+  const migrate = normalizeEvent({ txType: 'migrate', mint: 'GRADMINT', pool: 'pump-amm', signature: 'sig' })
+  check('a minimal migrate payload parses', migrate?.kind === 'migrate' && migrate.mint === 'GRADMINT')
+  check('the destination venue is read, not assumed', migrate.pool === 'pump-amm')
+  check('migrate needs no reserves or price', migrate.vSol === undefined && migrate.priceSol === undefined)
+}
+
+// ------------------------------------------------- ledger lock
+console.log('\nLedger lock')
+{
+  const lock = await import('../src/lock.js')
+  lock.release()
+  check('no lock means no holder', lock.heldByAnother() === null)
+
+  lock.acquire()
+  check('an acquired lock is visible to another reader', Boolean(lock.heldByAnother()))
+  check('the holder heartbeat is fresh', lock.heldByAnother().ageMs < 5000)
+
+  lock.release()
+  check('releasing clears it', lock.heldByAnother() === null)
+
+  // A crashed run must not block recovery forever.
+  const fsx = await import('node:fs')
+  const pathx = await import('node:path')
+  const stale = pathx.join(config.dataDir, config.paper ? 'paper.lock' : 'live.lock')
+  fsx.writeFileSync(stale, JSON.stringify({ pid: 999999, at: Date.now() - 10 * 60_000 }))
+  check('a stale lock is ignored so a crash cannot wedge recovery', lock.heldByAnother() === null)
+  fsx.unlinkSync(stale)
+
+  const idxSrc = fs.readFileSync(new URL('../src/index.js', import.meta.url), 'utf8')
+  check('panic refuses to run against a live instance', idxSrc.includes('heldByAnother'))
+  check('and points at the in-process route', idxSrc.includes('/panic confirm'))
+}
+
 // ------------------------------------------------- fill measurement
 console.log('\nFill measurement')
 {

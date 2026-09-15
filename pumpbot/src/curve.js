@@ -30,7 +30,14 @@ export function normalizeEvent(raw) {
   if (!mint) return null
 
   const txTypeRaw = String(pick(raw, 'txType', 'type', 'action') ?? '').toLowerCase()
-  const kind = txTypeRaw === 'create' ? 'create' : txTypeRaw === 'sell' ? 'sell' : txTypeRaw === 'buy' ? 'buy' : null
+  const kind =
+    txTypeRaw === 'create' ? 'create'
+    : txTypeRaw === 'sell' ? 'sell'
+    : txTypeRaw === 'buy' ? 'buy'
+    // Graduation. The payload is minimal — signature, mint, txType, pool — so it must
+    // not be required to carry reserves or a price.
+    : txTypeRaw === 'migrate' || txTypeRaw === 'migration' ? 'migrate'
+    : null
   if (!kind) return null
 
   const vSol = nu(pick(raw, 'vSolInBondingCurve', 'virtualSolReserves', 'vSol', 'solReserves'))

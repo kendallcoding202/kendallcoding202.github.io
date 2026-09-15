@@ -25,7 +25,15 @@ async function buildTransaction({ action, mint, amount, denominatedInSol, slippa
       denominatedInSol: denominatedInSol ? 'true' : 'false',
       slippage,
       priorityFee: config.exec.priorityFeeSol,
-      pool: pool || 'pump',
+      /**
+       * Buys are always fresh bonding-curve tokens, so 'pump' is right and avoids a
+       * venue lookup on the latency-critical path. Sells must use 'auto': a token that
+       * graduates has its curve CLOSED and its liquidity migrated to PumpSwap, so a
+       * sell routed at 'pump' fails outright. That failure lands on our winners —
+       * entries cap at 120 SOL market cap and the +200%/+400% rungs sit past
+       * graduation — which is the worst possible place to be unable to exit.
+       */
+      pool: pool || (action === 'sell' ? 'auto' : 'pump'),
     }),
     signal: AbortSignal.timeout(15000),
   })

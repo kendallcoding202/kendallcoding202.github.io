@@ -81,6 +81,8 @@ export class Feed extends EventEmitter {
       this.lastMessageAt = Date.now()
       log.info('feed connected')
       this.#send({ method: 'subscribeNewToken' })
+      // Free, like subscribeNewToken — and it is how we learn a held token graduated.
+      this.#send({ method: 'subscribeMigration' })
       if (this.watchedMints.size) {
         this.pendingSub = new Set(this.watchedMints)
         this.pendingUnsub.clear()
@@ -131,7 +133,7 @@ export class Feed extends EventEmitter {
         warnUnknownShape(parsed)
         return
       }
-      this.emit(event.kind === 'create' ? 'create' : 'trade', event)
+      this.emit(event.kind === 'create' ? 'create' : event.kind === 'migrate' ? 'migrate' : 'trade', event)
     })
 
     ws.on('close', () => {

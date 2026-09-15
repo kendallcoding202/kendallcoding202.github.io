@@ -9,6 +9,7 @@ import { keygen, getPublicKey, getSolBalance, getAllTokenBalances } from './wall
 import { sizingSummary } from './sizing.js'
 import { analyze, formatReport } from './learn.js'
 import { readBondingCurve } from './onchain.js'
+import { heldByAnother } from './lock.js'
 import { readAll } from './journal.js'
 import { normalizeEvent } from './curve.js'
 import { positionPnl } from './position.js'
@@ -206,6 +207,28 @@ function positions() {
 
 async function panic() {
   initStore()
+
+  /**
+   * The ledger is rewritten whole on every save, so two writers is data loss. Without
+   * this check, panic would liquidate and halt in its own process and the still-running
+   * bot's next save() would overwrite the file from its stale copy — resurrecting the
+   * sold positions and clearing the halt. The emergency tool would silently undo itself.
+   */
+  const held = heldByAnother()
+  if (held) {
+    console.error('')
+    console.error(`  A pumpbot instance is running (heartbeat ${Math.round(held.ageMs / 1000)}s ago).`)
+    console.error('  Running panic here would be overwritten by it, losing the liquidation.')
+    console.error('')
+    console.error('  Use Telegram instead — it runs inside the live process:')
+    console.error('      /panic confirm')
+    console.error('')
+    console.error('  Or stop the bot first, then re-run this.')
+    console.error('')
+    process.exitCode = 1
+    return
+  }
+
   if (process.argv[3] === 'resume') {
     clearHalt()
     console.log('Halt cleared. Restart the bot to resume trading.')

@@ -21,7 +21,8 @@ import { decideExit, newPosition, applySell, markPrice, positionPnl } from './po
 import { getPublicKey, getSolBalance, getAllTokenBalances } from './wallet.js'
 import { notifyEntry, notifySell, notifyClose, notifyHalt, notifyStartup, notify } from './notify.js'
 import { summaryText, summaryBaseline } from './summary.js'
-import { log, sol, utcDay } from './log.js'
+import { acquire as acquireLock, release as releaseLock } from './lock.js'
+import { log, sol, esc, utcDay } from './log.js'
 
 /**
  * The trading loop.
@@ -40,6 +41,10 @@ export class Bot {
     this.lastDay = utcDay()
     this.lastTierFloor = null
     this.busy = new Set() // mints with an in-flight order, preventing double-sends
+    // A sweep awaits network calls, so a 5s interval can start one while the previous
+    // is still mid-entry. Overlapping sweeps each read the same pre-buy state, so
+    // canOpen passes repeatedly and the position cap is exceeded.
+    this.sweeping = false
     this.stopping = false
 
     /**
@@ -177,6 +182,7 @@ export class Bot {
 
   async start() {
     initStore()
+    acquireLock()
     const pubkey = getPublicKey().toBase58()
 
     if (config.paper) {
@@ -227,6 +233,7 @@ export class Bot {
           'Set <code>PUMPPORTAL_API_KEY</code> (funded with 0.02 SOL) and restart.',
       )
     })
+    this.feed.on('migrate', (e) => this.#onMigrate(e).catch((err) => log.error(err)))
     this.feed.on('create', (e) => this.#onCreate(e))
     this.feed.on('trade', (e) => this.#onTrade(e))
     this.feed.start()
@@ -258,6 +265,7 @@ export class Bot {
     clearInterval(this.summaryTimer)
     await this.feed.stop()
     save()
+    releaseLock()
   }
 
   async #refreshBalance() {
@@ -317,6 +325,33 @@ export class Bot {
     this.feed.watch(event.mint)
   }
 
+  /**
+   * A token we hold has graduated: its bonding curve is closed and liquidity has moved.
+   * Record the new venue so exits route somewhere that still exists, and say so — this
+   * is the moment the thesis changes on our best positions.
+   */
+  async #onMigrate(event) {
+    this.stats.migrations = (this.stats.migrations ?? 0) + 1
+    const position = getState().positions[event.mint]
+    if (!position || position.state !== 'open') return
+
+    const to = event.pool && event.pool !== 'pump' ? event.pool : 'auto'
+    log.info(`GRADUATED: ${position.symbol} migrated to ${to}`)
+    position.pool = to
+    position.graduatedAt = Date.now()
+    save()
+    logActivity('risk', `GRADUATED ${position.symbol} → ${to}`, { mint: event.mint })
+
+    if (!position.explore) {
+      await notify(
+        `🎓 <b>${esc(position.symbol)} graduated</b> → <code>${esc(to)}</code>\n` +
+          'Bonding curve closed; exits now route to the new venue.\n' +
+          'Note: post-graduation price data needs a funded API key, so this position ' +
+          'may go quiet and exit on the stale-price rule.',
+      )
+    }
+  }
+
   #onTrade(event) {
     this.stats.trades++
     if (this.stopping) return
@@ -330,8 +365,16 @@ export class Bot {
 
     if (position?.state === 'open') {
       markPrice(position, event.priceSol)
-      position.lastVSol = event.vSol
-      position.lastVTokens = event.vTokens
+      // Only overwrite with real numbers. A tick without reserves would otherwise wipe
+      // the values the drain detector and the paper sell path both need.
+      if (Number.isFinite(event.vSol)) position.lastVSol = event.vSol
+      if (Number.isFinite(event.vTokens)) position.lastVTokens = event.vTokens
+      // Venues change under us when a token graduates; believe the feed over history.
+      if (event.pool && event.pool !== position.pool) {
+        log.info(`${position.symbol} venue moved ${position.pool} -> ${event.pool}`)
+        position.pool = event.pool
+        save()
+      }
       // Evaluate on the tick, not on a timer — a rung should fire when it is crossed.
       this.#manage(position, event.priceSol, event.vSol).catch((err) => log.error(err))
     }
@@ -393,6 +436,16 @@ export class Bot {
   }
 
   async #sweep() {
+    if (this.stopping || this.sweeping) return
+    this.sweeping = true
+    try {
+      await this.#sweepOnce()
+    } finally {
+      this.sweeping = false
+    }
+  }
+
+  async #sweepOnce() {
     if (this.stopping) return
 
     const today = utcDay()
@@ -588,6 +641,8 @@ export class Bot {
   async #manage(position, priceSol, vSol) {
     const mint = position.mint
     if (this.busy.has(mint) || position.state !== 'open') return
+    if (position.unsellable) return
+    if (position.retryAfter && Date.now() < position.retryAfter) return
 
     const decision = decideExit(position, { priceSol, vSol })
     if (!(decision.sellTokens > 0)) return
@@ -598,25 +653,52 @@ export class Bot {
         mint,
         tokenAmount: decision.sellTokens,
         curve: { vSol, vTokens: position.lastVTokens },
-        pool: position.pool,
+        // 'auto' rather than the venue recorded at creation: a graduated token no
+        // longer trades where it was born.
+        pool: position.pool === 'pump' ? 'auto' : position.pool,
       })
 
       if (!fill.ok) {
         log.error(`SELL FAILED for ${position.symbol}: ${fill.error}`)
         position.failedSells = (position.failedSells ?? 0) + 1
-        // Repeated exit failures mean we are stuck. Say so loudly — silently retrying
-        // forever is how a small loss becomes a total one.
-        if (position.failedSells === 3) {
+        position.lastSellAttemptAt = Date.now()
+
+        /**
+         * Retrying an unsellable mint forever burns priority fees on every attempt,
+         * and no circuit breaker can see that spend — it is never booked as a realized
+         * loss. Back off geometrically and stop trying after the cap, leaving the
+         * position flagged for a human rather than grinding the wallet down.
+         */
+        const n = position.failedSells
+        position.retryAfter = Date.now() + Math.min(30 * 60_000, 30_000 * 2 ** Math.min(n - 1, 6))
+
+        // Escaped: an unescaped symbol or error text makes the alert fail HTML parsing,
+        // so the one message you most need to receive is silently never delivered.
+        if (n === 3 || n === config.exec.maxSellAttempts) {
           await notify(
-            `⚠️ <b>Cannot exit ${position.symbol}</b>\n3 failed sell attempts: ${fill.error}\nThis may be unsellable. <code>${mint}</code>`,
+            `⚠️ <b>Cannot exit ${esc(position.symbol)}</b>\n` +
+              `${n} failed sell attempts: ${esc(String(fill.error))}\n` +
+              (n >= config.exec.maxSellAttempts
+                ? 'Giving up automatic retries — this looks unsellable. Handle it manually.'
+                : `Next attempt in ${Math.round((position.retryAfter - Date.now()) / 60_000)}m.`) +
+              `\n<code>${esc(mint)}</code>`,
           )
+        }
+        if (n >= config.exec.maxSellAttempts) {
+          position.unsellable = true
+          log.error(`${position.symbol} marked unsellable after ${n} attempts — no further retries`)
         }
         save()
         return
       }
+      position.failedSells = 0
+      position.retryAfter = 0
 
       applySell(position, fill, decision.reasons)
       position.rungsHit.push(...decision.rungs)
+      // Persist before any awaited notification: a crash during the Telegram round-trip
+      // would otherwise lose a fill that really happened on chain.
+      save()
       this.walletSol = config.paper
         ? paperWalletSol(this.paperStartSol)
         : this.walletSol + fill.solReceived
@@ -661,7 +743,7 @@ export class Bot {
           mint: position.mint,
           tokenAmount: position.tokensRemaining,
           curve: { vSol: position.lastVSol, vTokens: position.lastVTokens },
-          pool: position.pool,
+          pool: position.pool === 'pump' ? 'auto' : position.pool,
         })
         if (fill.ok) {
           applySell(position, fill, ['panic sell'])

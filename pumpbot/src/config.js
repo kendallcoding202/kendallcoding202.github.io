@@ -230,6 +230,9 @@ export const config = {
     // pump.fun protocol fee plus the trade API's cut, used for paper fills and PnL.
     feePct: num('FEE_PCT', 1.5),
     maxRetries: num('EXEC_MAX_RETRIES', 3),
+    // Sell attempts on one position before we stop retrying. Each failed attempt still
+    // costs a priority fee that no circuit breaker can see.
+    maxSellAttempts: num('MAX_SELL_ATTEMPTS', 8),
     confirmTimeoutMs: num('CONFIRM_TIMEOUT_MS', 30000),
   },
 
