@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pumpbot</title>
+<style>
+  :root {
+    --bg: #f7f7f8;
+    --panel: #ffffff;
+    --border: #e3e3e6;
+    --text: #18181b;
+    --muted: #71717a;
+    --pos: #16794a;
+    --neg: #c0392b;
+    --accent: #5b5bd6;
+    --warn-bg: #fef3c7;
+    --warn-text: #78350f;
+    --live-bg: #fee2e2;
+    --live-text: #991b1b;
+    --paper-bg: #e0e7ff;
+    --paper-text: #3730a3;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f0f11;
+      --panel: #18181b;
+      --border: #2a2a2f;
+      --text: #f4f4f5;
+      --muted: #a1a1aa;
+      --pos: #4ade80;
+      --neg: #f87171;
+      --accent: #a5b4fc;
+      --warn-bg: #422006;
+      --warn-text: #fde68a;
+      --live-bg: #450a0a;
+      --live-text: #fca5a5;
+      --paper-bg: #1e1b4b;
+      --paper-text: #c7d2fe;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f0f11; --panel: #18181b; --border: #2a2a2f; --text: #f4f4f5;
+    --muted: #a1a1aa; --pos: #4ade80; --neg: #f87171; --accent: #a5b4fc;
+    --warn-bg: #422006; --warn-text: #fde68a; --live-bg: #450a0a;
+    --live-text: #fca5a5; --paper-bg: #1e1b4b; --paper-text: #c7d2fe;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    padding: 24px 16px 64px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+
+  header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+  .badge {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 5px;
+  }
+  .badge.live { background: var(--live-bg); color: var(--live-text); }
+  .badge.paper { background: var(--paper-bg); color: var(--paper-text); }
+  .stamp { color: var(--muted); font-size: 13px; margin-left: auto; }
+
+  .banner {
+    background: var(--warn-bg); color: var(--warn-text);
+    border-radius: var(--radius); padding: 12px 14px; margin-bottom: 20px;
+    font-size: 14px; font-weight: 500;
+  }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(136px, 1fr)); gap: 10px; margin-bottom: 24px; }
+  .stat { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 13px 15px; }
+  .stat .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 5px; }
+  .stat .value { font-size: 21px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .stat .sub { font-size: 12px; color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums; }
+
+  h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 10px; }
+  section { margin-bottom: 28px; }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { padding: 9px 12px; text-align: right; white-space: nowrap; }
+  th:first-child, td:first-child, th.left, td.left { text-align: left; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); }
+  tbody tr + tr td { border-top: 1px solid var(--border); }
+  td { font-variant-numeric: tabular-nums; }
+  .sym { font-weight: 600; }
+  .mint { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--muted); }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .pos { color: var(--pos); }
+  .neg { color: var(--neg); }
+  .empty { padding: 28px 16px; text-align: center; color: var(--muted); font-size: 14px; }
+  .pill { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: var(--paper-bg); color: var(--paper-text); margin-left: 5px; }
+  .limits { font-size: 12.5px; color: var(--muted); line-height: 1.8; }
+  .limits code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); }
+  @media (max-width: 560px) { body { padding: 16px 12px 48px; } .stat .value { font-size: 18px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>pumpbot</h1>
+    <span id="mode" class="badge paper">…</span>
+    <span id="stamp" class="stamp"></span>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <div class="stats" id="stats"></div>
+
+  <section>
+    <h2>Open positions</h2>
+    <div class="panel scroll"><div id="open"></div></div>
+  </section>
+
+  <section>
+    <h2>Closed trades</h2>
+    <div class="panel scroll"><div id="closed"></div></div>
+  </section>
+
+  <section>
+    <h2>Learning</h2>
+    <div class="panel" style="padding: 14px 16px;"><div id="learning" class="limits"></div></div>
+  </section>
+
+  <section>
+    <h2>Active limits</h2>
+    <div class="panel" style="padding: 14px 16px;"><div class="limits" id="limits"></div></div>
+  </section>
+</div>
+
+<script>
+const fmtSol = (n, d = 4) => (Number.isFinite(n) ? (n >= 0 ? '' : '−') + Math.abs(n).toFixed(d) : '—')
+const fmtPct = (n, d = 1) => (Number.isFinite(n) ? (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n).toFixed(d) + '%' : '—')
+const cls = (n) => (n > 0 ? 'pos' : n < 0 ? 'neg' : '')
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+function dur(s) {
+  if (!Number.isFinite(s)) return '—'
+  if (s < 60) return s + 's'
+  if (s < 3600) return Math.floor(s / 60) + 'm ' + (s % 60) + 's'
+  return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm'
+}
+
+function usd(sol, price) {
+  if (!Number.isFinite(sol) || !Number.isFinite(price)) return ''
+  const v = sol * price
+  return '$' + (Math.abs(v) >= 1000 ? (v / 1000).toFixed(1) + 'K' : v.toFixed(2))
+}
+
+function statCard(label, value, sub, klass) {
+  return '<div class="stat"><div class="label">' + esc(label) + '</div>' +
+         '<div class="value ' + (klass || '') + '">' + value + '</div>' +
+         (sub ? '<div class="sub">' + sub + '</div>' : '') + '</div>'
+}
+
+function render(d) {
+  const p = d.solPriceUsd
+
+  document.getElementById('mode').textContent = d.mode
+  document.getElementById('mode').className = 'badge ' + d.mode
+  document.getElementById('stamp').textContent = 'updated ' + new Date(d.updatedAt).toLocaleTimeString()
+  document.title = (d.mode === 'live' ? '● ' : '') + 'pumpbot ' + fmtSol(d.pnl.netSol, 3)
+
+  const banner = document.getElementById('banner')
+  if (d.halted) {
+    banner.hidden = false
+    banner.textContent = '🛑 HALTED — ' + d.halted.reason + ' (open positions are still managed to exit)'
+  } else {
+    banner.hidden = true
+  }
+
+  document.getElementById('stats').innerHTML = [
+    statCard('Total value', fmtSol(d.wallet.totalValueSol, 3), usd(d.wallet.totalValueSol, p) + ' · wallet + open bags'),
+    statCard('Net P&L', fmtSol(d.pnl.netSol, 4), usd(d.pnl.netSol, p) + ' · realized + unrealized', cls(d.pnl.netSol)),
+    statCard('Realized', fmtSol(d.pnl.realizedTotalSol, 4), 'today ' + fmtSol(d.pnl.realizedTodaySol, 4), cls(d.pnl.realizedTotalSol)),
+    statCard('Unrealized', fmtSol(d.pnl.unrealizedSol, 4), d.positions.length + ' open', cls(d.pnl.unrealizedSol)),
+    statCard('Deployed', fmtSol(d.wallet.deployedSol, 3), 'cap ' + fmtSol(d.sizing.maxDeployedSol, 2)),
+    statCard('Win rate',
+      d.pnl.winRatePct === null ? '—' : d.pnl.winRatePct.toFixed(0) + '%',
+      d.pnl.wins + 'W / ' + d.pnl.losses + 'L · ' + d.pnl.tradesClosed + ' trades'),
+    statCard('Size tier', fmtSol(d.sizing.buySol, 3),
+      d.sizing.nextTier
+        ? fmtSol(d.sizing.nextTier.buySol, 3) + ' at ' + fmtSol(d.sizing.nextTier.atSol, 1) + ' · ' + fmtSol(d.sizing.nextTier.remainingSol, 2) + ' to go'
+        : 'top tier'),
+  ].join('')
+
+  // --- open positions ---
+  const open = document.getElementById('open')
+  if (!d.positions.length) {
+    open.innerHTML = '<div class="empty">No open positions.</div>'
+  } else {
+    open.innerHTML = '<table><thead><tr>' +
+      ['Token', 'Age', 'In', 'Out', 'Entry', 'Last', 'Change', 'Bag', 'P&L', ''].map((h) => '<th>' + h + '</th>').join('') +
+      '</tr></thead><tbody>' +
+      d.positions.map((x) =>
+        '<tr>' +
+        '<td><span class="sym">' + esc(x.symbol) + '</span><br><a class="mint" href="https://pump.fun/coin/' + esc(x.mint) + '" target="_blank" rel="noopener">' + esc(x.mint.slice(0, 10)) + '…</a></td>' +
+        '<td>' + dur(x.ageSeconds) + '</td>' +
+        '<td>' + fmtSol(x.solSpent, 4) + '</td>' +
+        '<td>' + fmtSol(x.solRecovered, 4) + '</td>' +
+        '<td>' + (x.entryPriceSol ? x.entryPriceSol.toExponential(2) : '—') + '</td>' +
+        '<td>' + (x.lastPriceSol ? x.lastPriceSol.toExponential(2) : '—') + '</td>' +
+        '<td class="' + cls(x.changePct) + '">' + fmtPct(x.changePct) + '</td>' +
+        '<td>' + fmtSol(x.markValueSol, 4) + '</td>' +
+        '<td class="' + cls(x.totalSol) + '">' + fmtSol(x.totalSol, 4) + '<br><span class="mint">' + fmtPct(x.totalPct) + '</span></td>' +
+        '<td>' + (x.initialsRecovered ? '<span class="pill">initials out</span>' : '') +
+                 (x.rungsHit.length ? '<span class="pill">' + x.rungsHit.map((r) => '+' + r + '%').join(' ') + '</span>' : '') +
+                 (x.failedSells ? '<span class="pill" style="background:var(--live-bg);color:var(--live-text)">' + x.failedSells + ' failed sells</span>' : '') + '</td>' +
+        '</tr>').join('') +
+      '</tbody></table>'
+  }
+
+  // --- closed trades ---
+  const closed = document.getElementById('closed')
+  if (!d.closed.length) {
+    closed.innerHTML = '<div class="empty">No closed trades yet.</div>'
+  } else {
+    closed.innerHTML = '<table><thead><tr>' +
+      ['Token', 'Closed', 'Held', 'In', 'Out', 'Realized', 'Reason']
+        .map((h) => '<th' + (h === 'Reason' ? ' class="left"' : '') + '>' + h + '</th>').join('') +
+      '</tr></thead><tbody>' +
+      d.closed.map((x) =>
+        '<tr>' +
+        '<td><span class="sym">' + esc(x.symbol) + '</span><br><a class="mint" href="https://pump.fun/coin/' + esc(x.mint) + '" target="_blank" rel="noopener">' + esc(x.mint.slice(0, 10)) + '…</a></td>' +
+        '<td>' + new Date(x.closedAt).toLocaleTimeString() + '</td>' +
+        '<td>' + dur(x.heldSeconds) + '</td>' +
+        '<td>' + fmtSol(x.solSpent, 4) + '</td>' +
+        '<td>' + fmtSol(x.solRecovered, 4) + '</td>' +
+        '<td class="' + cls(x.realizedSol) + '">' + fmtSol(x.realizedSol, 4) + '<br><span class="mint">' + fmtPct(x.realizedPct) + '</span></td>' +
+        '<td style="text-align:left;white-space:normal;max-width:260px" class="mint">' + esc(x.reason ?? '') + '</td>' +
+        '</tr>').join('') +
+      '</tbody></table>'
+  }
+
+  // --- learning ---
+  const lrn = document.getElementById('learning')
+  if (!d.learning) {
+    lrn.innerHTML = '<span style="color:var(--muted)">Learning is disabled.</span>'
+  } else {
+    const n = d.learning
+    const rows = []
+    rows.push('Journal: <code>' + n.labelled + '</code> labelled · <code>' + n.pending + '</code> still in their outcome window · <code>' + n.bought + '</code> bought / <code>' + n.rejected + '</code> shadow-tracked rejects')
+    if (n.baseRatePct !== null) {
+      rows.push('Reached first rung — all seen <code>' + n.baseRatePct.toFixed(1) + '%</code>' +
+        (n.boughtRatePct !== null ? ' · bought <code>' + n.boughtRatePct.toFixed(1) + '%</code>' : '') +
+        (n.rejectedRatePct !== null ? ' · rejected <code>' + n.rejectedRatePct.toFixed(1) + '%</code>' : ''))
+      rows.push('Filter verdict: <code>' + esc(n.filterEdge) + '</code>')
+    }
+    if (n.ev) {
+      const lo = n.ev.meanMultiple - 1.96 * n.ev.stdErr
+      const hi = n.ev.meanMultiple + 1.96 * n.ev.stdErr
+      const call = lo > 1 ? '<span class="pos">positive with support</span>'
+                 : hi < 1 ? '<span class="neg">negative with support</span>'
+                 : 'indistinguishable from break-even'
+      rows.push('Simulated ladder return: <code>' + n.ev.meanMultiple.toFixed(3) + 'x</code> mean (95% CI ' + lo.toFixed(3) + '–' + hi.toFixed(3) + ', n=' + n.ev.n + ') → ' + call)
+    }
+    if (n.topMisses?.length) {
+      rows.push('Winners rejected by check: ' + n.topMisses.map((m) =>
+        '<code>' + esc(m.check) + '</code> ' + m.wouldHaveHit + '/' + m.total).join(' · '))
+    }
+    if (!n.enoughData) {
+      rows.push('<span style="color:var(--muted)">No threshold suggestions until <code>' + n.minSamples + '</code> labelled samples — below that, apparent edges are noise.</span>')
+    } else if (n.suggestions?.length) {
+      rows.push('Proposals (not applied): ' + n.suggestions.map((s) =>
+        '<code>' + esc(s.feature) + ' ' + esc(s.keep) + ' ' + s.cut + '</code>').join(' · '))
+    } else {
+      rows.push('<span style="color:var(--muted)">No threshold beat sampling error. That is itself a result.</span>')
+    }
+    lrn.innerHTML = rows.join('<br>')
+  }
+
+  const L = d.limits
+  document.getElementById('limits').innerHTML =
+    'Size <code>' + fmtSol(d.sizing.buySol, 3) + '</code> per trade · max <code>' + L.maxConcurrent + '</code> open · deploy cap <code>' + fmtSol(d.sizing.maxDeployedSol, 2) + '</code><br>' +
+    'Tiers ' + d.sizing.allTiers.map((t) => '<code>≥' + t.minEquitySol + ' SOL → ' + t.buySol + '</code>').join(' · ') + '<br>' +
+    'Ladder <code>' + L.ladder.map((r) => '+' + r.atPct + '% → sell ' + r.sellPct + '%').join('</code>, <code>') + '</code><br>' +
+    'Stop-loss <code>−' + L.stopLossPct + '%</code> · time stop <code>' + L.timeStopSeconds + 's</code><br>' +
+    'Daily loss limit <code>' + fmtSol(L.dailyLossLimitSol, 2) + '</code> · total loss limit <code>' + fmtSol(L.totalLossLimitSol, 2) + '</code>'
+}
+
+async function tick() {
+  try {
+    const res = await fetch('/api/state' + location.search, { cache: 'no-store' })
+    if (res.ok) render(await res.json())
+  } catch {
+    document.getElementById('stamp').textContent = 'disconnected — retrying'
+  }
+}
+tick()
+setInterval(tick, 4000)
+</script>
+</body>
+</html>

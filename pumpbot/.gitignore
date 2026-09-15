@@ -1,0 +1,8 @@
+# Never commit: contains the signing key
+.env
+
+# Trading state, journal, recorded feed samples
+.data/
+
+node_modules/
+package-lock.json

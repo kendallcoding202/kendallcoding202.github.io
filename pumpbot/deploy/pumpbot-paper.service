@@ -1,0 +1,48 @@
+# Install:
+#   sudo cp deploy/pumpbot-paper.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now pumpbot-paper
+# Logs:
+#   journalctl -u pumpbot-paper -f
+
+[Unit]
+Description=pumpbot (paper)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pumpbot
+WorkingDirectory=/opt/pumpbot
+Environment=PAPER=1
+Environment=DASHBOARD_PORT=8081
+ExecStart=/usr/bin/node src/index.js run
+Restart=always
+RestartSec=10
+
+# Do not restart into a crash loop that keeps re-entering positions.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+# The .env holding the signing key must not be world readable.
+UMask=0077
+
+# Hardening: the bot needs the network and its own directory, nothing else.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/pumpbot/.data
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pumpbot-paper
+
+[Install]
+WantedBy=multi-user.target

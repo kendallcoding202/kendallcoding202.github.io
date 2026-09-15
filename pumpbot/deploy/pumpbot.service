@@ -1,0 +1,49 @@
+# Install:
+#   sudo cp deploy/pumpbot.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now pumpbot
+# Logs:
+#   journalctl -u pumpbot -f
+# Stop trading immediately:
+#   sudo systemctl stop pumpbot        # leaves positions open, managed on restart
+#   npm run panic                      # liquidates everything now
+
+[Unit]
+Description=pumpbot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pumpbot
+WorkingDirectory=/opt/pumpbot
+ExecStart=/usr/bin/node src/index.js run
+Restart=always
+RestartSec=10
+
+# Do not restart into a crash loop that keeps re-entering positions.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+# The .env holding the signing key must not be world readable.
+UMask=0077
+
+# Hardening: the bot needs the network and its own directory, nothing else.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/pumpbot/.data
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pumpbot
+
+[Install]
+WantedBy=multi-user.target
