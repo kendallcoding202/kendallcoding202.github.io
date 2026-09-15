@@ -400,6 +400,12 @@ function render(d) {
         rows.push('Subscriptions <code>' + num(sub.watched) + '/' + num(sub.max) + '</code>' +
           (sub.dropped ? ' · <span class="neg">' + num(sub.dropped) + ' dropped</span>' : '') +
           ' · control msgs <code>' + num(sub.controlMessages ?? 0) + '</code>')
+        if (sub.controlSamples && sub.controlSamples.length) {
+          rows.push('Feed replied (distinct messages):')
+          for (const cm of sub.controlSamples) {
+            rows.push('<code style="color:var(--amber);word-break:break-all;white-space:normal">' + esc(cm) + '</code>')
+          }
+        }
         if (sub.unparsed && sub.unparsed.count) {
           rows.push('<span class="neg"><b>' + num(sub.unparsed.count) + ' UNPARSED messages</b></span> — ' +
             'these may be the trade events. Sample:')

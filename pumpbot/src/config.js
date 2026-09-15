@@ -59,8 +59,16 @@ export const config = {
   dataDir: str('DATA_DIR', path.join(ROOT, '.data')),
 
   feed: {
-    // Subscriptions are collected and sent as one message per window.
-    subscribeBatchMs: num('SUBSCRIBE_BATCH_MS', 700),
+    /**
+     * How long subscriptions accumulate before being sent as one message.
+     *
+     * This is deliberately long. Launches arrive one at a time, so a short window
+     * produces a stream of one-key messages — which is the exact pattern the feed
+     * warns against and is indistinguishable from the per-mint sends it replaced.
+     * At five seconds a batch actually batches, and the socket sees ~12 messages a
+     * minute instead of ~85. The cost is up to 5s of a 30s observation window.
+     */
+    subscribeBatchMs: num('SUBSCRIBE_BATCH_MS', 5000),
     // Upper bound on simultaneous per-token trade subscriptions.
     maxWatchedMints: num('MAX_WATCHED_MINTS', 180),
   },

@@ -8,6 +8,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pumpbot-test-'))
 process.env.DATA_DIR = tmp
 process.env.LOG_LEVEL = 'error'
 process.env.PAPER = '1'
+process.env.SUBSCRIBE_BATCH_MS = '120' // keep the suite fast; the real default is asserted below
 delete process.env.PRIVATE_KEY
 
 const { config } = await import('../src/config.js')
@@ -472,6 +473,14 @@ console.log('\nFeed subscriptions')
 
   for (let i = 0; i < 50; i++) feed.watch('MINT' + i)
   check('watching does not send immediately', sent.length === 0, 'batched, not per-mint')
+  // The shipped default must be long enough that a batch actually batches — a short
+  // window degenerates to one-key messages, which is the pattern we replaced.
+  const { execFileSync: exec2 } = await import('node:child_process')
+  const shipped = Number(exec2('node', ['--input-type=module', '-e',
+    "const {config} = await import('/home/user/kendallcoding202.github.io/pumpbot/src/config.js');" +
+    'console.log(config.feed.subscribeBatchMs)'],
+    { encoding: 'utf8', env: { ...process.env, SUBSCRIBE_BATCH_MS: '' } }).trim())
+  check('shipped batch window actually batches', shipped >= 2000, `${shipped}ms`)
   check('all mints are tracked', feed.subscriptionStats().watched === 50)
 
   await new Promise((r) => setTimeout(r, config.feed.subscribeBatchMs + 120))

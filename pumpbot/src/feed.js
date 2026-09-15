@@ -30,6 +30,9 @@ export class Feed extends EventEmitter {
     this.maxWatched = config.feed.maxWatchedMints
     this.droppedWatches = 0
     this.controlMessages = 0
+    // Kept verbatim: when the feed refuses a subscription it says so here, and that
+    // reply is the only place the real reason appears.
+    this.controlSamples = []
   }
 
   start() {
@@ -92,9 +95,14 @@ export class Feed extends EventEmitter {
       this.emit('raw', parsed)
 
       // Subscription acks and similar control messages carry no mint.
-      if (parsed?.message && !parsed?.mint) {
+      if ((parsed?.message || parsed?.errors) && !parsed?.mint) {
         this.controlMessages++
-        log.info(`feed control message: ${JSON.stringify(parsed).slice(0, 300)}`)
+        const text = JSON.stringify(parsed).slice(0, 300)
+        // Keep distinct texts only — 30 copies of the same ack tells us nothing.
+        if (!this.controlSamples.includes(text) && this.controlSamples.length < 6) {
+          this.controlSamples.push(text)
+          log.info(`feed control message: ${text}`)
+        }
         return
       }
 
@@ -190,6 +198,7 @@ export class Feed extends EventEmitter {
       max: this.maxWatched,
       lastSubscribe: this.lastSubscribe ?? null,
       controlMessages: this.controlMessages,
+      controlSamples: this.controlSamples,
       unparsed: unknownShapeStats(),
     }
   }
