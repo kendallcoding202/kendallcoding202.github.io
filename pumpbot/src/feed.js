@@ -14,7 +14,12 @@ import { normalizeEvent, warnUnknownShape, unknownShapeStats } from './curve.js'
 export class Feed extends EventEmitter {
   constructor({ url = config.wsFeedUrl } = {}) {
     super()
-    this.url = url
+    // The key rides on the query string; it is never logged (see connectUrl()).
+    this.url = config.feedApiKey && !url.includes('api-key=')
+      ? `${url}${url.includes('?') ? '&' : '?'}api-key=${encodeURIComponent(config.feedApiKey)}`
+      : url
+    this.hasApiKey = Boolean(config.feedApiKey) || url.includes('api-key=')
+    this.tradeFeedRefused = false
     this.ws = null
     this.watchedMints = new Set()
     this.stopped = false
@@ -67,7 +72,7 @@ export class Feed extends EventEmitter {
 
   #connect() {
     if (this.stopped) return
-    log.info(`connecting to feed ${this.url}`)
+    log.info(`connecting to feed ${this.redactedUrl()}${this.hasApiKey ? ' (with API key)' : ' (no API key — trade feed unavailable)'}`)
     const ws = new WebSocket(this.url)
     this.ws = ws
 
@@ -103,6 +108,21 @@ export class Feed extends EventEmitter {
           this.controlSamples.push(text)
           log.info(`feed control message: ${text}`)
         }
+        // The one refusal that stops the bot working entirely. Say what to do about it.
+        if (/api key/i.test(text) && /subscribeTokenTrade/i.test(text)) {
+          if (!this.tradeFeedRefused) {
+            this.tradeFeedRefused = true
+            log.error('═══════════════════════════════════════════════════════════')
+            log.error('TRADE FEED REFUSED — the free tier serves new-token events only.')
+            log.error('Without it: no buyer counts, so nothing passes the entry filter,')
+            log.error('and no price ticks, so exits cannot be managed properly.')
+            log.error('Fix: get an API key at https://pumpportal.fun/trading-api, fund it')
+            log.error('with 0.02 SOL, and set PUMPPORTAL_API_KEY. It is a DATA key —')
+            log.error('trades are still signed locally with your own wallet.')
+            log.error('═══════════════════════════════════════════════════════════')
+            this.emit('trade-feed-refused', text)
+          }
+        }
         return
       }
 
@@ -123,6 +143,11 @@ export class Feed extends EventEmitter {
     ws.on('error', (err) => {
       log.warn('feed error:', err.message)
     })
+  }
+
+  /** Never log the raw URL — the API key lives in its query string. */
+  redactedUrl() {
+    return this.url.replace(/api-key=[^&]*/i, 'api-key=<redacted>')
   }
 
   async #reconnect() {
@@ -199,6 +224,8 @@ export class Feed extends EventEmitter {
       lastSubscribe: this.lastSubscribe ?? null,
       controlMessages: this.controlMessages,
       controlSamples: this.controlSamples,
+      hasApiKey: this.hasApiKey,
+      tradeFeedRefused: this.tradeFeedRefused,
       unparsed: unknownShapeStats(),
     }
   }

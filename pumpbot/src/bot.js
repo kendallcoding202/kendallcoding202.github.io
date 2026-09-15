@@ -176,6 +176,17 @@ export class Bot {
       this.stats.messages++
       this.stats.sinceBeat.messages++
     })
+    this.feed.on('trade-feed-refused', async () => {
+      if (config.paper) return
+      // Live with no trade feed means unmanageable exits. Refuse to open anything.
+      halt('trade feed refused — no price data, exits cannot be managed')
+      await notify(
+        '🛑 <b>HALTED — no trade feed</b>\n' +
+          'PumpPortal is serving new-token events only, so we get no prices.\n' +
+          'Entry is impossible and exits cannot be managed.\n' +
+          'Set <code>PUMPPORTAL_API_KEY</code> (funded with 0.02 SOL) and restart.',
+      )
+    })
     this.feed.on('create', (e) => this.#onCreate(e))
     this.feed.on('trade', (e) => this.#onTrade(e))
     this.feed.start()

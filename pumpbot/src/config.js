@@ -54,6 +54,18 @@ export const config = {
   rpcUrl: str('RPC_URL', 'https://api.mainnet-beta.solana.com'),
   pumpProgramId: str('PUMP_PROGRAM_ID', '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P'),
   wsFeedUrl: str('FEED_URL', 'wss://pumpportal.fun/api/data'),
+  /**
+   * PumpPortal API key. WITHOUT IT THE BOT CANNOT TRADE.
+   *
+   * The free feed serves subscribeNewToken only; subscribeTokenTrade requires a key
+   * funded with at least 0.02 SOL. No trade events means no buyer counts, so nothing
+   * ever passes the entry filter, and — more seriously — no price ticks, so exits
+   * degrade to the stop-loss and time stop firing on a stale entry price.
+   *
+   * This key is for DATA ONLY. Trades are still built and signed locally with your own
+   * wallet; the key never gains the ability to move your funds.
+   */
+  feedApiKey: str('PUMPPORTAL_API_KEY'),
   tradeApiUrl: str('TRADE_API_URL', 'https://pumpportal.fun/api/trade-local'),
 
   dataDir: str('DATA_DIR', path.join(ROOT, '.data')),
@@ -240,6 +252,15 @@ export const config = {
     trailingDrawdownPct: num('TRAILING_DRAWDOWN_PCT', 50),
     // Abandon-ship if the curve drains — the pump.fun analogue of an LP pull.
     liquidityDropPct: num('LIQUIDITY_DROP_PCT', 60),
+    /**
+     * Exit if the price has not updated in this long.
+     *
+     * Holding a position we cannot price is the worst state this bot can be in: the
+     * stop-loss can never fire because the price never moves, and the time stop is
+     * disabled once a rung is hit. A token that spiked and then collapsed would be
+     * held indefinitely. Getting out blind beats holding blind.
+     */
+    stalePriceSeconds: num('STALE_PRICE_SECONDS', 180),
   },
 }
 

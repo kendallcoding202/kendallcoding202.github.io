@@ -17,6 +17,19 @@ export function decideExit(position, { priceSol, vSol, now = Date.now() }) {
   const ageSeconds = (now - position.openedAt) / 1000
   const exitAll = (reason) => ({ sellTokens: position.tokensRemaining, sellAll: true, reasons: [reason], rungs: [] })
 
+  // 0. We have stopped receiving prices for this token. Everything below reasons from
+  //    a price, so a stale one silently disables the stop-loss and the trailing stop.
+  //    Exiting blind is strictly better than holding blind.
+  const priceAgeSeconds = (now - (position.lastPriceAt ?? position.openedAt)) / 1000
+  if (priceAgeSeconds >= config.exit.stalePriceSeconds) {
+    return {
+      sellTokens: position.tokensRemaining,
+      sellAll: true,
+      reasons: [`no price update in ${Math.round(priceAgeSeconds)}s — exiting blind`],
+      rungs: [],
+    }
+  }
+
   // 1. The curve is draining. On pump.fun this is the analogue of an LP pull: the SOL
   //    backing the token is leaving, and every second of delay is a worse fill.
   if (position.entryVSol > 0 && Number.isFinite(vSol) && vSol > 0) {
@@ -83,6 +96,7 @@ export function newPosition({ mint, symbol, creator, fill, curve, pool }) {
     rungsHit: [],
     peakPriceSol: fill.avgPriceSol,
     lastPriceSol: fill.avgPriceSol,
+    lastPriceAt: Date.now(),
     entryVSol: curve?.vSol ?? 0,
     fills: [{ side: 'buy', at: Date.now(), tokens: fill.tokensReceived, sol: fill.solSpent, signature: fill.signature }],
   }
@@ -106,6 +120,7 @@ export function applySell(position, fill, reasons) {
 export function markPrice(position, priceSol) {
   if (!(priceSol > 0)) return position
   position.lastPriceSol = priceSol
+  position.lastPriceAt = Date.now()
   if (priceSol > position.peakPriceSol) position.peakPriceSol = priceSol
   return position
 }

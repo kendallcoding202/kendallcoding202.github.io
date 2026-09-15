@@ -45,7 +45,7 @@ Believe the numbers it gives you over the numbers you hoped for.
 ```bash
 cd pumpbot
 npm install
-npm test                     # 215 offline checks, no network or keys needed
+npm test                     # 219 offline checks, no network or keys needed
 
 cp .env.example .env
 npm run keygen               # creates the burner, prints the address to fund
@@ -57,6 +57,25 @@ npm run paper                # dashboard at http://localhost:8081
 Leave it for an hour and watch the dashboard. That is the point of the paper instance:
 it runs the identical pipeline — live feed, live screening, live prices — with simulated
 fills, so what you see is what the strategy would have done.
+
+### You need a PumpPortal API key
+
+**The bot cannot trade without one.** The free feed serves `subscribeNewToken` only;
+`subscribeTokenTrade` is refused with:
+
+> `'subscribeTokenTrade' and 'subscribeAccountTrade' methods are only available when
+> connecting with an API key funded with at least 0.02 SOL.`
+
+Without trade events there are no buyer counts, so nothing ever passes the entry filter —
+and no price ticks, so exits degrade to a stop-loss that can never fire on a price that
+never moves. Get a key at [pumpportal.fun/trading-api](https://pumpportal.fun/trading-api),
+fund it with 0.02 SOL (~$2), and set `PUMPPORTAL_API_KEY`.
+
+**It is a data key.** Trades are still built and signed locally with your own wallet; the
+key never gains the ability to move your funds. It rides on the websocket query string
+and is redacted from every log line.
+
+In live mode, a refused trade feed **halts the bot** rather than letting it run blind.
 
 ### Before you ever set `PAPER=0`
 
@@ -435,7 +454,7 @@ verification above.
 
 | Command | Does |
 |---|---|
-| `npm test` | 215 offline checks |
+| `npm test` | 219 offline checks |
 | `npm run keygen` | Create the burner wallet |
 | `npm run balance` | Address, balance, current size tier |
 | `npm run paper` | Paper instance, dashboard on :8081 |
@@ -471,7 +490,7 @@ src/
   commands.js   Telegram /status, /pause, /panic
   summary.js    shared status + digest text
 deploy/         systemd units for live and paper
-test/run.js     215 checks
+test/run.js     219 checks
 ```
 
 ## What is unverified

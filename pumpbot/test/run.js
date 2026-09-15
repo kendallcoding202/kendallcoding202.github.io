@@ -168,7 +168,9 @@ const mkPosition = (over = {}) => ({
   mint: 'M', symbol: 'T', state: 'open', openedAt: Date.now(),
   entryPriceSol: 1e-7, tokensBought: 1_000_000, tokensRemaining: 1_000_000,
   solSpent: 0.075, solRecovered: 0, rungsHit: [], peakPriceSol: 1e-7,
-  lastPriceSol: 1e-7, entryVSol: 30, fills: [], ...over,
+  // Fresh by default so the other rules are tested in isolation; the stale-price rule
+  // fires before everything else and would otherwise mask them.
+  lastPriceSol: 1e-7, lastPriceAt: Date.now(), entryVSol: 30, fills: [], ...over,
 })
 
 {
@@ -192,11 +194,11 @@ const mkPosition = (over = {}) => ({
   const stop = decideExit(mkPosition(), { priceSol: 0.6e-7, vSol: 22 })
   check('stop-loss exits everything', stop.sellAll && stop.reasons[0].includes('stop-loss'))
 
-  const old = decideExit(mkPosition({ openedAt: Date.now() - 700_000 }), { priceSol: 1.1e-7, vSol: 31 })
+  const old = decideExit(mkPosition({ openedAt: Date.now() - 700_000, lastPriceAt: Date.now() }), { priceSol: 1.1e-7, vSol: 31 })
   check('time stop fires on a position that never ran', old.sellAll && old.reasons[0].includes('time stop'))
 
   const oldButRunning = decideExit(
-    mkPosition({ openedAt: Date.now() - 700_000, rungsHit: [50], peakPriceSol: 1.6e-7 }),
+    mkPosition({ openedAt: Date.now() - 700_000, lastPriceAt: Date.now(), rungsHit: [50], peakPriceSol: 1.6e-7 }),
     { priceSol: 1.55e-7, vSol: 34 },
   )
   check('time stop does NOT fire once a rung is hit', oldButRunning.sellTokens === 0)
@@ -213,6 +215,30 @@ const mkPosition = (over = {}) => ({
     'draining beats the ladder even when in profit',
     decideExit(mkPosition(), { priceSol: 2e-7, vSol: 8 }).reasons[0].includes('drained'),
   )
+
+  // Stale price: every other rule reasons from a price, so a frozen one silently
+  // disables the stop-loss and the trailing stop. Holding blind is the worst state.
+  const staleMs = (config.exit.stalePriceSeconds + 30) * 1000
+  const stale = decideExit(mkPosition({ lastPriceAt: Date.now() - staleMs }), { priceSol: 1e-7, vSol: 30 })
+  check('a frozen price forces an exit', stale.sellAll && stale.reasons[0].includes('no price update'))
+
+  const staleButWinning = decideExit(
+    mkPosition({ lastPriceAt: Date.now() - staleMs, rungsHit: [50, 100], peakPriceSol: 3e-7 }),
+    { priceSol: 2.9e-7, vSol: 50 },
+  )
+  check('stale price beats even a winning ladder', staleButWinning.sellAll && staleButWinning.reasons[0].includes('no price update'))
+
+  const freshEnough = decideExit(
+    mkPosition({ lastPriceAt: Date.now() - (config.exit.stalePriceSeconds - 30) * 1000 }),
+    { priceSol: 1e-7, vSol: 30 },
+  )
+  check('a price just inside the window does not force an exit', freshEnough.sellTokens === 0)
+
+  const noPriceAt = decideExit(
+    { ...mkPosition(), lastPriceAt: undefined, openedAt: Date.now() - staleMs },
+    { priceSol: 1e-7, vSol: 30 },
+  )
+  check('missing lastPriceAt falls back to open time', noPriceAt.sellAll && noPriceAt.reasons[0].includes('no price update'))
 
   const empty = decideExit(mkPosition({ tokensRemaining: 0 }), { priceSol: 2e-7, vSol: 34 })
   check('an empty position closes', empty.sellAll)
