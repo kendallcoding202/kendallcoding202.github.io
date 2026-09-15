@@ -168,7 +168,14 @@ export class Feed extends EventEmitter {
       set.clear()
       // Chunked so one message never gets rejected for being oversized.
       for (let i = 0; i < keys.length; i += 100) {
-        this.#send({ method, keys: keys.slice(i, i + 100) })
+        const payload = { method, keys: keys.slice(i, i + 100) }
+        // Kept so the "no trades matched" diagnostic can show exactly what we sent —
+        // comparing our payload against the docs is the fastest way to settle whether
+        // the subscription format is wrong.
+        if (method === 'subscribeTokenTrade') {
+          this.lastSubscribe = { method, sampleKeys: payload.keys.slice(0, 2), count: payload.keys.length, at: Date.now() }
+        }
+        this.#send(payload)
       }
     }
   }
@@ -179,6 +186,7 @@ export class Feed extends EventEmitter {
       pending: this.pendingSub.size + this.pendingUnsub.size,
       dropped: this.droppedWatches,
       max: this.maxWatched,
+      lastSubscribe: this.lastSubscribe ?? null,
     }
   }
 }

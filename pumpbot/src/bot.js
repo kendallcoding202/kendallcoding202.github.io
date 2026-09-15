@@ -118,6 +118,8 @@ export class Bot {
           `(${s.trades} trade events total, ${subs?.watched ?? '?'} subscriptions). ` +
           'Entry is impossible in this state — every candidate scores 0 buyers.',
       )
+      // Show exactly what we sent, so the payload can be checked against the docs.
+      log.error(`last subscribe payload: ${JSON.stringify(subs?.lastSubscribe ?? null)}`)
     }
 
     const rejects = this.statsSnapshot().topRejects
@@ -245,8 +247,17 @@ export class Bot {
 
     if (this.stopping || getState().halted) return
     if (this.candidates.has(event.mint)) return
-    if (openPositions().length >= config.sizing.maxConcurrentPositions) return
 
+    /**
+     * Observing is deliberately NOT gated on how many positions are open.
+     *
+     * It used to be, and that was a deadlock: explore positions counted toward the
+     * limit, so once the experiment held more than MAX_CONCURRENT_POSITIONS the bot
+     * stopped watching new launches entirely — no candidates, no screening, no data,
+     * and no way out of the state. Observation is cheap and already bounded by
+     * MAX_WATCHED_MINTS; the exposure limits belong at entry, where canOpen enforces
+     * them against strategy positions only.
+     */
     this.candidates.set(event.mint, new Candidate(event))
     this.feed.watch(event.mint)
   }

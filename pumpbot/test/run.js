@@ -751,6 +751,7 @@ console.log('\nEnd-to-end bot loop')
   clearInterval(bot.sweepTimer); clearInterval(bot.balanceTimer); clearInterval(bot.heartbeatTimer)
 
   check('bot subscribes to the feed on start', feed.started)
+
   check('paper wallet address is stable across runs',
     (await import('../src/wallet.js')).getPublicKey().toBase58() ===
     (await import('../src/wallet.js')).getPublicKey().toBase58())
@@ -815,6 +816,23 @@ console.log('\nEnd-to-end bot loop')
   const snap = buildSnapshot(0.5, bot.statsSnapshot())
   check('pipeline stats reach the dashboard', snap.pipeline?.creates === 1 && snap.pipeline.entered === 1)
   check('dashboard payload still serialises', typeof JSON.stringify(snap) === 'string')
+
+
+  // Regression: explore positions once counted toward MAX_CONCURRENT_POSITIONS in
+  // #onCreate, so the experiment could fill the limit and stop the bot observing any
+  // new launch at all — no candidates, no data, and no way out of the state.
+  for (let i = 0; i < config.sizing.maxConcurrentPositions + 3; i++) {
+    store.addPosition({ mint: `BLOCK${i}`, symbol: `B${i}`, state: 'open', openedAt: Date.now(),
+      solSpent: 0.075, solRecovered: 0, tokensRemaining: 1000, rungsHit: [], explore: true })
+  }
+  feed.emit('create', normalizeEvent({ txType: 'create', mint: 'NOTBLOCKED', traderPublicKey: 'D',
+    name: 'Free', symbol: 'FREE', initialBuy: 1e7, solAmount: 0.5,
+    vSolInBondingCurve: 31, vTokensInBondingCurve: 9.8e8, marketCapSol: 40 }))
+  check('open positions do not block observing new launches', bot.candidates.has('NOTBLOCKED'))
+  check('and the new launch is subscribed to', feed.watched.has('NOTBLOCKED'))
+  bot.candidates.delete('NOTBLOCKED')
+  for (let i = 0; i < config.sizing.maxConcurrentPositions + 3; i++) delete store.getState().positions[`BLOCK${i}`]
+  store.save()
 
   await bot.stop()
   check('bot stops cleanly', !feed.started)
