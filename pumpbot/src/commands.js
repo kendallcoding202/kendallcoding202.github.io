@@ -1,5 +1,5 @@
 import { config } from './config.js'
-import { openPositions, clearHalt, halt } from './store.js'
+import { getState, openPositions, clearHalt, halt, save } from './store.js'
 import { statusText, positionsText } from './summary.js'
 import { notify } from './notify.js'
 import { log, sleep } from './log.js'
@@ -104,6 +104,7 @@ export class CommandListener {
             '/pause — stop opening new positions',
             '/resume — allow new positions again',
             '/panic confirm — sell everything now',
+            '/reset confirm — clear the paper book (paper only)',
           ].join('\n'),
         )
 
@@ -135,6 +136,43 @@ export class CommandListener {
         await this.#reply('🛑 Panic selling…')
         await this.bot.panicSell()
         return 'panic'
+      }
+
+      /**
+       * Clears the paper ledger from inside the running process. On a hosted platform
+       * the CLI reset cannot run — the bot holds the single-writer lock, and rightly
+       * so — which would otherwise leave no practical way to start a clean measurement.
+       */
+      case '/reset': {
+        if (!config.paper) {
+          return this.#reply('❌ Refusing — this is the <b>LIVE</b> ledger, a record of real money.')
+        }
+        const s2 = getState()
+        const summary =
+          `${s2.closed.length} closed · ${openPositions().length} open · ` +
+          `strategy ${(s2.totalRealizedSol ?? 0).toFixed(4)} · explore ${(s2.exploreRealizedSol ?? 0).toFixed(4)} SOL`
+
+        if (args[0]?.toLowerCase() !== 'confirm') {
+          return this.#reply(
+            `🧹 <b>Reset the paper book?</b>\nCurrently: ${summary}\n\n` +
+              'Send <code>/reset confirm</code>. The decision journal is kept — that is ' +
+              'the learning data; only the trade ledger is cleared.',
+          )
+        }
+
+        s2.positions = {}
+        s2.closed = []
+        s2.daily = {}
+        s2.activity = []
+        s2.totalRealizedSol = 0
+        s2.exploreRealizedSol = 0
+        s2.exploreWins = 0
+        s2.exploreLosses = 0
+        s2.consecutiveLosses = 0
+        s2.blockedCreators = {}
+        s2.halted = null
+        save()
+        return this.#reply(`🧹 <b>Paper book cleared.</b>\nWas: ${summary}\nMeasuring from here.`)
       }
 
       default:

@@ -45,7 +45,7 @@ Believe the numbers it gives you over the numbers you hoped for.
 ```bash
 cd pumpbot
 npm install
-npm test                     # 296 offline checks, no network or keys needed
+npm test                     # 301 offline checks, no network or keys needed
 
 cp .env.example .env
 npm run keygen               # creates the burner, prints the address to fund
@@ -248,6 +248,7 @@ you hold. You can also talk back to it:
 | `/pause` | Stop opening new positions (open ones still exit) |
 | `/resume` | Allow new entries again |
 | `/panic confirm` | Sell everything now |
+| `/reset confirm` | Clear the paper book for a clean measurement (paper only) |
 
 ### Telling explore trades from real ones
 
@@ -454,7 +455,7 @@ verification above.
 
 | Command | Does |
 |---|---|
-| `npm test` | 296 offline checks |
+| `npm test` | 301 offline checks |
 | `npm run keygen` | Create the burner wallet |
 | `npm run balance` | Address, balance, current size tier |
 | `npm run paper` | Paper instance, dashboard on :8081 |
@@ -491,7 +492,7 @@ src/
   commands.js   Telegram /status, /pause, /panic
   summary.js    shared status + digest text
 deploy/         systemd units for live and paper
-test/run.js     296 checks
+test/run.js     301 checks
 ```
 
 ## What is unverified

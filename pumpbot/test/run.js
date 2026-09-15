@@ -1067,6 +1067,17 @@ console.log('\nTelegram commands')
   await listener.handle('/panic confirm')
   check('/panic confirm actually liquidates', panicked)
 
+  // /reset must never be a bare command, and must never touch a live ledger.
+  store.getState().closed = [{ symbol: 'X', realizedSol: -0.01, explore: true, openedAt: 1, closedAt: 2, solSpent: 0.075, solRecovered: 0.065 }]
+  store.getState().exploreRealizedSol = -1.86
+  const resetWarn = await listener.handle('/reset')
+  check('/reset alone only warns', resetWarn.includes('confirm') && store.getState().closed.length === 1)
+  check('/reset warning shows what would go', resetWarn.includes('1.8600'))
+  const resetDone = await listener.handle('/reset confirm')
+  check('/reset confirm clears the ledger', store.getState().closed.length === 0)
+  check('and zeroes the explore book', store.getState().exploreRealizedSol === 0)
+  check('reset reports what it cleared', resetDone.includes('cleared'))
+
   check('unknown commands are ignored', (await listener.handle('/nonsense')) === null)
   check('plain chat is ignored', (await listener.handle('hello there')) === null)
   check('/help lists the commands', (await listener.handle('/help')).includes('/status'))
