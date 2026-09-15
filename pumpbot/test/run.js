@@ -695,6 +695,8 @@ console.log('\nExplore mode')
   const paperOff = JSON.parse(probe({ PAPER: '1', EXPLORE: '0' }))
   check('explore can be turned off in paper', paperOff.explore === false)
 
+  check('exploration has a budget', config.explore.budgetSol > 0)
+
   // Explore positions must not consume the strategy's exposure budget.
   store.initStore()
   const st = store.getState()
@@ -730,6 +732,46 @@ console.log('\nExplore mode')
   store.closePosition('REALLOSS', 'stop-loss')
   check('a real loss still books to the strategy', near(st.totalRealizedSol, -0.025, 1e-9))
   check('a real loss still increments the streak', st.consecutiveLosses === 1)
+
+  // The experiment must stop when its budget is gone. Left unbounded it spent 1.58 SOL
+  // from a 0.5 SOL paper account, driving the derived balance negative.
+  {
+    const { Bot } = await import('../src/bot.js')
+    const { EventEmitter } = await import('node:events')
+    class Stub extends EventEmitter {
+      constructor() { super(); this.watched = new Set() }
+      start() {} ; async stop() {} ; watch() {} ; unwatch() {}
+      subscriptionStats() { return { watched: 0, pending: 0, dropped: 0, max: 60 } }
+    }
+    const b = new Bot({ feed: new Stub() })
+    const verdict = { failed: [{ id: 'buyers' }], pass: false }
+
+    // Healthy feed, budget intact -> exploration is possible.
+    b.stats.creates = 100
+    b.stats.tradesMatched = 500
+    store.getState().exploreRealizedSol = 0
+    let any = false
+    for (let i = 0; i < 200; i++) if (b.explorePermitted(verdict)) { any = true; break }
+    check('explores when data flows and budget remains', any)
+
+    // Budget exhausted -> stop, regardless of sample rate.
+    store.getState().exploreRealizedSol = -config.explore.budgetSol
+    check('stops once the budget is spent',
+      Array.from({ length: 200 }, () => b.explorePermitted(verdict)).every((x) => x === false))
+
+    // No trade data -> every explore trade is a forced blind exit at fee cost, which
+    // costs budget and teaches nothing.
+    store.getState().exploreRealizedSol = 0
+    b.stats.tradesMatched = 0
+    check('pauses when there is no trade data',
+      Array.from({ length: 200 }, () => b.explorePermitted(verdict)).every((x) => x === false))
+
+    // Never relaxes the one check it must not.
+    b.stats.tradesMatched = 500
+    check('still never explores an unpriceable token',
+      Array.from({ length: 200 }, () => b.explorePermitted({ failed: [{ id: 'priceable' }], pass: false }))
+        .every((x) => x === false))
+  }
 
   // Activity log is bounded.
   for (let i = 0; i < 400; i++) store.logActivity('buy', `event ${i}`)

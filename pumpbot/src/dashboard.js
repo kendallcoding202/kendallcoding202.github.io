@@ -166,7 +166,11 @@ export function buildSnapshot(walletSol, stats = null) {
     pipeline: stats,
     history,
     goal: nextTierSol
-      ? { targetSol: nextTierSol, currentSol: walletSol ?? 0, pct: Math.min(100, ((walletSol ?? 0) / nextTierSol) * 100) }
+      ? {
+          targetSol: nextTierSol,
+          currentSol: walletSol ?? 0,
+          pct: Math.max(0, Math.min(100, ((walletSol ?? 0) / nextTierSol) * 100)),
+        }
       : null,
     activity: [...(state.activity ?? [])].reverse().slice(0, 60),
     explore: {

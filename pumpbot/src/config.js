@@ -143,6 +143,12 @@ export const config = {
     // Paper mode can carry far more positions than live — it is not risking anything.
     maxConcurrent: num('EXPLORE_MAX_CONCURRENT', 15),
     /**
+     * Total the experiment may lose before it stops. An unbounded experiment is not an
+     * experiment — it spent 1.58 SOL from a 0.5 SOL paper account in one run, which
+     * drove the derived balance negative and made the size tier meaningless.
+     */
+    budgetSol: num('EXPLORE_BUDGET_SOL', 0.3),
+    /**
      * The only check never overridden. Everything else is a hypothesis worth testing;
      * an unpriceable token is one whose exit we cannot manage, so an explore trade on it
      * would produce a stuck position and no usable label.

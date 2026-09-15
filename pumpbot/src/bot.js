@@ -454,11 +454,42 @@ export class Bot {
    * hypothesis, and the only way to learn that a threshold is too tight is to sometimes
    * trade the other side of it.
    */
+  /** Exposed for tests; the loop calls it through #shouldExplore. */
+  explorePermitted(verdict) {
+    return this.#shouldExplore(verdict)
+  }
+
   #shouldExplore(verdict) {
     const e = config.explore
     if (!e.enabled) return false
     if (verdict.failed.some((c) => e.neverRelax.includes(c.id))) return false
     if (openPositions().length >= e.maxConcurrent) return false
+
+    /**
+     * Without trade data every explore position is a forced blind exit at fee cost —
+     * a guaranteed loss carrying zero information, because nothing can move and no
+     * outcome can be labelled. Spending a budget to learn nothing is the worst trade
+     * available, so the experiment pauses until prices flow.
+     */
+    if (this.stats.creates > 30 && this.stats.tradesMatched === 0) {
+      if (!this.stats.exploreParked) {
+        this.stats.exploreParked = true
+        log.warn('exploration paused — no trade data, so explore trades can only lose fees')
+      }
+      return false
+    }
+    this.stats.exploreParked = false
+
+    // The experiment has a budget, like any experiment.
+    const spent = -(getState().exploreRealizedSol ?? 0)
+    if (spent >= e.budgetSol) {
+      if (!this.stats.exploreBudgetHit) {
+        this.stats.exploreBudgetHit = true
+        log.warn(`exploration stopped — spent ${sol(spent)} of its ${sol(e.budgetSol)} budget`)
+      }
+      return false
+    }
+
     return Math.random() < e.sampleRate
   }
 
