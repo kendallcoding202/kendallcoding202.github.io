@@ -190,10 +190,15 @@ export function buildSnapshot(walletSol, stats = null) {
       open: explorePositions().length,
       closed: exploreClosed.length,
       // The experiment's separate bankroll, so it is obvious at a glance that none of
-      // this is coming out of the strategy's money.
+      // this is coming out of the strategy's money. null means unlimited — the panel
+      // shows what has been spent instead of what is left, which is the useful number
+      // when there is no ceiling to count down from.
       deployedSol: exploreDeployedSol(),
-      bankrollSol: config.explore.budgetSol,
-      bankrollLeftSol: config.explore.budgetSol + (state.exploreRealizedSol ?? 0) - exploreDeployedSol(),
+      bankrollSol: config.explore.budgetSol > 0 ? config.explore.budgetSol : null,
+      bankrollLeftSol:
+        config.explore.budgetSol > 0
+          ? config.explore.budgetSol + (state.exploreRealizedSol ?? 0) - exploreDeployedSol()
+          : null,
       enabled: config.explore.enabled,
     },
     learning: learningSnapshot(),

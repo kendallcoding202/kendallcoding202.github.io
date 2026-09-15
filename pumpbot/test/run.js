@@ -644,10 +644,11 @@ console.log('\nDashboard snapshot')
   })
   const withExp = buildSnapshot(1.2)
 
-  check('the explore panel has its own bankroll', withExp.explore.bankrollSol === config.explore.budgetSol)
   check('deployed explore capital is reported', near(withExp.explore.deployedSol, 0.075))
-  check('bankroll left subtracts deployed capital',
-    near(withExp.explore.bankrollLeftSol, config.explore.budgetSol - 0.075), String(withExp.explore.bankrollLeftSol))
+  // Unlimited is published as null rather than a number, so the panel shows what has
+  // been spent instead of counting down from a ceiling that does not exist.
+  check('an unlimited bankroll is published as null', withExp.explore.bankrollSol === null)
+  check('and so is the remaining figure', withExp.explore.bankrollLeftSol === null)
   check('the panel knows whether explore is on', withExp.explore.enabled === config.explore.enabled)
 
   const stratMark = withExp.positions.filter((x) => !x.explore).reduce((s, x) => s + x.markValueSol, 0)
@@ -1087,7 +1088,15 @@ console.log('\nExplore mode')
   const paperOff = JSON.parse(probe({ PAPER: '1', EXPLORE: '0' }))
   check('explore can be turned off in paper', paperOff.explore === false)
 
-  check('exploration has a budget', config.explore.budgetSol > 0)
+  /**
+   * The bankroll is UNLIMITED by default. A cap only ever existed to stop the experiment
+   * wrecking the strategy's books; with the two separated there is no reason to stop
+   * buying information with money that does not exist, and a cap just starves the
+   * rejected arm of the comparison the report is built to make. What still bounds it is
+   * maxConcurrent, and being paper-only.
+   */
+  check('the bankroll is unlimited by default', config.explore.budgetSol === 0)
+  check('concurrency still bounds the experiment', config.explore.maxConcurrent > 0)
 
   // Explore positions must not consume the strategy's exposure budget.
   store.initStore()
@@ -1146,10 +1155,32 @@ console.log('\nExplore mode')
     for (let i = 0; i < 200; i++) if (b.explorePermitted(verdict)) { any = true; break }
     check('explores when data flows and budget remains', any)
 
-    // Budget exhausted -> stop, regardless of sample rate.
-    store.getState().exploreRealizedSol = -config.explore.budgetSol
-    check('stops once the budget is spent',
+    // Unlimited: heavy losses must NOT stop it. This is the point of the experiment —
+    // the losses are the tuition, and stopping early is what leaves the report unable
+    // to say anything about the launches the filter rejected.
+    store.getState().exploreRealizedSol = -500
+    check('unlimited keeps exploring through heavy losses',
+      Array.from({ length: 200 }, () => b.explorePermitted(verdict)).some((x) => x === true))
+
+    // A cap, when one is set, is still enforced — and on capital AT RISK, not only on
+    // money already lost. Gating on realized P&L alone let concurrent positions tie up
+    // more than the whole bankroll while "spent" still read near zero.
+    const realBudget = config.explore.budgetSol
+    config.explore.budgetSol = 1
+    store.getState().exploreRealizedSol = -1
+    check('a configured cap still stops exploration',
       Array.from({ length: 200 }, () => b.explorePermitted(verdict)).every((x) => x === false))
+
+    store.getState().exploreRealizedSol = 0
+    for (let i = 0; i < 13; i++) {
+      store.addPosition({ mint: `CAP${i}`, symbol: `C${i}`, state: 'open', openedAt: Date.now(),
+        solSpent: 0.075, solRecovered: 0, tokensRemaining: 1000, rungsHit: [], explore: true })
+    }
+    check('a cap counts capital still deployed, not just realized losses',
+      Array.from({ length: 200 }, () => b.explorePermitted(verdict)).every((x) => x === false),
+      `deployed ${store.exploreDeployedSol()} against a 1 SOL cap`)
+    for (let i = 0; i < 13; i++) delete store.getState().positions[`CAP${i}`]
+    config.explore.budgetSol = realBudget
 
     // No trade data -> every explore trade is a forced blind exit at fee cost, which
     // costs budget and teaches nothing.
@@ -1299,7 +1330,7 @@ console.log('\nTelegram commands')
   check('/status separates the strategy book', split.includes('<b>Strategy</b>'))
   check('/status shows the explore book separately', split.includes('Explore book'))
   check('/status gives the explore book its own P&L', split.includes('-0.0310'))
-  check('/status shows what is left of the explore bankroll', split.includes('Bankroll'))
+  check('/status shows the explore bankroll state', split.includes('Bankroll unlimited'))
   check('/status says explore is not the strategy\'s money', split.includes("not the strategy's money"))
 
   // The explore position must appear under its own heading, labelled with what the

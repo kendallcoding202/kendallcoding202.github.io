@@ -461,9 +461,12 @@ function render(d) {
         rows.push('Explore book — <b>separate bankroll, not the strategy\'s money</b>: <code>' +
           sgn(d.explore.realizedSol, 4) + ' SOL</code> over ' + d.explore.closed + ' closed · ' +
           d.explore.wins + 'W/' + d.explore.losses + 'L · ' + d.explore.open + ' open')
-        rows.push('Explore bankroll: <code>' + d.explore.bankrollLeftSol.toFixed(3) + '</code> left of <code>' +
-          d.explore.bankrollSol.toFixed(2) + '</code> · <code>' + d.explore.deployedSol.toFixed(3) +
-          '</code> deployed. The four cards at the top are strategy only.')
+        rows.push(d.explore.bankrollSol === null
+          ? 'Explore bankroll: <code>unlimited</code> (paper only) · <code>' +
+            d.explore.deployedSol.toFixed(3) + '</code> deployed now. The four cards at the top are strategy only.'
+          : 'Explore bankroll: <code>' + d.explore.bankrollLeftSol.toFixed(3) + '</code> left of <code>' +
+            d.explore.bankrollSol.toFixed(2) + '</code> · <code>' + d.explore.deployedSol.toFixed(3) +
+            '</code> deployed. The four cards at the top are strategy only.')
       }
     }
     document.getElementById('pipenote').innerHTML = rows.join('<br>')
@@ -540,8 +543,10 @@ function render(d) {
       card('Explore P&L · SOL', sgn(totalExp, 4),
         'realized ' + sgn(e.realizedSol, 4) + ' + ' + sgn(expUnrealized, 4) + ' open',
         cls(totalExp), totalExp >= 0 ? 'pos' : 'neg'),
-      card('Bankroll Left', e.bankrollLeftSol.toFixed(3),
-        'of ' + e.bankrollSol.toFixed(2) + ' · ' + e.deployedSol.toFixed(3) + ' deployed'),
+      e.bankrollSol === null
+        ? card('Deployed Now', e.deployedSol.toFixed(3), 'bankroll unlimited · paper only')
+        : card('Bankroll Left', e.bankrollLeftSol.toFixed(3),
+            'of ' + e.bankrollSol.toFixed(2) + ' · ' + e.deployedSol.toFixed(3) + ' deployed'),
       card('Explore Record', e.wins + 'W / ' + e.losses + 'L',
         e.closed + ' closed · ' + e.open + ' open'),
       card('Avg Per Trade', e.closed ? sgn(e.realizedSol / e.closed, 4) : '—',
@@ -551,7 +556,9 @@ function render(d) {
       'These are trades the filter <b>rejected</b> and the bot took anyway, on paper, to find out ' +
       'whether the filter was right. They run on a separate bankroll and are excluded from the ' +
       'four cards at the top, the P&amp;L chart, the win rate and the size tier. ' +
-      (e.bankrollLeftSol < 0.2 ? '<b style="color:var(--amber)">Bankroll nearly exhausted — exploration will pause.</b>' : '')
+      (e.bankrollSol !== null && e.bankrollLeftSol < 0.2
+        ? '<b style="color:var(--amber)">Bankroll nearly exhausted — exploration will pause.</b>'
+        : '')
   } else {
     expsec.hidden = true
   }

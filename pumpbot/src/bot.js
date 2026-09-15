@@ -577,21 +577,26 @@ export class Bot {
     this.stats.exploreParked = false
 
     /**
-     * The experiment has a bankroll, and the gate is capital AT RISK — not just money
+     * An optional bankroll cap. When set, the gate is capital AT RISK — not just money
      * already lost. Gating on realized P&L alone let 15 concurrent positions tie up
      * 1.1 SOL while "spent" still read near zero, which is how a 0.3 budget produced a
      * -0.650 balance. What is left = bankroll + realized - still deployed.
+     *
+     * Unlimited (budgetSol 0) is the default and skips this entirely. Exploration is
+     * still bounded by maxConcurrent, and by being paper-only.
      */
-    const left = paperExploreWalletSol(e.budgetSol)
-    if (left < buySolFor(this.walletSol)) {
-      if (!this.stats.exploreBudgetHit) {
-        this.stats.exploreBudgetHit = true
-        log.warn(`exploration paused — ${sol(left)} left of its ${sol(e.budgetSol)} bankroll`)
+    if (e.budgetSol > 0) {
+      const left = paperExploreWalletSol(e.budgetSol)
+      if (left < buySolFor(this.walletSol)) {
+        if (!this.stats.exploreBudgetHit) {
+          this.stats.exploreBudgetHit = true
+          log.warn(`exploration paused — ${sol(left)} left of its ${sol(e.budgetSol)} bankroll`)
+        }
+        return false
       }
-      return false
+      // Recoverable: positions close and free capital, unlike the old one-way latch.
+      this.stats.exploreBudgetHit = false
     }
-    // Recoverable: positions close and free capital, unlike the old one-way latch.
-    this.stats.exploreBudgetHit = false
 
     return Math.random() < e.sampleRate
   }

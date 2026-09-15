@@ -73,14 +73,16 @@ export function exploreText() {
   if (!open.length && !closed && !realized) return ''
 
   const unrealized = open.reduce((sum, p) => sum + positionPnl(p).totalSol, 0)
-  const left = config.explore.budgetSol + realized - exploreDeployedSol()
+  const capped = config.explore.budgetSol > 0
 
   return [
     '',
     `🧪 <b>Explore book</b> — separate bankroll, not the strategy's money`,
     `  P&L <b>${sol(realized + unrealized)}</b> · realized ${sol(realized)} · open ${sol(unrealized)}`,
     `  ${state.exploreWins ?? 0}W/${state.exploreLosses ?? 0}L over ${closed} closed · ${open.length} open`,
-    `  Bankroll ${sol(left)} left of ${sol(config.explore.budgetSol)}`,
+    capped
+      ? `  Bankroll ${sol(config.explore.budgetSol + realized - exploreDeployedSol())} left of ${sol(config.explore.budgetSol)}`
+      : `  Bankroll unlimited (paper only) · ${sol(exploreDeployedSol())} deployed now`,
   ].join('\n')
 }
 

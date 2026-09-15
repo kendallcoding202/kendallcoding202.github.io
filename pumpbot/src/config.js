@@ -156,17 +156,26 @@ export const config = {
     // Paper mode can carry far more positions than live — it is not risking anything.
     maxConcurrent: num('EXPLORE_MAX_CONCURRENT', 15),
     /**
-     * The experiment's own notional bankroll, kept entirely apart from the strategy
-     * book (see paperExploreWalletSol). Explore may hold at most this much at once and
-     * stops when it has lost this much.
+     * The experiment's notional bankroll. **0 means UNLIMITED, and that is the default.**
      *
-     * Sized for the question it has to answer, not for caution: the learning report
-     * needs ~200 labelled samples before it will suggest anything, and explore trades
-     * average roughly a 2% round-trip loss on a dead launch, so a few hundred samples
-     * costs on the order of 1-2 SOL of PAPER money. A 0.3 bankroll ran the experiment
-     * out in about twenty minutes and produced nothing conclusive.
+     * A cap here only ever existed to stop the experiment wrecking the strategy's books:
+     * explore used to share the strategy's paper balance, so an unbounded experiment
+     * drove that balance negative and — because the size tier reads it — steered the
+     * strategy's real position sizing. That is fixed at the source now; explore has its
+     * own balance (paperExploreWalletSol), its own deployed figure, and touches none of
+     * the strategy's numbers or circuit breakers.
+     *
+     * With the books separated there is no reason left to stop buying information with
+     * money that does not exist. The experiment is the whole point: it is the only thing
+     * sampling the other side of every threshold, and capping it just means the report
+     * runs out of evidence on the rejected arm and cannot answer the one question it was
+     * built for. Exploration remains bounded where it actually matters — maxConcurrent
+     * positions at a time — and is hard-gated to paper, so "unlimited" is unlimited
+     * pretend money and nothing else.
+     *
+     * Set a positive number to impose a cap. To stop exploring entirely, use EXPLORE=0.
      */
-    budgetSol: num('EXPLORE_BUDGET_SOL', 3),
+    budgetSol: num('EXPLORE_BUDGET_SOL', 0),
     /**
      * The only check never overridden. Everything else is a hypothesis worth testing;
      * an unpriceable token is one whose exit we cannot manage, so an explore trade on it
