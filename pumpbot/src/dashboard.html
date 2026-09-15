@@ -392,7 +392,27 @@ function render(d) {
       rows.push('Connected, no messages yet…')
     } else {
       rows.push('Feed <span class="pos">' + (pl.parsing ? 'PARSING OK' : 'pending') + '</span> · ' +
-        num(pl.messages) + ' messages · ' + num(pl.trades) + ' trade events')
+        num(pl.messages) + ' messages · ' + num(pl.trades) + ' trade events · ' +
+        num(pl.tradesMatched ?? 0) + ' matched')
+
+      const sub = pl.subscriptions
+      if (sub) {
+        rows.push('Subscriptions <code>' + num(sub.watched) + '/' + num(sub.max) + '</code>' +
+          (sub.dropped ? ' · <span class="neg">' + num(sub.dropped) + ' dropped</span>' : '') +
+          ' · control msgs <code>' + num(sub.controlMessages ?? 0) + '</code>')
+        if (sub.unparsed && sub.unparsed.count) {
+          rows.push('<span class="neg"><b>' + num(sub.unparsed.count) + ' UNPARSED messages</b></span> — ' +
+            'these may be the trade events. Sample:')
+          for (const sm of sub.unparsed.samples.slice(0, 2)) {
+            rows.push('<code style="color:var(--amber);word-break:break-all;white-space:normal">' + esc(sm.slice(0, 400)) + '</code>')
+          }
+        }
+        if (pl.creates > 40 && (pl.trades ?? 0) === 0) {
+          rows.push('<span class="neg">Zero trade events despite ' + num(sub.watched) +
+            ' subscriptions — the subscribe format is likely wrong. Last sent: <code>' +
+            esc(JSON.stringify(sub.lastSubscribe)) + '</code></span>')
+        }
+      }
       if (pl.topRejects && pl.topRejects.length) {
         rows.push('Rejected on: ' + pl.topRejects.map((r) => '<code>' + esc(r.id) + ' ×' + r.n + '</code>').join(' · '))
       }

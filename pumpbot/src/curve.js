@@ -110,9 +110,25 @@ export function priceImpactPct(spotPrice, avgPrice) {
   return Math.abs((avgPrice - spotPrice) / spotPrice) * 100
 }
 
-let warnedUnknown = 0
+/**
+ * Unparsed messages are the single most valuable diagnostic this bot has: a message we
+ * cannot read is a trade we cannot count, and the symptom ("no buyers") looks nothing
+ * like the cause. So we count them all and keep verbatim samples.
+ */
+let unknownCount = 0
+const unknownSamples = []
+
 export function warnUnknownShape(raw) {
-  if (warnedUnknown >= 3) return
-  warnedUnknown++
-  log.warn('feed message did not match any known shape:', JSON.stringify(raw).slice(0, 400))
+  unknownCount++
+  if (unknownSamples.length < 5) {
+    const json = JSON.stringify(raw)
+    unknownSamples.push(json.slice(0, 600))
+    // ERROR, not WARN: this is why nothing trades, and it must not be easy to miss.
+    log.error(`UNPARSED feed message #${unknownCount}: ${json.slice(0, 600)}`)
+    log.error(`  its keys: ${Object.keys(raw ?? {}).join(', ')}`)
+  }
+}
+
+export function unknownShapeStats() {
+  return { count: unknownCount, samples: unknownSamples }
 }

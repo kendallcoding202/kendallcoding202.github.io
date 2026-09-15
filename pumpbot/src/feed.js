@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import WebSocket from 'ws'
 import { config } from './config.js'
 import { log, sleep } from './log.js'
-import { normalizeEvent, warnUnknownShape } from './curve.js'
+import { normalizeEvent, warnUnknownShape, unknownShapeStats } from './curve.js'
 
 /**
  * Live feed of pump.fun deploys and trades.
@@ -29,6 +29,7 @@ export class Feed extends EventEmitter {
     this.flushTimer = null
     this.maxWatched = config.feed.maxWatchedMints
     this.droppedWatches = 0
+    this.controlMessages = 0
   }
 
   start() {
@@ -92,7 +93,8 @@ export class Feed extends EventEmitter {
 
       // Subscription acks and similar control messages carry no mint.
       if (parsed?.message && !parsed?.mint) {
-        log.debug('feed control message:', parsed.message)
+        this.controlMessages++
+        log.info(`feed control message: ${JSON.stringify(parsed).slice(0, 300)}`)
         return
       }
 
@@ -187,6 +189,8 @@ export class Feed extends EventEmitter {
       dropped: this.droppedWatches,
       max: this.maxWatched,
       lastSubscribe: this.lastSubscribe ?? null,
+      controlMessages: this.controlMessages,
+      unparsed: unknownShapeStats(),
     }
   }
 }
