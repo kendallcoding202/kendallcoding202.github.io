@@ -45,7 +45,7 @@ Believe the numbers it gives you over the numbers you hoped for.
 ```bash
 cd pumpbot
 npm install
-npm test                     # 106 offline checks, no network or keys needed
+npm test                     # 127 offline checks, no network or keys needed
 
 cp .env.example .env
 npm run keygen               # creates the burner, prints the address to fund
@@ -188,6 +188,20 @@ Total value, net/realized/unrealized P&L, win rate, current size tier and distan
 next one, open positions with per-position P&L and which rungs have fired, closed trade
 history with exit reasons, the learning summary, and every active limit.
 
+**Feed pipeline** is the panel to watch early on. It shows messages received, whether
+parsing is healthy, and the funnel — launches seen → observing → screened → entered —
+plus which checks are doing the rejecting. A bot that is working correctly but finding
+nothing worth buying looks identical to a hung one without it. The same summary prints to
+the log every 60 seconds:
+
+```
++38 launches (1247 total) · watching 9 · screened +36/1204 · entered +0/7 · open 2
+  · shadow 62 · rejects: buyers×812 buy_pressure×241 market_cap×104
+```
+
+If messages arrive but nothing parses, both the log and the dashboard say so loudly —
+that means the feed's field names moved and `src/curve.js` needs the alias.
+
 **Localhost only by default.** To view from your laptop, tunnel — don't rebind:
 
 ```bash
@@ -258,7 +272,7 @@ verification above.
 
 | Command | Does |
 |---|---|
-| `npm test` | 106 offline checks |
+| `npm test` | 127 offline checks |
 | `npm run keygen` | Create the burner wallet |
 | `npm run balance` | Address, balance, current size tier |
 | `npm run paper` | Paper instance, dashboard on :8081 |
@@ -290,7 +304,7 @@ src/
   dashboard.js  local HTTP server
   notify.js     Telegram
 deploy/         systemd units for live and paper
-test/run.js     106 checks
+test/run.js     127 checks
 ```
 
 ## What is unverified

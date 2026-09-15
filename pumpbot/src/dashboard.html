@@ -115,6 +115,11 @@
 
   <div class="stats" id="stats"></div>
 
+  <section id="pipeline-section" hidden>
+    <h2>Feed pipeline</h2>
+    <div class="panel" style="padding: 14px 16px;"><div class="limits" id="pipeline"></div></div>
+  </section>
+
   <section>
     <h2>Open positions</h2>
     <div class="panel scroll"><div id="open"></div></div>
@@ -191,6 +196,29 @@ function render(d) {
         ? fmtSol(d.sizing.nextTier.buySol, 3) + ' at ' + fmtSol(d.sizing.nextTier.atSol, 1) + ' · ' + fmtSol(d.sizing.nextTier.remainingSol, 2) + ' to go'
         : 'top tier'),
   ].join('')
+
+  // --- feed pipeline ---
+  const pipeSection = document.getElementById('pipeline-section')
+  if (d.pipeline) {
+    pipeSection.hidden = false
+    const p2 = d.pipeline
+    const rows = []
+    if (p2.messages > 50 && !p2.parsing) {
+      rows.push('<span class="neg"><b>' + p2.messages + ' feed messages but none parsed</b> — field names in src/curve.js do not match this feed. Run <code>npm run record</code> then <code>npm run replay</code>.</span>')
+    } else if (!p2.messages) {
+      rows.push('<span style="color:var(--muted)">Connected, no messages yet…</span>')
+    } else {
+      rows.push('Uptime <code>' + dur(p2.uptimeSeconds) + '</code> · feed messages <code>' + p2.messages.toLocaleString() + '</code> · parsing <code>' + (p2.parsing ? 'OK' : 'pending') + '</code>')
+      rows.push('Launches seen <code>' + p2.creates.toLocaleString() + '</code> → observing <code>' + p2.watching + '</code> → screened <code>' + p2.screened + '</code> → <b>entered <code>' + p2.entered + '</code></b>')
+      rows.push('Trade events <code>' + p2.trades.toLocaleString() + '</code> · shadow-tracked <code>' + p2.shadowTracked + '</code>')
+      if (p2.topRejects?.length) {
+        rows.push('Rejected on: ' + p2.topRejects.map((r) => '<code>' + esc(r.id) + ' ×' + r.n + '</code>').join(' · '))
+      }
+    }
+    document.getElementById('pipeline').innerHTML = rows.join('<br>')
+  } else {
+    pipeSection.hidden = true
+  }
 
   // --- open positions ---
   const open = document.getElementById('open')

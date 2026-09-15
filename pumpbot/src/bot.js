@@ -28,8 +28,9 @@ import { log, sol, utcDay } from './log.js'
  * rather than a timer, so a rung fires on the tick that crosses it.
  */
 export class Bot {
-  constructor() {
-    this.feed = new Feed()
+  /** `feed` is injectable so the whole loop can be driven by a synthetic feed in tests. */
+  constructor({ feed } = {}) {
+    this.feed = feed ?? new Feed()
     this.candidates = new Map() // mint -> Candidate, pre-entry
     this.shadow = config.learning.enabled ? new ShadowTracker() : null
     this.walletSol = 0
@@ -37,6 +38,77 @@ export class Bot {
     this.lastTierFloor = null
     this.busy = new Set() // mints with an in-flight order, preventing double-sends
     this.stopping = false
+
+    /**
+     * Pipeline counters. Without these a healthy bot that simply is not finding
+     * anything worth buying looks exactly like a hung one — which matters most during
+     * the hours of paper running where you are deciding whether to trust it at all.
+     */
+    this.stats = {
+      messages: 0,
+      creates: 0,
+      trades: 0,
+      screened: 0,
+      entered: 0,
+      rejects: new Map(),
+      firstParsedAt: null,
+      startedAt: null,
+      // Reset each heartbeat so the log shows rate, not just a running total.
+      sinceBeat: { messages: 0, creates: 0, screened: 0, entered: 0 },
+    }
+  }
+
+  statsSnapshot() {
+    const s = this.stats
+    return {
+      messages: s.messages,
+      creates: s.creates,
+      trades: s.trades,
+      screened: s.screened,
+      entered: s.entered,
+      watching: this.candidates.size,
+      shadowTracked: this.shadow?.size ?? 0,
+      parsing: s.firstParsedAt !== null,
+      uptimeSeconds: s.startedAt ? Math.round((Date.now() - s.startedAt) / 1000) : 0,
+      topRejects: [...s.rejects.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([id, n]) => ({ id, n })),
+    }
+  }
+
+  #countReject(verdict) {
+    this.stats.screened++
+    this.stats.sinceBeat.screened++
+    for (const c of verdict?.failed ?? []) {
+      this.stats.rejects.set(c.id, (this.stats.rejects.get(c.id) ?? 0) + 1)
+    }
+  }
+
+  #heartbeat() {
+    const s = this.stats
+    const beat = s.sinceBeat
+
+    // Messages arriving but nothing parsing means the feed's field names moved.
+    if (s.messages > 50 && s.creates === 0 && s.trades === 0) {
+      log.error(
+        `${s.messages} feed messages received but NONE parsed — the field names in src/curve.js ` +
+          'do not match this feed. Run `npm run record -- 120` and `npm run replay`. Not trading.',
+      )
+      return
+    }
+
+    if (!s.messages) {
+      log.warn('no feed messages at all — the socket is connected but silent')
+      return
+    }
+
+    const rejects = this.statsSnapshot().topRejects
+    log.info(
+      `+${beat.creates} launches (${s.creates} total) · watching ${this.candidates.size} · ` +
+        `screened +${beat.screened}/${s.screened} · entered +${beat.entered}/${s.entered} · ` +
+        `open ${openPositions().length} · shadow ${this.shadow?.size ?? 0}` +
+        (rejects.length ? ` · rejects: ${rejects.map((r) => `${r.id}×${r.n}`).join(' ')}` : ''),
+    )
+
+    s.sinceBeat = { messages: 0, creates: 0, screened: 0, entered: 0 }
   }
 
   async start() {
@@ -73,6 +145,11 @@ export class Bot {
       log.info(`resuming position ${p.symbol} (${p.mint})`)
     }
 
+    this.stats.startedAt = Date.now()
+    this.feed.on('raw', () => {
+      this.stats.messages++
+      this.stats.sinceBeat.messages++
+    })
     this.feed.on('create', (e) => this.#onCreate(e))
     this.feed.on('trade', (e) => this.#onTrade(e))
     this.feed.start()
@@ -81,12 +158,14 @@ export class Bot {
     // abandoning stale candidates, closing outcome windows, and the day rollover.
     this.sweepTimer = setInterval(() => this.#sweep().catch((e) => log.error(e)), 5000)
     this.balanceTimer = setInterval(() => this.#refreshBalance().catch((e) => log.debug(e)), 60_000)
+    this.heartbeatTimer = setInterval(() => this.#heartbeat(), 60_000)
   }
 
   async stop() {
     this.stopping = true
     clearInterval(this.sweepTimer)
     clearInterval(this.balanceTimer)
+    clearInterval(this.heartbeatTimer)
     await this.feed.stop()
     save()
   }
@@ -112,6 +191,21 @@ export class Bot {
   }
 
   #onCreate(event) {
+    this.stats.creates++
+    this.stats.sinceBeat.creates++
+
+    // One-time confirmation that the feed's field names actually match the parser.
+    if (this.stats.firstParsedAt === null) {
+      this.stats.firstParsedAt = Date.now()
+      log.info(
+        `feed parsing confirmed — first launch "${event.symbol ?? '?'}" ` +
+          `at ${event.marketCapSol?.toFixed(1) ?? '?'} SOL mcap, price ${event.priceSol?.toExponential(2) ?? 'MISSING'}`,
+      )
+      if (!(event.priceSol > 0)) {
+        log.error('launch parsed but has NO PRICE — exits cannot be managed. Check src/curve.js.')
+      }
+    }
+
     if (this.stopping || getState().halted) return
     if (this.candidates.has(event.mint)) return
     if (openPositions().length >= config.sizing.maxConcurrentPositions) return
@@ -121,6 +215,7 @@ export class Bot {
   }
 
   #onTrade(event) {
+    this.stats.trades++
     if (this.stopping) return
 
     this.candidates.get(event.mint)?.apply(event)
@@ -134,6 +229,11 @@ export class Bot {
       // Evaluate on the tick, not on a timer — a rung should fire when it is crossed.
       this.#manage(position, event.priceSol, event.vSol).catch((err) => log.error(err))
     }
+  }
+
+  /** Runs one sweep on demand. The scheduler calls #sweep directly; tests use this. */
+  async tick() {
+    return this.#sweep()
   }
 
   async #sweep() {
@@ -159,11 +259,15 @@ export class Bot {
 
       if (!verdict.pass) {
         log.debug(`skip ${candidate.symbol}: ${verdict.reason}`)
+        this.#countReject(verdict)
         // Keep watching rejects so we learn what the filter is throwing away.
         this.shadow?.track({ candidate, verdict, action: 'rejected' })
         if (!this.shadow?.has(mint)) this.feed.unwatch(mint)
         continue
       }
+
+      this.stats.screened++
+      this.stats.sinceBeat.screened++
 
       await this.#enter(candidate, verdict)
     }
@@ -227,6 +331,8 @@ export class Bot {
       addPosition(position)
       this.walletSol -= fill.solSpent
 
+      this.stats.entered++
+      this.stats.sinceBeat.entered++
       this.shadow?.track({ candidate, verdict, action: 'bought', entryPriceSol: fill.avgPriceSol })
 
       await notifyEntry(position, {

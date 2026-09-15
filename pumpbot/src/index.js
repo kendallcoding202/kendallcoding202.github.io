@@ -35,7 +35,7 @@ async function run() {
   const bot = new Bot()
   await bot.start()
 
-  const server = startDashboard(() => bot.walletSol)
+  const server = startDashboard(() => ({ walletSol: bot.walletSol, stats: bot.statsSnapshot() }))
 
   let shuttingDown = false
   const shutdown = async (signal) => {

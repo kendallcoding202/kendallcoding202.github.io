@@ -75,7 +75,7 @@ async function refreshSolPrice() {
   return solPriceUsd
 }
 
-export function buildSnapshot(walletSol) {
+export function buildSnapshot(walletSol, stats = null) {
   const state = getState()
   const open = openPositions()
   const today = todayPnl()
@@ -149,6 +149,7 @@ export function buildSnapshot(walletSol) {
       tradesClosed: state.closed.length,
     },
     sizing: sizingSummary(walletSol),
+    pipeline: stats,
     learning: learningSnapshot(),
     limits: {
       maxConcurrent: config.sizing.maxConcurrentPositions,
@@ -163,7 +164,11 @@ export function buildSnapshot(walletSol) {
   }
 }
 
-export function startDashboard(getWalletSol) {
+/**
+ * getContext() returns { walletSol, stats } — a getter rather than values so every
+ * poll reflects live bot state.
+ */
+export function startDashboard(getContext) {
   if (!config.dashboard.enabled) return null
 
   const { host, port, token } = config.dashboard
@@ -191,7 +196,8 @@ export function startDashboard(getWalletSol) {
 
     if (url.pathname === '/api/state') {
       await refreshSolPrice()
-      const body = JSON.stringify(buildSnapshot(getWalletSol()))
+      const ctx = getContext() ?? {}
+      const body = JSON.stringify(buildSnapshot(ctx.walletSol, ctx.stats ?? null))
       res.writeHead(200, {
         'content-type': 'application/json',
         'cache-control': 'no-store',

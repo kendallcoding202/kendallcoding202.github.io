@@ -424,6 +424,107 @@ console.log('\nDashboard snapshot')
   check('serialises cleanly for the API', typeof JSON.stringify(snap) === 'string')
 }
 
+// ------------------------------------------------- end-to-end, synthetic feed
+console.log('\nEnd-to-end bot loop')
+{
+  const { EventEmitter } = await import('node:events')
+  const { Bot } = await import('../src/bot.js')
+
+  // A feed we drive by hand. Same event contract as the real one.
+  class FakeFeed extends EventEmitter {
+    constructor() { super(); this.watched = new Set(); this.started = false }
+    start() { this.started = true }
+    async stop() { this.started = false }
+    watch(m) { this.watched.add(m) }
+    unwatch(m) { this.watched.delete(m) }
+  }
+
+  const MINT = 'E2EmintAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+  const curve = { vSol: 40, vTokens: 900_000_000 }
+  const priceAt = (mult) => (curve.vSol * mult) / curve.vTokens
+
+  const mkCreate = () => normalizeEvent({
+    txType: 'create', mint: MINT, traderPublicKey: 'DEV', name: 'E2E Dog', symbol: 'E2E',
+    initialBuy: 20_000_000, solAmount: 0.8,
+    vSolInBondingCurve: curve.vSol, vTokensInBondingCurve: curve.vTokens, marketCapSol: 44,
+  })
+  const mkTrade = (kind, trader, mult = 1) => normalizeEvent({
+    txType: kind, mint: MINT, traderPublicKey: trader, tokenAmount: 1000, solAmount: 0.05,
+    vSolInBondingCurve: curve.vSol * mult, vTokensInBondingCurve: curve.vTokens, marketCapSol: 44 * mult,
+  })
+
+  store.initStore()
+  const st = store.getState()
+  st.positions = {}; st.closed = []; st.daily = {}; st.totalRealizedSol = 0
+  st.consecutiveLosses = 0; st.blockedCreators = {}; st.halted = null
+  // Must persist: bot.start() re-runs initStore(), which reloads from disk.
+  store.save()
+
+  const feed = new FakeFeed()
+  const bot = new Bot({ feed })
+  await bot.start()
+  // Drop the real schedulers; this test drives every tick explicitly.
+  clearInterval(bot.sweepTimer); clearInterval(bot.balanceTimer); clearInterval(bot.heartbeatTimer)
+
+  check('bot subscribes to the feed on start', feed.started)
+
+  feed.emit('raw', {}); feed.emit('create', mkCreate())
+  check('a new launch is watched', feed.watched.has(MINT))
+  check('launch counted in stats', bot.statsSnapshot().creates === 1)
+  check('parsing marked healthy', bot.statsSnapshot().parsing === true)
+
+  for (let i = 0; i < 20; i++) feed.emit('trade', mkTrade('buy', `BUYER${i}`))
+  feed.emit('trade', mkTrade('sell', 'SELLER0'))
+  check('trade events counted', bot.statsSnapshot().trades === 21)
+
+  // Not old enough to screen yet.
+  await bot.tick()
+  check('does not enter before the observation window', !store.getState().positions[MINT])
+  check('candidate is still being observed', bot.candidates.has(MINT))
+
+  // Age the candidate past OBSERVE_SECONDS.
+  bot.candidates.get(MINT).createdAt -= (config.entry.observeSeconds + 5) * 1000
+  await bot.tick()
+
+  const pos = store.getState().positions[MINT]
+  check('enters a qualifying launch', Boolean(pos), JSON.stringify(bot.statsSnapshot().topRejects))
+  check('entry used the tier size', pos && near(pos.solSpent, 0.075 + config.exec.priorityFeeSol, 1e-9))
+  check('entry counted in stats', bot.statsSnapshot().entered === 1)
+  check('position is shadow-tracked for learning', bot.shadow.has(MINT))
+
+  // Price doubles -> first two rungs fire.
+  const beforeTokens = pos.tokensRemaining
+  feed.emit('trade', mkTrade('buy', 'WHALE', 2))
+  await new Promise((r) => setImmediate(r))
+  await bot.tick()
+
+  const after = store.getState().positions[MINT]
+  check('ladder fired on the price move', !after || after.tokensRemaining < beforeTokens)
+  if (after) {
+    check('initials were recovered', after.solRecovered >= after.solSpent, `${after.solRecovered} vs ${after.solSpent}`)
+    check('rungs recorded', after.rungsHit.length >= 1, after.rungsHit.join(','))
+  }
+
+  // Curve collapses -> emergency exit closes the position.
+  feed.emit('trade', mkTrade('sell', 'RUGGER', 0.2))
+  await new Promise((r) => setImmediate(r))
+  await bot.tick()
+
+  check('collapse closes the position', !store.getState().positions[MINT])
+  const closed = store.getState().closed.at(-1)
+  check('closed trade was booked', closed?.mint === MINT, JSON.stringify(closed?.symbol))
+  check('a ladder winner books a profit', closed && closed.realizedSol > 0, String(closed?.realizedSol))
+  check('feed unsubscribed after close', !feed.watched.has(MINT) || bot.shadow.has(MINT))
+
+  // Stats survive into the dashboard payload.
+  const snap = buildSnapshot(0.5, bot.statsSnapshot())
+  check('pipeline stats reach the dashboard', snap.pipeline?.creates === 1 && snap.pipeline.entered === 1)
+  check('dashboard payload still serialises', typeof JSON.stringify(snap) === 'string')
+
+  await bot.stop()
+  check('bot stops cleanly', !feed.started)
+}
+
 fs.rmSync(tmp, { recursive: true, force: true })
 
 console.log(`\n${passed} passed, ${failures.length} failed`)
