@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Automated pump.fun entry/exit bot with a take-profit ladder, stop-loss and hard risk limits.",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node src/index.js run",
     "test": "node test/run.js",
@@ -17,7 +19,9 @@
     "panic": "node src/index.js panic",
     "paper": "PAPER=1 DASHBOARD_PORT=8081 node src/index.js run",
     "paper:positions": "PAPER=1 node src/index.js positions",
-    "paper:learn": "PAPER=1 node src/index.js learn"
+    "paper:learn": "PAPER=1 node src/index.js learn",
+    "reset": "node src/index.js reset",
+    "paper:reset": "PAPER=1 node src/index.js reset"
   },
   "dependencies": {
     "@solana/web3.js": "^1.99.0",

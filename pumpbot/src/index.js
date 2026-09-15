@@ -25,6 +25,65 @@ const commands = {
   record,
   replay,
   adopt,
+  reset,
+}
+
+/**
+ * Clears the paper book so a measurement can start clean.
+ *
+ * The first hours of running produced 113 explore trades that all closed on "no price
+ * update" — pure fee losses carrying no information, because without trade data nothing
+ * could move and no outcome could be labelled. Leaving that in the ledger would bias
+ * every statistic the learning report produces.
+ *
+ * Refuses in live mode: a live ledger is a record of real money and is not disposable.
+ */
+async function reset() {
+  if (!config.paper) {
+    console.error('\n  Refusing — this is the LIVE ledger, a record of real money.')
+    console.error('  Nothing here is safe to discard automatically.\n')
+    process.exitCode = 1
+    return
+  }
+
+  const held = heldByAnother()
+  if (held) {
+    console.error(`\n  A pumpbot instance is running (heartbeat ${Math.round(held.ageMs / 1000)}s ago).`)
+    console.error('  Stop it first, or its next save will write the old book straight back.\n')
+    process.exitCode = 1
+    return
+  }
+
+  initStore()
+  const s = getState()
+  const summary =
+    `${s.closed.length} closed · ${Object.keys(s.positions).length} open · ` +
+    `strategy ${(s.totalRealizedSol ?? 0).toFixed(4)} SOL · explore ${(s.exploreRealizedSol ?? 0).toFixed(4)} SOL`
+
+  if (process.argv[3] !== '--confirm') {
+    console.log(`\n  Paper book currently holds: ${summary}`)
+    console.log('\n  Re-run with --confirm to clear it:')
+    console.log('    npm run reset -- --confirm\n')
+    console.log('  The decision journal is kept — that is the learning data. Only the')
+    console.log('  trade ledger and activity feed are cleared.\n')
+    return
+  }
+
+  s.positions = {}
+  s.closed = []
+  s.daily = {}
+  s.activity = []
+  s.totalRealizedSol = 0
+  s.exploreRealizedSol = 0
+  s.exploreWins = 0
+  s.exploreLosses = 0
+  s.consecutiveLosses = 0
+  s.blockedCreators = {}
+  s.halted = null
+  save()
+
+  console.log(`\n  Cleared: ${summary}`)
+  console.log('  Paper book is empty. Restart the bot to begin a clean measurement.\n')
 }
 
 /**

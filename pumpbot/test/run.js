@@ -556,6 +556,17 @@ console.log('\nLedger lock')
   const idxSrc = fs.readFileSync(new URL('../src/index.js', import.meta.url), 'utf8')
   check('panic refuses to run against a live instance', idxSrc.includes('heldByAnother'))
   check('and points at the in-process route', idxSrc.includes('/panic confirm'))
+
+  // reset clears the paper book; it must never touch a live ledger, and must not run
+  // against a live instance that would write the old book straight back.
+  check('reset refuses in live mode', idxSrc.includes('record of real money'))
+  check('reset refuses against a running instance',
+    idxSrc.slice(idxSrc.indexOf('async function reset')).includes('heldByAnother'))
+  check('reset requires explicit confirmation',
+    idxSrc.slice(idxSrc.indexOf('async function reset')).includes("--confirm"))
+  check('reset keeps the decision journal',
+    idxSrc.includes('decision journal is kept'),
+    'the journal is the learning data — only the trade ledger is disposable')
 }
 
 // ------------------------------------------------- fill measurement
