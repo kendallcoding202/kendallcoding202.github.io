@@ -163,17 +163,35 @@ export class ShadowTracker {
       peakPriceSol: price,
       troughPriceSol: price,
       lastPriceSol: price,
+      // Seeded to the decision moment so ordering is defined even with zero ticks.
+      peakAt: Date.now(),
+      troughAt: Date.now(),
       ticks: 0,
     })
   }
 
-  onTrade(event) {
+  onTrade(event, now = Date.now()) {
     const row = this.rows.get(event.mint)
     if (!row || !(event.priceSol > 0)) return
     row.ticks++
     row.lastPriceSol = event.priceSol
-    if (event.priceSol > row.peakPriceSol) row.peakPriceSol = event.priceSol
-    if (event.priceSol < row.troughPriceSol) row.troughPriceSol = event.priceSol
+    /**
+     * WHEN the peak and trough happened, not just their values.
+     *
+     * Without the ordering, a replay of the exit rules cannot tell a coin that dipped
+     * and then recovered from one that spiked and then died — they have identical
+     * peak/trough/end. The simulator resolves that ambiguity in the strategy's favour,
+     * so the stop-loss can never knock it out of an eventual winner, and tighter stops
+     * come out looking free. Two timestamps remove the guess.
+     */
+    if (event.priceSol > row.peakPriceSol) {
+      row.peakPriceSol = event.priceSol
+      row.peakAt = now
+    }
+    if (event.priceSol < row.troughPriceSol) {
+      row.troughPriceSol = event.priceSol
+      row.troughAt = now
+    }
   }
 
   /** Mints whose observation window has elapsed. */
@@ -218,6 +236,13 @@ export class ShadowTracker {
       hitFirstRung: peakMultiple >= 1 + firstRung / 100,
       firstRungPct: firstRung,
       wentToZero: endMultiple <= 0.1,
+      /**
+       * Did the low come before the high? This is what lets a replay decide whether a
+       * stop-loss would have fired BEFORE the coin ran — without it the simulator has
+       * to guess, and it guesses in the strategy's favour.
+       */
+      troughFirst: row.troughAt < row.peakAt,
+      hasOrdering: Number.isFinite(row.troughAt) && Number.isFinite(row.peakAt) && row.ticks > 0,
     }
 
     append(finished)

@@ -501,7 +501,67 @@ console.log('\nLearning')
   check('an EV estimate is produced', report.ev.bought?.n === 200)
   check('repeat creators are surfaced', report.repeatCreators.length > 0)
 
-  const { formatReport } = await import('../src/learn.js')
+  const { formatReport, exitSweep, criticalZ } = await import('../src/learn.js')
+
+  // ---- counterfactual exit search ----
+
+  // The correction has to move with the number of alternatives tried, or the best of
+  // sixteen coin flips reads as a discovery.
+  check('the critical value is the usual one for a single test', near(criticalZ(1), 1.96, 0.005), String(criticalZ(1)))
+  check('and rises with the number of comparisons', criticalZ(16) > 2.9 && criticalZ(16) < 3.1, String(criticalZ(16)))
+
+  /**
+   * The bias this exists to remove: a coin that DIPPED then ran and one that ran then
+   * died have identical peak/trough/end. Without ordering the simulator assumes the rung
+   * came first, so the stop-loss can never knock it out of a winner — and a sweep would
+   * happily recommend tightening the stop to nothing.
+   */
+  const dippedThenRan = { peakMultiple: 3, troughMultiple: 0.5, endMultiple: 2.5, hasOrdering: true, troughFirst: true }
+  const ranThenDied = { peakMultiple: 3, troughMultiple: 0.5, endMultiple: 0.5, hasOrdering: true, troughFirst: false }
+  const stoppedOut = simulateLadder(dippedThenRan, { stopLossPct: 30 })
+  check('a dip before the run stops us out of it', near(stoppedOut, 0.7 * 0.97, 0.01), String(stoppedOut))
+  check('the same path in the other order still rides the ladder',
+    simulateLadder(ranThenDied, { stopLossPct: 30 }) > 1, String(simulateLadder(ranThenDied, { stopLossPct: 30 })))
+  check('a stop too deep to trigger does not fire',
+    simulateLadder(dippedThenRan, { stopLossPct: 60 }) > 1)
+  check('rows without ordering keep the old optimistic reading',
+    simulateLadder({ ...dippedThenRan, hasOrdering: false }, { stopLossPct: 30 }) > 1)
+
+  // A population where taking profit EARLIER is genuinely better: everything spikes a
+  // little and round-trips to nothing.
+  const spikeAndDie = Array.from({ length: 400 }, () => ({
+    v: JOURNAL_VERSION, action: 'bought', decisionPriceSol: 1, features: { organicBuyers: 10 },
+    hitFirstRung: false, peakMultiple: 1.3, troughMultiple: 0.05, endMultiple: 0.05,
+    hasOrdering: true, troughFirst: false,
+  }))
+  const earlySweep = exitSweep(spikeAndDie, { minSamples: 10 })
+  check('the sweep evaluates the current plan', earlySweep.n === 400)
+  check('it tries alternatives on every axis', earlySweep.comparisons >= 14, String(earlySweep.comparisons))
+  const cheaperRung = earlySweep.better.find((r) => r.axis === 'first rung trigger')
+  check('a lower first rung is found when everything only spikes a little',
+    Boolean(cheaperRung), JSON.stringify(earlySweep.better.map((b) => b.axis + ' ' + b.label)))
+
+  // ...and pure noise must NOT produce a recommendation.
+  let seed = 7
+  const rand = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648 }
+  const noiseRows = Array.from({ length: 400 }, () => {
+    const peak = 1 + rand() * 2
+    return {
+      v: JOURNAL_VERSION, action: 'bought', decisionPriceSol: 1, features: { organicBuyers: 10 },
+      hitFirstRung: peak >= 1.5, peakMultiple: peak, troughMultiple: rand(), endMultiple: rand() * peak,
+      hasOrdering: true, troughFirst: rand() < 0.5,
+    }
+  })
+  const noiseSweep = exitSweep(noiseRows, { minSamples: 10 })
+  check('the sweep reports how many rows carry ordering', noiseSweep.withOrdering === 400)
+  check('every comparison is paired over the same rows',
+    noiseSweep.results.every((r) => r.n === 400))
+  check('a variant is only called better if its corrected interval clears zero',
+    noiseSweep.better.every((r) => r.deltaLo > 0))
+
+  const sweepText = formatReport(analyze(spikeAndDie))
+  check('the exit sweep reaches the report', sweepText.includes('Exit plan, replayed'))
+  check('and states the ordering caveat', sweepText.includes('ordering') || sweepText.includes('dip came before'))
 
   /**
    * Rows from before the shadow-price fix must be DROPPED, not averaged in. Every one of

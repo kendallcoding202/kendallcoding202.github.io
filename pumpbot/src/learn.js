@@ -62,6 +62,22 @@ export function simulateLadder(
     return exit * (1 - fees)
   }
 
+  /**
+   * The dip came BEFORE the run, and it was deep enough to stop us out. We were not in
+   * the position for the run at all.
+   *
+   * Without the ordering this case is invisible: a coin that dipped then recovered and
+   * one that spiked then died have identical peak/trough/end, and the simulator resolved
+   * the ambiguity by assuming the rung came first — which means the stop-loss could
+   * never knock it out of an eventual winner. Tighter stops therefore looked free, and a
+   * sweep over stop-loss depth would have recommended tightening all the way down.
+   * Rows recorded before the timestamps exist keep the old optimistic behaviour, which
+   * is why the sweep reports how many rows actually carry ordering.
+   */
+  if (row.hasOrdering && row.troughFirst && Number.isFinite(trough) && trough <= stopMultiple) {
+    return stopMultiple * (1 - fees)
+  }
+
   let tokensLeft = 1 // fraction of the original bag
   let recovered = 0
 
@@ -83,6 +99,154 @@ export function simulateLadder(
   }
 
   return recovered * (1 - fees)
+}
+
+/**
+ * Inverse normal CDF (Acklam's rational approximation, ~1e-9 absolute error).
+ *
+ * Needed because a sweep tests many alternatives against the same data, and at the usual
+ * 1.96 the best of sixteen coin flips looks like a discovery. The critical value has to
+ * move with the number of comparisons.
+ */
+function probit(p) {
+  const a = [-3.969683028665376e1, 2.209460984245205e2, -2.759285104469687e2, 1.383577518672690e2, -3.066479806614716e1, 2.506628277459239]
+  const b = [-5.447609879822406e1, 1.615858368580409e2, -1.556989798598866e2, 6.680131188771972e1, -1.328068155288572e1]
+  const c = [-7.784894002430293e-3, -3.223964580411365e-1, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783]
+  const d = [7.784695709041462e-3, 3.224671290700398e-1, 2.445134137142996, 3.754408661907416]
+  const pl = 0.02425
+  if (p <= 0 || p >= 1) return p <= 0 ? -Infinity : Infinity
+  if (p < pl) {
+    const q = Math.sqrt(-2 * Math.log(p))
+    return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
+      ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1)
+  }
+  if (p > 1 - pl) return -probit(1 - p)
+  const q = p - 0.5
+  const r = q * q
+  return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q /
+    (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1)
+}
+
+/** Two-sided critical value at 5%, Bonferroni-corrected for k comparisons. */
+export function criticalZ(k, alpha = 0.05) {
+  return probit(1 - alpha / (2 * Math.max(1, k)))
+}
+
+/**
+ * PAIRED comparison of two exit plans over the same price paths.
+ *
+ * Paired, not two independent means: every row is replayed under both plans, so the
+ * per-coin variance — which is enormous, these are meme coins — cancels out. Comparing
+ * unpaired averages on data this noisy would need orders of magnitude more samples to
+ * see a difference that is plainly visible per-row.
+ */
+function pairedDelta(rows, variant, incumbent) {
+  const diffs = []
+  for (const r of rows) {
+    const a = simulateLadder(r, variant)
+    const b = simulateLadder(r, incumbent)
+    if (a === null || b === null) continue
+    diffs.push(a - b)
+  }
+  if (diffs.length < 2) return null
+  const mean = diffs.reduce((s, x) => s + x, 0) / diffs.length
+  const variance = diffs.reduce((s, x) => s + (x - mean) ** 2, 0) / (diffs.length - 1)
+  return { n: diffs.length, mean, stdErr: Math.sqrt(variance / diffs.length) }
+}
+
+const withFirstRung = (ladder, atPct) =>
+  ladder.map((r, i) => (i === 0 ? { ...r, atPct } : r))
+const withFirstSell = (ladder, sellPct) =>
+  ladder.map((r, i) => (i === 0 ? { ...r, sellPct } : r))
+
+/**
+ * Replays alternative exit plans against the recorded price paths and reports where the
+ * configured one sits.
+ *
+ * ONE-DIMENSIONAL SWEEPS, not a grid. A full grid over four axes is hundreds of
+ * comparisons on a few hundred noisy rows, which reliably produces a "winner" that is
+ * noise. Sweeping each axis around the current setting is a handful of comparisons, the
+ * result reads as a response curve rather than a lucky cell, and — because every variant
+ * on an axis keeps the same NUMBER of rungs — it avoids the simulator's other bias, that
+ * a plan with more rungs collects more of the "a touched rung is assumed filled"
+ * optimism than one with fewer.
+ */
+export function exitSweep(rows, { minSamples = config.learning.minSamplesForSuggestion } = {}) {
+  const usable = rows.filter((r) => r.peakMultiple > 0)
+  const withOrdering = usable.filter((r) => r.hasOrdering).length
+
+  const base = {
+    ladder: config.exit.ladder,
+    stopLossPct: config.exit.stopLossPct,
+    trailingPct: config.exit.trailingDrawdownPct,
+  }
+
+  const firstAt = config.exit.ladder[0]?.atPct ?? 50
+  const firstSell = config.exit.ladder[0]?.sellPct ?? 67
+
+  const variants = []
+  for (const atPct of [25, 35, 50, 75, 100]) {
+    if (atPct !== firstAt) {
+      variants.push({ axis: 'first rung trigger', label: `+${atPct}%`, plan: { ...base, ladder: withFirstRung(base.ladder, atPct) } })
+    }
+  }
+  for (const sellPct of [40, 50, 67, 80, 100]) {
+    if (sellPct !== firstSell) {
+      variants.push({ axis: 'first rung size', label: `sell ${sellPct}%`, plan: { ...base, ladder: withFirstSell(base.ladder, sellPct) } })
+    }
+  }
+  for (const stopLossPct of [15, 20, 30, 40, 60]) {
+    if (stopLossPct !== base.stopLossPct) {
+      variants.push({ axis: 'stop-loss', label: `−${stopLossPct}%`, plan: { ...base, stopLossPct } })
+    }
+  }
+  for (const trailingPct of [25, 35, 50, 65]) {
+    if (trailingPct !== base.trailingPct) {
+      variants.push({ axis: 'trailing stop', label: `${trailingPct}% giveback`, plan: { ...base, trailingPct } })
+    }
+  }
+
+  const z = criticalZ(variants.length)
+  const incumbentSims = usable.map((r) => simulateLadder(r, base)).filter((x) => x !== null)
+  const incumbentMean = incumbentSims.length
+    ? incumbentSims.reduce((s, x) => s + x, 0) / incumbentSims.length
+    : null
+
+  const results = variants
+    .map((v) => {
+      const d = pairedDelta(usable, v.plan, base)
+      if (!d) return null
+      return {
+        axis: v.axis,
+        label: v.label,
+        n: d.n,
+        deltaMean: d.mean,
+        deltaLo: d.mean - z * d.stdErr,
+        deltaHi: d.mean + z * d.stdErr,
+        // Better than the current plan with support, after correcting for how many
+        // alternatives were tried.
+        better: d.mean - z * d.stdErr > 0,
+        worse: d.mean + z * d.stdErr < 0,
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.deltaMean - a.deltaMean)
+
+  return {
+    n: incumbentSims.length,
+    withOrdering,
+    enoughData: usable.length >= minSamples,
+    comparisons: variants.length,
+    criticalZ: z,
+    incumbent: {
+      ladder: config.exit.ladder,
+      stopLossPct: base.stopLossPct,
+      trailingPct: base.trailingPct,
+      meanMultiple: incumbentMean,
+    },
+    results,
+    better: results.filter((r) => r.better),
+  }
 }
 
 function numericFeatures(rows) {
@@ -247,6 +411,9 @@ export function analyze(rows = readAll()) {
     falseNegatives,
     suggestions,
     repeatCreators,
+    // Would a different exit have done better on these same coins? The entry filter is
+    // only half the strategy, and this is the half nothing was testing.
+    exitSweep: exitSweep(labelled),
     enoughData,
     minSamples: config.learning.minSamplesForSuggestion,
   }
@@ -342,6 +509,57 @@ export function formatReport(a) {
       L.push(`  ${f.check.padEnd(18)} rejected ${String(f.total).padStart(4)} · ${String(f.wouldHaveHit).padStart(4)} would have hit · ${p(f.rate)}`)
     }
     L.push('  A check rejecting many winners is a candidate to loosen.')
+    L.push('')
+  }
+
+  if (a.exitSweep?.n) {
+    const x = a.exitSweep
+    L.push('Exit plan, replayed against the same coins:')
+    L.push(`  current: ladder ${x.incumbent.ladder.map((r) => `+${r.atPct}%→${r.sellPct}%`).join(' ')} · ` +
+      `stop −${x.incumbent.stopLossPct}% · trail ${x.incumbent.trailingPct}%`)
+    L.push(`  → ${x.incumbent.meanMultiple.toFixed(3)}x over n=${x.n}`)
+    L.push('')
+
+    if (!x.enoughData) {
+      L.push(`  Not enough data to rank alternatives (${x.n}/${a.minSamples}).`)
+    } else if (!x.better.length) {
+      L.push(`  No alternative beat it across ${x.comparisons} tried.`)
+      L.push('  That is a real result: the exit plan is not the thing holding returns back.')
+    } else {
+      L.push(`  Alternatives that beat it (paired, corrected for ${x.comparisons} comparisons):`)
+      for (const r of x.better) {
+        L.push(`    ${r.axis.padEnd(20)} ${r.label.padEnd(16)} ${r.deltaMean >= 0 ? '+' : ''}${r.deltaMean.toFixed(3)}x ` +
+          `[${r.deltaLo.toFixed(3)} to ${r.deltaHi.toFixed(3)}]`)
+      }
+      L.push('  PROPOSALS, not changes. Nothing here is applied automatically.')
+    }
+
+    // The three worst, so the shape of the curve is visible rather than just its top.
+    const worst = x.results.filter((r) => r.worse).slice(-3).reverse()
+    if (worst.length) {
+      L.push('')
+      L.push('  Clearly worse than current, for contrast:')
+      for (const r of worst) {
+        L.push(`    ${r.axis.padEnd(20)} ${r.label.padEnd(16)} ${r.deltaMean.toFixed(3)}x`)
+      }
+    }
+
+    /**
+     * The caveat that decides whether any of the above is trustworthy. Rows without
+     * peak/trough ordering cannot tell "dipped then ran" from "ran then died", and the
+     * simulator resolves that in the strategy's favour — so on those rows the stop-loss
+     * can never knock you out of a winner and tighter stops look free.
+     */
+    const pct = x.n ? Math.round((x.withOrdering / x.n) * 100) : 0
+    L.push('')
+    if (pct < 90) {
+      L.push(`  ⚠ Only ${x.withOrdering}/${x.n} rows (${pct}%) record whether the dip came before the run.`)
+      L.push('  On the rest the stop-loss can never knock you out of an eventual winner, so')
+      L.push('  TIGHTER STOPS LOOK BETTER THAN THEY ARE. Treat the stop-loss row with suspicion')
+      L.push('  until this reaches ~100%, which it will as older rows age out.')
+    } else {
+      L.push(`  ${pct}% of rows carry dip-before-run ordering, so the stop-loss comparison is sound.`)
+    }
     L.push('')
   }
 
