@@ -5,7 +5,7 @@ import { Candidate, evaluateEntry } from './filter.js'
 import { buy, sell } from './exec.js'
 import { canOpen, riskSummary, rolloverDaily } from './risk.js'
 import { buySolFor, tierFor, sizingSummary } from './sizing.js'
-import { ShadowTracker } from './journal.js'
+import { ShadowTracker, saveShadow, loadShadow } from './journal.js'
 import {
   initStore,
   getState,
@@ -247,6 +247,25 @@ export class Bot {
       log.info(`resuming position ${p.symbol} (${p.mint})`)
     }
 
+    /**
+     * Pending observations survive the restart. Without this every row still inside its
+     * outcome window is lost whenever the process stops, and on a hosted platform that
+     * is often — a restart every 15 minutes against a 15-minute window keeps nothing at
+     * all, and the rows it does lose cluster around deploys rather than being a random
+     * sample of the market.
+     */
+    if (this.shadow) {
+      const { restored, expired } = this.shadow.restore(loadShadow())
+      if (restored) {
+        log.info(`restored ${restored} pending observation(s) from the last run`)
+        for (const mint of expired) {
+          this.shadow.finalize(mint, 'window closed during downtime')
+          if (!getState().positions[mint]) this.feed.unwatch(mint)
+        }
+        if (expired.length) log.info(`${expired.length} of them had already matured and were journalled`)
+      }
+    }
+
     await this.#checkForOrphans()
 
     this.stats.startedAt = Date.now()
@@ -284,6 +303,16 @@ export class Bot {
     // abandoning stale candidates, closing outcome windows, and the day rollover.
     this.sweepTimer = setInterval(() => this.#sweep().catch((e) => log.error(e)), 5000)
     this.balanceTimer = setInterval(() => this.#refreshBalance().catch((e) => log.debug(e)), 60_000)
+    /**
+     * Checkpoint pending observations, not just on shutdown. A hosted container is not
+     * guaranteed a clean exit — an OOM kill or a platform restart takes the process
+     * without running any handler, which is precisely when losing 450 in-flight rows
+     * hurts most.
+     */
+    if (this.shadow) {
+      this.shadowTimer = setInterval(() => saveShadow(this.shadow), 30_000)
+      this.shadowTimer.unref?.()
+    }
     if (config.telegram.summaryHours > 0) {
       this.summaryBase = summaryBaseline(this)
       const everyMs = config.telegram.summaryHours * 3600_000
@@ -305,9 +334,11 @@ export class Bot {
     clearInterval(this.balanceTimer)
     clearInterval(this.heartbeatTimer)
     clearInterval(this.summaryTimer)
+    clearInterval(this.shadowTimer)
     await this.feed.stop()
     await this.logFeed?.stop()
     save()
+    saveShadow(this.shadow)
     releaseLock()
   }
 

@@ -586,6 +586,68 @@ console.log('\nShadow tracker')
 
   // Outcome rows record how long they were ACTUALLY watched, so a shortened window
   // cannot pass itself off as a full one.
+  /**
+   * Pending observations must survive a restart.
+   *
+   * Rows only reach the journal when their outcome window closes, so without this every
+   * row still in flight is discarded whenever the process stops — ~450 of them at 30
+   * launches a minute against a 15-minute window. A restart every 15 minutes keeps
+   * nothing at all. The loss is also biased, which is worse than its size: restarts
+   * cluster around deploys, so the dataset systematically omits whatever was launching
+   * while changes were being shipped.
+   */
+  {
+    const before = new ShadowTracker({ windowMs: 600_000, max: 100 })
+    for (let i = 0; i < 5; i++) before.track({ candidate: mk(100 + i), verdict, action: 'rejected' })
+    before.onTrade({ mint: 'M101', priceSol: 4e-7 })
+
+    const after = new ShadowTracker({ windowMs: 600_000, max: 100 })
+    const { restored, expired } = after.restore(before.snapshot())
+    check('pending rows survive a restart', restored === 5 && after.size === 5, `${restored} restored`)
+    check('nothing has matured yet', expired.length === 0)
+
+    // The price path observed before the restart is preserved, not reset to entry.
+    const carried = after.finalize('M101', 'test')
+    check('a restored row keeps the prices it already saw',
+      near(carried.peakMultiple, 4, 1e-6), String(carried?.peakMultiple))
+
+    // Round-trip through the real file, since that is what a redeploy actually does.
+    const { saveShadow, loadShadow, clearShadow } = await import('../src/journal.js')
+    const disk = new ShadowTracker({ windowMs: 600_000, max: 100 })
+    for (let i = 0; i < 3; i++) disk.track({ candidate: mk(200 + i), verdict, action: 'rejected' })
+    disk.onTrade({ mint: 'M201', priceSol: 2.5e-7 })
+    saveShadow(disk)
+
+    const reloaded = new ShadowTracker({ windowMs: 600_000, max: 100 })
+    check('the checkpoint round-trips through disk', reloaded.restore(loadShadow()).restored === 3)
+    check('and carries the price path with it',
+      near(reloaded.finalize('M201', 'test').peakMultiple, 2.5, 1e-6))
+
+    clearShadow()
+    check('a missing checkpoint is not an error',
+      new ShadowTracker({ windowMs: 600_000, max: 100 }).restore(loadShadow()).restored === 0)
+
+    // Rows whose window elapsed during the downtime are handed back to be journalled,
+    // rather than sitting in the tracker pretending to still be observed.
+    const late = new ShadowTracker({ windowMs: 600_000, max: 100 })
+    const stale = before.snapshot()
+    for (const r of stale.rows) r.decidedAt -= 700_000
+    check('matured rows are returned for journalling', late.restore(stale).expired.length === stale.rows.length)
+
+    // Eviction order must still be oldest-first after a restore, or the Map's insertion
+    // order stops meaning "oldest" and eviction starts dropping the wrong rows.
+    const ordered = new ShadowTracker({ windowMs: 600_000, max: 100 })
+    const shuffled = before.snapshot()
+    shuffled.rows = [...shuffled.rows].reverse()
+    ordered.restore(shuffled)
+    const seq = [...ordered.rows.values()].map((r) => r.decidedAt)
+    check('restore preserves oldest-first ordering', seq.every((v, i) => i === 0 || seq[i - 1] <= v))
+
+    // A snapshot from an older schema is refused rather than mixed in.
+    check('an old-schema snapshot is not restored',
+      new ShadowTracker({ windowMs: 600_000, max: 100 }).restore({ v: 1, rows: stale.rows }).restored === 0)
+  }
+
   const tw = new ShadowTracker({ windowMs: 60_000, max: 10 })
   tw.track({ candidate: mk(9), verdict, action: 'rejected' })
   tw.onTrade({ mint: 'M9', priceSol: 3e-7 })
@@ -629,6 +691,15 @@ console.log('\nDashboard snapshot')
   check('effective shadow capacity is published', snap.limits.learning.maxShadowTracked === config.learning.maxShadowTracked)
   check('effective explore bankroll is published', snap.limits.exploreBankrollSol === config.explore.budgetSol)
   check('scaled loss limits are published', snap.limits.maxDrawdownPct === config.risk.maxDrawdownPct)
+
+  /**
+   * Persistence has to be stated, not assumed. A bot writing to ephemeral disk looks
+   * perfectly healthy right up until a restart wipes every observation it ever made.
+   */
+  check('the data directory is reported', snap.storage.dataDir === config.dataDir)
+  check('writability is reported', snap.storage.writable === true)
+  check('journal size is reported', typeof snap.storage.journalBytes === 'number')
+  check('checkpoint presence is reported', typeof snap.storage.pendingCheckpoint === 'boolean')
 
   /**
    * The explore book gets its own P&L on the dashboard, and the headline numbers must

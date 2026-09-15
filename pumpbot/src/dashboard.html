@@ -615,7 +615,25 @@ function render(d) {
       L.learning.minSamplesForSuggestion + '</code> samples · explore bankroll <code>' +
       fmtSol(L.exploreBankrollSol, 2) + '</code><br>' +
     '<span class="dim">These are the values this process actually resolved — a Railway ' +
-      'variable of the same name overrides the default in code.</span>'
+      'variable of the same name overrides the default in code.</span>' +
+    (d.storage ? '<br>' + storageLine(d.storage) : '')
+}
+
+/**
+ * Persistence, stated rather than assumed. A bot writing to ephemeral disk looks
+ * perfectly healthy until a restart, at which point months of evidence are simply gone.
+ */
+function storageLine(s) {
+  const kb = s.journalBytes >= 1024
+    ? (s.journalBytes / 1024).toFixed(0) + ' KB'
+    : s.journalBytes + ' B'
+  const ok = s.writable && s.journalBytes > 0
+  return 'Storage <code>' + esc(s.dataDir) + '</code> · journal <code>' + kb + '</code>' +
+    (s.writable ? '' : ' <b style="color:var(--red)">NOT WRITABLE</b>') +
+    (s.pendingCheckpoint ? ' · pending observations checkpointed' :
+      ' · <span style="color:var(--amber)">no checkpoint yet</span>') +
+    (ok ? '' : '<br><span style="color:var(--amber)">If this path is not a mounted volume, ' +
+      'every restart starts from nothing.</span>')
 }
 
 async function tick() {

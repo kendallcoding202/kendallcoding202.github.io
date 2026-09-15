@@ -46,6 +46,43 @@ export function append(row) {
   }
 }
 
+const shadowPath = () =>
+  path.join(config.dataDir, config.paper ? 'shadow-paper.json' : 'shadow-live.json')
+
+/**
+ * Checkpointed rather than written only on shutdown, because a hosted container is not
+ * guaranteed to get a clean shutdown — an OOM kill or a platform restart takes the
+ * process without running any handler, and that is exactly when you least want to lose
+ * the pending observations.
+ */
+export function saveShadow(tracker) {
+  if (!tracker) return
+  try {
+    fs.mkdirSync(config.dataDir, { recursive: true })
+    const tmp = `${shadowPath()}.tmp`
+    fs.writeFileSync(tmp, JSON.stringify(tracker.snapshot()))
+    fs.renameSync(tmp, shadowPath()) // atomic: a torn write must not destroy the last good copy
+  } catch (err) {
+    log.warn(`shadow checkpoint failed: ${err.message}`)
+  }
+}
+
+export function loadShadow() {
+  try {
+    return JSON.parse(fs.readFileSync(shadowPath(), 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+export function clearShadow() {
+  try {
+    fs.unlinkSync(shadowPath())
+  } catch {
+    /* already gone */
+  }
+}
+
 export function readAll() {
   try {
     return fs
@@ -202,5 +239,48 @@ export class ShadowTracker {
 
   get size() {
     return this.rows.size
+  }
+
+  /**
+   * In-flight rows, persisted across restarts.
+   *
+   * Without this, every row still inside its outcome window is discarded whenever the
+   * process stops — and on a hosted platform it stops often. At ~30 launches a minute
+   * against a 15-minute window there are ~450 rows in flight at any moment, so a restart
+   * every half hour throws away half the dataset and a restart every fifteen minutes
+   * throws away all of it.
+   *
+   * The loss is also BIASED, which is worse than its size: rows are only ever discarded
+   * around a restart, and restarts cluster around deploys. A dataset that systematically
+   * omits whatever was launching while you were shipping changes is not a random sample
+   * of the market.
+   */
+  snapshot() {
+    return { v: JOURNAL_VERSION, savedAt: Date.now(), rows: [...this.rows.values()] }
+  }
+
+  /**
+   * Returns rows whose window elapsed while the process was down — the caller finalizes
+   * them. They are labelled on the prices seen before the gap, which is honest: the row
+   * carries observedSeconds and windowTruncated, so a shortened observation cannot pass
+   * itself off as a full one.
+   */
+  restore(snapshot, now = Date.now()) {
+    if (!snapshot || (snapshot.v ?? 1) < JOURNAL_VERSION) return { restored: 0, expired: [] }
+    const expired = []
+    let restored = 0
+    for (const row of snapshot.rows ?? []) {
+      if (!row?.mint || !(row.decidedAt > 0)) continue
+      // Oldest first, so the Map's insertion order still means "oldest" for eviction.
+      this.rows.set(row.mint, row)
+      restored++
+    }
+    // Sorting after the fact is cheap here (once per process) and keeps eviction O(1).
+    const ordered = [...this.rows.entries()].sort((a, b) => a[1].decidedAt - b[1].decidedAt)
+    this.rows = new Map(ordered)
+    for (const [mint, row] of this.rows) {
+      if (now - row.decidedAt >= this.windowMs) expired.push(mint)
+    }
+    return { restored, expired }
   }
 }

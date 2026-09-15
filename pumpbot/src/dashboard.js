@@ -20,6 +20,39 @@ import { log } from './log.js'
 let learningCache = { at: 0, data: null }
 
 /**
+ * Is the data actually being kept? On a hosted platform DATA_DIR has to point at a
+ * mounted volume, or every restart starts from nothing — and that failure is silent,
+ * because a bot writing to ephemeral disk looks completely healthy right up until it
+ * forgets everything.
+ */
+function storageSnapshot() {
+  const stat = (name) => {
+    try {
+      const st = fs.statSync(path.join(config.dataDir, name))
+      return { bytes: st.size, modifiedAt: st.mtimeMs }
+    } catch {
+      return null
+    }
+  }
+  const journal = stat(config.paper ? 'journal-paper.jsonl' : 'journal-live.jsonl')
+  let writable = false
+  try {
+    fs.accessSync(config.dataDir, fs.constants.W_OK)
+    writable = true
+  } catch {
+    /* reported as false */
+  }
+  return {
+    dataDir: config.dataDir,
+    writable,
+    journalBytes: journal?.bytes ?? 0,
+    ledger: Boolean(stat(config.paper ? 'paper-state.json' : 'live-state.json')),
+    // A checkpoint means pending observations will survive the next restart.
+    pendingCheckpoint: Boolean(stat(config.paper ? 'shadow-paper.json' : 'shadow-live.json')),
+  }
+}
+
+/**
  * The learning report is a full pass over the journal, so it is cached — the dashboard
  * polls every few seconds and this does not change that fast.
  */
@@ -44,6 +77,8 @@ function learningSnapshot() {
         ev: a.ev.bought,
         topMisses: a.falseNegatives.slice(0, 4),
         suggestions: a.suggestions.slice(0, 4),
+        stale: a.totals.stale,
+        truncated: a.totals.truncated,
       },
     }
   } catch (err) {
@@ -202,6 +237,7 @@ export function buildSnapshot(walletSol, stats = null) {
       enabled: config.explore.enabled,
     },
     learning: learningSnapshot(),
+    storage: storageSnapshot(),
     /**
      * The EFFECTIVE settings, read back out of the live config rather than assumed.
      *
