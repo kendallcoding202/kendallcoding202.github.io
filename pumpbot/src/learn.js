@@ -1,5 +1,5 @@
 import { config } from './config.js'
-import { readAll } from './journal.js'
+import { readAll, JOURNAL_VERSION } from './journal.js'
 
 /**
  * Analysis over the decision journal.
@@ -134,7 +134,16 @@ export function bestThreshold(rows, feature, { minBucket = config.learning.minBu
 }
 
 export function analyze(rows = readAll()) {
-  const labelled = rows.filter((r) => typeof r.hitFirstRung === 'boolean' && r.decisionPriceSol > 0)
+  /**
+   * Rows from an older schema are dropped, not averaged in. v1 rows were all recorded
+   * while shadow-tracked tokens received no price updates at all, so every one of them
+   * reads as "went nowhere" regardless of what the token actually did. Including them
+   * would bias the rejected arm toward break-even and manufacture an edge for the
+   * filter out of nothing but missing data.
+   */
+  const stale = rows.filter((r) => (r.v ?? 1) < JOURNAL_VERSION).length
+  const current = rows.filter((r) => (r.v ?? 1) >= JOURNAL_VERSION)
+  const labelled = current.filter((r) => typeof r.hitFirstRung === 'boolean' && r.decisionPriceSol > 0)
   const bought = labelled.filter((r) => r.action === 'bought')
   const explored = labelled.filter((r) => r.action === 'explored')
   // Everything the filter declined — whether we shadow-tracked it or bought it anyway
@@ -214,11 +223,12 @@ export function analyze(rows = readAll()) {
     generatedAt: Date.now(),
     totals: {
       journalled: rows.length,
+      stale,
       labelled: labelled.length,
       bought: bought.length,
       explored: explored.length,
       rejected: rejected.length,
-      pending: rows.length - labelled.length,
+      pending: current.length - labelled.length,
       truncated,
       medianObservedSeconds,
       intendedWindowSeconds: config.learning.outcomeWindowMinutes * 60,
@@ -251,6 +261,10 @@ export function formatReport(a) {
   L.push('')
   L.push(`Journalled ${a.totals.journalled} decisions · ${a.totals.labelled} labelled · ${a.totals.pending} still in their outcome window`)
   L.push(`  bought ${a.totals.bought} · rejected (shadow-tracked) ${a.totals.rejected}`)
+  if (a.totals.stale) {
+    L.push(`  ${a.totals.stale} older rows EXCLUDED — recorded before shadow tokens received prices,`)
+    L.push('  so every one of them reads as "went nowhere" whatever the token actually did.')
+  }
   if (a.totals.truncated) {
     const pct = ((a.totals.truncated / Math.max(1, a.totals.labelled)) * 100).toFixed(0)
     L.push(

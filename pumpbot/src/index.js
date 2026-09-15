@@ -78,6 +78,8 @@ async function reset() {
   s.exploreWins = 0
   s.exploreLosses = 0
   s.consecutiveLosses = 0
+  s.baseEquitySol = 0
+  s.peakRealizedSol = 0
   s.blockedCreators = {}
   s.halted = null
   save()

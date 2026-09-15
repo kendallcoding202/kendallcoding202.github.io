@@ -20,6 +20,7 @@ const store = await import('../src/store.js')
 const { canOpen } = await import('../src/risk.js')
 const { buy, sell } = await import('../src/exec.js')
 const { wilson, simulateLadder, bestThreshold, analyze } = await import('../src/learn.js')
+const { JOURNAL_VERSION } = await import('../src/journal.js')
 const { buildSnapshot } = await import('../src/dashboard.js')
 
 let passed = 0
@@ -486,11 +487,12 @@ console.log('\nLearning')
   for (let i = 0; i < 400; i++) noise.push({ features: { organicBuyers: i % 40 }, hitFirstRung: i % 3 === 0 })
   check('noise yields no false discovery', bestThreshold(noise, 'organicBuyers') === null)
 
-  const small = analyze(signal.slice(0, 20).map((r) => ({ ...r, decisionPriceSol: 1, peakMultiple: 1, endMultiple: 1 })))
+  const small = analyze(signal.slice(0, 20).map((r) => ({ ...r, v: JOURNAL_VERSION, decisionPriceSol: 1, peakMultiple: 1, endMultiple: 1 })))
   check('suggestions are gated on sample size', !small.enoughData && small.suggestions.length === 0)
 
   const labelled = signal.map((r, i) => ({
-    ...r, decisionPriceSol: 1, peakMultiple: r.hitFirstRung ? 2 : 0.5, endMultiple: r.hitFirstRung ? 1.5 : 0.2,
+    ...r, v: JOURNAL_VERSION, decisionPriceSol: 1,
+    peakMultiple: r.hitFirstRung ? 2 : 0.5, endMultiple: r.hitFirstRung ? 1.5 : 0.2,
     rejectedFor: r.action === 'rejected' ? ['buyers'] : null, creator: `C${i % 5}`,
   }))
   const report = analyze(labelled)
@@ -500,6 +502,23 @@ console.log('\nLearning')
   check('repeat creators are surfaced', report.repeatCreators.length > 0)
 
   const { formatReport } = await import('../src/learn.js')
+
+  /**
+   * Rows from before the shadow-price fix must be DROPPED, not averaged in. Every one of
+   * them was recorded while rejected tokens received no price updates, so they all read
+   * as "went nowhere" whatever the token did — mixing them in manufactures an edge for
+   * the filter out of nothing but missing data, and the report would state it with a
+   * confidence interval.
+   */
+  const staleRows = labelled.map((r) => ({ ...r, v: 1, peakMultiple: 1, endMultiple: 1, hitFirstRung: false }))
+  const mixed = analyze([...staleRows, ...labelled])
+  check('older-schema rows are excluded', mixed.totals.labelled === labelled.length,
+    `${mixed.totals.labelled} labelled of ${staleRows.length + labelled.length}`)
+  check('the exclusion is counted', mixed.totals.stale === staleRows.length)
+  check('and disclosed in the report', formatReport(mixed).includes('EXCLUDED'))
+  check('the surviving rates match the clean dataset alone',
+    near(mixed.rates.base.p, analyze(labelled).rates.base.p, 1e-12))
+  check('a row with no version at all is treated as old', analyze(labelled.map(({ v, ...r }) => r)).totals.labelled === 0)
 
   /**
    * The headline comparison needs BOTH arms. When the filter accepts nothing — which is

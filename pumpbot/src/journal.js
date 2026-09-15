@@ -15,6 +15,19 @@ import { log } from './log.js'
  * can be analysed with anything.
  */
 
+/**
+ * Journal schema version. Bump this whenever a change makes OLD ROWS UNCOMPARABLE to
+ * new ones, so the analyser can drop them instead of averaging them in.
+ *
+ * v1 -> v2: before the LogFeed `interested` predicate covered shadow rows, a rejected
+ * token stopped receiving prices the moment it was screened. Every v1 row therefore has
+ * ticks 0, peakMultiple 1.0 and hitFirstRung false — not because those launches went
+ * nowhere, but because nobody was watching. Mixed into a v2 dataset they drag the
+ * "filter said NO" arm toward 1.0 and make the filter look good for a reason that has
+ * nothing to do with the filter.
+ */
+export const JOURNAL_VERSION = 2
+
 let journalPath = null
 
 function file() {
@@ -100,7 +113,7 @@ export class ShadowTracker {
 
     const price = entryPriceSol ?? candidate.priceSol
     this.rows.set(candidate.mint, {
-      v: 1,
+      v: JOURNAL_VERSION,
       mint: candidate.mint,
       symbol: candidate.symbol,
       creator: candidate.creator,

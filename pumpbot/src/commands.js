@@ -169,6 +169,8 @@ export class CommandListener {
         s2.exploreWins = 0
         s2.exploreLosses = 0
         s2.consecutiveLosses = 0
+        s2.baseEquitySol = 0
+        s2.peakRealizedSol = 0
         s2.blockedCreators = {}
         s2.halted = null
         save()
