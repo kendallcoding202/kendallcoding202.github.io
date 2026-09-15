@@ -16,7 +16,7 @@ import {
   halt,
 } from './store.js'
 import { decideExit, newPosition, applySell, markPrice, positionPnl } from './position.js'
-import { getPublicKey, getSolBalance } from './wallet.js'
+import { getPublicKey, getSolBalance, getAllTokenBalances } from './wallet.js'
 import { notifyEntry, notifySell, notifyClose, notifyHalt, notifyStartup, notify } from './notify.js'
 import { log, sol, utcDay } from './log.js'
 
@@ -145,6 +145,8 @@ export class Bot {
       log.info(`resuming position ${p.symbol} (${p.mint})`)
     }
 
+    await this.#checkForOrphans()
+
     this.stats.startedAt = Date.now()
     this.feed.on('raw', () => {
       this.stats.messages++
@@ -234,6 +236,48 @@ export class Bot {
       // Evaluate on the tick, not on a timer — a rung should fire when it is crossed.
       this.#manage(position, event.priceSol, event.vSol).catch((err) => log.error(err))
     }
+  }
+
+  /**
+   * Tokens the wallet holds that the ledger knows nothing about.
+   *
+   * This is the failure mode of running with ephemeral storage: the container restarts,
+   * the state file is gone, and the bot silently forgets it is holding real positions.
+   * Those bags then sit there with no stop-loss, no time stop, and no exit — the single
+   * most expensive way this can go wrong. Loud is the correct behaviour.
+   */
+  async #checkForOrphans() {
+    if (config.paper) return []
+
+    let held
+    try {
+      held = await getAllTokenBalances()
+    } catch (err) {
+      log.warn(`could not check for orphaned positions: ${err.message}`)
+      return []
+    }
+
+    const known = new Set(Object.keys(getState().positions))
+    const orphans = held.filter((t) => !known.has(t.mint))
+    if (!orphans.length) return []
+
+    log.error('═══════════════════════════════════════════════════════════')
+    log.error(`${orphans.length} token(s) in the wallet are NOT in the ledger:`)
+    for (const o of orphans) log.error(`   ${o.mint}  ${o.amount.toFixed(0)} tokens`)
+    log.error('These are unmanaged — no stop-loss, no time stop, no exit.')
+    log.error('Usually this means the state file was lost (ephemeral storage?).')
+    log.error('Run `npm run adopt` to bring them under management, or sell manually.')
+    log.error('═══════════════════════════════════════════════════════════')
+
+    await notify(
+      `⚠️ <b>${orphans.length} unmanaged position(s)</b>\n` +
+        'Tokens in the wallet that the ledger does not know about — they have no ' +
+        'stop-loss and no exit rules.\n' +
+        orphans.map((o) => `<code>${o.mint}</code>`).join('\n') +
+        '\n\nThis usually means the state file was lost. Run <code>npm run adopt</code>.',
+    )
+
+    return orphans
   }
 
   /** Runs one sweep on demand. The scheduler calls #sweep directly; tests use this. */

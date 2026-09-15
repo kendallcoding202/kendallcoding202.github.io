@@ -52,6 +52,7 @@ export const config = {
 
   privateKey: str('PRIVATE_KEY'),
   rpcUrl: str('RPC_URL', 'https://api.mainnet-beta.solana.com'),
+  pumpProgramId: str('PUMP_PROGRAM_ID', '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P'),
   wsFeedUrl: str('FEED_URL', 'wss://pumpportal.fun/api/data'),
   tradeApiUrl: str('TRADE_API_URL', 'https://pumpportal.fun/api/trade-local'),
 
@@ -90,7 +91,9 @@ export const config = {
 
   dashboard: {
     enabled: bool('DASHBOARD', true),
-    port: num('DASHBOARD_PORT', 8080),
+    // PORT is the convention on hosted platforms (Railway, Render, Fly) — honour it
+    // so the dashboard lands on the port the platform actually routes to.
+    port: num('DASHBOARD_PORT', num('PORT', 8080)),
     /**
      * Localhost only by default. This page shows your wallet, your positions and your
      * P&L — it has no business being reachable from the internet. To view it from your
@@ -215,6 +218,9 @@ function parseLadder(spec) {
   if (total > 100) throw new Error(`LADDER sells ${total}% of the position — must be <= 100%`)
   return rungs
 }
+
+export const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'
+export const TOKEN_2022_PROGRAM = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'
 
 export const LAMPORTS_PER_SOL = 1_000_000_000
 // Every pump.fun mint is 1e9 tokens at 6 decimals.

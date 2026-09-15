@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { Keypair, Connection, PublicKey } from '@solana/web3.js'
 import bs58 from 'bs58'
-import { config, ROOT, LAMPORTS_PER_SOL } from './config.js'
+import { config, ROOT, LAMPORTS_PER_SOL, TOKEN_PROGRAM, TOKEN_2022_PROGRAM } from './config.js'
 import { log } from './log.js'
 
 let cachedKeypair = null
@@ -65,6 +65,33 @@ export async function getTokenBalance(mint) {
     total += Number(account.data?.parsed?.info?.tokenAmount?.uiAmount) || 0
   }
   return total
+}
+
+/**
+ * Every SPL token the wallet currently holds. Used to detect positions the ledger has
+ * lost track of — which is exactly what happens if state is stored on an ephemeral
+ * filesystem and the container restarts.
+ */
+export async function getAllTokenBalances() {
+  const connection = getConnection()
+  const out = []
+  for (const programId of [TOKEN_PROGRAM, TOKEN_2022_PROGRAM]) {
+    let res
+    try {
+      res = await connection.getParsedTokenAccountsByOwner(getPublicKey(), {
+        programId: new PublicKey(programId),
+      })
+    } catch (err) {
+      log.warn(`could not read ${programId.slice(0, 8)} accounts: ${err.message}`)
+      continue
+    }
+    for (const { account } of res.value) {
+      const info = account.data?.parsed?.info
+      const amount = Number(info?.tokenAmount?.uiAmount) || 0
+      if (info?.mint && amount > 0) out.push({ mint: info.mint, amount })
+    }
+  }
+  return out
 }
 
 /**

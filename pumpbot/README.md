@@ -45,7 +45,7 @@ Believe the numbers it gives you over the numbers you hoped for.
 ```bash
 cd pumpbot
 npm install
-npm test                     # 127 offline checks, no network or keys needed
+npm test                     # 137 offline checks, no network or keys needed
 
 cp .env.example .env
 npm run keygen               # creates the burner, prints the address to fund
@@ -248,7 +248,85 @@ that stops fill at their trigger price. Read its output as an upper bound.
 
 ---
 
-## VPS deploy
+## Running it 24/7
+
+Your laptop only works while it is awake and the terminal is open. `caffeinate -i npm run
+paper` stops it sleeping, but the moment you close the lid or the terminal, the bot dies
+and open positions stop being managed. For anything real you need it hosted.
+
+### Railway
+
+Works well, and is the least setup. **One thing is mandatory:**
+
+> **Attach a Volume and set `DATA_DIR` to its mount path.**
+>
+> Railway containers have an ephemeral filesystem. Without a volume, every redeploy,
+> crash, or platform restart wipes `.data/` — and the bot comes back believing it holds
+> nothing. Any open position becomes a bag with no stop-loss, no time stop, and no exit,
+> sitting there until you notice. That is the single most expensive way this can fail.
+
+Setup:
+
+1. New Project → Deploy from GitHub repo → pick this repo and the tracker branch.
+2. **Add a Volume**, mount path `/data`.
+3. Variables:
+
+   | Variable | Value |
+   |---|---|
+   | `DATA_DIR` | `/data` ← the volume mount, not a normal path |
+   | `PAPER` | `1` |
+   | `RPC_URL` | your Helius URL |
+   | `PRIVATE_KEY` | *(leave unset until you go live)* |
+   | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | optional |
+   | `DASHBOARD_HOST` | `0.0.0.0` — only if you want the dashboard public |
+   | `DASHBOARD_TOKEN` | a long random string — **required** with the above |
+
+   `PORT` is injected by Railway and the dashboard picks it up automatically.
+
+4. Deploy. Watch the deploy logs for `feed connected` and `feed parsing confirmed`.
+
+**On the private key.** Railway variables are a reasonable place for a burner holding
+~$100. They are not a reasonable place for a wallet you would mind losing. Generate the
+key locally with `npm run keygen`, then paste it into the Railway variable — do not
+generate it in a shell whose history is stored.
+
+**On exposing the dashboard.** Setting `DASHBOARD_HOST=0.0.0.0` puts your wallet and P&L
+on a public URL. The server refuses to start without `DASHBOARD_TOKEN`, and you then
+reach it at `https://your-app.up.railway.app/?token=YOUR_TOKEN`. That token is the only
+thing protecting it, so make it long. Leaving the host at `127.0.0.1` and reading the
+deploy logs instead is the safer choice.
+
+### Orphaned positions
+
+If state is ever lost while positions are open, the bot detects it on the next start:
+tokens in the wallet that the ledger knows nothing about get a loud log block and a
+Telegram alert. Then either:
+
+```bash
+npm run adopt               # lists them
+npm run adopt -- --confirm  # brings them back under the exit rules
+npm run panic               # or just get out
+```
+
+Adoption sets entry price to the *current* price, so reported P&L on those positions is
+measured from adoption rather than from what you paid. It is an explicit command, never
+automatic — silently rewriting your cost basis is not something a bot should decide.
+
+### VPS deploy
+
+There is a bootstrap script for a fresh Ubuntu/Debian box:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kendallcoding202/kendallcoding202.github.io/claude/solana-meme-coin-tracker-gugfaj/pumpbot/deploy/setup.sh -o setup.sh
+less setup.sh        # read it first — it runs as root
+sudo bash setup.sh   # --firewall to also enable ufw
+```
+
+It installs Node 20, creates an unprivileged `pumpbot` user, clones to `/opt/pumpbot`,
+runs the tests, and starts paper mode. It deliberately does not create a wallet, enable
+live trading, or open any port.
+
+Manual equivalent:
 
 ```bash
 sudo useradd -r -s /usr/sbin/nologin -d /opt/pumpbot pumpbot
@@ -272,7 +350,7 @@ verification above.
 
 | Command | Does |
 |---|---|
-| `npm test` | 127 offline checks |
+| `npm test` | 137 offline checks |
 | `npm run keygen` | Create the burner wallet |
 | `npm run balance` | Address, balance, current size tier |
 | `npm run paper` | Paper instance, dashboard on :8081 |
@@ -282,6 +360,7 @@ verification above.
 | `npm run positions` | Open and recent closed trades |
 | `npm run learn` | Learning report |
 | `npm run panic` | Liquidate everything |
+| `npm run adopt` | Re-manage tokens the ledger lost track of |
 
 ---
 
@@ -302,9 +381,10 @@ src/
   journal.js    decision journal + shadow tracking
   learn.js      statistics over the journal
   dashboard.js  local HTTP server
+  onchain.js    bonding curve account reads (pricing when the feed is silent)
   notify.js     Telegram
 deploy/         systemd units for live and paper
-test/run.js     127 checks
+test/run.js     137 checks
 ```
 
 ## What is unverified

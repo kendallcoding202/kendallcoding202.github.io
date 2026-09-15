@@ -3,10 +3,11 @@ import path from 'node:path'
 import { config } from './config.js'
 import { Bot } from './bot.js'
 import { startDashboard } from './dashboard.js'
-import { initStore, getState, clearHalt, openPositions, save } from './store.js'
-import { keygen, getPublicKey, getSolBalance } from './wallet.js'
+import { initStore, getState, clearHalt, openPositions, save, addPosition } from './store.js'
+import { keygen, getPublicKey, getSolBalance, getAllTokenBalances } from './wallet.js'
 import { sizingSummary } from './sizing.js'
 import { analyze, formatReport } from './learn.js'
+import { readBondingCurve } from './onchain.js'
 import { readAll } from './journal.js'
 import { normalizeEvent } from './curve.js'
 import { positionPnl } from './position.js'
@@ -21,6 +22,82 @@ const commands = {
   learn,
   record,
   replay,
+  adopt,
+}
+
+/**
+ * Brings wallet tokens the ledger lost track of back under management.
+ *
+ * Entry price is unknowable after the fact, so it is set to the current price and the
+ * position is flagged `adopted`. That means P&L on it is measured from adoption, NOT
+ * from what you actually paid — but the exit rules apply again from here, which is the
+ * point. Explicit command rather than automatic: silently rewriting cost basis is not
+ * something a bot should do on its own.
+ */
+async function adopt() {
+  if (config.paper) {
+    console.log('\n  Paper mode has no real wallet to adopt from.\n')
+    return
+  }
+
+  initStore()
+  const held = await getAllTokenBalances()
+  const known = new Set(Object.keys(getState().positions))
+  const orphans = held.filter((t) => !known.has(t.mint))
+
+  if (!orphans.length) {
+    console.log('\n  No unmanaged tokens — the ledger matches the wallet.\n')
+    return
+  }
+
+  console.log(`\n  ${orphans.length} unmanaged token(s):\n`)
+  for (const o of orphans) console.log(`    ${o.mint}  ${o.amount.toFixed(0)}`)
+
+  if (process.argv[3] !== '--confirm') {
+    console.log('\n  Re-run with --confirm to bring these under management:')
+    console.log('    npm run adopt -- --confirm\n')
+    console.log('  Their entry price will be set to the CURRENT price, so reported P&L')
+    console.log('  will not reflect what you originally paid. Exit rules resume either way.')
+    console.log('  If you would rather just get out, use `npm run panic`.\n')
+    return
+  }
+
+  let adopted = 0
+
+  for (const o of orphans) {
+    // Price straight off the bonding curve. If we cannot price it, we cannot manage it.
+    const priced = await readBondingCurve(o.mint)
+    if (!(priced?.priceSol > 0)) {
+      console.log(`    skipped ${o.mint} — no usable price (graduated, or not a pump.fun curve)`)
+      continue
+    }
+    addPosition({
+      mint: o.mint,
+      symbol: o.mint.slice(0, 6),
+      creator: null,
+      pool: 'pump',
+      state: 'open',
+      openedAt: Date.now(),
+      adopted: true,
+      entryPriceSol: priced.priceSol,
+      tokensBought: o.amount,
+      tokensRemaining: o.amount,
+      // Unknown — treated as zero so adoption cannot invent a fake profit.
+      solSpent: 0,
+      solRecovered: 0,
+      rungsHit: [],
+      peakPriceSol: priced.priceSol,
+      lastPriceSol: priced.priceSol,
+      lastVSol: priced.vSol,
+      lastVTokens: priced.vTokens,
+      entryVSol: priced.vSol,
+      fills: [],
+    })
+    adopted++
+    console.log(`    adopted ${o.mint} at ${priced.priceSol.toExponential(3)} SOL`)
+  }
+
+  console.log(`\n  ${adopted} position(s) now managed. Restart the bot to pick them up.\n`)
 }
 
 async function run() {

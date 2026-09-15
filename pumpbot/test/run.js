@@ -424,6 +424,43 @@ console.log('\nDashboard snapshot')
   check('serialises cleanly for the API', typeof JSON.stringify(snap) === 'string')
 }
 
+// ---------------------------------------------- bonding curve account decoding
+console.log('\nBonding curve account')
+{
+  const { decodeBondingCurve, bondingCurveAddress } = await import('../src/onchain.js')
+
+  const encode = ({ vTokens, vSol, rTokens = 700_000_000e6, rSol = 30e9, supply = 1_000_000_000e6, complete = false }) => {
+    const b = Buffer.alloc(8 + 8 * 5 + 1)
+    b.writeBigUInt64LE(BigInt(Math.round(vTokens)), 8)
+    b.writeBigUInt64LE(BigInt(Math.round(vSol)), 16)
+    b.writeBigUInt64LE(BigInt(Math.round(rTokens)), 24)
+    b.writeBigUInt64LE(BigInt(Math.round(rSol)), 32)
+    b.writeBigUInt64LE(BigInt(Math.round(supply)), 40)
+    b.writeUInt8(complete ? 1 : 0, 48)
+    return b
+  }
+
+  // 1,073,000,000 tokens (6dp) against 32 SOL (9dp) — a typical early curve.
+  const decoded = decodeBondingCurve(encode({ vTokens: 1_073_000_000e6, vSol: 32e9 }))
+  check('decodes a plausible curve', Boolean(decoded))
+  check('reserves converted out of base units', decoded && near(decoded.vSol, 32, 1e-6) && near(decoded.vTokens, 1_073_000_000, 1))
+  check('price derived from reserves', decoded && near(decoded.priceSol, 32 / 1_073_000_000, 1e-15))
+
+  check('rejects a truncated account', decodeBondingCurve(Buffer.alloc(20)) === null)
+  check('rejects empty data', decodeBondingCurve(null) === null)
+
+  // The safety property that matters: garbage must not produce a confident price.
+  const garbage = Buffer.alloc(49)
+  garbage.fill(0xff)
+  check('rejects garbage rather than pricing it', decodeBondingCurve(garbage) === null)
+  check('rejects an all-zero account', decodeBondingCurve(Buffer.alloc(49)) === null)
+  check('rejects implausibly tiny reserves', decodeBondingCurve(encode({ vTokens: 1, vSol: 1 })) === null)
+
+  const addr = bondingCurveAddress('So11111111111111111111111111111111111111112').toBase58()
+  check('derives a deterministic curve PDA', typeof addr === 'string' && addr.length >= 32)
+  check('PDA is stable across calls', bondingCurveAddress('So11111111111111111111111111111111111111112').toBase58() === addr)
+}
+
 // ------------------------------------------------- end-to-end, synthetic feed
 console.log('\nEnd-to-end bot loop')
 {
