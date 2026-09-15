@@ -95,8 +95,24 @@ export const config = {
      * minute instead of ~85. The cost is up to 5s of a 30s observation window.
      */
     subscribeBatchMs: num('SUBSCRIBE_BATCH_MS', 5000),
-    // Upper bound on simultaneous per-token trade subscriptions.
-    maxWatchedMints: num('MAX_WATCHED_MINTS', 180),
+    /**
+     * Upper bound on simultaneous per-token trade subscriptions.
+     *
+     * Kept low because PumpPortal METERS the data feed — published rate is 0.01 SOL
+     * per 10,000 websocket messages. Freshly-launched tokens are the most trade-dense
+     * on the platform, so each extra subscription is a recurring cost, not a free one.
+     * 180 hot tokens can plausibly generate hundreds of thousands of messages a day,
+     * which on a 0.5 SOL stack would cost more than the trading.
+     */
+    maxWatchedMints: num('MAX_WATCHED_MINTS', 60),
+    /**
+     * Published metering rate, used only to ESTIMATE spend from messages we count.
+     * We cannot read the key's balance, so this turns an invisible drain into a number
+     * you can watch. Set to 0 to hide the estimate.
+     */
+    costPer10kMessagesSol: num('FEED_COST_PER_10K_SOL', 0.01),
+    // Warn once estimated feed spend crosses this. Default is the minimum funding.
+    costWarnSol: num('FEED_COST_WARN_SOL', 0.02),
   },
 
   // How often the pipeline summary prints. The first beat always comes early so you

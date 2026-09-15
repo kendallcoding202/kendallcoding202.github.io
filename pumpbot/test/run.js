@@ -488,6 +488,77 @@ console.log('\nBonding curve account')
   check('PDA is stable across calls', bondingCurveAddress('So11111111111111111111111111111111111111112').toBase58() === addr)
 }
 
+// ------------------------------------------- pump.fun log event decoding
+console.log('\nPump.fun log events')
+{
+  const { decodeTradeEvent, tradeEventsFromLogs, toFeedEvent, rpcWebsocketUrl,
+          TRADE_EVENT_DISCRIMINATOR } = await import('../src/pumpevents.js')
+  const { createHash } = await import('node:crypto')
+  const { PublicKey } = await import('@solana/web3.js')
+
+  // The discriminator must be DERIVED, not trusted — Anchor defines it as
+  // sha256("event:<Name>")[0..8], and the base64 prefix is what real logs carry.
+  const derived = createHash('sha256').update('event:TradeEvent').digest().subarray(0, 8)
+  check('TradeEvent discriminator matches Anchor derivation', TRADE_EVENT_DISCRIMINATOR.equals(derived))
+  check('and matches the prefix seen in mainnet logs', derived.toString('base64').startsWith('vdt/007mYe'))
+
+  const mint = new PublicKey('So11111111111111111111111111111111111111112')
+  const user = new PublicKey('7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU')
+  const build = ({ isBuy = true, vSolLamports = 32e9, vTokensRaw = 1.073e15, tail = 0 } = {}) => {
+    const b = Buffer.alloc(8 + 105 + tail)
+    derived.copy(b, 0)
+    mint.toBuffer().copy(b, 8)
+    b.writeBigUInt64LE(BigInt(0.05e9), 40)      // solAmount
+    b.writeBigUInt64LE(BigInt(1_500_000e6), 48) // tokenAmount
+    b.writeUInt8(isBuy ? 1 : 0, 56)
+    user.toBuffer().copy(b, 57)
+    b.writeBigInt64LE(BigInt(1789500000), 89)
+    b.writeBigUInt64LE(BigInt(vSolLamports), 97)
+    b.writeBigUInt64LE(BigInt(vTokensRaw), 105)
+    return b
+  }
+
+  const t = decodeTradeEvent(build())
+  check('decodes a trade event', Boolean(t))
+  check('mint decoded', t.mint === mint.toBase58())
+  check('trader decoded — this is the distinct-buyer signal', t.trader === user.toBase58())
+  check('direction decoded', t.isBuy === true)
+  check('sol amount converted from lamports', near(t.solAmount, 0.05, 1e-9))
+  check('token amount converted from base units', near(t.tokenAmount, 1_500_000, 1e-6))
+  check('reserves converted', near(t.vSol, 32, 1e-9) && near(t.vTokens, 1.073e9, 1))
+
+  const sell = decodeTradeEvent(build({ isBuy: false }))
+  check('sell direction decoded', sell.isBuy === false)
+
+  // The struct has grown upstream before; appended fields must not break the prefix.
+  const withTail = decodeTradeEvent(build({ tail: 200 }))
+  check('extra trailing bytes are ignored', Boolean(withTail) && withTail.mint === mint.toBase58())
+
+  // Refuse rather than misreport — a layout change must not yield wrong prices.
+  check('rejects a wrong discriminator', decodeTradeEvent(Buffer.alloc(150)) === null)
+  check('rejects a truncated payload', decodeTradeEvent(build().subarray(0, 60)) === null)
+  check('rejects implausible reserves', decodeTradeEvent(build({ vSolLamports: 1, vTokensRaw: 1 })) === null)
+
+  const logs = [
+    'Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P invoke [1]',
+    'Program log: Instruction: Buy',
+    `Program data: ${build().toString('base64')}`,
+    'Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P success',
+  ]
+  const found = tradeEventsFromLogs(logs)
+  check('extracts trades from a log array', found.length === 1 && found[0].mint === mint.toBase58())
+  check('ignores non-event log lines', tradeEventsFromLogs(['Program log: hello']).length === 0)
+  check('survives a garbage Program data line', tradeEventsFromLogs(['Program data: not-base64!!!']).length === 0)
+  check('handles missing logs', tradeEventsFromLogs(null).length === 0)
+
+  const feedEvent = toFeedEvent(found[0])
+  check('shapes into a feed event', feedEvent.kind === 'buy' && feedEvent.mint === mint.toBase58())
+  check('price derived the same way as the websocket feed', near(feedEvent.priceSol, 32 / 1.073e9, 1e-18))
+
+  check('derives a wss URL from an https RPC', rpcWebsocketUrl('https://x.helius-rpc.com/?api-key=k').startsWith('wss://'))
+  check('derives ws from http', rpcWebsocketUrl('http://localhost:8899').startsWith('ws://'))
+}
+
 // ------------------------------------------------------- paper balance
 console.log('\nPaper balance')
 {
@@ -586,12 +657,15 @@ console.log('\nFeed subscriptions')
   const capped = new Feed()
   capped.ws = { readyState: 1, send: () => {} }
   for (let i = 0; i < config.feed.maxWatchedMints + 40; i++) capped.watch('C' + i)
+  check('the cap is low enough to bound a metered feed', config.feed.maxWatchedMints <= 100,
+    `${config.feed.maxWatchedMints} — each subscription is a recurring cost, not a free one`)
   check('subscriptions are capped', capped.subscriptionStats().watched === config.feed.maxWatchedMints)
   check('dropped watches are counted, not silent', capped.subscriptionStats().dropped === 40)
 
   // Oversized batches are chunked rather than sent as one huge message.
   const many = new Feed()
   const manySent = []
+  many.maxWatched = 500 // this test is about chunking, not the cap
   many.ws = { readyState: 1, send: (s) => manySent.push(JSON.parse(s)) }
   for (let i = 0; i < 150; i++) many.watch('M' + i)
   await new Promise((r) => setTimeout(r, config.feed.subscribeBatchMs + 120))

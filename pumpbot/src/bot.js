@@ -60,6 +60,10 @@ export class Bot {
       startedAt: null,
       // Reset each heartbeat so the log shows rate, not just a running total.
       sinceBeat: { messages: 0, creates: 0, screened: 0, entered: 0 },
+      costWarned: false,
+      uptimeHours() {
+        return this.startedAt ? (Date.now() - this.startedAt) / 3_600_000 : 0
+      },
     }
   }
 
@@ -79,6 +83,25 @@ export class Bot {
       parsing: s.firstParsedAt !== null,
       uptimeSeconds: s.startedAt ? Math.round((Date.now() - s.startedAt) / 1000) : 0,
       topRejects: [...s.rejects.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([id, n]) => ({ id, n })),
+      feedCost: this.#feedCost(),
+    }
+  }
+
+  /**
+   * Estimated spend on the metered feed. We cannot read the API key's balance, so this
+   * is derived from messages received — an estimate, but an observable one, and far
+   * better than discovering the wallet drained by watching trades stop.
+   */
+  #feedCost() {
+    const rate = config.feed.costPer10kMessagesSol
+    if (!(rate > 0)) return null
+    const spentSol = (this.stats.messages / 10_000) * rate
+    const uptimeH = Math.max(this.stats.uptimeHours(), 1 / 60)
+    return {
+      messages: this.stats.messages,
+      spentSol,
+      perDaySol: (spentSol / uptimeH) * 24,
+      warnAtSol: config.feed.costWarnSol,
     }
   }
 
@@ -121,6 +144,22 @@ export class Bot {
       )
       // Show exactly what we sent, so the payload can be checked against the docs.
       log.error(`last subscribe payload: ${JSON.stringify(subs?.lastSubscribe ?? null)}`)
+    }
+
+    // Metered feed: say something before the funding is gone, not after.
+    const cost = this.#feedCost()
+    if (cost && !s.costWarned && cost.spentSol >= cost.warnAtSol) {
+      s.costWarned = true
+      log.error(
+        `Estimated feed spend ${cost.spentSol.toFixed(4)} SOL from ${cost.messages} messages ` +
+          `(~${cost.perDaySol.toFixed(2)} SOL/day at this rate). Top up the API key, lower ` +
+          'MAX_WATCHED_MINTS, or switch to the free RPC log feed.',
+      )
+      notify(
+        `💸 <b>Metered feed spend ~${cost.spentSol.toFixed(4)} SOL</b>\n` +
+          `${cost.messages.toLocaleString()} messages · ~<b>${cost.perDaySol.toFixed(2)} SOL/day</b> at this rate\n` +
+          'Top up the PumpPortal key, lower MAX_WATCHED_MINTS, or move to the free RPC feed.',
+      ).catch(() => {})
     }
 
     const rejects = this.statsSnapshot().topRejects
