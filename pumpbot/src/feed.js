@@ -167,6 +167,9 @@ export class Feed extends EventEmitter {
   }
 
   watch(mint) {
+    // Nothing to subscribe to when trades are decoded from program logs — one
+    // subscription there already covers every token.
+    if (config.feed.tradeSource === 'rpc') return
     if (this.watchedMints.has(mint)) return
     if (this.watchedMints.size >= this.maxWatched) {
       // Refusing loudly beats silently subscribing to more than the feed will serve.

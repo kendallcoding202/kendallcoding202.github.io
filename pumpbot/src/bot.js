@@ -1,5 +1,6 @@
 import { config, envReport } from './config.js'
 import { Feed } from './feed.js'
+import { LogFeed } from './logfeed.js'
 import { Candidate, evaluateEntry } from './filter.js'
 import { buy, sell } from './exec.js'
 import { canOpen, riskSummary, rolloverDaily } from './risk.js'
@@ -33,8 +34,18 @@ import { log, sol, esc, utcDay } from './log.js'
  */
 export class Bot {
   /** `feed` is injectable so the whole loop can be driven by a synthetic feed in tests. */
-  constructor({ feed } = {}) {
+  constructor({ feed, logFeed } = {}) {
     this.feed = feed ?? new Feed()
+    this.usingRpcTrades = config.feed.tradeSource === 'rpc'
+    // One subscription to the program covers every token, so the per-token tape is
+    // not needed at all when this is on.
+    this.logFeed =
+      logFeed ??
+      (this.usingRpcTrades
+        ? new LogFeed({
+            interested: (mint) => this.candidates.has(mint) || Boolean(getState().positions[mint]),
+          })
+        : null)
     this.candidates = new Map() // mint -> Candidate, pre-entry
     this.shadow = config.learning.enabled ? new ShadowTracker() : null
     this.walletSol = 0
@@ -80,6 +91,8 @@ export class Bot {
       trades: s.trades,
       tradesMatched: s.tradesMatched,
       subscriptions: this.feed.subscriptionStats?.() ?? null,
+      tradeSource: this.usingRpcTrades ? 'rpc-logs' : 'pumpportal',
+      logFeed: this.logFeed?.feedStats?.() ?? null,
       screened: s.screened,
       entered: s.entered,
       explored: s.explored,
@@ -244,8 +257,18 @@ export class Bot {
     })
     this.feed.on('migrate', (e) => this.#onMigrate(e).catch((err) => log.error(err)))
     this.feed.on('create', (e) => this.#onCreate(e))
-    this.feed.on('trade', (e) => this.#onTrade(e))
+    // Only take the metered tape when we are not decoding trades ourselves.
+    if (!this.usingRpcTrades) this.feed.on('trade', (e) => this.#onTrade(e))
     this.feed.start()
+
+    if (this.logFeed) {
+      this.logFeed.on('trade', (e) => {
+        this.stats.messages++
+        this.#onTrade(e)
+      })
+      this.logFeed.start()
+      log.info('trade ticks from RPC program logs (free) — metered tape not subscribed')
+    }
 
     // Sweeps cover everything the event stream cannot: silent tokens, the time stop,
     // abandoning stale candidates, closing outcome windows, and the day rollover.
@@ -273,6 +296,7 @@ export class Bot {
     clearInterval(this.heartbeatTimer)
     clearInterval(this.summaryTimer)
     await this.feed.stop()
+    await this.logFeed?.stop()
     save()
     releaseLock()
   }

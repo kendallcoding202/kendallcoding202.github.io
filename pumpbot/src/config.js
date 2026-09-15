@@ -86,6 +86,19 @@ export const config = {
 
   feed: {
     /**
+     * Where trade ticks come from.
+     *
+     * 'rpc' decodes pump.fun's TradeEvent from Solana transaction logs: one
+     * subscription covers every token, costs nothing per message, and has no
+     * subscription cap. 'pumpportal' uses the metered tape, billed at 0.01 SOL per
+     * 10,000 messages — at real launch density that runs over a SOL a day, many times
+     * the trading stack it serves. Free is also strictly more complete here, since the
+     * per-token tape only covers tokens we thought to subscribe to.
+     *
+     * New-token and migration discovery stay on PumpPortal either way; both are free.
+     */
+    tradeSource: str('TRADE_SOURCE', 'rpc'),
+    /**
      * How long subscriptions accumulate before being sent as one message.
      *
      * This is deliberately long. Launches arrive one at a time, so a short window

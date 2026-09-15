@@ -763,6 +763,9 @@ console.log('\nPaper balance')
 console.log('\nFeed subscriptions')
 {
   const { Feed } = await import('../src/feed.js')
+  // These cover the metered per-token tape; the default source skips it entirely.
+  const realSource = config.feed.tradeSource
+  config.feed.tradeSource = 'pumpportal'
   const feed = new Feed()
   const sent = []
   // Pretend the socket is open and capture what would go over the wire.
@@ -818,6 +821,18 @@ console.log('\nFeed subscriptions')
   check('chunks total the full set', manySent.reduce((n, m) => n + m.keys.length, 0) === 150)
 
   await feed.stop(); await capped.stop(); await many.stop()
+
+  // Under the free source there is nothing to subscribe per token — one program-level
+  // subscription already covers every mint.
+  config.feed.tradeSource = 'rpc'
+  const noop = new Feed()
+  noop.ws = { readyState: 1, send: () => {} }
+  for (let i = 0; i < 20; i++) noop.watch('N' + i)
+  check('the per-token tape is not subscribed under the free source',
+    noop.subscriptionStats().watched === 0)
+  await noop.stop()
+
+  config.feed.tradeSource = realSource
 }
 
 // ------------------------------------------------------- explore mode
@@ -1124,9 +1139,18 @@ console.log('\nEnd-to-end bot loop')
   // Must persist: bot.start() re-runs initStore(), which reloads from disk.
   store.save()
 
+  class FakeLogFeed extends EventEmitter {
+    constructor() { super(); this.started = false }
+    start() { this.started = true }
+    async stop() { this.started = false }
+    feedStats() { return { notifications: 0, decoded: 0, kept: 0, connected: true } }
+  }
+
   const feed = new FakeFeed()
-  const bot = new Bot({ feed })
+  const logFeed = new FakeLogFeed()
+  const bot = new Bot({ feed, logFeed })
   await bot.start()
+  check('the free trade feed is started', logFeed.started)
   // Drop the real schedulers; this test drives every tick explicitly.
   clearInterval(bot.sweepTimer); clearInterval(bot.balanceTimer); clearInterval(bot.heartbeatTimer)
 
@@ -1141,14 +1165,14 @@ console.log('\nEnd-to-end bot loop')
   check('launch counted in stats', bot.statsSnapshot().creates === 1)
   check('parsing marked healthy', bot.statsSnapshot().parsing === true)
 
-  for (let i = 0; i < 20; i++) feed.emit('trade', mkTrade('buy', `BUYER${i}`))
-  feed.emit('trade', mkTrade('sell', 'SELLER0'))
+  for (let i = 0; i < 20; i++) logFeed.emit('trade', mkTrade('buy', `BUYER${i}`))
+  logFeed.emit('trade', mkTrade('sell', 'SELLER0'))
   check('trade events counted', bot.statsSnapshot().trades === 21)
   check('trades are attributed to the watched candidate', bot.statsSnapshot().tradesMatched === 21)
 
   // A trade for something we are not tracking must not count as matched — that counter
   // is the signal that our subscriptions are actually being served.
-  feed.emit('trade', normalizeEvent({ txType: 'buy', mint: 'UNRELATED', traderPublicKey: 'Z',
+  logFeed.emit('trade', normalizeEvent({ txType: 'buy', mint: 'UNRELATED', traderPublicKey: 'Z',
     tokenAmount: 1, solAmount: 0.01, vSolInBondingCurve: 30, vTokensInBondingCurve: 1e9 }))
   check('unrelated trades are not counted as matched', bot.statsSnapshot().tradesMatched === 21)
   check('but they do count toward total trades', bot.statsSnapshot().trades === 22)
@@ -1170,7 +1194,7 @@ console.log('\nEnd-to-end bot loop')
 
   // Price doubles -> first two rungs fire.
   const beforeTokens = pos.tokensRemaining
-  feed.emit('trade', mkTrade('buy', 'WHALE', 2))
+  logFeed.emit('trade', mkTrade('buy', 'WHALE', 2))
   await new Promise((r) => setImmediate(r))
   await bot.tick()
 
@@ -1182,7 +1206,7 @@ console.log('\nEnd-to-end bot loop')
   }
 
   // Curve collapses -> emergency exit closes the position.
-  feed.emit('trade', mkTrade('sell', 'RUGGER', 0.2))
+  logFeed.emit('trade', mkTrade('sell', 'RUGGER', 0.2))
   await new Promise((r) => setImmediate(r))
   await bot.tick()
 
@@ -1190,7 +1214,7 @@ console.log('\nEnd-to-end bot loop')
   const closed = store.getState().closed.at(-1)
   check('closed trade was booked', closed?.mint === MINT, JSON.stringify(closed?.symbol))
   check('a ladder winner books a profit', closed && closed.realizedSol > 0, String(closed?.realizedSol))
-  check('feed unsubscribed after close', !feed.watched.has(MINT) || bot.shadow.has(MINT))
+  check('trade source is reported as the free one', bot.statsSnapshot().tradeSource === 'rpc-logs')
 
   // Stats survive into the dashboard payload.
   const snap = buildSnapshot(0.5, bot.statsSnapshot())

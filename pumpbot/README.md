@@ -45,7 +45,7 @@ Believe the numbers it gives you over the numbers you hoped for.
 ```bash
 cd pumpbot
 npm install
-npm test                     # 301 offline checks, no network or keys needed
+npm test                     # 303 offline checks, no network or keys needed
 
 cp .env.example .env
 npm run keygen               # creates the burner, prints the address to fund
@@ -58,9 +58,29 @@ Leave it for an hour and watch the dashboard. That is the point of the paper ins
 it runs the identical pipeline — live feed, live screening, live prices — with simulated
 fills, so what you see is what the strategy would have done.
 
-### You need a PumpPortal API key
+### Trade data is free by default
 
-**The bot cannot trade without one.** The free feed serves `subscribeNewToken` only;
+Trade ticks are decoded from pump.fun's Anchor `TradeEvent` in Solana transaction logs.
+One `logsSubscribe` on the program covers **every token**: no per-token subscription, no
+cap, no batching delay, and no per-message bill. It carries exactly what a paid tape
+carries — the trader address (distinct buyers), the direction (buy/sell ratio) and
+post-trade reserves (price).
+
+New-token and migration discovery stay on PumpPortal, which is free for both.
+
+`TRADE_SOURCE=pumpportal` switches to their metered tape instead, which needs the API key
+below. You almost certainly do not want it: it is billed at **0.01 SOL per 10,000
+messages**, which at real launch density runs well over a SOL a day — many times the
+trading stack it is meant to serve. The bot estimates this spend from messages received
+and warns before the funding is gone.
+
+One known limitation of the free path: Solana truncates very long transaction logs, so an
+event inside a heavily-nested transaction can be dropped. For counting buyers in a
+30-second window that is acceptable, and exits are covered by the stale-price rule.
+
+### The PumpPortal API key (only for `TRADE_SOURCE=pumpportal`)
+
+**Not needed on the default free path.** The free feed serves `subscribeNewToken` only;
 `subscribeTokenTrade` is refused with:
 
 > `'subscribeTokenTrade' and 'subscribeAccountTrade' methods are only available when
@@ -455,7 +475,7 @@ verification above.
 
 | Command | Does |
 |---|---|
-| `npm test` | 301 offline checks |
+| `npm test` | 303 offline checks |
 | `npm run keygen` | Create the burner wallet |
 | `npm run balance` | Address, balance, current size tier |
 | `npm run paper` | Paper instance, dashboard on :8081 |
@@ -488,11 +508,14 @@ src/
   learn.js      statistics over the journal
   dashboard.js  local HTTP server
   onchain.js    bonding curve account reads (pricing when the feed is silent)
+  pumpevents.js Anchor TradeEvent decoding from program logs
+  logfeed.js    free trade feed — one RPC subscription, all tokens
+  lock.js       single-writer lock on the ledger
   notify.js     Telegram alerts
   commands.js   Telegram /status, /pause, /panic
   summary.js    shared status + digest text
 deploy/         systemd units for live and paper
-test/run.js     301 checks
+test/run.js     303 checks
 ```
 
 ## What is unverified

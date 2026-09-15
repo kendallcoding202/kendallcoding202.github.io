@@ -398,6 +398,17 @@ function render(d) {
 
       const sub = pl.subscriptions
       if (sub) {
+        if (pl.tradeSource) {
+          const free = pl.tradeSource === 'rpc-logs'
+          rows.push('Trade source: ' + (free
+            ? '<span class="pos">RPC program logs</span> — free, all tokens, no subscription cap'
+            : '<span class="amb">PumpPortal metered tape</span> — billed per message'))
+          if (free && pl.logFeed) {
+            rows.push('Log feed ' + (pl.logFeed.connected ? '<span class="pos">connected</span>' : '<span class="neg">disconnected</span>') +
+              ' · <code>' + num(pl.logFeed.notifications) + '</code> txns · <code>' +
+              num(pl.logFeed.decoded) + '</code> trades decoded · <code>' + num(pl.logFeed.kept) + '</code> for watched tokens')
+          }
+        }
         rows.push('API key: ' + (sub.hasApiKey
           ? '<span class="pos">detected</span> (' + (sub.apiKeyLength ?? '?') + ' chars)'
           : '<span class="neg"><b>NOT SET</b></span> — the process sees <code>' +
