@@ -11,7 +11,25 @@ export function decideExit(position, { priceSol, vSol, now = Date.now() }) {
   const none = { sellTokens: 0, sellAll: false, reasons: [], rungs: [] }
   if (position.state === 'closed') return none
   if (!(position.tokensRemaining > 0)) return { ...none, sellAll: true, reasons: ['no tokens left'] }
-  if (!(priceSol > 0) || !(position.entryPriceSol > 0)) return none
+
+  /**
+   * An unusable entry price used to return "no action", which silently disabled every
+   * rule below — the stop-loss, the trailing stop, the ladder, all of it — for the life
+   * of the position. That is the worst possible default: a corrupt position became an
+   * un-exitable one. Get out instead.
+   */
+  if (!(position.entryPriceSol > 0) || !Number.isFinite(position.entryPriceSol)) {
+    return {
+      sellTokens: position.tokensRemaining,
+      sellAll: true,
+      reasons: [`unusable entry price (${position.entryPriceSol}) — exiting rather than holding blind`],
+      rungs: [],
+    }
+  }
+
+  // No current price is different: it is transient, and the stale-price rule above
+  // already covers a price that stops arriving for good.
+  if (!(priceSol > 0)) return none
 
   const pnlPct = ((priceSol - position.entryPriceSol) / position.entryPriceSol) * 100
   const ageSeconds = (now - position.openedAt) / 1000

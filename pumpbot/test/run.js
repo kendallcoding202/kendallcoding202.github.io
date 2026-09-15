@@ -247,7 +247,19 @@ const mkPosition = (over = {}) => ({
   check('a closed position never trades again', closed.sellTokens === 0)
 
   const noPrice = decideExit(mkPosition(), { priceSol: 0, vSol: 30 })
-  check('no price means no decision', noPrice.sellTokens === 0)
+  check('a momentarily missing price means no decision', noPrice.sellTokens === 0)
+
+  /**
+   * Audit finding: a corrupted entry price used to return "no action", silently
+   * disabling the stop-loss, trailing stop and ladder for the life of the position.
+   * A corrupt position must not become an un-exitable one.
+   */
+  for (const [label, bad] of [['negative', -1e-8], ['zero', 0], ['NaN', NaN], ['Infinity', Infinity]]) {
+    const corrupt = decideExit(mkPosition({ entryPriceSol: bad }), { priceSol: 2e-7, vSol: 34 })
+    check(`a ${label} entry price forces an exit, not a freeze`,
+      corrupt.sellAll && corrupt.reasons[0].includes('unusable entry price'),
+      JSON.stringify(corrupt.reasons))
+  }
 
   // Ladder can never oversell the remaining bag.
   const partial = decideExit(mkPosition({ tokensRemaining: 100_000 }), { priceSol: 5e-7, vSol: 60 })
@@ -486,6 +498,38 @@ console.log('\nBonding curve account')
   const addr = bondingCurveAddress('So11111111111111111111111111111111111111112').toBase58()
   check('derives a deterministic curve PDA', typeof addr === 'string' && addr.length >= 32)
   check('PDA is stable across calls', bondingCurveAddress('So11111111111111111111111111111111111111112').toBase58() === addr)
+}
+
+// ------------------------------------------------- fill measurement
+console.log('\nFill measurement')
+{
+  /**
+   * The audit's critical finding: fills were measured as before/after whole-wallet SOL
+   * deltas while up to four orders ran concurrently on different mints, so one order's
+   * proceeds landed inside another's measurement window. Fills are now read from the
+   * specific transaction, which cannot be contaminated.
+   */
+  const src = fs.readFileSync(new URL('../src/exec.js', import.meta.url), 'utf8')
+
+  check('fills no longer use whole-wallet balance deltas',
+    !/before\.solBal\s*-\s*after\.solBal/.test(src) && !/after\.solBal\s*-\s*before\.solBal/.test(src),
+    'a concurrent order on another mint would corrupt the measurement')
+  check('fills are read from the transaction itself', src.includes('fillFromTransaction'))
+  check('it reads that transaction\'s own pre/post balances',
+    src.includes('preBalances') && src.includes('postBalances'))
+  check('token deltas are matched to our wallet and this mint',
+    src.includes("b?.mint === mint && b?.owner === me"))
+  check('a fill it cannot measure is a failure, not a guess',
+    src.includes('its effect could not be measured'))
+
+  // Validation must reject rather than store an unusable entry price.
+  check('a non-positive cost is refused', src.includes('refusing to open'))
+  check('a non-positive sale is refused', src.includes('measured a non-positive sale'))
+
+  // Duplicate-order protection: a timed-out confirm may still have landed.
+  check('sent signatures are recorded before confirmation', src.includes('sentSignatures.push(signature)'))
+  check('retries check whether a send already landed', src.includes('alreadyLanded'))
+  check('a landed order is adopted rather than re-sent', src.includes('retry avoided'))
 }
 
 // ------------------------------------------- pump.fun log event decoding
