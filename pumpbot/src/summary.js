@@ -1,5 +1,12 @@
 import { config } from './config.js'
-import { getState, openPositions, strategyPositions, explorePositions, deployedSol, todayPnl } from './store.js'
+import {
+  getState,
+  strategyPositions,
+  explorePositions,
+  deployedSol,
+  exploreDeployedSol,
+  todayPnl,
+} from './store.js'
 import { positionPnl } from './position.js'
 import { sizingSummary } from './sizing.js'
 import { esc, sol, pct, shortAddr } from './log.js'
@@ -12,11 +19,12 @@ import { esc, sol, pct, shortAddr } from './log.js'
 export function statusText(bot) {
   const state = getState()
   const today = todayPnl()
-  const open = openPositions()
   const stats = bot?.statsSnapshot?.() ?? null
   const s = sizingSummary(bot?.walletSol)
 
-  const unrealized = open.reduce((sum, p) => sum + positionPnl(p).totalSol, 0)
+  // Strategy only. Folding explore bags in here made the headline P&L describe a paper
+  // experiment rather than the strategy the number is supposed to be reporting on.
+  const unrealized = strategyPositions().reduce((sum, p) => sum + positionPnl(p).totalSol, 0)
   const net = state.totalRealizedSol + unrealized
 
   const lines = [
@@ -47,39 +55,64 @@ export function statusText(bot) {
     }
   }
 
-  const strategyOpen = strategyPositions().length
-  const exploreOpen = explorePositions().length
-  lines.push('', `<b>Strategy</b>: ${strategyOpen} open · ${state.closed.filter((p) => !p.explore).length} closed`)
-
-  if (exploreOpen || state.exploreRealizedSol) {
-    lines.push(
-      `🧪 <b>Explore</b> (experiment, separate book): ${exploreOpen} open · ` +
-        `${state.exploreWins ?? 0}W/${state.exploreLosses ?? 0}L · ${sol(state.exploreRealizedSol ?? 0)}`,
-    )
-  }
+  const strategyOpen = strategyPositions()
+  lines.push('', `<b>Strategy</b>: ${strategyOpen.length} open · ${state.closed.filter((p) => !p.explore).length} closed`)
+  lines.push(exploreText())
   return lines.join('\n')
 }
 
-export function positionsText() {
-  const open = openPositions()
-  if (!open.length) return '<b>No open positions.</b>'
+/**
+ * The explore book's own P&L. It is its own money on its own bankroll, so it gets its
+ * own total rather than a footnote on the strategy's.
+ */
+export function exploreText() {
+  const state = getState()
+  const open = explorePositions()
+  const closed = state.closed.filter((p) => p.explore).length
+  const realized = state.exploreRealizedSol ?? 0
+  if (!open.length && !closed && !realized) return ''
+
+  const unrealized = open.reduce((sum, p) => sum + positionPnl(p).totalSol, 0)
+  const left = config.explore.budgetSol + realized - exploreDeployedSol()
 
   return [
-    `<b>${open.length} open position(s)</b>`,
     '',
-    ...open.map((p) => {
-      const pnl = positionPnl(p)
-      const tag = p.explore ? ' 🧪' : ''
-      const change = p.entryPriceSol > 0 ? ((p.lastPriceSol - p.entryPriceSol) / p.entryPriceSol) * 100 : 0
-      const age = Math.round((Date.now() - p.openedAt) / 1000)
-      return [
-        `<b>${esc(p.symbol)}</b>${tag} ${pct(change)} · ${age < 60 ? `${age}s` : `${Math.round(age / 60)}m`}`,
-        `  in ${sol(p.solSpent)} · out ${sol(p.solRecovered)} · P&L ${sol(pnl.totalSol)}`,
-        `  ${pnl.initialsRecovered ? '✅ initials out · ' : ''}rungs ${p.rungsHit.length ? p.rungsHit.map((r) => `+${r}%`).join(' ') : 'none'}`,
-        `  <code>${esc(shortAddr(p.mint))}</code>`,
-      ].join('\n')
-    }),
+    `🧪 <b>Explore book</b> — separate bankroll, not the strategy's money`,
+    `  P&L <b>${sol(realized + unrealized)}</b> · realized ${sol(realized)} · open ${sol(unrealized)}`,
+    `  ${state.exploreWins ?? 0}W/${state.exploreLosses ?? 0}L over ${closed} closed · ${open.length} open`,
+    `  Bankroll ${sol(left)} left of ${sol(config.explore.budgetSol)}`,
   ].join('\n')
+}
+
+export function positionsText() {
+  const strategy = strategyPositions()
+  const explore = explorePositions()
+  if (!strategy.length && !explore.length) return '<b>No open positions.</b>'
+
+  const render = (p) => {
+    const pnl = positionPnl(p)
+    const change = p.entryPriceSol > 0 ? ((p.lastPriceSol - p.entryPriceSol) / p.entryPriceSol) * 100 : 0
+    const age = Math.round((Date.now() - p.openedAt) / 1000)
+    return [
+      `<b>${esc(p.symbol)}</b> ${pct(change)} · ${age < 60 ? `${age}s` : `${Math.round(age / 60)}m`}`,
+      `  in ${sol(p.solSpent)} · out ${sol(p.solRecovered)} · P&L ${sol(pnl.totalSol)}`,
+      `  ${pnl.initialsRecovered ? '✅ initials out · ' : ''}rungs ${p.rungsHit.length ? p.rungsHit.map((r) => `+${r}%`).join(' ') : 'none'}` +
+        (p.explore && p.failedChecks?.length ? ` · would skip: ${esc(p.failedChecks.join(','))}` : ''),
+      `  <code>${esc(shortAddr(p.mint))}</code>`,
+    ].join('\n')
+  }
+
+  const out = []
+  out.push(`<b>Strategy — ${strategy.length} open</b>`)
+  out.push('')
+  out.push(...(strategy.length ? strategy.map(render) : ['<i>none</i>']))
+  if (explore.length) {
+    out.push('')
+    out.push(`🧪 <b>Explore — ${explore.length} open</b> <i>(experiment, separate bankroll)</i>`)
+    out.push('')
+    out.push(...explore.map(render))
+  }
+  return out.join('\n')
 }
 
 /**
@@ -88,7 +121,6 @@ export function positionsText() {
  */
 export function summaryText(bot, since) {
   const state = getState()
-  const open = openPositions()
   const stats = bot?.statsSnapshot?.() ?? null
 
   const realizedDelta = state.totalRealizedSol - (since?.totalRealizedSol ?? 0)
@@ -111,11 +143,24 @@ export function summaryText(bot, since) {
     statusText(bot),
   ]
 
+  /**
+   * This used to read "that is the filter working, not a fault". It is only reassuring
+   * up to a point: a filter that takes NOTHING, window after window, produces no
+   * evidence about itself and is indistinguishable from a broken one. Say which case
+   * this is instead of always congratulating it.
+   */
   if (launchesDelta > 0 && enteredDelta === 0) {
-    lines.push('', `<i>Screened ${launchesDelta} launches this window and took none. That is the filter working, not a fault.</i>`)
+    const everEntered = (stats?.entered ?? 0) > 0
+    lines.push(
+      '',
+      everEntered
+        ? `<i>Screened ${launchesDelta} launches this window and took none — a quiet window.</i>`
+        : `<i>Screened ${launchesDelta} launches and took none, and has never taken one. ` +
+          `Nothing is being learned about the filter's own picks — consider loosening the entry bar.</i>`,
+    )
   }
 
-  if (open.length) lines.push('', positionsText())
+  if (strategyPositions().length || explorePositions().length) lines.push('', positionsText())
 
   return lines.join('\n')
 }

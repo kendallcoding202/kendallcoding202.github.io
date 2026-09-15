@@ -179,8 +179,20 @@ export const config = {
     enabled: bool('LEARNING', true),
     // How long to follow a token after we decide on it, to label the outcome.
     outcomeWindowMinutes: num('OUTCOME_WINDOW_MINUTES', 15),
-    // Cap on simultaneously shadow-tracked tokens, to bound memory and feed traffic.
-    maxShadowTracked: num('MAX_SHADOW_TRACKED', 80),
+    /**
+     * Cap on simultaneously shadow-tracked tokens.
+     *
+     * This has to be large enough to hold a FULL outcome window's worth of launches, or
+     * rows get evicted early and the "outcome" being measured is not the 15-minute one
+     * the report claims. At ~30 launches/minute, 80 slots holds under three minutes —
+     * every row was being labelled on a window five times shorter than advertised, which
+     * understates peakMultiple for everything and quietly suppresses hitFirstRung.
+     *
+     * 30/min x 15min is ~450, so 1500 leaves real headroom for a burst. The old cap was
+     * partly about feed traffic, which no longer applies: the RPC log feed is one
+     * subscription for all tokens, so an extra tracked mint costs a Map lookup.
+     */
+    maxShadowTracked: num('MAX_SHADOW_TRACKED', 1500),
     /**
      * Minimum labelled samples before the analyser will make any threshold suggestion.
      * Below this, apparent "edges" are sampling noise. 200 is already generous for a
@@ -233,10 +245,23 @@ export const config = {
   },
 
   risk: {
-    // Realized loss in a UTC day that halts all new entries.
+    /**
+     * Absolute floors, in SOL. These are correct for a ~0.5 SOL account and WRONG for a
+     * larger one: a flat 0.35 SOL total-loss halt is 70% of a 0.5 SOL account but 7% of
+     * the 5 SOL benchmark this bot is built to grow into, so a healthy account would
+     * halt permanently on an ordinary drawdown. The percentage limits below are the ones
+     * that scale; whichever triggers first wins.
+     */
     dailyLossLimitSol: num('DAILY_LOSS_LIMIT_SOL', 0.2),
-    // Total realized loss that halts the bot permanently until you reset it.
     totalLossLimitSol: num('TOTAL_LOSS_LIMIT_SOL', 0.35),
+    /**
+     * The same limits as a share of the account's high-water mark, which is what keeps
+     * them meaningful at every size. Defaults are chosen to match the absolute numbers
+     * above at a 0.5 SOL start (0.2/0.5 = 40%, 0.35/0.5 = 70%), so today's behaviour is
+     * unchanged and only the scaling is new. Set either to 0 to disable it.
+     */
+    dailyLossLimitPct: num('DAILY_LOSS_LIMIT_PCT', 40),
+    maxDrawdownPct: num('MAX_DRAWDOWN_PCT', 70),
     // Consecutive losing trades that halt new entries for the day.
     maxConsecutiveLosses: num('MAX_CONSECUTIVE_LOSSES', 6),
   },
@@ -265,8 +290,16 @@ export const config = {
     observeSeconds: num('OBSERVE_SECONDS', 30),
     // Give up on a token that never qualifies, so the watch list cannot grow forever.
     abandonSeconds: num('ABANDON_SECONDS', 180),
-    minUniqueBuyers: num('MIN_UNIQUE_BUYERS', 12),
-    minBuysPerSell: num('MIN_BUY_SELL_RATIO', 1.8),
+    /**
+     * Loosened from 12 and 1.8, which passed 0 of 169 screened launches across two runs.
+     * A filter that never fires is not a conservative filter — it produces no evidence
+     * at all, so the learning report has nothing to put on the "filter said YES" side
+     * and can never tell you whether the filter is worth having. These numbers exist to
+     * be measured, not defended; the report's threshold suggestions are what should move
+     * them next, once there are ~200 labelled samples on both sides.
+     */
+    minUniqueBuyers: num('MIN_UNIQUE_BUYERS', 7),
+    minBuysPerSell: num('MIN_BUY_SELL_RATIO', 1.4),
     minMarketCapSol: num('MIN_MARKET_CAP_SOL', 25),
     maxMarketCapSol: num('MAX_MARKET_CAP_SOL', 120),
     // Dev's share of supply from their own launch buy.

@@ -141,6 +141,9 @@
   h2.sec { font-size: 11px; letter-spacing: .13em; text-transform: uppercase;
     color: var(--dim); margin: 0 0 10px; font-family: var(--mono); }
   section { margin-bottom: 18px; }
+  /* Plain-language gloss on a section heading, so the two books are never confused. */
+  .secnote { text-transform: none; letter-spacing: 0; color: var(--dimmer);
+    font-size: 11px; margin-left: 8px; }
 
   @media (max-width: 880px) { .g2 { grid-template-columns: 1fr; } }
   @media (max-width: 560px) {
@@ -189,6 +192,12 @@
     </div>
   </div>
 
+  <section id="exploresec" hidden>
+    <h2 class="sec">Explore Book · separate bankroll</h2>
+    <div class="grid g4" id="explorestats"></div>
+    <div class="card"><div class="note" id="explorenote"></div></div>
+  </section>
+
   <section>
     <h2 class="sec">Feed Pipeline</h2>
     <div class="tiles" id="tiles"></div>
@@ -196,13 +205,23 @@
   </section>
 
   <section>
-    <h2 class="sec">Open Positions</h2>
+    <h2 class="sec">Open Positions · strategy <span class="secnote">real trades, counted in P&amp;L</span></h2>
     <div class="card" style="padding:0"><div class="scroll" id="open"></div></div>
   </section>
 
+  <section id="openexpsec" hidden>
+    <h2 class="sec">Open Positions · explore <span class="secnote">filter said no, bought anyway to learn</span></h2>
+    <div class="card" style="padding:0"><div class="scroll" id="openexp"></div></div>
+  </section>
+
   <section>
-    <h2 class="sec">Closed Trades</h2>
+    <h2 class="sec">Closed Trades · strategy <span class="secnote">real trades, counted in P&amp;L</span></h2>
     <div class="card" style="padding:0"><div class="scroll" id="closed"></div></div>
+  </section>
+
+  <section id="closedexpsec" hidden>
+    <h2 class="sec">Closed Trades · explore <span class="secnote">experiment only, separate bankroll</span></h2>
+    <div class="card" style="padding:0"><div class="scroll" id="closedexp"></div></div>
   </section>
 
   <section>
@@ -453,14 +472,13 @@ function render(d) {
     document.getElementById('pipenote').textContent = 'Pipeline stats unavailable.'
   }
 
-  /* ---- open positions ---- */
-  const open = document.getElementById('open')
-  open.innerHTML = !d.positions.length
-    ? '<div class="empty">no open positions</div>'
+  /* ---- open positions, strategy and explore in their own boxes ---- */
+  const openTable = (list, emptyText) => !list.length
+    ? '<div class="empty">' + emptyText + '</div>'
     : '<table><thead><tr>' +
       ['Token','Age','In','Out','Entry','Last','Chg','Bag','P&L',''].map((h) => '<th>' + h + '</th>').join('') +
       '</tr></thead><tbody>' +
-      d.positions.map((x) =>
+      list.map((x) =>
         '<tr' + (x.explore ? ' class="exp"' : '') + '>' +
         '<td><span class="sym">' + esc(x.symbol) + '</span>' + (x.explore ? '<span class="chip a">EXPLORE</span>' : '') +
           '<br><a class="mint" href="https://pump.fun/coin/' + esc(x.mint) + '" target="_blank" rel="noopener">' + esc(x.mint.slice(0, 10)) + '…</a></td>' +
@@ -478,16 +496,23 @@ function render(d) {
           (x.explore && x.failedChecks.length ? '<span class="chip a">' + x.failedChecks.map(esc).join(',') + '</span>' : '') +
         '</td></tr>').join('') + '</tbody></table>'
 
-  /* ---- closed trades ---- */
-  const closed = document.getElementById('closed')
-  closed.innerHTML = !d.closed.length
-    ? '<div class="empty">no closed trades yet</div>'
+  const openStrat = d.positions.filter((x) => !x.explore)
+  const openExp = d.positions.filter((x) => x.explore)
+  document.getElementById('open').innerHTML = openTable(openStrat, 'no open strategy positions')
+  document.getElementById('openexp').innerHTML = openTable(openExp, 'no open explore positions')
+  document.getElementById('openexpsec').hidden = !(d.explore && d.explore.enabled)
+
+  /* ---- closed trades, same split ---- */
+  const closedTable = (list, emptyText) => !list.length
+    ? '<div class="empty">' + emptyText + '</div>'
     : '<table><thead><tr>' +
       ['Token','Closed','Held','In','Out','Realized'].map((h) => '<th>' + h + '</th>').join('') +
       '<th class="l">Reason</th></tr></thead><tbody>' +
-      d.closed.map((x) =>
+      list.map((x) =>
         '<tr' + (x.explore ? ' class="exp"' : '') + '>' +
         '<td><span class="sym">' + esc(x.symbol) + '</span>' + (x.explore ? '<span class="chip a">EXP</span>' : '') +
+          (x.explore && x.failedChecks && x.failedChecks.length
+            ? '<br><span class="chip a">' + x.failedChecks.map(esc).join(',') + '</span>' : '') +
           '<br><a class="mint" href="https://pump.fun/coin/' + esc(x.mint) + '" target="_blank" rel="noopener">' + esc(x.mint.slice(0, 10)) + '…</a></td>' +
         '<td>' + new Date(x.closedAt).toLocaleTimeString([], { hour12: false }) + '</td>' +
         '<td>' + dur(x.heldSeconds) + '</td>' +
@@ -496,6 +521,40 @@ function render(d) {
         '<td class="' + cls(x.realizedSol) + '">' + sgn(x.realizedSol, 4) + '<br><span class="mint">' + fmtPct(x.realizedPct) + '</span></td>' +
         '<td class="l" style="white-space:normal;max-width:280px;color:var(--dim)">' + esc(x.reason ?? '') + '</td>' +
         '</tr>').join('') + '</tbody></table>'
+
+  const closedStrat = d.closed.filter((x) => !x.explore)
+  const closedExp = d.closed.filter((x) => x.explore)
+  document.getElementById('closed').innerHTML = closedTable(closedStrat, 'no closed strategy trades yet')
+  document.getElementById('closedexp').innerHTML = closedTable(closedExp, 'no closed explore trades yet')
+  document.getElementById('closedexpsec').hidden = !(d.explore && d.explore.enabled)
+
+  /* ---- explore book: its own P&L, because it is its own money ---- */
+  const expsec = document.getElementById('exploresec')
+  if (d.explore && d.explore.enabled) {
+    expsec.hidden = false
+    const e = d.explore
+    // Open explore bags are already marked to the last seen price in d.positions.
+    const expUnrealized = openExp.reduce((s, x) => s + x.totalSol, 0)
+    const totalExp = e.realizedSol + expUnrealized
+    document.getElementById('explorestats').innerHTML = [
+      card('Explore P&L · SOL', sgn(totalExp, 4),
+        'realized ' + sgn(e.realizedSol, 4) + ' + ' + sgn(expUnrealized, 4) + ' open',
+        cls(totalExp), totalExp >= 0 ? 'pos' : 'neg'),
+      card('Bankroll Left', e.bankrollLeftSol.toFixed(3),
+        'of ' + e.bankrollSol.toFixed(2) + ' · ' + e.deployedSol.toFixed(3) + ' deployed'),
+      card('Explore Record', e.wins + 'W / ' + e.losses + 'L',
+        e.closed + ' closed · ' + e.open + ' open'),
+      card('Avg Per Trade', e.closed ? sgn(e.realizedSol / e.closed, 4) : '—',
+        'realized, per closed explore trade'),
+    ].join('')
+    document.getElementById('explorenote').innerHTML =
+      'These are trades the filter <b>rejected</b> and the bot took anyway, on paper, to find out ' +
+      'whether the filter was right. They run on a separate bankroll and are excluded from the ' +
+      'four cards at the top, the P&amp;L chart, the win rate and the size tier. ' +
+      (e.bankrollLeftSol < 0.2 ? '<b style="color:var(--amber)">Bankroll nearly exhausted — exploration will pause.</b>' : '')
+  } else {
+    expsec.hidden = true
+  }
 
   /* ---- learning ---- */
   const lrn = document.getElementById('learning')

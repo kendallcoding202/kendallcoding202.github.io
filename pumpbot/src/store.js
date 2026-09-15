@@ -15,6 +15,11 @@ const EMPTY = {
   exploreRealizedSol: 0,
   exploreWins: 0,
   exploreLosses: 0,
+  // Drawdown circuit breaker state. Persisted so a restart cannot silently reset the
+  // ratchet and hand the bot a fresh allowance. baseEquitySol anchors the account size
+  // once; peakRealizedSol is the high-water mark realized P&L has ever reached.
+  baseEquitySol: 0,
+  peakRealizedSol: 0,
   blockedCreators: {}, // creator -> { at, reason }
   halted: null, // { at, reason } — set by a circuit breaker
   activity: [], // rolling event feed for the dashboard, newest last

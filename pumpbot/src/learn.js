@@ -175,6 +175,18 @@ export function analyze(rows = readAll()) {
     }
   }
 
+  /**
+   * Rows that were evicted before their outcome window elapsed were labelled on a
+   * shorter window than the report claims, which biases peakMultiple — and therefore
+   * hitFirstRung — downward. Silently averaging them in makes every arm look worse than
+   * it was, so the count is reported rather than hidden.
+   */
+  const truncated = labelled.filter((r) => r.windowTruncated).length
+  const observed = labelled.map((r) => r.observedSeconds).filter((s) => Number.isFinite(s))
+  const medianObservedSeconds = observed.length
+    ? [...observed].sort((a, b) => a - b)[Math.floor(observed.length / 2)]
+    : null
+
   const enoughData = labelled.length >= config.learning.minSamplesForSuggestion
   const suggestions = enoughData
     ? numericFeatures(labelled)
@@ -207,6 +219,9 @@ export function analyze(rows = readAll()) {
       explored: explored.length,
       rejected: rejected.length,
       pending: rows.length - labelled.length,
+      truncated,
+      medianObservedSeconds,
+      intendedWindowSeconds: config.learning.outcomeWindowMinutes * 60,
     },
     rates: { base, bought: boughtRate, rejected: rejectedRate, explored: exploredRate },
     // Does our filter actually select better-than-random launches?
@@ -236,6 +251,14 @@ export function formatReport(a) {
   L.push('')
   L.push(`Journalled ${a.totals.journalled} decisions · ${a.totals.labelled} labelled · ${a.totals.pending} still in their outcome window`)
   L.push(`  bought ${a.totals.bought} · rejected (shadow-tracked) ${a.totals.rejected}`)
+  if (a.totals.truncated) {
+    const pct = ((a.totals.truncated / Math.max(1, a.totals.labelled)) * 100).toFixed(0)
+    L.push(
+      `  WARNING: ${a.totals.truncated} rows (${pct}%) were evicted before their ` +
+        `${a.totals.intendedWindowSeconds}s window closed — median observed ${a.totals.medianObservedSeconds}s.`,
+    )
+    L.push('  Those rows understate peaks. Raise MAX_SHADOW_TRACKED.')
+  }
   L.push('')
   L.push(`Base rate of reaching +${config.exit.ladder[0]?.atPct ?? 50}%:`)
   L.push(`  all launches seen : ${p(a.rates.base)}`)
@@ -244,6 +267,27 @@ export function formatReport(a) {
   if (a.rates.explored.n) L.push(`  explore trades    : ${p(a.rates.explored)}`)
   L.push(`  verdict: ${a.filterEdge}`)
   L.push('')
+
+  /**
+   * When one arm is empty this block used to just not print, which reads as "nothing to
+   * report" when it actually means "the headline comparison could not be computed at
+   * all". Say which side is missing and why.
+   */
+  if (!a.ev.bought || !a.ev.explored) {
+    L.push('Filtered vs explored: NOT AVAILABLE.')
+    if (!a.ev.bought) {
+      L.push(`  No labelled positions the filter ACCEPTED (bought n=${a.totals.bought}).`)
+      L.push('  The filter is rejecting everything, so there is nothing to compare its')
+      L.push('  picks against. Loosen entry thresholds until this arm has samples —')
+      L.push('  until then the report cannot tell you whether the filter is worth having.')
+    }
+    if (!a.ev.explored) {
+      L.push(`  No labelled explore trades (explored n=${a.totals.explored}).`)
+      L.push('  Explore is what samples the other side of every threshold. Check that')
+      L.push('  PAPER=1 and EXPLORE=1, and that the explore bankroll is not exhausted.')
+    }
+    L.push('')
+  }
 
   if (a.ev.bought && a.ev.explored) {
     const f = a.ev.bought

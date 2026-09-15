@@ -130,6 +130,8 @@ export function buildSnapshot(walletSol, stats = null) {
     realizedPct: p.solSpent > 0 ? (p.realizedSol / p.solSpent) * 100 : 0,
     reason: p.closeReason,
     explore: Boolean(p.explore),
+    // What the filter objected to, so an explore row says why it was an experiment.
+    failedChecks: p.failedChecks ?? [],
     rungsHit: p.rungsHit,
   }))
 

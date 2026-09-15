@@ -318,17 +318,79 @@ console.log('\nRisk gates')
   check('a losing streak pauses entries', canOpen({ mint: 'N2', creator: 'C', walletSol: 1 })?.includes('consecutive'))
   s.consecutiveLosses = 0
 
-  s.daily[new Date().toISOString().slice(0, 10)] = { realizedSol: -config.risk.dailyLossLimitSol, wins: 0, losses: 5 }
-  check('the daily loss limit stops trading', canOpen({ mint: 'N3', creator: 'C', walletSol: 1 })?.includes('daily loss'))
+  /**
+   * Loss limits at the ACCOUNT SIZE THEY WERE WRITTEN FOR — a 0.5 SOL start. Here the
+   * absolute floor and the percentage rule are equal by construction, so these are the
+   * original numbers and behaviour is unchanged.
+   */
+  const today = new Date().toISOString().slice(0, 10)
+  const anchor = (walletSol) => { s.baseEquitySol = 0; s.peakRealizedSol = 0; canOpen({ mint: 'ANCHOR', creator: 'C', walletSol }) }
+
+  s.daily = {}; s.totalRealizedSol = 0
+  anchor(0.5)
+  check('base equity is anchored from the first reading', near(s.baseEquitySol, 0.5), String(s.baseEquitySol))
+
+  s.daily[today] = { realizedSol: -0.19, wins: 0, losses: 5 }
+  check('just inside the daily limit still trades', canOpen({ mint: 'N3a', creator: 'C', walletSol: 0.5 }) === null,
+    String(canOpen({ mint: 'N3a', creator: 'C', walletSol: 0.5 })))
+  s.daily[today] = { realizedSol: -0.2, wins: 0, losses: 5 }
+  check('the daily loss limit stops trading', canOpen({ mint: 'N3', creator: 'C', walletSol: 0.5 })?.includes('daily loss'))
 
   s.daily = {}
-  s.totalRealizedSol = -config.risk.totalLossLimitSol
-  const blocked = canOpen({ mint: 'N4', creator: 'C', walletSol: 1 })
-  check('the total loss limit halts the bot', blocked === 'total loss limit reached' && Boolean(s.halted))
+  s.totalRealizedSol = -0.35
+  const blocked = canOpen({ mint: 'N4', creator: 'C', walletSol: 0.5 })
+  check('the total loss limit halts the bot', blocked === 'total loss limit reached' && Boolean(s.halted), String(blocked))
   check('a halt blocks everything after it', canOpen({ mint: 'N5', creator: 'C', walletSol: 1 })?.startsWith('halted'))
-
   store.clearHalt()
-  s.totalRealizedSol = 0
+
+  /**
+   * The same limits on an account that GREW to the 5 SOL benchmark.
+   *
+   * A flat 0.35 SOL total-loss cap is 70% of the starting account but 7% of this one, so
+   * taking whichever limit fires first would halt a perfectly healthy account on an
+   * ordinary dip — and permanently, since the total-loss halt does not clear with the
+   * day. The limits have to scale with the account or the benchmark the bot is built to
+   * reach is also the point at which it bricks itself.
+   */
+  s.daily = {}; s.totalRealizedSol = 4.5
+  anchor(5)
+  check('a grown account anchors the same base', near(s.baseEquitySol, 0.5), String(s.baseEquitySol))
+  check('the peak tracks realized gains', near(s.peakRealizedSol, 4.5), String(s.peakRealizedSol))
+
+  // A 0.4 SOL loss exceeds the old fixed 0.35 cap, but is 8% of a 5 SOL account.
+  s.totalRealizedSol = 4.1
+  check('a small dip on a grown account does NOT halt',
+    canOpen({ mint: 'G1', creator: 'C', walletSol: 4.6 }) === null && !s.halted,
+    String(canOpen({ mint: 'G1', creator: 'C', walletSol: 4.6 })))
+
+  // A real 70% drawdown from the 5.0 peak does.
+  s.totalRealizedSol = 0.9
+  check('a genuine drawdown on a grown account halts',
+    canOpen({ mint: 'G2', creator: 'C', walletSol: 1.4 }) === 'total loss limit reached' && Boolean(s.halted))
+  store.clearHalt()
+
+  // Daily limit scales too: 40% of the 5.0 peak is 2.0, not 0.2.
+  s.totalRealizedSol = 4.5
+  s.daily[today] = { realizedSol: -0.5, wins: 0, losses: 9 }
+  check('a daily loss well past the old cap is fine on a grown account',
+    canOpen({ mint: 'G3', creator: 'C', walletSol: 5 }) === null,
+    String(canOpen({ mint: 'G3', creator: 'C', walletSol: 5 })))
+  s.daily[today] = { realizedSol: -2.1, wins: 0, losses: 30 }
+  check('but the scaled daily limit still bites',
+    canOpen({ mint: 'G4', creator: 'C', walletSol: 5 })?.includes('daily loss'))
+
+  /**
+   * The breaker must read OUR LEDGER, not a live balance. A transient bad balance read
+   * — an RPC hiccup returning 0, a fetch that failed — must never be able to trip a
+   * permanent halt on its own.
+   */
+  s.daily = {}; s.totalRealizedSol = 4.5; store.clearHalt()
+  const onBadRead = canOpen({ mint: 'G5', creator: 'C', walletSol: 0 })
+  check('a zero balance reading does not trip the drawdown halt', !s.halted, String(onBadRead))
+  check('it is refused for the ordinary reason instead', String(onBadRead).includes('below'), String(onBadRead))
+
+  s.daily = {}; s.totalRealizedSol = 0; s.baseEquitySol = 0; s.peakRealizedSol = 0
+  store.clearHalt()
 }
 
 // ---------------------------------------------------------------- store ledger
@@ -436,6 +498,83 @@ console.log('\nLearning')
   check('false negatives are attributed to the check', report.falseNegatives.some((f) => f.check === 'buyers'))
   check('an EV estimate is produced', report.ev.bought?.n === 200)
   check('repeat creators are surfaced', report.repeatCreators.length > 0)
+
+  const { formatReport } = await import('../src/learn.js')
+
+  /**
+   * The headline comparison needs BOTH arms. When the filter accepts nothing — which is
+   * exactly what it did for its first 169 screened launches — the block used to simply
+   * not print, which reads as "nothing to report" rather than "the one number you are
+   * waiting for could not be computed". Silence about a missing measurement is the most
+   * dangerous output this report can produce.
+   */
+  const rejectsOnly = labelled
+    .filter((r) => r.action === 'rejected')
+    .map((r) => ({ ...r, action: 'explored' }))
+  const oneArm = formatReport(analyze(rejectsOnly))
+  check('a missing arm is announced, not omitted', oneArm.includes('NOT AVAILABLE'))
+  check('it names which side is empty', oneArm.includes('No labelled positions the filter ACCEPTED'))
+  check('and says what to do about it', oneArm.includes('Loosen entry thresholds'))
+
+  const bothArms = formatReport(analyze(labelled.map((r) =>
+    r.action === 'rejected' ? { ...r, action: 'explored' } : r)))
+  check('with both arms the comparison prints', bothArms.includes('filter said YES'))
+  check('and the NOT AVAILABLE notice does not', !bothArms.includes('NOT AVAILABLE'))
+
+  /**
+   * A row evicted before its window closed was labelled on a shorter observation than
+   * the report claims, which biases peaks downward. Averaging those in silently would
+   * make every arm look worse than it was, for a reason invisible in the output.
+   */
+  const truncatedRows = labelled.map((r, i) => ({
+    ...r, observedSeconds: i < 50 ? 120 : 900, windowTruncated: i < 50,
+  }))
+  const tReport = analyze(truncatedRows)
+  check('truncated rows are counted', tReport.totals.truncated === 50, String(tReport.totals.truncated))
+  check('truncation is surfaced in the report', formatReport(tReport).includes('evicted before'))
+  check('a clean run says nothing about truncation', !formatReport(report).includes('evicted before'))
+}
+
+// ------------------------------------------- shadow tracker capacity + windows
+console.log('\nShadow tracker')
+{
+  const { ShadowTracker } = await import('../src/journal.js')
+
+  const mk = (n) => ({
+    mint: `M${n}`, symbol: `S${n}`, creator: 'DEV', createdAt: Date.now(), priceSol: 1e-7,
+  })
+  const verdict = { pass: false, failed: [{ id: 'buyers' }] }
+
+  /**
+   * Capacity has to hold a FULL outcome window of launches. At ~30 launches a minute a
+   * 15-minute window needs ~450 slots; the old default of 80 held under three minutes,
+   * so every row was labelled on a window five times shorter than the report claimed.
+   */
+  const perMinute = 30
+  const needed = perMinute * config.learning.outcomeWindowMinutes
+  check('capacity covers a full outcome window at real launch rates',
+    config.learning.maxShadowTracked >= needed,
+    `${config.learning.maxShadowTracked} slots vs ~${needed} needed`)
+
+  const t = new ShadowTracker({ windowMs: 60_000, max: 3 })
+  for (let i = 0; i < 3; i++) t.track({ candidate: mk(i), verdict, action: 'rejected' })
+  check('holds up to capacity', t.size === 3)
+
+  // Eviction takes the OLDEST, which for an insertion-ordered Map is the first key.
+  t.track({ candidate: mk(3), verdict, action: 'rejected' })
+  check('eviction stays at capacity', t.size === 3)
+  check('eviction drops the oldest', !t.has('M0') && t.has('M1') && t.has('M3'))
+
+  // Outcome rows record how long they were ACTUALLY watched, so a shortened window
+  // cannot pass itself off as a full one.
+  const tw = new ShadowTracker({ windowMs: 60_000, max: 10 })
+  tw.track({ candidate: mk(9), verdict, action: 'rejected' })
+  tw.onTrade({ mint: 'M9', priceSol: 3e-7 })
+  const row = tw.finalize('M9', 'evicted')
+  check('rows record their observed window', Number.isFinite(row.observedSeconds))
+  check('an early finalize is marked truncated', row.windowTruncated === true)
+  check('the price path still labels the row', near(row.peakMultiple, 3, 1e-6), String(row.peakMultiple))
+  check('and the outcome label follows from it', row.hitFirstRung === true)
 }
 
 // ---------------------------------------------------------------- dashboard
@@ -461,6 +600,43 @@ console.log('\nDashboard snapshot')
   check('sizing tier included', near(snap.sizing.buySol, 0.075))
   check('next tier included', snap.sizing.nextTier?.atSol === 5)
   check('serialises cleanly for the API', typeof JSON.stringify(snap) === 'string')
+
+  /**
+   * The explore book gets its own P&L on the dashboard, and the headline numbers must
+   * stay strategy-only. A -0.650 TOTAL VALUE on a 0.5 SOL book is what the mixed version
+   * produced: fifteen concurrent explores tied up more than the account held.
+   */
+  store.addPosition({
+    mint: 'DX', symbol: 'XDOG', state: 'open', openedAt: Date.now() - 30_000,
+    entryPriceSol: 2e-7, lastPriceSol: 1e-7, peakPriceSol: 2e-7,
+    tokensBought: 500_000, tokensRemaining: 500_000,
+    solSpent: 0.075, solRecovered: 0, rungsHit: [], fills: [],
+    explore: true, failedChecks: ['buyers', 'dev_hold'],
+  })
+  const withExp = buildSnapshot(1.2)
+
+  check('the explore panel has its own bankroll', withExp.explore.bankrollSol === config.explore.budgetSol)
+  check('deployed explore capital is reported', near(withExp.explore.deployedSol, 0.075))
+  check('bankroll left subtracts deployed capital',
+    near(withExp.explore.bankrollLeftSol, config.explore.budgetSol - 0.075), String(withExp.explore.bankrollLeftSol))
+  check('the panel knows whether explore is on', withExp.explore.enabled === config.explore.enabled)
+
+  const stratMark = withExp.positions.filter((x) => !x.explore).reduce((s, x) => s + x.markValueSol, 0)
+  check('total value excludes explore bags', near(withExp.wallet.totalValueSol, 1.2 + stratMark, 1e-9),
+    `${withExp.wallet.totalValueSol} vs ${1.2 + stratMark}`)
+  check('total value is not dragged negative by the experiment', withExp.wallet.totalValueSol > 0)
+  check('strategy deployed excludes explore', near(withExp.wallet.deployedSol, snap.wallet.deployedSol))
+
+  // An explore row must carry WHY it was taken, in both tables.
+  const expOpen = withExp.positions.find((x) => x.explore)
+  check('an open explore row names the failed checks', expOpen?.failedChecks.includes('dev_hold'))
+  store.closePosition('DX', 'stop-loss')
+  const afterClose = buildSnapshot(1.2)
+  const expClosed = afterClose.closed.find((x) => x.explore)
+  check('a closed explore row still names the failed checks', expClosed?.failedChecks.includes('dev_hold'))
+  check('explore losses stay out of the strategy P&L chart',
+    afterClose.history.every((h) => Number.isFinite(h.sol)) &&
+      !afterClose.closed.filter((x) => !x.explore).some((x) => x.mint === 'DX'))
 }
 
 // ---------------------------------------------- bonding curve account decoding
@@ -993,7 +1169,18 @@ console.log('\nPeriodic summary')
   creates = 900
   const quiet = summaryText(fakeBot, base)
   check('quiet window says so plainly', quiet.includes('No trades'))
-  check('quiet window reassures rather than alarms', quiet.includes('filter working'))
+  check('a quiet window for a bot that HAS traded is not alarming', quiet.includes('a quiet window'))
+
+  /**
+   * But a filter that has NEVER taken a trade is a different situation and must not get
+   * the same reassurance. It produces no evidence about its own picks, so it is
+   * indistinguishable from a broken one — the digest has to say so.
+   */
+  entered = 0
+  const neverTraded = summaryText(fakeBot, { ...base, entered: 0 })
+  check('a filter that never fires is flagged, not congratulated',
+    neverTraded.includes('never taken one') && !neverTraded.includes('a quiet window'))
+  entered = 2
   check('quiet window names how many it screened', quiet.includes('500 launches'))
   check('window length is labelled', quiet.includes('4h 0m'))
   check('summary embeds full status', quiet.includes('launches') && quiet.includes('feed OK'))
@@ -1081,7 +1268,16 @@ console.log('\nTelegram commands')
 
   const split = await listener.handle('/status')
   check('/status separates the strategy book', split.includes('<b>Strategy</b>'))
-  check('/status shows the explore book separately', split.includes('Explore</b> (experiment'))
+  check('/status shows the explore book separately', split.includes('Explore book'))
+  check('/status gives the explore book its own P&L', split.includes('-0.0310'))
+  check('/status shows what is left of the explore bankroll', split.includes('Bankroll'))
+  check('/status says explore is not the strategy\'s money', split.includes("not the strategy's money"))
+
+  // The explore position must appear under its own heading, labelled with what the
+  // filter objected to — otherwise it reads as a trade the strategy chose to take.
+  const posText = await listener.handle('/positions')
+  check('/positions separates strategy from explore', posText.includes('Explore —'))
+  check('/positions says why an explore trade was taken', posText.includes('would skip: buyers'))
   check('/status shows explore W/L and P&L', split.includes('1W/4L') && split.includes('0.0310'))
   check('strategy open count excludes explore', split.includes('<b>Strategy</b>: 1 open'))
 

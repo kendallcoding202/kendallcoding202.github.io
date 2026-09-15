@@ -86,9 +86,16 @@ export class ShadowTracker {
 
   track({ candidate, verdict, action, entryPriceSol }) {
     if (this.rows.size >= this.max) {
-      // Drop the oldest rather than refuse — recent data is more representative.
-      const oldest = [...this.rows.entries()].sort((a, b) => a[1].decidedAt - b[1].decidedAt)[0]
-      if (oldest) this.finalize(oldest[0], 'evicted')
+      /**
+       * Drop the oldest rather than refuse — recent data is more representative.
+       *
+       * A Map iterates in insertion order and decidedAt is stamped at insertion, so the
+       * first key IS the oldest. The previous version copied and sorted the entire Map
+       * on every insert, which at a 1500-row cap and ~30 launches a minute is tens of
+       * thousands of comparisons per launch on the same thread that decodes the feed.
+       */
+      const oldest = this.rows.keys().next().value
+      if (oldest !== undefined) this.finalize(oldest, 'evicted')
     }
 
     const price = entryPriceSol ?? candidate.priceSol
@@ -140,10 +147,19 @@ export class ShadowTracker {
     const endMultiple = row.lastPriceSol / base
     const firstRung = config.exit.ladder[0]?.atPct ?? 50
 
+    const observedSeconds = Math.round((Date.now() - row.decidedAt) / 1000)
+
     const finished = {
       ...row,
       finalizedAt: Date.now(),
       finalizeReason: reason,
+      /**
+       * How long this row was ACTUALLY watched. A row evicted early was labelled on a
+       * shorter window than the report claims, which biases peakMultiple down. Recording
+       * it means the analyser can say so instead of averaging truncated rows in silently.
+       */
+      observedSeconds,
+      windowTruncated: observedSeconds < Math.round(this.windowMs / 1000) * 0.9,
       peakMultiple: Number(peakMultiple.toFixed(4)),
       endMultiple: Number(endMultiple.toFixed(4)),
       troughMultiple: Number((row.troughPriceSol / base).toFixed(4)),
