@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { Keypair, Connection, PublicKey } from '@solana/web3.js'
 import bs58 from 'bs58'
@@ -18,8 +19,15 @@ export function getKeypair() {
   const raw = config.privateKey
   if (!raw) {
     if (config.paper) {
-      cachedKeypair = Keypair.generate()
-      log.warn('PRIVATE_KEY unset — paper mode is using an ephemeral throwaway key')
+      /**
+       * Derived from a fixed seed rather than generated, so the paper wallet is the
+       * same address on every restart. A new random address each time makes restart
+       * notifications unreadable — you cannot tell a restart from a second instance.
+       * Nothing signs in paper mode, so this key never controls anything.
+       */
+      const seed = createHash('sha256').update('pumpbot:paper:v1').digest()
+      cachedKeypair = Keypair.fromSeed(new Uint8Array(seed))
+      log.warn('PRIVATE_KEY unset — paper mode is using a fixed, non-funded demo key')
       return cachedKeypair
     }
     throw new Error('PRIVATE_KEY is required for live trading. Run `npm run keygen` first.')

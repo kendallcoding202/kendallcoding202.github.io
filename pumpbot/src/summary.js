@@ -31,10 +31,16 @@ export function statusText(bot) {
   if (state.halted) lines.push('', `Halt reason: ${esc(state.halted.reason)}`)
 
   if (stats) {
+    const tradeHealth =
+      stats.creates > 40 && stats.tradesMatched === 0
+        ? '⚠️ NO TRADE DATA — entry impossible'
+        : `${stats.tradesMatched ?? 0} trades matched`
+
     lines.push(
       '',
-      `Up ${duration(stats.uptimeSeconds)} · ${stats.parsing ? 'feed OK' : '⚠️ FEED NOT PARSING'}`,
-      `${stats.creates} launches → ${stats.watching} observing → ${stats.screened} screened → <b>${stats.entered} entered</b>`,
+      `Up ${duration(stats.uptimeSeconds)} · ${stats.parsing ? 'feed OK' : '⚠️ FEED NOT PARSING'} · ${tradeHealth}`,
+      `${stats.creates} launches → ${stats.watching} observing → ${stats.screened} screened → <b>${stats.entered} entered</b>` +
+        (stats.explored ? ` · ${stats.explored} explored` : ''),
     )
     if (stats.topRejects?.length) {
       lines.push(`Rejects: ${stats.topRejects.map((r) => `${r.id}×${r.n}`).join(' · ')}`)

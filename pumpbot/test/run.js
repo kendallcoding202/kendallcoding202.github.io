@@ -461,6 +461,56 @@ console.log('\nBonding curve account')
   check('PDA is stable across calls', bondingCurveAddress('So11111111111111111111111111111111111111112').toBase58() === addr)
 }
 
+// ------------------------------------------------- feed subscription batching
+console.log('\nFeed subscriptions')
+{
+  const { Feed } = await import('../src/feed.js')
+  const feed = new Feed()
+  const sent = []
+  // Pretend the socket is open and capture what would go over the wire.
+  feed.ws = { readyState: 1, send: (s) => sent.push(JSON.parse(s)) }
+
+  for (let i = 0; i < 50; i++) feed.watch('MINT' + i)
+  check('watching does not send immediately', sent.length === 0, 'batched, not per-mint')
+  check('all mints are tracked', feed.subscriptionStats().watched === 50)
+
+  await new Promise((r) => setTimeout(r, config.feed.subscribeBatchMs + 120))
+  check('one batched message covers them all', sent.length === 1, String(sent.length))
+  check('batch carries every mint', sent[0]?.keys?.length === 50)
+  check('batch uses the subscribe method', sent[0]?.method === 'subscribeTokenTrade')
+
+  sent.length = 0
+  for (let i = 0; i < 10; i++) feed.unwatch('MINT' + i)
+  await new Promise((r) => setTimeout(r, config.feed.subscribeBatchMs + 120))
+  check('unsubscribes batch too', sent.length === 1 && sent[0].keys.length === 10)
+  check('unsubscribe uses the right method', sent[0]?.method === 'unsubscribeTokenTrade')
+  check('watched count drops', feed.subscriptionStats().watched === 40)
+
+  // A watch immediately followed by an unwatch should cancel, not churn the socket.
+  sent.length = 0
+  feed.watch('CHURN'); feed.unwatch('CHURN')
+  await new Promise((r) => setTimeout(r, config.feed.subscribeBatchMs + 120))
+  check('watch+unwatch in one window does not subscribe', !sent.some((m) => m.method === 'subscribeTokenTrade'))
+
+  // The cap must hold, and be visible.
+  const capped = new Feed()
+  capped.ws = { readyState: 1, send: () => {} }
+  for (let i = 0; i < config.feed.maxWatchedMints + 40; i++) capped.watch('C' + i)
+  check('subscriptions are capped', capped.subscriptionStats().watched === config.feed.maxWatchedMints)
+  check('dropped watches are counted, not silent', capped.subscriptionStats().dropped === 40)
+
+  // Oversized batches are chunked rather than sent as one huge message.
+  const many = new Feed()
+  const manySent = []
+  many.ws = { readyState: 1, send: (s) => manySent.push(JSON.parse(s)) }
+  for (let i = 0; i < 150; i++) many.watch('M' + i)
+  await new Promise((r) => setTimeout(r, config.feed.subscribeBatchMs + 120))
+  check('large batches are chunked', manySent.length === 2, String(manySent.length))
+  check('chunks total the full set', manySent.reduce((n, m) => n + m.keys.length, 0) === 150)
+
+  await feed.stop(); await capped.stop(); await many.stop()
+}
+
 // ------------------------------------------------------- explore mode
 console.log('\nExplore mode')
 {
@@ -701,6 +751,9 @@ console.log('\nEnd-to-end bot loop')
   clearInterval(bot.sweepTimer); clearInterval(bot.balanceTimer); clearInterval(bot.heartbeatTimer)
 
   check('bot subscribes to the feed on start', feed.started)
+  check('paper wallet address is stable across runs',
+    (await import('../src/wallet.js')).getPublicKey().toBase58() ===
+    (await import('../src/wallet.js')).getPublicKey().toBase58())
 
   feed.emit('raw', {}); feed.emit('create', mkCreate())
   check('a new launch is watched', feed.watched.has(MINT))
@@ -710,6 +763,14 @@ console.log('\nEnd-to-end bot loop')
   for (let i = 0; i < 20; i++) feed.emit('trade', mkTrade('buy', `BUYER${i}`))
   feed.emit('trade', mkTrade('sell', 'SELLER0'))
   check('trade events counted', bot.statsSnapshot().trades === 21)
+  check('trades are attributed to the watched candidate', bot.statsSnapshot().tradesMatched === 21)
+
+  // A trade for something we are not tracking must not count as matched — that counter
+  // is the signal that our subscriptions are actually being served.
+  feed.emit('trade', normalizeEvent({ txType: 'buy', mint: 'UNRELATED', traderPublicKey: 'Z',
+    tokenAmount: 1, solAmount: 0.01, vSolInBondingCurve: 30, vTokensInBondingCurve: 1e9 }))
+  check('unrelated trades are not counted as matched', bot.statsSnapshot().tradesMatched === 21)
+  check('but they do count toward total trades', bot.statsSnapshot().trades === 22)
 
   // Not old enough to screen yet.
   await bot.tick()

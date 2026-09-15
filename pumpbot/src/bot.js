@@ -50,6 +50,7 @@ export class Bot {
       messages: 0,
       creates: 0,
       trades: 0,
+      tradesMatched: 0,
       screened: 0,
       entered: 0,
       explored: 0,
@@ -67,6 +68,8 @@ export class Bot {
       messages: s.messages,
       creates: s.creates,
       trades: s.trades,
+      tradesMatched: s.tradesMatched,
+      subscriptions: this.feed.subscriptionStats?.() ?? null,
       screened: s.screened,
       entered: s.entered,
       explored: s.explored,
@@ -104,9 +107,24 @@ export class Bot {
       return
     }
 
+    const subs = this.feed.subscriptionStats?.()
+
+    // Launches arriving with no per-token trades means our trade subscriptions are not
+    // being served — which looks exactly like "a quiet market" from the filter's side,
+    // because every candidate then shows zero buyers and can never pass.
+    if (s.creates > 40 && s.tradesMatched === 0) {
+      log.error(
+        `${s.creates} launches seen but ZERO trade events matched a watched token ` +
+          `(${s.trades} trade events total, ${subs?.watched ?? '?'} subscriptions). ` +
+          'Entry is impossible in this state — every candidate scores 0 buyers.',
+      )
+    }
+
     const rejects = this.statsSnapshot().topRejects
     log.info(
       `+${beat.creates} launches (${s.creates} total) · watching ${this.candidates.size} · ` +
+        `trades ${s.tradesMatched}/${s.trades} matched · subs ${subs?.watched ?? '?'}` +
+        (subs?.dropped ? ` (${subs.dropped} dropped)` : '') + ' · ' +
         `screened +${beat.screened}/${s.screened} · entered +${beat.entered}/${s.entered} · ` +
         `open ${openPositions().length} · shadow ${this.shadow?.size ?? 0}` +
         (rejects.length ? ` · rejects: ${rejects.map((r) => `${r.id}×${r.n}`).join(' ')}` : ''),
@@ -237,10 +255,13 @@ export class Bot {
     this.stats.trades++
     if (this.stopping) return
 
-    this.candidates.get(event.mint)?.apply(event)
+    const candidate = this.candidates.get(event.mint)
+    const position = getState().positions[event.mint]
+    if (candidate || position) this.stats.tradesMatched++
+
+    candidate?.apply(event)
     this.shadow?.onTrade(event)
 
-    const position = getState().positions[event.mint]
     if (position?.state === 'open') {
       markPrice(position, event.priceSol)
       position.lastVSol = event.vSol

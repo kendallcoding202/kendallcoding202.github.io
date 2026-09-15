@@ -20,6 +20,15 @@ export class Feed extends EventEmitter {
     this.stopped = false
     this.attempt = 0
     this.lastMessageAt = 0
+    // Subscriptions are batched. Sending one socket message per mint means a message
+    // every couple of seconds at real launch rates, which the feed throttles — and a
+    // throttled subscribe is silent, so it looks like "no trades happening" rather
+    // than "we never subscribed".
+    this.pendingSub = new Set()
+    this.pendingUnsub = new Set()
+    this.flushTimer = null
+    this.maxWatched = config.feed.maxWatchedMints
+    this.droppedWatches = 0
   }
 
   start() {
@@ -44,6 +53,7 @@ export class Feed extends EventEmitter {
   async stop() {
     this.stopped = true
     clearInterval(this.watchdog)
+    clearTimeout(this.flushTimer)
     try {
       this.ws?.close()
     } catch {
@@ -63,7 +73,9 @@ export class Feed extends EventEmitter {
       log.info('feed connected')
       this.#send({ method: 'subscribeNewToken' })
       if (this.watchedMints.size) {
-        this.#send({ method: 'subscribeTokenTrade', keys: [...this.watchedMints] })
+        this.pendingSub = new Set(this.watchedMints)
+        this.pendingUnsub.clear()
+        this.#flush()
       }
       this.emit('open')
     })
@@ -119,12 +131,54 @@ export class Feed extends EventEmitter {
 
   watch(mint) {
     if (this.watchedMints.has(mint)) return
+    if (this.watchedMints.size >= this.maxWatched) {
+      // Refusing loudly beats silently subscribing to more than the feed will serve.
+      this.droppedWatches++
+      return
+    }
     this.watchedMints.add(mint)
-    this.#send({ method: 'subscribeTokenTrade', keys: [mint] })
+    this.pendingUnsub.delete(mint)
+    this.pendingSub.add(mint)
+    this.#scheduleFlush()
   }
 
   unwatch(mint) {
     if (!this.watchedMints.delete(mint)) return
-    this.#send({ method: 'unsubscribeTokenTrade', keys: [mint] })
+    this.pendingSub.delete(mint)
+    this.pendingUnsub.add(mint)
+    this.#scheduleFlush()
+  }
+
+  #scheduleFlush() {
+    if (this.flushTimer) return
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = null
+      this.#flush()
+    }, config.feed.subscribeBatchMs)
+  }
+
+  #flush() {
+    if (this.ws?.readyState !== WebSocket.OPEN) return
+    for (const [method, set] of [
+      ['subscribeTokenTrade', this.pendingSub],
+      ['unsubscribeTokenTrade', this.pendingUnsub],
+    ]) {
+      if (!set.size) continue
+      const keys = [...set]
+      set.clear()
+      // Chunked so one message never gets rejected for being oversized.
+      for (let i = 0; i < keys.length; i += 100) {
+        this.#send({ method, keys: keys.slice(i, i + 100) })
+      }
+    }
+  }
+
+  subscriptionStats() {
+    return {
+      watched: this.watchedMints.size,
+      pending: this.pendingSub.size + this.pendingUnsub.size,
+      dropped: this.droppedWatches,
+      max: this.maxWatched,
+    }
   }
 }

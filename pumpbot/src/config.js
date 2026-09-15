@@ -58,6 +58,13 @@ export const config = {
 
   dataDir: str('DATA_DIR', path.join(ROOT, '.data')),
 
+  feed: {
+    // Subscriptions are collected and sent as one message per window.
+    subscribeBatchMs: num('SUBSCRIBE_BATCH_MS', 700),
+    // Upper bound on simultaneous per-token trade subscriptions.
+    maxWatchedMints: num('MAX_WATCHED_MINTS', 180),
+  },
+
   // How often the pipeline summary prints. The first beat always comes early so you
   // get confirmation the feed is alive without waiting a full interval.
   heartbeatSeconds: num('HEARTBEAT_SECONDS', 60),
