@@ -461,6 +461,74 @@ console.log('\nBonding curve account')
   check('PDA is stable across calls', bondingCurveAddress('So11111111111111111111111111111111111111112').toBase58() === addr)
 }
 
+// ------------------------------------------------------- periodic summary
+console.log('\nPeriodic summary')
+{
+  const { summaryText, summaryBaseline, statusText } = await import('../src/summary.js')
+
+  store.initStore()
+  const st = store.getState()
+  st.positions = {}; st.closed = []; st.halted = null; st.totalRealizedSol = 0
+
+  let entered = 2
+  let creates = 400
+  const fakeBot = {
+    walletSol: 0.52,
+    statsSnapshot: () => ({
+      messages: 90_000, creates, trades: 88_000, screened: 380, entered,
+      watching: 7, shadowTracked: 55, parsing: true, uptimeSeconds: 14_400,
+      topRejects: [{ id: 'buyers', n: 300 }, { id: 'market_cap', n: 40 }],
+    }),
+  }
+
+  // A realistic baseline: 4 hours ago, when 400 launches had been seen and 2 entered.
+  const base = { at: Date.now() - 4 * 3600_000, totalRealizedSol: 0, closedCount: 0, entered: 2, creates: 400 }
+
+  // A quiet window — 500 more launches screened since, none taken.
+  creates = 900
+  const quiet = summaryText(fakeBot, base)
+  check('quiet window says so plainly', quiet.includes('No trades'))
+  check('quiet window reassures rather than alarms', quiet.includes('filter working'))
+  check('quiet window names how many it screened', quiet.includes('500 launches'))
+  check('window length is labelled', quiet.includes('4h 0m'))
+  check('summary embeds full status', quiet.includes('launches') && quiet.includes('feed OK'))
+
+  // Same window, now with activity.
+  entered = 5
+  store.addPosition({
+    mint: 'SumMint11111111111111111111111111111111111', symbol: 'SUMDOG', state: 'open',
+    openedAt: Date.now() - 200_000, entryPriceSol: 1e-7, lastPriceSol: 1.7e-7, peakPriceSol: 1.8e-7,
+    tokensBought: 1e6, tokensRemaining: 330_000, solSpent: 0.075, solRecovered: 0.0765,
+    rungsHit: [50], fills: [],
+  })
+  store.addPosition({
+    mint: 'ClosedMint1111111111111111111111111111111', symbol: 'CLOSED', state: 'open',
+    openedAt: Date.now() - 400_000, solSpent: 0.075, solRecovered: 0.19, tokensRemaining: 0, rungsHit: [50, 100],
+  })
+  store.closePosition('ClosedMint1111111111111111111111111111111', 'ladder complete')
+
+  const active = summaryText(fakeBot, base)
+  check('active window leads with realized delta', active.includes('realized on 1 trade'))
+  check('delta is measured from the baseline, not all-time', active.includes('0.1150'), 'expected +0.115 SOL')
+  check('open positions are appended', active.includes('SUMDOG'))
+  check('quiet-window note is suppressed when trades happened', !active.includes('filter working'))
+
+  // Baseline advances so the next window starts clean.
+  const next = summaryBaseline(fakeBot)
+  check('new baseline captures realized', near(next.totalRealizedSol, 0.115, 1e-9))
+  check('new baseline captures trade count', next.closedCount === 1)
+  check('new baseline captures entries', next.entered === 5)
+  const afterRebase = summaryText(fakeBot, next)
+  check('immediately after re-baselining the window reads quiet', afterRebase.includes('No trades'))
+
+  // Entries but no exits yet.
+  const openedOnly = summaryText({ ...fakeBot, statsSnapshot: () => ({ ...fakeBot.statsSnapshot(), entered: 9 }) }, next)
+  check('entries-without-exits is its own headline', openedOnly.includes('opened'))
+
+  check('status alone is a subset of the summary', quiet.includes(statusText(fakeBot).split('\n')[0]))
+  check('summary fits a Telegram message', active.length < 4000, String(active.length))
+}
+
 // ------------------------------------------------------- telegram commands
 console.log('\nTelegram commands')
 {

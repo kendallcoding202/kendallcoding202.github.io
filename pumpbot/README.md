@@ -45,7 +45,7 @@ Believe the numbers it gives you over the numbers you hoped for.
 ```bash
 cd pumpbot
 npm install
-npm test                     # 157 offline checks, no network or keys needed
+npm test                     # 173 offline checks, no network or keys needed
 
 cp .env.example .env
 npm run keygen               # creates the burner, prints the address to fund
@@ -230,6 +230,12 @@ you hold. You can also talk back to it:
 | `/resume` | Allow new entries again |
 | `/panic confirm` | Sell everything now |
 
+It also sends a **scheduled digest every `TELEGRAM_SUMMARY_HOURS`** (default 4; `0`
+disables). The digest leads with what CHANGED since the last one rather than repeating a
+static snapshot — a message that reads identically every four hours trains you to ignore
+it, which defeats the point. A window with no trades says so explicitly, and names how
+many launches it screened and declined, so silence is legible instead of ambiguous.
+
 **Only the configured `TELEGRAM_CHAT_ID` is obeyed.** Bot tokens leak, and anyone who has
 one can message the bot — the chat id is the authorization boundary, and messages from
 any other chat are ignored silently rather than answered. `/panic` refuses to act without
@@ -375,7 +381,7 @@ verification above.
 
 | Command | Does |
 |---|---|
-| `npm test` | 157 offline checks |
+| `npm test` | 173 offline checks |
 | `npm run keygen` | Create the burner wallet |
 | `npm run balance` | Address, balance, current size tier |
 | `npm run paper` | Paper instance, dashboard on :8081 |
@@ -409,8 +415,9 @@ src/
   onchain.js    bonding curve account reads (pricing when the feed is silent)
   notify.js     Telegram alerts
   commands.js   Telegram /status, /pause, /panic
+  summary.js    shared status + digest text
 deploy/         systemd units for live and paper
-test/run.js     157 checks
+test/run.js     173 checks
 ```
 
 ## What is unverified

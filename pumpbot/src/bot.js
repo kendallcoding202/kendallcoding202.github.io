@@ -18,6 +18,7 @@ import {
 import { decideExit, newPosition, applySell, markPrice, positionPnl } from './position.js'
 import { getPublicKey, getSolBalance, getAllTokenBalances } from './wallet.js'
 import { notifyEntry, notifySell, notifyClose, notifyHalt, notifyStartup, notify } from './notify.js'
+import { summaryText, summaryBaseline } from './summary.js'
 import { log, sol, utcDay } from './log.js'
 
 /**
@@ -160,6 +161,13 @@ export class Bot {
     // abandoning stale candidates, closing outcome windows, and the day rollover.
     this.sweepTimer = setInterval(() => this.#sweep().catch((e) => log.error(e)), 5000)
     this.balanceTimer = setInterval(() => this.#refreshBalance().catch((e) => log.debug(e)), 60_000)
+    if (config.telegram.summaryHours > 0) {
+      this.summaryBase = summaryBaseline(this)
+      const everyMs = config.telegram.summaryHours * 3600_000
+      this.summaryTimer = setInterval(() => this.#sendSummary().catch((e) => log.warn(e.message)), everyMs)
+      log.info(`telegram summary every ${config.telegram.summaryHours}h`)
+    }
+
     // First beat lands early for fast confirmation, then settles into the interval.
     const beatMs = config.heartbeatSeconds * 1000
     this.heartbeatTimer = setTimeout(() => {
@@ -173,6 +181,7 @@ export class Bot {
     clearInterval(this.sweepTimer)
     clearInterval(this.balanceTimer)
     clearInterval(this.heartbeatTimer)
+    clearInterval(this.summaryTimer)
     await this.feed.stop()
     save()
   }
@@ -236,6 +245,14 @@ export class Bot {
       // Evaluate on the tick, not on a timer — a rung should fire when it is crossed.
       this.#manage(position, event.priceSol, event.vSol).catch((err) => log.error(err))
     }
+  }
+
+  /** The scheduled digest. Deltas are measured from the previous summary, not all-time. */
+  async #sendSummary() {
+    const text = summaryText(this, this.summaryBase)
+    // Re-baseline only after a successful send, so a failed send does not swallow a
+    // window's worth of activity.
+    if (await notify(text)) this.summaryBase = summaryBaseline(this)
   }
 
   /**

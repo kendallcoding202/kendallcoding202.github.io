@@ -1,9 +1,8 @@
 import { config } from './config.js'
-import { getState, openPositions, deployedSol, todayPnl, clearHalt, halt } from './store.js'
-import { positionPnl } from './position.js'
-import { sizingSummary } from './sizing.js'
+import { openPositions, clearHalt, halt } from './store.js'
+import { statusText, positionsText } from './summary.js'
 import { notify } from './notify.js'
-import { log, esc, sol, pct, shortAddr, sleep } from './log.js'
+import { log, sleep } from './log.js'
 
 /**
  * Telegram command listener.
@@ -109,10 +108,10 @@ export class CommandListener {
         )
 
       case '/status':
-        return this.#reply(this.#statusText())
+        return this.#reply(statusText(this.bot))
 
       case '/positions':
-        return this.#reply(this.#positionsText())
+        return this.#reply(positionsText())
 
       case '/pause': {
         halt('paused from Telegram')
@@ -146,64 +145,5 @@ export class CommandListener {
   async #reply(text) {
     await notify(text)
     return text
-  }
-
-  #statusText() {
-    const state = getState()
-    const today = todayPnl()
-    const open = openPositions()
-    const stats = this.bot?.statsSnapshot?.() ?? null
-    const s = sizingSummary(this.bot?.walletSol)
-
-    const unrealized = open.reduce((sum, p) => sum + positionPnl(p).totalSol, 0)
-    const net = state.totalRealizedSol + unrealized
-
-    const lines = [
-      `<b>pumpbot</b> — ${config.paper ? 'PAPER' : '<b>LIVE</b>'}${state.halted ? ' · 🛑 HALTED' : ''}`,
-      '',
-      `Wallet ${sol(this.bot?.walletSol ?? 0)} · deployed ${sol(deployedSol())}`,
-      `Net P&L <b>${sol(net)}</b> · realized ${sol(state.totalRealizedSol)} · unrealized ${sol(unrealized)}`,
-      `Today ${sol(today.realizedSol)} · ${today.wins}W/${today.losses}L`,
-      `Size ${sol(s.buySol)}/trade${s.nextTier ? ` · next ${sol(s.nextTier.buySol)} at ${sol(s.nextTier.atSol)}` : ''}`,
-    ]
-
-    if (state.halted) lines.push('', `Halt reason: ${esc(state.halted.reason)}`)
-
-    if (stats) {
-      const up = stats.uptimeSeconds
-      const uptime = up < 3600 ? `${Math.round(up / 60)}m` : `${Math.floor(up / 3600)}h ${Math.round((up % 3600) / 60)}m`
-      lines.push(
-        '',
-        `Up ${uptime} · ${stats.parsing ? 'feed OK' : '⚠️ FEED NOT PARSING'}`,
-        `${stats.creates} launches → ${stats.watching} observing → ${stats.screened} screened → <b>${stats.entered} entered</b>`,
-      )
-      if (stats.topRejects?.length) {
-        lines.push(`Rejects: ${stats.topRejects.map((r) => `${r.id}×${r.n}`).join(' · ')}`)
-      }
-    }
-
-    lines.push('', `${open.length} open · ${state.closed.length} closed`)
-    return lines.join('\n')
-  }
-
-  #positionsText() {
-    const open = openPositions()
-    if (!open.length) return '<b>No open positions.</b>'
-
-    return [
-      `<b>${open.length} open position(s)</b>`,
-      '',
-      ...open.map((p) => {
-        const pnl = positionPnl(p)
-        const change = p.entryPriceSol > 0 ? ((p.lastPriceSol - p.entryPriceSol) / p.entryPriceSol) * 100 : 0
-        const age = Math.round((Date.now() - p.openedAt) / 1000)
-        return [
-          `<b>${esc(p.symbol)}</b> ${pct(change)} · ${age < 60 ? `${age}s` : `${Math.round(age / 60)}m`}`,
-          `  in ${sol(p.solSpent)} · out ${sol(p.solRecovered)} · P&L ${sol(pnl.totalSol)}`,
-          `  ${pnl.initialsRecovered ? '✅ initials out · ' : ''}rungs ${p.rungsHit.length ? p.rungsHit.map((r) => `+${r}%`).join(' ') : 'none'}`,
-          `  <code>${esc(shortAddr(p.mint))}</code>`,
-        ].join('\n')
-      }),
-    ].join('\n')
   }
 }
