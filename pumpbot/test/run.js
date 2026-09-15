@@ -731,11 +731,27 @@ console.log('\nPaper balance')
   store.closePosition('W1', 'stop-loss')
   check('a closed loss lands in the balance', near(paperWalletSol(START), START - 0.025), String(paperWalletSol(START)))
 
-  // Explore P&L counts toward the balance even though it is a separate book.
+  /**
+   * The two books are separate money. Folding explore into the strategy balance meant
+   * 15 concurrent explores at 0.075 tied up 1.1 SOL against a 0.5 SOL book — the
+   * balance went negative (TOTAL VALUE read -0.650) and, because the size tier reads
+   * this number, the experiment was steering the strategy's position sizing.
+   */
+  const { paperExploreWalletSol, exploreDeployedSol, deployedSol } = store
+  const strategyBefore = paperWalletSol(START)
+
   store.addPosition({ mint: 'W2', symbol: 'W2', state: 'open', openedAt: Date.now(),
-    solSpent: 0.075, solRecovered: 0.12, tokensRemaining: 0, rungsHit: [], explore: true })
+    solSpent: 0.075, solRecovered: 0, tokensRemaining: 1000, rungsHit: [], explore: true })
+  check('an open explore position does not tie up strategy capital',
+    near(paperWalletSol(START), strategyBefore), String(paperWalletSol(START)))
+  check('it ties up the experiment bankroll instead', near(exploreDeployedSol(), 0.075))
+  check('explore capital is excluded from strategy deployed', near(deployedSol(), 0))
+
+  store.getState().positions.W2.solRecovered = 0.12
   store.closePosition('W2', 'ladder')
-  check('explore P&L still moves real paper balance', near(paperWalletSol(START), START - 0.025 + 0.045))
+  check('closed explore P&L does not move the strategy balance',
+    near(paperWalletSol(START), strategyBefore), String(paperWalletSol(START)))
+  check('it moves the experiment bankroll', near(paperExploreWalletSol(2), 2 + 0.045))
 
   /**
    * The regression this exists for: a running counter resets to START on restart while
@@ -747,16 +763,27 @@ console.log('\nPaper balance')
   check('balance survives a restart unchanged', near(paperWalletSol(START), beforeRestart),
     `${paperWalletSol(START)} vs ${beforeRestart}`)
 
-  // Many losing trades must drive it DOWN, never up.
+  // Many losing trades must drive the book they belong to DOWN, never up.
+  const exploreBefore = paperExploreWalletSol(2)
   for (let i = 0; i < 20; i++) {
     store.addPosition({ mint: `L${i}`, symbol: `L${i}`, state: 'open', openedAt: Date.now(),
       solSpent: 0.075, solRecovered: 0.059, tokensRemaining: 0, rungsHit: [], explore: true })
     store.closePosition(`L${i}`, 'time stop')
   }
-  check('twenty losing trades reduce the balance', paperWalletSol(START) < beforeRestart,
+  check('twenty losing explore trades reduce the experiment bankroll',
+    near(paperExploreWalletSol(2), exploreBefore - 20 * 0.016, 1e-9), String(paperExploreWalletSol(2)))
+  check('and leave the strategy balance untouched', near(paperWalletSol(START), beforeRestart),
     String(paperWalletSol(START)))
-  check('the drop matches the losses', near(paperWalletSol(START), beforeRestart - 20 * 0.016, 1e-9),
-    String(paperWalletSol(START)))
+
+  // The same twenty losses on the strategy side must land squarely on it.
+  const strategyStart = paperWalletSol(START)
+  for (let i = 0; i < 20; i++) {
+    store.addPosition({ mint: `S${i}`, symbol: `S${i}`, state: 'open', openedAt: Date.now(),
+      solSpent: 0.075, solRecovered: 0.059, tokensRemaining: 0, rungsHit: [] })
+    store.closePosition(`S${i}`, 'time stop')
+  }
+  check('twenty losing strategy trades reduce the strategy balance',
+    near(paperWalletSol(START), strategyStart - 20 * 0.016, 1e-9), String(paperWalletSol(START)))
 }
 
 // ------------------------------------------------- feed subscription batching
@@ -1101,6 +1128,59 @@ console.log('\nTelegram commands')
   // Authorization: only the configured chat id may drive the bot.
   check('listener is disabled without credentials', new CommandListener(fakeBot).enabled === false)
   check('escaping is applied to symbols', typeof pos === 'string' && !pos.includes('<script'))
+}
+
+// ------------------------------------------- which mints the RPC feed decodes
+console.log('\nLog feed interest filter')
+{
+  const { Bot } = await import('../src/bot.js')
+  const { EventEmitter } = await import('node:events')
+  class QuietFeed extends EventEmitter {
+    start() {} async stop() {} watch() {} unwatch() {}
+  }
+
+  store.initStore()
+  const st = store.getState()
+  st.positions = {}; st.closed = []; st.halted = null
+  store.save()
+
+  // NOT injecting a logFeed: we want the real one, because the bug lived in the
+  // predicate the Bot hands it. Every e2e test injects a fake, which is exactly why
+  // 303 tests passed while shadow rows silently received no prices at all.
+  const bot = new Bot({ feed: new QuietFeed() })
+  check('an rpc-sourced bot builds a real log feed', Boolean(bot.logFeed?.interested))
+
+  const want = bot.logFeed.interested
+  check('an unknown mint is ignored', want('NOBODY') === false)
+
+  bot.candidates.set('CAND', {})
+  check('a mint still inside the observation window is decoded', want('CAND') === true)
+
+  store.addPosition({ mint: 'HELD', symbol: 'HELD', state: 'open', openedAt: Date.now(),
+    solSpent: 0.075, solRecovered: 0, tokensRemaining: 1000, rungsHit: [] })
+  check('an open position is decoded', want('HELD') === true)
+
+  /**
+   * The regression. A rejected token is deleted from `candidates` the instant it is
+   * screened, so if the predicate does not also cover shadow rows it stops receiving
+   * trades immediately and its journal row finalizes at peakMultiple 1.0 with zero
+   * ticks. That does not read as "no data" downstream — it reads as "everything we
+   * rejected went nowhere", which is the filter grading its own homework.
+   */
+  bot.shadow.track({
+    candidate: { mint: 'SHADOW', symbol: 'SHD', creator: 'DEV', createdAt: Date.now(), priceSol: 1e-7 },
+    verdict: { pass: false, failed: [{ id: 'buyers' }] },
+    action: 'rejected',
+  })
+  check('a shadow-tracked reject is still decoded', want('SHADOW') === true)
+
+  // And it must actually reach the tracker, so the row can be labelled.
+  bot.shadow.onTrade({ mint: 'SHADOW', priceSol: 2e-7 })
+  const row = bot.shadow.finalize('SHADOW', 'test')
+  check('shadow rows accumulate price ticks', row?.ticks === 1, JSON.stringify(row?.ticks))
+  check('and produce a real outcome multiple', row && near(row.peakMultiple, 2, 1e-6), String(row?.peakMultiple))
+
+  await bot.logFeed.stop()
 }
 
 // ------------------------------------------------- end-to-end, synthetic feed

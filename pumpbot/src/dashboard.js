@@ -3,7 +3,15 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { config } from './config.js'
-import { getState, openPositions, strategyPositions, explorePositions, deployedSol, todayPnl } from './store.js'
+import {
+  getState,
+  openPositions,
+  strategyPositions,
+  explorePositions,
+  deployedSol,
+  exploreDeployedSol,
+  todayPnl,
+} from './store.js'
 import { positionPnl } from './position.js'
 import { sizingSummary } from './sizing.js'
 import { analyze } from './learn.js'
@@ -179,6 +187,12 @@ export function buildSnapshot(walletSol, stats = null) {
       losses: state.exploreLosses ?? 0,
       open: explorePositions().length,
       closed: exploreClosed.length,
+      // The experiment's separate bankroll, so it is obvious at a glance that none of
+      // this is coming out of the strategy's money.
+      deployedSol: exploreDeployedSol(),
+      bankrollSol: config.explore.budgetSol,
+      bankrollLeftSol: config.explore.budgetSol + (state.exploreRealizedSol ?? 0) - exploreDeployedSol(),
+      enabled: config.explore.enabled,
     },
     learning: learningSnapshot(),
     limits: {

@@ -17,6 +17,7 @@ import {
   halt,
   logActivity,
   paperWalletSol,
+  paperExploreWalletSol,
 } from './store.js'
 import { decideExit, newPosition, applySell, markPrice, positionPnl } from './position.js'
 import { getPublicKey, getSolBalance, getAllTokenBalances } from './wallet.js'
@@ -43,7 +44,16 @@ export class Bot {
       logFeed ??
       (this.usingRpcTrades
         ? new LogFeed({
-            interested: (mint) => this.candidates.has(mint) || Boolean(getState().positions[mint]),
+            // Shadow rows MUST be in here. A rejected token leaves `candidates` the
+            // instant it is screened, so without this clause it receives no further
+            // trades, and its journal row finalizes at peakMultiple 1.0 with zero
+            // ticks. That does not read as "no data" — it reads as "every token we
+            // rejected went nowhere", which is the filter grading its own homework.
+            // The per-mint tape had the equivalent guard at feed.unwatch().
+            interested: (mint) =>
+              this.candidates.has(mint) ||
+              Boolean(getState().positions[mint]) ||
+              Boolean(this.shadow?.has(mint)),
           })
         : null)
     this.candidates = new Map() // mint -> Candidate, pre-entry
@@ -566,15 +576,22 @@ export class Bot {
     }
     this.stats.exploreParked = false
 
-    // The experiment has a budget, like any experiment.
-    const spent = -(getState().exploreRealizedSol ?? 0)
-    if (spent >= e.budgetSol) {
+    /**
+     * The experiment has a bankroll, and the gate is capital AT RISK — not just money
+     * already lost. Gating on realized P&L alone let 15 concurrent positions tie up
+     * 1.1 SOL while "spent" still read near zero, which is how a 0.3 budget produced a
+     * -0.650 balance. What is left = bankroll + realized - still deployed.
+     */
+    const left = paperExploreWalletSol(e.budgetSol)
+    if (left < buySolFor(this.walletSol)) {
       if (!this.stats.exploreBudgetHit) {
         this.stats.exploreBudgetHit = true
-        log.warn(`exploration stopped — spent ${sol(spent)} of its ${sol(e.budgetSol)} budget`)
+        log.warn(`exploration paused — ${sol(left)} left of its ${sol(e.budgetSol)} bankroll`)
       }
       return false
     }
+    // Recoverable: positions close and free capital, unlike the old one-way latch.
+    this.stats.exploreBudgetHit = false
 
     return Math.random() < e.sampleRate
   }

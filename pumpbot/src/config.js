@@ -156,11 +156,17 @@ export const config = {
     // Paper mode can carry far more positions than live — it is not risking anything.
     maxConcurrent: num('EXPLORE_MAX_CONCURRENT', 15),
     /**
-     * Total the experiment may lose before it stops. An unbounded experiment is not an
-     * experiment — it spent 1.58 SOL from a 0.5 SOL paper account in one run, which
-     * drove the derived balance negative and made the size tier meaningless.
+     * The experiment's own notional bankroll, kept entirely apart from the strategy
+     * book (see paperExploreWalletSol). Explore may hold at most this much at once and
+     * stops when it has lost this much.
+     *
+     * Sized for the question it has to answer, not for caution: the learning report
+     * needs ~200 labelled samples before it will suggest anything, and explore trades
+     * average roughly a 2% round-trip loss on a dead launch, so a few hundred samples
+     * costs on the order of 1-2 SOL of PAPER money. A 0.3 bankroll ran the experiment
+     * out in about twenty minutes and produced nothing conclusive.
      */
-    budgetSol: num('EXPLORE_BUDGET_SOL', 0.3),
+    budgetSol: num('EXPLORE_BUDGET_SOL', 3),
     /**
      * The only check never overridden. Everything else is a hypothesis worth testing;
      * an unpriceable token is one whose exit we cannot manage, so an explore trade on it

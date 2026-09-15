@@ -55,8 +55,11 @@ export const openPositions = () => Object.values(getState().positions).filter((p
 export const strategyPositions = () => openPositions().filter((p) => !p.explore)
 export const explorePositions = () => openPositions().filter((p) => p.explore)
 
-export const deployedSol = () =>
-  strategyPositions().reduce((sum, p) => sum + Math.max(0, p.solSpent - p.solRecovered), 0)
+const tiedUpIn = (positions) =>
+  positions.reduce((sum, p) => sum + Math.max(0, p.solSpent - p.solRecovered), 0)
+
+export const deployedSol = () => tiedUpIn(strategyPositions())
+export const exploreDeployedSol = () => tiedUpIn(explorePositions())
 
 export function addPosition(position) {
   getState().positions[position.mint] = position
@@ -136,11 +139,23 @@ export function logActivity(kind, text, extra = {}) {
  * correct against, and an inflated balance silently bumps the size tier.
  *
  * Double-entry: start + everything realized - capital still tied up in open positions.
+ *
+ * STRATEGY ONLY. Explore is a simulation running alongside on separate notional money,
+ * and folding it in here broke two things at once: 15 concurrent explores at 0.075 tie
+ * up 1.1 SOL against a 0.5 SOL book, so the balance went negative and TOTAL VALUE read
+ * -0.650; and because the size tier reads this balance, the experiment was steering the
+ * strategy's position sizing. The paper strategy wallet has to mirror what live would
+ * do, and live never places an explore trade.
  */
 export function paperWalletSol(startSol) {
   const s = getState()
-  const tiedUp = openPositions().reduce((sum, p) => sum + Math.max(0, p.solSpent - p.solRecovered), 0)
-  return startSol + (s.totalRealizedSol ?? 0) + (s.exploreRealizedSol ?? 0) - tiedUp
+  return startSol + (s.totalRealizedSol ?? 0) - deployedSol()
+}
+
+/** The experiment's own notional bankroll, tracked the same way and kept apart. */
+export function paperExploreWalletSol(startSol) {
+  const s = getState()
+  return startSol + (s.exploreRealizedSol ?? 0) - exploreDeployedSol()
 }
 
 export function todayPnl() {
