@@ -45,7 +45,7 @@ Believe the numbers it gives you over the numbers you hoped for.
 ```bash
 cd pumpbot
 npm install
-npm test                     # 137 offline checks, no network or keys needed
+npm test                     # 157 offline checks, no network or keys needed
 
 cp .env.example .env
 npm run keygen               # creates the burner, prints the address to fund
@@ -213,6 +213,31 @@ requires `DASHBOARD_TOKEN` and the server refuses to start without one.
 
 ---
 
+## Watching it from your phone
+
+Telegram is the better answer than exposing the dashboard: push alerts, no public URL,
+and nothing sensitive sitting in a browser history.
+
+Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` and you get pushes on every entry, rung
+fire, exit, halt, and — the one that saves money — liquidity draining out of a position
+you hold. You can also talk back to it:
+
+| Command | Does |
+|---|---|
+| `/status` | Balance, P&L, size tier, feed health, the full funnel |
+| `/positions` | Open positions with P&L and which rungs have fired |
+| `/pause` | Stop opening new positions (open ones still exit) |
+| `/resume` | Allow new entries again |
+| `/panic confirm` | Sell everything now |
+
+**Only the configured `TELEGRAM_CHAT_ID` is obeyed.** Bot tokens leak, and anyone who has
+one can message the bot — the chat id is the authorization boundary, and messages from
+any other chat are ignored silently rather than answered. `/panic` refuses to act without
+the literal word `confirm`, and a restart drains any queued backlog so an old command
+cannot replay hours later.
+
+---
+
 ## Learning
 
 **What this is not:** a model that trains itself into profitability. At this trade volume
@@ -350,7 +375,7 @@ verification above.
 
 | Command | Does |
 |---|---|
-| `npm test` | 137 offline checks |
+| `npm test` | 157 offline checks |
 | `npm run keygen` | Create the burner wallet |
 | `npm run balance` | Address, balance, current size tier |
 | `npm run paper` | Paper instance, dashboard on :8081 |
@@ -382,9 +407,10 @@ src/
   learn.js      statistics over the journal
   dashboard.js  local HTTP server
   onchain.js    bonding curve account reads (pricing when the feed is silent)
-  notify.js     Telegram
+  notify.js     Telegram alerts
+  commands.js   Telegram /status, /pause, /panic
 deploy/         systemd units for live and paper
-test/run.js     137 checks
+test/run.js     157 checks
 ```
 
 ## What is unverified

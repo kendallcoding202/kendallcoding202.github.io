@@ -3,6 +3,7 @@ import path from 'node:path'
 import { config } from './config.js'
 import { Bot } from './bot.js'
 import { startDashboard } from './dashboard.js'
+import { CommandListener } from './commands.js'
 import { initStore, getState, clearHalt, openPositions, save, addPosition } from './store.js'
 import { keygen, getPublicKey, getSolBalance, getAllTokenBalances } from './wallet.js'
 import { sizingSummary } from './sizing.js'
@@ -114,6 +115,9 @@ async function run() {
 
   const server = startDashboard(() => ({ walletSol: bot.walletSol, stats: bot.statsSnapshot() }))
 
+  const telegram = new CommandListener(bot)
+  await telegram.start()
+
   let shuttingDown = false
   const shutdown = async (signal) => {
     if (shuttingDown) return
@@ -121,6 +125,7 @@ async function run() {
     log.info(`${signal} received — shutting down`)
     // Open positions are deliberately left open: they are re-attached on restart.
     // Use `npm run panic` if you want them liquidated instead.
+    telegram.stop()
     await bot.stop()
     server?.close()
     process.exit(0)

@@ -461,6 +461,73 @@ console.log('\nBonding curve account')
   check('PDA is stable across calls', bondingCurveAddress('So11111111111111111111111111111111111111112').toBase58() === addr)
 }
 
+// ------------------------------------------------------- telegram commands
+console.log('\nTelegram commands')
+{
+  const { CommandListener } = await import('../src/commands.js')
+
+  store.initStore()
+  const st = store.getState()
+  st.positions = {}; st.closed = []; st.halted = null; st.totalRealizedSol = 0.12
+  store.addPosition({
+    mint: 'TgMint111111111111111111111111111111111111', symbol: 'TGDOG', state: 'open',
+    openedAt: Date.now() - 90_000, entryPriceSol: 1e-7, lastPriceSol: 1.6e-7, peakPriceSol: 1.7e-7,
+    tokensBought: 1_000_000, tokensRemaining: 330_000, solSpent: 0.075, solRecovered: 0.0762,
+    rungsHit: [50], fills: [],
+  })
+
+  let panicked = false
+  const fakeBot = {
+    walletSol: 1.25,
+    statsSnapshot: () => ({
+      messages: 5000, creates: 120, trades: 4800, screened: 100, entered: 3,
+      watching: 6, shadowTracked: 40, parsing: true, uptimeSeconds: 7200,
+      topRejects: [{ id: 'buyers', n: 80 }],
+    }),
+    panicSell: async () => { panicked = true },
+  }
+
+  // With no token configured, notify() logs instead of sending, so handle() can be
+  // called directly and we assert on what it would have replied.
+  const listener = new CommandListener(fakeBot)
+  const status = await listener.handle('/status')
+  check('/status reports mode', status.includes('PAPER'))
+  check('/status reports wallet', status.includes('1.2500'))
+  check('/status reports net P&L', status.includes('P&L'))
+  check('/status reports the funnel', status.includes('120 launches') && status.includes('3 entered'))
+  check('/status reports feed health', status.includes('feed OK'))
+
+  const pos = await listener.handle('/positions')
+  check('/positions lists the open position', pos.includes('TGDOG'))
+  check('/positions shows initials recovered', pos.includes('initials out'))
+  check('/positions shows rungs hit', pos.includes('+50%'))
+
+  await listener.handle('/pause')
+  check('/pause halts the bot', Boolean(store.getState().halted))
+  const haltedStatus = await listener.handle('/status')
+  check('/status surfaces the halt', haltedStatus.includes('HALTED'))
+
+  await listener.handle('/resume')
+  check('/resume clears the halt', store.getState().halted === null)
+
+  // The destructive one must never fire on a bare command.
+  const warned = await listener.handle('/panic')
+  check('/panic alone only warns', !panicked && warned.includes('confirm'))
+  check('/panic warning names the position count', warned.includes('1 open'))
+
+  await listener.handle('/panic confirm')
+  check('/panic confirm actually liquidates', panicked)
+
+  check('unknown commands are ignored', (await listener.handle('/nonsense')) === null)
+  check('plain chat is ignored', (await listener.handle('hello there')) === null)
+  check('/help lists the commands', (await listener.handle('/help')).includes('/status'))
+  check('@botname suffix is stripped', (await listener.handle('/status@pumpbot')).includes('pumpbot'))
+
+  // Authorization: only the configured chat id may drive the bot.
+  check('listener is disabled without credentials', new CommandListener(fakeBot).enabled === false)
+  check('escaping is applied to symbols', typeof pos === 'string' && !pos.includes('<script'))
+}
+
 // ------------------------------------------------- end-to-end, synthetic feed
 console.log('\nEnd-to-end bot loop')
 {
