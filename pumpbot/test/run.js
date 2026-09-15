@@ -621,6 +621,16 @@ console.log('\nDashboard snapshot')
   check('serialises cleanly for the API', typeof JSON.stringify(snap) === 'string')
 
   /**
+   * The panel reports EFFECTIVE config, not the defaults in source. A Railway variable
+   * silently overrides a changed default, and last time that happened it cost several
+   * rounds of guessing at what the deployment was running.
+   */
+  check('effective entry thresholds are published', snap.limits.entry.minUniqueBuyers === config.entry.minUniqueBuyers)
+  check('effective shadow capacity is published', snap.limits.learning.maxShadowTracked === config.learning.maxShadowTracked)
+  check('effective explore bankroll is published', snap.limits.exploreBankrollSol === config.explore.budgetSol)
+  check('scaled loss limits are published', snap.limits.maxDrawdownPct === config.risk.maxDrawdownPct)
+
+  /**
    * The explore book gets its own P&L on the dashboard, and the headline numbers must
    * stay strategy-only. A -0.650 TOTAL VALUE on a 0.5 SOL book is what the mixed version
    * produced: fifteen concurrent explores tied up more than the account held.

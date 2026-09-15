@@ -197,13 +197,37 @@ export function buildSnapshot(walletSol, stats = null) {
       enabled: config.explore.enabled,
     },
     learning: learningSnapshot(),
+    /**
+     * The EFFECTIVE settings, read back out of the live config rather than assumed.
+     *
+     * A default changed in code is silently overridden by an environment variable of the
+     * same name, and the last time that happened it cost several rounds of guessing at
+     * what the deployment was actually running. Showing the values the process resolved
+     * turns "did my change take effect?" into something you can read off the page.
+     */
     limits: {
       maxConcurrent: config.sizing.maxConcurrentPositions,
       dailyLossLimitSol: config.risk.dailyLossLimitSol,
       totalLossLimitSol: config.risk.totalLossLimitSol,
+      dailyLossLimitPct: config.risk.dailyLossLimitPct,
+      maxDrawdownPct: config.risk.maxDrawdownPct,
       ladder: config.exit.ladder,
       stopLossPct: config.exit.stopLossPct,
       timeStopSeconds: config.exit.timeStopSeconds,
+      entry: {
+        minUniqueBuyers: config.entry.minUniqueBuyers,
+        minBuysPerSell: config.entry.minBuysPerSell,
+        minMarketCapSol: config.entry.minMarketCapSol,
+        maxMarketCapSol: config.entry.maxMarketCapSol,
+        maxDevHoldPct: config.entry.maxDevHoldPct,
+        observeSeconds: config.entry.observeSeconds,
+      },
+      learning: {
+        maxShadowTracked: config.learning.maxShadowTracked,
+        outcomeWindowMinutes: config.learning.outcomeWindowMinutes,
+        minSamplesForSuggestion: config.learning.minSamplesForSuggestion,
+      },
+      exploreBankrollSol: config.explore.budgetSol,
     },
     positions,
     closed,

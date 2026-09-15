@@ -595,8 +595,20 @@ function render(d) {
       '</code> open · deploy cap <code>' + fmtSol(d.sizing.maxDeployedSol, 2) + '</code><br>' +
     'Tiers ' + d.sizing.allTiers.map((t) => '<code>≥' + t.minEquitySol + ' → ' + t.buySol + '</code>').join(' · ') + '<br>' +
     'Ladder ' + L.ladder.map((r) => '<code>+' + r.atPct + '% → ' + r.sellPct + '%</code>').join(' · ') + '<br>' +
-    'Stop <code>−' + L.stopLossPct + '%</code> · time stop <code>' + L.timeStopSeconds + 's</code> · ' +
-    'daily limit <code>' + fmtSol(L.dailyLossLimitSol, 2) + '</code> · total <code>' + fmtSol(L.totalLossLimitSol, 2) + '</code>'
+    'Stop <code>−' + L.stopLossPct + '%</code> · time stop <code>' + L.timeStopSeconds + 's</code><br>' +
+    'Loss limits — daily <code>' + fmtSol(L.dailyLossLimitSol, 2) + '</code> or <code>' + L.dailyLossLimitPct +
+      '%</code> · total <code>' + fmtSol(L.totalLossLimitSol, 2) + '</code> or <code>' + L.maxDrawdownPct +
+      '%</code> of peak <span class="dim">(whichever is larger, so they scale with the account)</span><br>' +
+    'Entry — buyers <code>≥' + L.entry.minUniqueBuyers + '</code> · buy/sell <code>≥' + L.entry.minBuysPerSell +
+      '</code> · mcap <code>' + L.entry.minMarketCapSol + '–' + L.entry.maxMarketCapSol +
+      '</code> · dev hold <code>≤' + L.entry.maxDevHoldPct + '%</code> · observe <code>' +
+      L.entry.observeSeconds + 's</code><br>' +
+    'Learning — shadow slots <code>' + L.learning.maxShadowTracked + '</code> · window <code>' +
+      L.learning.outcomeWindowMinutes + 'm</code> · suggestions at <code>' +
+      L.learning.minSamplesForSuggestion + '</code> samples · explore bankroll <code>' +
+      fmtSol(L.exploreBankrollSol, 2) + '</code><br>' +
+    '<span class="dim">These are the values this process actually resolved — a Railway ' +
+      'variable of the same name overrides the default in code.</span>'
 }
 
 async function tick() {
