@@ -57,6 +57,10 @@ export const config = {
 
   dataDir: str('DATA_DIR', path.join(ROOT, '.data')),
 
+  // How often the pipeline summary prints. The first beat always comes early so you
+  // get confirmation the feed is alive without waiting a full interval.
+  heartbeatSeconds: num('HEARTBEAT_SECONDS', 60),
+
   telegram: {
     token: str('TELEGRAM_BOT_TOKEN'),
     chatId: str('TELEGRAM_CHAT_ID'),

@@ -158,7 +158,12 @@ export class Bot {
     // abandoning stale candidates, closing outcome windows, and the day rollover.
     this.sweepTimer = setInterval(() => this.#sweep().catch((e) => log.error(e)), 5000)
     this.balanceTimer = setInterval(() => this.#refreshBalance().catch((e) => log.debug(e)), 60_000)
-    this.heartbeatTimer = setInterval(() => this.#heartbeat(), 60_000)
+    // First beat lands early for fast confirmation, then settles into the interval.
+    const beatMs = config.heartbeatSeconds * 1000
+    this.heartbeatTimer = setTimeout(() => {
+      this.#heartbeat()
+      this.heartbeatTimer = setInterval(() => this.#heartbeat(), beatMs)
+    }, Math.min(15_000, beatMs))
   }
 
   async stop() {
