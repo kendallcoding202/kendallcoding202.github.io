@@ -64,33 +64,46 @@ const chartLink = (mint) => `https://pump.fun/coin/${mint}`
 export const notifyEntry = (position, entryChecks) =>
   notify(
     [
-      `🟢 <b>BOUGHT ${esc(position.symbol)}</b>`,
+      position.explore
+        ? `🧪 <b>EXPLORE BUY ${esc(position.symbol)}</b> <i>(experiment — not the strategy)</i>`
+        : `🟢 <b>BOUGHT ${esc(position.symbol)}</b>`,
       `${sol(position.solSpent)} → ${position.tokensBought.toFixed(0)} tokens`,
       `Entry ${position.entryPriceSol.toExponential(3)} SOL/token`,
       `Buyers: ${entryChecks?.buyers ?? '?'} · dev holds ${entryChecks?.devHoldPct?.toFixed(1) ?? '?'}%`,
+      position.explore && position.failedChecks?.length
+        ? `Filter would have skipped: <code>${esc(position.failedChecks.join(', '))}</code>`
+        : '',
       `<a href="${chartLink(position.mint)}">chart</a> · <code>${esc(position.mint)}</code>`,
-    ].join('\n'),
+    ]
+      .filter(Boolean)
+      .join('\n'),
+    { silent: Boolean(position.explore) },
   )
 
 export const notifySell = (position, fill, reasons, pnl) =>
   notify(
     [
-      `${pnl.totalSol >= 0 ? '💰' : '🔻'} <b>SOLD ${esc(position.symbol)}</b>`,
+      `${position.explore ? '🧪' : pnl.totalSol >= 0 ? '💰' : '🔻'} <b>${position.explore ? 'EXPLORE ' : ''}SOLD ${esc(position.symbol)}</b>`,
       reasons.join(' · '),
       `${fill.tokensSold.toFixed(0)} tokens → ${sol(fill.solReceived)}`,
       `Recovered ${sol(position.solRecovered)} of ${sol(position.solSpent)} · ${position.tokensRemaining.toFixed(0)} tokens left`,
       `P&L ${sol(pnl.totalSol)} (${pct(pnl.totalPct)})${pnl.initialsRecovered ? ' · <b>initials recovered</b>' : ''}`,
     ].join('\n'),
+    { silent: Boolean(position.explore) },
   )
 
 export const notifyClose = (position, pnl) =>
   notify(
     [
-      `${position.realizedSol >= 0 ? '✅' : '❌'} <b>CLOSED ${esc(position.symbol)}</b> — ${esc(position.closeReason ?? '')}`,
+      `${position.explore ? '🧪' : position.realizedSol >= 0 ? '✅' : '❌'} <b>${position.explore ? 'EXPLORE ' : ''}CLOSED ${esc(position.symbol)}</b> — ${esc(position.closeReason ?? '')}`,
       `In ${sol(position.solSpent)} · out ${sol(position.solRecovered)}`,
       `Realized <b>${sol(position.realizedSol)}</b> (${pct((position.realizedSol / position.solSpent) * 100)})`,
       `Held ${Math.round((position.closedAt - position.openedAt) / 1000)}s`,
-    ].join('\n'),
+      position.explore ? '<i>Experiment — kept out of the strategy P&L.</i>' : '',
+    ]
+      .filter(Boolean)
+      .join('\n'),
+    { silent: Boolean(position.explore) },
   )
 
 export const notifyHalt = (reason, summary) =>

@@ -45,7 +45,7 @@ Believe the numbers it gives you over the numbers you hoped for.
 ```bash
 cd pumpbot
 npm install
-npm test                     # 209 offline checks, no network or keys needed
+npm test                     # 215 offline checks, no network or keys needed
 
 cp .env.example .env
 npm run keygen               # creates the burner, prints the address to fund
@@ -229,6 +229,21 @@ you hold. You can also talk back to it:
 | `/pause` | Stop opening new positions (open ones still exit) |
 | `/resume` | Allow new entries again |
 | `/panic confirm` | Sell everything now |
+
+### Telling explore trades from real ones
+
+| Where | Strategy trade | Explore trade |
+|---|---|---|
+| Telegram alert | 🟢 BOUGHT / 💰 SOLD, **notifies** | silent by default — no alert at all |
+| `/status` | under **Strategy** | under 🧪 **Explore**, separate W/L and P&L |
+| `/positions` | plain symbol | symbol tagged 🧪 |
+| Dashboard row | normal | amber tint + `EXPLORE` chip + the checks it failed |
+| Activity log | `[BUY]` cyan | `[EXPLORE]` amber |
+| Headline P&L | counted | **not counted** — separate book |
+
+The default is deliberate: **if your phone buzzes, real money moved.** Set
+`TELEGRAM_EXPLORE_ALERTS=1` to also receive explore trades — they arrive tagged 🧪 and
+with notifications suppressed, so they land in the chat without interrupting you.
 
 It also sends a **scheduled digest every `TELEGRAM_SUMMARY_HOURS`** (default 4; `0`
 disables). The digest leads with what CHANGED since the last one rather than repeating a
@@ -420,7 +435,7 @@ verification above.
 
 | Command | Does |
 |---|---|
-| `npm test` | 209 offline checks |
+| `npm test` | 215 offline checks |
 | `npm run keygen` | Create the burner wallet |
 | `npm run balance` | Address, balance, current size tier |
 | `npm run paper` | Paper instance, dashboard on :8081 |
@@ -456,7 +471,7 @@ src/
   commands.js   Telegram /status, /pause, /panic
   summary.js    shared status + digest text
 deploy/         systemd units for live and paper
-test/run.js     209 checks
+test/run.js     215 checks
 ```
 
 ## What is unverified

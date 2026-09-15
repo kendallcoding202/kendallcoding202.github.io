@@ -58,6 +58,20 @@ export const config = {
 
   dataDir: str('DATA_DIR', path.join(ROOT, '.data')),
 
+  /**
+   * Which build is actually running. Without this, "did my fix deploy?" is answered by
+   * inferring from behaviour, which is exactly how you end up debugging a version that
+   * is no longer running. Railway injects the first of these; the others cover other
+   * hosts and local runs.
+   */
+  version: (
+    str('RAILWAY_GIT_COMMIT_SHA') ||
+    str('RAILWAY_DEPLOYMENT_ID') ||
+    str('GIT_SHA') ||
+    str('SOURCE_VERSION') ||
+    'local'
+  ).slice(0, 7),
+
   feed: {
     /**
      * How long subscriptions accumulate before being sent as one message.

@@ -686,7 +686,25 @@ console.log('\nTelegram commands')
   check('/status reports the funnel', status.includes('120 launches') && status.includes('3 entered'))
   check('/status reports feed health', status.includes('feed OK'))
 
+  // Explore and strategy books must be distinguishable from the phone.
+  store.addPosition({ mint: 'TgExp1111111111111111111111111111111111111', symbol: 'EXPDOG', state: 'open',
+    openedAt: Date.now() - 30_000, entryPriceSol: 2e-7, lastPriceSol: 1.8e-7, peakPriceSol: 2.1e-7,
+    tokensBought: 500_000, tokensRemaining: 500_000, solSpent: 0.075, solRecovered: 0,
+    rungsHit: [], fills: [], explore: true, failedChecks: ['buyers'] })
+  store.getState().exploreRealizedSol = -0.031
+  store.getState().exploreWins = 1
+  store.getState().exploreLosses = 4
+
+  const split = await listener.handle('/status')
+  check('/status separates the strategy book', split.includes('<b>Strategy</b>'))
+  check('/status shows the explore book separately', split.includes('Explore</b> (experiment'))
+  check('/status shows explore W/L and P&L', split.includes('1W/4L') && split.includes('0.0310'))
+  check('strategy open count excludes explore', split.includes('<b>Strategy</b>: 1 open'))
+
   const pos = await listener.handle('/positions')
+  check('/positions tags explore positions', pos.includes('EXPDOG') && pos.includes('🧪'))
+  check('/positions leaves strategy positions untagged', /TGDOG<\/b> \+/.test(pos))
+  delete store.getState().positions['TgExp1111111111111111111111111111111111111']
   check('/positions lists the open position', pos.includes('TGDOG'))
   check('/positions shows initials recovered', pos.includes('initials out'))
   check('/positions shows rungs hit', pos.includes('+50%'))

@@ -315,10 +315,11 @@ function render(d) {
   document.title = (live ? '● ' : '') + 'pumpbot ' + sgn(d.pnl.netSol, 3)
 
   const pl = d.pipeline
+  const build = d.version ? ' · BUILD <b>' + esc(d.version) + '</b>' : ''
   document.getElementById('hstat').innerHTML = pl
-    ? '<b>' + num(pl.creates) + '</b> LAUNCHES SEEN · UP <b>' + dur(pl.uptimeSeconds) + '</b><br>' +
+    ? '<b>' + num(pl.creates) + '</b> LAUNCHES SEEN · UP <b>' + dur(pl.uptimeSeconds) + '</b>' + build + '<br>' +
       'UPDATED ' + new Date(d.updatedAt).toLocaleTimeString()
-    : 'UPDATED ' + new Date(d.updatedAt).toLocaleTimeString()
+    : 'UPDATED ' + new Date(d.updatedAt).toLocaleTimeString() + build
 
   const banner = document.getElementById('banner')
   if (d.halted) {

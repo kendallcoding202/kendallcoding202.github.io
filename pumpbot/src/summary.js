@@ -1,5 +1,5 @@
 import { config } from './config.js'
-import { getState, openPositions, deployedSol, todayPnl } from './store.js'
+import { getState, openPositions, strategyPositions, explorePositions, deployedSol, todayPnl } from './store.js'
 import { positionPnl } from './position.js'
 import { sizingSummary } from './sizing.js'
 import { esc, sol, pct, shortAddr } from './log.js'
@@ -38,7 +38,7 @@ export function statusText(bot) {
 
     lines.push(
       '',
-      `Up ${duration(stats.uptimeSeconds)} · ${stats.parsing ? 'feed OK' : '⚠️ FEED NOT PARSING'} · ${tradeHealth}`,
+      `Up ${duration(stats.uptimeSeconds)} · build <code>${esc(config.version)}</code> · ${stats.parsing ? 'feed OK' : '⚠️ FEED NOT PARSING'} · ${tradeHealth}`,
       `${stats.creates} launches → ${stats.watching} observing → ${stats.screened} screened → <b>${stats.entered} entered</b>` +
         (stats.explored ? ` · ${stats.explored} explored` : ''),
     )
@@ -47,7 +47,16 @@ export function statusText(bot) {
     }
   }
 
-  lines.push('', `${open.length} open · ${state.closed.length} closed`)
+  const strategyOpen = strategyPositions().length
+  const exploreOpen = explorePositions().length
+  lines.push('', `<b>Strategy</b>: ${strategyOpen} open · ${state.closed.filter((p) => !p.explore).length} closed`)
+
+  if (exploreOpen || state.exploreRealizedSol) {
+    lines.push(
+      `🧪 <b>Explore</b> (experiment, separate book): ${exploreOpen} open · ` +
+        `${state.exploreWins ?? 0}W/${state.exploreLosses ?? 0}L · ${sol(state.exploreRealizedSol ?? 0)}`,
+    )
+  }
   return lines.join('\n')
 }
 
@@ -60,10 +69,11 @@ export function positionsText() {
     '',
     ...open.map((p) => {
       const pnl = positionPnl(p)
+      const tag = p.explore ? ' 🧪' : ''
       const change = p.entryPriceSol > 0 ? ((p.lastPriceSol - p.entryPriceSol) / p.entryPriceSol) * 100 : 0
       const age = Math.round((Date.now() - p.openedAt) / 1000)
       return [
-        `<b>${esc(p.symbol)}</b> ${pct(change)} · ${age < 60 ? `${age}s` : `${Math.round(age / 60)}m`}`,
+        `<b>${esc(p.symbol)}</b>${tag} ${pct(change)} · ${age < 60 ? `${age}s` : `${Math.round(age / 60)}m`}`,
         `  in ${sol(p.solSpent)} · out ${sol(p.solRecovered)} · P&L ${sol(pnl.totalSol)}`,
         `  ${pnl.initialsRecovered ? '✅ initials out · ' : ''}rungs ${p.rungsHit.length ? p.rungsHit.map((r) => `+${r}%`).join(' ') : 'none'}`,
         `  <code>${esc(shortAddr(p.mint))}</code>`,

@@ -140,6 +140,7 @@ export function buildSnapshot(walletSol, stats = null) {
 
   return {
     mode: config.paper ? 'paper' : 'live',
+    version: config.version,
     halted: state.halted,
     updatedAt: Date.now(),
     solPriceUsd,

@@ -155,7 +155,7 @@ export class Bot {
     this.lastTierFloor = tierFor(this.walletSol).minEquitySol
     const summary = riskSummary(this.walletSol)
 
-    log.info(`starting in ${config.paper ? 'PAPER' : 'LIVE'} mode as ${pubkey}`)
+    log.info(`starting in ${config.paper ? 'PAPER' : 'LIVE'} mode as ${pubkey} · build ${config.version}`)
     log.info(
       `tier: ${sol(summary.sizing.buySol)}/trade at ${sol(this.walletSol)} equity` +
         (summary.sizing.nextTier
@@ -484,7 +484,7 @@ export class Bot {
         entryPriceSol: fill.avgPriceSol,
       })
 
-      if (!explore) {
+      if (!explore || config.telegram.exploreAlerts) {
         await notifyEntry(position, {
           buyers: candidate.organicBuyers,
           devHoldPct: candidate.devHoldPct,
@@ -532,7 +532,7 @@ export class Bot {
       const pnl = positionPnl(position)
       logActivity('sell', `SELL ${position.symbol} ${sol(fill.solReceived)} · ${decision.reasons[0] ?? ''}`,
         { mint, sol: fill.solReceived, explore: Boolean(position.explore) })
-      if (!position.explore) await notifySell(position, fill, decision.reasons, pnl)
+      if (!position.explore || config.telegram.exploreAlerts) await notifySell(position, fill, decision.reasons, pnl)
 
       if (decision.sellAll || position.tokensRemaining <= 0) {
         const closed = closePosition(mint, decision.reasons.join('; '))
@@ -540,7 +540,7 @@ export class Bot {
         logActivity(closed.realizedSol >= 0 ? 'win' : 'loss',
           `${closed.explore ? 'EXPLORE ' : ''}CLOSE ${closed.symbol} ${sol(closed.realizedSol)} · ${closed.closeReason ?? ''}`,
           { mint, sol: closed.realizedSol, explore: Boolean(closed.explore) })
-        if (!closed.explore) await notifyClose(closed, pnl)
+        if (!closed.explore || config.telegram.exploreAlerts) await notifyClose(closed, pnl)
 
         // A total loss on a launch is a signal about who deployed it.
         if (closed.realizedSol < 0 && position.creator) {
