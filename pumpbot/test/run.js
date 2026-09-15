@@ -461,6 +461,68 @@ console.log('\nBonding curve account')
   check('PDA is stable across calls', bondingCurveAddress('So11111111111111111111111111111111111111112').toBase58() === addr)
 }
 
+// ------------------------------------------------------- explore mode
+console.log('\nExplore mode')
+{
+  check('explore is on in paper', config.explore.enabled === true)
+  check('priceable is never relaxed', config.explore.neverRelax.includes('priceable'))
+
+  // The safety property that matters: there must be no env var that turns exploration
+  // on with real money. Checked in a separate process so config re-reads the env.
+  const { execFileSync } = await import('node:child_process')
+  const probe = (env) =>
+    execFileSync('node', ['--input-type=module', '-e',
+      "const {config} = await import('/home/user/kendallcoding202.github.io/pumpbot/src/config.js');" +
+      "console.log(JSON.stringify({explore: config.explore.enabled, paper: config.paper}))"],
+      { encoding: 'utf8', env: { ...process.env, ...env } }).trim()
+
+  const live = JSON.parse(probe({ PAPER: '0', EXPLORE: '1', PRIVATE_KEY: '' }))
+  check('explore is OFF in live even with EXPLORE=1', live.explore === false, JSON.stringify(live))
+  const paperOff = JSON.parse(probe({ PAPER: '1', EXPLORE: '0' }))
+  check('explore can be turned off in paper', paperOff.explore === false)
+
+  // Explore positions must not consume the strategy's exposure budget.
+  store.initStore()
+  const st = store.getState()
+  st.positions = {}; st.closed = []; st.daily = {}; st.totalRealizedSol = 0
+  st.exploreRealizedSol = 0; st.exploreWins = 0; st.exploreLosses = 0; st.consecutiveLosses = 0
+  st.halted = null; st.activity = []
+
+  for (let i = 0; i < 10; i++) {
+    store.addPosition({ mint: `X${i}`, symbol: `X${i}`, state: 'open', openedAt: Date.now(),
+      solSpent: 0.075, solRecovered: 0, tokensRemaining: 1000, rungsHit: [], explore: true })
+  }
+  check('explore positions are excluded from strategy positions', store.strategyPositions().length === 0)
+  check('explore positions do not count as deployed', store.deployedSol() === 0)
+  check('10 explore positions still allow a real entry',
+    canOpen({ mint: 'REAL', creator: 'C', walletSol: 1 }) === null,
+    String(canOpen({ mint: 'REAL', creator: 'C', walletSol: 1 })))
+
+  // Explore losses must not trip the strategy's circuit breakers.
+  for (let i = 0; i < 10; i++) {
+    store.getState().positions[`X${i}`].solRecovered = 0.01 // a 0.065 loss each
+    store.closePosition(`X${i}`, 'stop-loss')
+  }
+  check('explore P&L books to its own bucket', near(st.exploreRealizedSol, -0.65, 1e-9), String(st.exploreRealizedSol))
+  check('strategy P&L is untouched by explore losses', st.totalRealizedSol === 0)
+  check('explore losses do not count as a losing streak', st.consecutiveLosses === 0)
+  check('explore losses do not hit the daily limit',
+    canOpen({ mint: 'REAL2', creator: 'C', walletSol: 1 }) === null)
+  check('explore wins/losses tallied separately', st.exploreLosses === 10 && st.exploreWins === 0)
+
+  // A real loss still counts normally.
+  store.addPosition({ mint: 'REALLOSS', symbol: 'RL', state: 'open', openedAt: Date.now(),
+    solSpent: 0.075, solRecovered: 0.05, tokensRemaining: 0, rungsHit: [] })
+  store.closePosition('REALLOSS', 'stop-loss')
+  check('a real loss still books to the strategy', near(st.totalRealizedSol, -0.025, 1e-9))
+  check('a real loss still increments the streak', st.consecutiveLosses === 1)
+
+  // Activity log is bounded.
+  for (let i = 0; i < 400; i++) store.logActivity('buy', `event ${i}`)
+  check('activity log is capped', st.activity.length === 300, String(st.activity.length))
+  check('activity log keeps the newest', st.activity.at(-1).text === 'event 399')
+}
+
 // ------------------------------------------------------- periodic summary
 console.log('\nPeriodic summary')
 {

@@ -4,233 +4,421 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>pumpbot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #f7f7f8;
-    --panel: #ffffff;
-    --border: #e3e3e6;
-    --text: #18181b;
-    --muted: #71717a;
-    --pos: #16794a;
-    --neg: #c0392b;
-    --accent: #5b5bd6;
-    --warn-bg: #fef3c7;
-    --warn-text: #78350f;
-    --live-bg: #fee2e2;
-    --live-text: #991b1b;
-    --paper-bg: #e0e7ff;
-    --paper-text: #3730a3;
-    --radius: 10px;
+    --bg: #080b14;
+    --panel: #0e1422;
+    --panel-2: #131b2e;
+    --line: #1e2942;
+    --text: #e8edf7;
+    --dim: #6b7a99;
+    --dimmer: #46536e;
+    --green: #2ee88a;
+    --red: #ff5c72;
+    --amber: #ffb347;
+    --violet: #a97bff;
+    --cyan: #4dd8ff;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #0f0f11;
-      --panel: #18181b;
-      --border: #2a2a2f;
-      --text: #f4f4f5;
-      --muted: #a1a1aa;
-      --pos: #4ade80;
-      --neg: #f87171;
-      --accent: #a5b4fc;
-      --warn-bg: #422006;
-      --warn-text: #fde68a;
-      --live-bg: #450a0a;
-      --live-text: #fca5a5;
-      --paper-bg: #1e1b4b;
-      --paper-text: #c7d2fe;
-    }
-  }
-  :root[data-theme="dark"] {
-    --bg: #0f0f11; --panel: #18181b; --border: #2a2a2f; --text: #f4f4f5;
-    --muted: #a1a1aa; --pos: #4ade80; --neg: #f87171; --accent: #a5b4fc;
-    --warn-bg: #422006; --warn-text: #fde68a; --live-bg: #450a0a;
-    --live-text: #fca5a5; --paper-bg: #1e1b4b; --paper-text: #c7d2fe;
-  }
-
   * { box-sizing: border-box; }
+  html, body { background: var(--bg); }
   body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-    padding: 24px 16px 64px;
+    margin: 0; color: var(--text); font-family: var(--sans);
+    font-size: 14px; line-height: 1.5; padding: 18px 14px 56px;
+    background-image: radial-gradient(900px 400px at 82% -8%, rgba(169,123,255,.16), transparent 60%);
   }
-  .wrap { max-width: 1080px; margin: 0 auto; }
+  .wrap { max-width: 1240px; margin: 0 auto; }
 
-  header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
-  h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
-  .badge {
-    font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-    padding: 3px 8px; border-radius: 5px;
-  }
-  .badge.live { background: var(--live-bg); color: var(--live-text); }
-  .badge.paper { background: var(--paper-bg); color: var(--paper-text); }
-  .stamp { color: var(--muted); font-size: 13px; margin-left: auto; }
+  /* ---------- header ---------- */
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 10px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 14px; padding: 9px 15px; }
+  .mark { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--violet), var(--cyan)); font-size: 14px; }
+  .brand h1 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: .1em; }
+  .brand h1 span { color: var(--violet); }
+  .pill { display: inline-flex; align-items: center; gap: 7px; font-family: var(--mono);
+    font-size: 11px; font-weight: 700; letter-spacing: .1em; padding: 7px 13px;
+    border-radius: 999px; border: 1px solid var(--line); background: var(--panel); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green);
+    box-shadow: 0 0 9px var(--green); animation: pulse 2s infinite; }
+  .pill.live .dot { background: var(--red); box-shadow: 0 0 9px var(--red); }
+  .pill.live { color: var(--red); }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
+  .hstat { margin-left: auto; text-align: right; font-family: var(--mono);
+    font-size: 11px; color: var(--dim); letter-spacing: .06em; }
+  .hstat b { color: var(--text); }
 
-  .banner {
-    background: var(--warn-bg); color: var(--warn-text);
-    border-radius: var(--radius); padding: 12px 14px; margin-bottom: 20px;
-    font-size: 14px; font-weight: 500;
-  }
+  /* ---------- banner ---------- */
+  .banner { border-radius: 12px; padding: 12px 15px; margin-bottom: 16px; font-weight: 600;
+    background: rgba(255,92,114,.1); border: 1px solid rgba(255,92,114,.35); color: var(--red); }
 
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(136px, 1fr)); gap: 10px; margin-bottom: 24px; }
-  .stat { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 13px 15px; }
-  .stat .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 5px; }
-  .stat .value { font-size: 21px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
-  .stat .sub { font-size: 12px; color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums; }
+  /* ---------- cards ---------- */
+  .grid { display: grid; gap: 12px; margin-bottom: 14px; }
+  .grid > * { min-width: 0; }
+  .g4 { grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); }
+  .g2 { grid-template-columns: 1.15fr 1fr; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 15px; padding: 15px 17px; }
+  .label { font-family: var(--mono); font-size: 10px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--dim); margin-bottom: 7px; }
+  .big { font-family: var(--mono); font-size: 29px; font-weight: 700; letter-spacing: -.02em; line-height: 1.15; }
+  .sub { font-size: 12px; color: var(--dim); margin-top: 4px; font-family: var(--mono); }
+  .accent { border-left: 3px solid var(--green); }
+  .accent.neg { border-left-color: var(--red); }
+  .pos { color: var(--green); } .neg { color: var(--red); } .amb { color: var(--amber); }
 
-  h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 10px; }
-  section { margin-bottom: 28px; }
+  .winrate { display: flex; align-items: center; gap: 16px; }
+  .donut { position: relative; width: 66px; height: 66px; flex: none; }
+  .donut svg { transform: rotate(-90deg); }
+  .donut .val { position: absolute; inset: 0; display: grid; place-items: center;
+    font-family: var(--mono); font-size: 14px; font-weight: 700; }
 
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  /* ---------- chart + log ---------- */
+  .panelhead { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+  .panelhead h2 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  .panelhead .meta { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--dimmer); letter-spacing: .08em; }
+  #chart { width: 100%; height: 190px; display: block; }
+  .chart-empty { height: 190px; display: grid; place-items: center; color: var(--dimmer); font-family: var(--mono); font-size: 12px; }
+
+  .log { font-family: var(--mono); font-size: 11.5px; line-height: 1.95;
+    max-height: 228px; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin;
+    -webkit-mask-image: linear-gradient(180deg, #000 88%, transparent 100%);
+    mask-image: linear-gradient(180deg, #000 88%, transparent 100%); }
+  .log::-webkit-scrollbar { width: 5px; }
+  .log::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+  .log div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tag { font-weight: 700; margin-right: 7px; }
+  .t-buy { color: var(--cyan); } .t-sell { color: var(--violet); }
+  .t-win { color: var(--green); } .t-loss { color: var(--red); }
+  .t-explore { color: var(--amber); } .t-risk { color: var(--amber); }
+
+  /* ---------- goal bar ---------- */
+  .goal { display: flex; align-items: center; gap: 13px; padding: 13px 17px; margin-bottom: 14px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 15px;
+    font-family: var(--mono); font-size: 11px; letter-spacing: .07em; color: var(--dim); }
+  .bar { flex: 1; height: 7px; border-radius: 4px; background: var(--panel-2); overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: 4px;
+    background: linear-gradient(90deg, var(--green), var(--cyan)); transition: width .6s ease; }
+
+  /* ---------- pipeline tiles ---------- */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 11px; margin-bottom: 14px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 13px 14px; position: relative; overflow: hidden; }
+  .tile::before { content: ''; position: absolute; top: 0; left: 14px; right: 14px; height: 2px;
+    border-radius: 0 0 2px 2px; background: var(--accentc, var(--violet)); }
+  .tile .n { font-family: var(--mono); font-size: 21px; font-weight: 700; }
+  .tile .k { font-family: var(--mono); font-size: 9.5px; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--dim); margin-top: 3px; }
+  .tile .x { font-family: var(--mono); font-size: 10px; color: var(--dimmer); margin-top: 5px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ---------- tables ---------- */
   .scroll { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-  th, td { padding: 9px 12px; text-align: right; white-space: nowrap; }
-  th:first-child, td:first-child, th.left, td.left { text-align: left; }
-  th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); }
-  tbody tr + tr td { border-top: 1px solid var(--border); }
-  td { font-variant-numeric: tabular-nums; }
-  .sym { font-weight: 600; }
-  .mint { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--muted); }
-  a { color: var(--accent); text-decoration: none; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-family: var(--mono); }
+  th, td { padding: 9px 11px; text-align: right; white-space: nowrap; }
+  th:first-child, td:first-child, th.l, td.l { text-align: left; }
+  th { font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--dim); font-weight: 500; border-bottom: 1px solid var(--line); }
+  tbody tr + tr td { border-top: 1px solid rgba(30,41,66,.55); }
+  tbody tr.exp { background: rgba(255,179,71,.045); }
+  .sym { font-weight: 700; font-family: var(--sans); font-size: 13px; }
+  .mint { font-size: 10px; color: var(--dimmer); }
+  a { color: var(--cyan); text-decoration: none; }
   a:hover { text-decoration: underline; }
-  .pos { color: var(--pos); }
-  .neg { color: var(--neg); }
-  .empty { padding: 28px 16px; text-align: center; color: var(--muted); font-size: 14px; }
-  .pill { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: var(--paper-bg); color: var(--paper-text); margin-left: 5px; }
-  .limits { font-size: 12.5px; color: var(--muted); line-height: 1.8; }
-  .limits code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); }
-  @media (max-width: 560px) { body { padding: 16px 12px 48px; } .stat .value { font-size: 18px; } }
+  .chip { display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: .07em;
+    padding: 2px 6px; border-radius: 5px; margin-left: 5px; font-family: var(--mono);
+    background: rgba(169,123,255,.16); color: var(--violet); }
+  .chip.g { background: rgba(46,232,138,.14); color: var(--green); }
+  .chip.a { background: rgba(255,179,71,.15); color: var(--amber); }
+  .chip.r { background: rgba(255,92,114,.15); color: var(--red); }
+  .empty { padding: 26px; text-align: center; color: var(--dimmer); font-family: var(--mono); font-size: 12px; }
+  .note { font-family: var(--mono); font-size: 11.5px; line-height: 1.95; color: var(--dim); }
+  .note code { color: var(--text); }
+  h2.sec { font-size: 11px; letter-spacing: .13em; text-transform: uppercase;
+    color: var(--dim); margin: 0 0 10px; font-family: var(--mono); }
+  section { margin-bottom: 18px; }
+
+  @media (max-width: 880px) { .g2 { grid-template-columns: 1fr; } }
+  @media (max-width: 560px) {
+    body { padding: 12px 10px 40px; }
+    .big { font-size: 24px; }
+    .hstat { margin-left: 0; width: 100%; text-align: left; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>pumpbot</h1>
-    <span id="mode" class="badge paper">…</span>
-    <span id="stamp" class="stamp"></span>
+    <div class="brand">
+      <div class="mark">◆</div>
+      <h1>PUMP<span>BOT</span></h1>
+    </div>
+    <span id="mode" class="pill"><span class="dot"></span><span id="modetext">…</span></span>
+    <div class="hstat" id="hstat"></div>
   </header>
 
   <div id="banner" class="banner" hidden></div>
 
-  <div class="stats" id="stats"></div>
+  <div class="grid g4" id="stats"></div>
 
-  <section id="pipeline-section" hidden>
-    <h2>Feed pipeline</h2>
-    <div class="panel" style="padding: 14px 16px;"><div class="limits" id="pipeline"></div></div>
+  <div class="goal" id="goalbar" hidden>
+    <span id="goallabel"></span>
+    <span class="bar"><i id="goalfill" style="width:0%"></i></span>
+    <span id="goalpct"></span>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <div class="panelhead">
+        <h2>P&amp;L History</h2>
+        <span class="meta" id="chartmeta"></span>
+      </div>
+      <canvas id="chart"></canvas>
+      <div class="chart-empty" id="chartempty">no closed trades yet</div>
+    </div>
+    <div class="card">
+      <div class="panelhead">
+        <h2>Activity Log</h2>
+        <span class="meta" id="logmeta"></span>
+      </div>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+
+  <section>
+    <h2 class="sec">Feed Pipeline</h2>
+    <div class="tiles" id="tiles"></div>
+    <div class="card"><div class="note" id="pipenote"></div></div>
   </section>
 
   <section>
-    <h2>Open positions</h2>
-    <div class="panel scroll"><div id="open"></div></div>
+    <h2 class="sec">Open Positions</h2>
+    <div class="card" style="padding:0"><div class="scroll" id="open"></div></div>
   </section>
 
   <section>
-    <h2>Closed trades</h2>
-    <div class="panel scroll"><div id="closed"></div></div>
+    <h2 class="sec">Closed Trades</h2>
+    <div class="card" style="padding:0"><div class="scroll" id="closed"></div></div>
   </section>
 
   <section>
-    <h2>Learning</h2>
-    <div class="panel" style="padding: 14px 16px;"><div id="learning" class="limits"></div></div>
+    <h2 class="sec">Learning</h2>
+    <div class="card"><div class="note" id="learning"></div></div>
   </section>
 
   <section>
-    <h2>Active limits</h2>
-    <div class="panel" style="padding: 14px 16px;"><div class="limits" id="limits"></div></div>
+    <h2 class="sec">Active Limits</h2>
+    <div class="card"><div class="note" id="limits"></div></div>
   </section>
 </div>
 
 <script>
 const fmtSol = (n, d = 4) => (Number.isFinite(n) ? (n >= 0 ? '' : '−') + Math.abs(n).toFixed(d) : '—')
+const sgn = (n, d = 4) => (Number.isFinite(n) ? (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n).toFixed(d) : '—')
 const fmtPct = (n, d = 1) => (Number.isFinite(n) ? (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n).toFixed(d) + '%' : '—')
 const cls = (n) => (n > 0 ? 'pos' : n < 0 ? 'neg' : '')
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+const num = (n) => (Number.isFinite(n) ? n.toLocaleString() : '—')
 
 function dur(s) {
   if (!Number.isFinite(s)) return '—'
   if (s < 60) return s + 's'
   if (s < 3600) return Math.floor(s / 60) + 'm ' + (s % 60) + 's'
-  return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm'
+  if (s < 86400) return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm'
+  return Math.floor(s / 86400) + 'd ' + Math.floor((s % 86400) / 3600) + 'h'
 }
-
 function usd(sol, price) {
   if (!Number.isFinite(sol) || !Number.isFinite(price)) return ''
   const v = sol * price
-  return '$' + (Math.abs(v) >= 1000 ? (v / 1000).toFixed(1) + 'K' : v.toFixed(2))
+  return (v < 0 ? '−$' : '$') + (Math.abs(v) >= 1000 ? (Math.abs(v) / 1000).toFixed(1) + 'K' : Math.abs(v).toFixed(2))
+}
+function card(label, value, sub, klass, accent) {
+  return '<div class="card' + (accent ? ' accent' + (accent === 'neg' ? ' neg' : '') : '') + '">' +
+    '<div class="label">' + esc(label) + '</div>' +
+    '<div class="big ' + (klass || '') + '">' + value + '</div>' +
+    (sub ? '<div class="sub">' + sub + '</div>' : '') + '</div>'
 }
 
-function statCard(label, value, sub, klass) {
-  return '<div class="stat"><div class="label">' + esc(label) + '</div>' +
-         '<div class="value ' + (klass || '') + '">' + value + '</div>' +
-         (sub ? '<div class="sub">' + sub + '</div>' : '') + '</div>'
+/* Cumulative realized P&L, drawn on a canvas so the page stays dependency-free. */
+function drawChart(history, unrealized) {
+  const cv = document.getElementById('chart')
+  const empty = document.getElementById('chartempty')
+  if (!history || history.length < 2) { cv.style.display = 'none'; empty.style.display = 'grid'; return }
+  cv.style.display = 'block'; empty.style.display = 'none'
+
+  const dpr = window.devicePixelRatio || 1
+  const w = cv.clientWidth, h = 190
+  cv.width = w * dpr; cv.height = h * dpr
+  const g = cv.getContext('2d')
+  g.setTransform(dpr, 0, 0, dpr, 0, 0)
+  g.clearRect(0, 0, w, h)
+
+  const pts = [{ at: history[0].at - 1, sol: 0 }, ...history]
+  const vals = pts.map((p) => p.sol)
+  let lo = Math.min(0, ...vals), hi = Math.max(0, ...vals)
+  if (hi - lo < 1e-9) { hi += 0.01; lo -= 0.01 }
+  const pad = (hi - lo) * 0.14; lo -= pad; hi += pad
+
+  const x = (i) => (i / (pts.length - 1)) * (w - 8) + 4
+  const y = (v) => h - 22 - ((v - lo) / (hi - lo)) * (h - 40)
+  const last = vals[vals.length - 1]
+  const col = last >= 0 ? '#2ee88a' : '#ff5c72'
+
+  // zero line
+  g.strokeStyle = 'rgba(107,122,153,.28)'; g.lineWidth = 1; g.setLineDash([3, 4])
+  g.beginPath(); g.moveTo(0, y(0)); g.lineTo(w, y(0)); g.stroke(); g.setLineDash([])
+
+  const fill = g.createLinearGradient(0, 0, 0, h)
+  fill.addColorStop(0, last >= 0 ? 'rgba(46,232,138,.26)' : 'rgba(255,92,114,.26)')
+  fill.addColorStop(1, 'rgba(0,0,0,0)')
+  g.beginPath(); g.moveTo(x(0), y(vals[0]))
+  pts.forEach((p, i) => g.lineTo(x(i), y(p.sol)))
+  g.lineTo(x(pts.length - 1), y(lo)); g.lineTo(x(0), y(lo)); g.closePath()
+  g.fillStyle = fill; g.fill()
+
+  g.beginPath(); g.moveTo(x(0), y(vals[0]))
+  pts.forEach((p, i) => g.lineTo(x(i), y(p.sol)))
+  g.strokeStyle = col; g.lineWidth = 2; g.lineJoin = 'round'; g.stroke()
+
+  const lx = x(pts.length - 1), ly = y(last)
+  g.beginPath(); g.arc(lx, ly, 3.5, 0, Math.PI * 2); g.fillStyle = col; g.fill()
+  g.font = '700 12px JetBrains Mono, monospace'; g.fillStyle = col; g.textAlign = 'right'
+  g.fillText(sgn(last, 4) + ' SOL', Math.max(60, lx - 8), Math.max(14, ly - 10))
+
+  g.font = '10px JetBrains Mono, monospace'; g.fillStyle = '#46536e'; g.textAlign = 'left'
+  g.fillText(fmtSol(lo, 3), 4, h - 5)
+  void unrealized
+  void hi
+}
+
+function donut(pct) {
+  const r = 27, c = 2 * Math.PI * r
+  const v = Number.isFinite(pct) ? pct : 0
+  const col = v >= 55 ? '#2ee88a' : v >= 35 ? '#ffb347' : '#ff5c72'
+  return '<div class="donut"><svg width="66" height="66">' +
+    '<circle cx="33" cy="33" r="' + r + '" fill="none" stroke="#131b2e" stroke-width="7"/>' +
+    '<circle cx="33" cy="33" r="' + r + '" fill="none" stroke="' + col + '" stroke-width="7" stroke-linecap="round" ' +
+    'stroke-dasharray="' + c + '" stroke-dashoffset="' + (c - (v / 100) * c) + '"/></svg>' +
+    '<div class="val">' + (Number.isFinite(pct) ? Math.round(pct) + '%' : '—') + '</div></div>'
 }
 
 function render(d) {
   const p = d.solPriceUsd
+  const live = d.mode === 'live'
 
-  document.getElementById('mode').textContent = d.mode
-  document.getElementById('mode').className = 'badge ' + d.mode
-  document.getElementById('stamp').textContent = 'updated ' + new Date(d.updatedAt).toLocaleTimeString()
-  document.title = (d.mode === 'live' ? '● ' : '') + 'pumpbot ' + fmtSol(d.pnl.netSol, 3)
+  document.getElementById('modetext').textContent = live ? 'LIVE' : 'PAPER'
+  document.getElementById('mode').className = 'pill' + (live ? ' live' : '')
+  document.title = (live ? '● ' : '') + 'pumpbot ' + sgn(d.pnl.netSol, 3)
+
+  const pl = d.pipeline
+  document.getElementById('hstat').innerHTML = pl
+    ? '<b>' + num(pl.creates) + '</b> LAUNCHES SEEN · UP <b>' + dur(pl.uptimeSeconds) + '</b><br>' +
+      'UPDATED ' + new Date(d.updatedAt).toLocaleTimeString()
+    : 'UPDATED ' + new Date(d.updatedAt).toLocaleTimeString()
 
   const banner = document.getElementById('banner')
   if (d.halted) {
     banner.hidden = false
-    banner.textContent = '🛑 HALTED — ' + d.halted.reason + ' (open positions are still managed to exit)'
-  } else {
-    banner.hidden = true
-  }
+    banner.textContent = '🛑 HALTED — ' + d.halted.reason + ' · open positions are still managed to exit'
+  } else banner.hidden = true
 
+  /* ---- stat cards ---- */
+  const wr = d.pnl.winRatePct
   document.getElementById('stats').innerHTML = [
-    statCard('Total value', fmtSol(d.wallet.totalValueSol, 3), usd(d.wallet.totalValueSol, p) + ' · wallet + open bags'),
-    statCard('Net P&L', fmtSol(d.pnl.netSol, 4), usd(d.pnl.netSol, p) + ' · realized + unrealized', cls(d.pnl.netSol)),
-    statCard('Realized', fmtSol(d.pnl.realizedTotalSol, 4), 'today ' + fmtSol(d.pnl.realizedTodaySol, 4), cls(d.pnl.realizedTotalSol)),
-    statCard('Unrealized', fmtSol(d.pnl.unrealizedSol, 4), d.positions.length + ' open', cls(d.pnl.unrealizedSol)),
-    statCard('Deployed', fmtSol(d.wallet.deployedSol, 3), 'cap ' + fmtSol(d.sizing.maxDeployedSol, 2)),
-    statCard('Win rate',
-      d.pnl.winRatePct === null ? '—' : d.pnl.winRatePct.toFixed(0) + '%',
-      d.pnl.wins + 'W / ' + d.pnl.losses + 'L · ' + d.pnl.tradesClosed + ' trades'),
-    statCard('Size tier', fmtSol(d.sizing.buySol, 3),
+    card('Net P&L · SOL', sgn(d.pnl.netSol, 4), usd(d.pnl.netSol, p) + ' · realized + open',
+      cls(d.pnl.netSol), d.pnl.netSol >= 0 ? 'pos' : 'neg'),
+    card('Total Value', fmtSol(d.wallet.totalValueSol, 3), usd(d.wallet.totalValueSol, p) + ' · wallet + bags'),
+    '<div class="card"><div class="label">Win Rate</div><div class="winrate">' + donut(wr) +
+      '<div><div class="big" style="font-size:22px">' + d.pnl.wins + 'W <span class="dim">/</span> ' + d.pnl.losses + 'L</div>' +
+      '<div class="sub">' + d.pnl.tradesClosed + ' closed · ' + d.positions.filter(x=>!x.explore).length + ' open</div></div></div></div>',
+    card('Size Tier', fmtSol(d.sizing.buySol, 3),
       d.sizing.nextTier
-        ? fmtSol(d.sizing.nextTier.buySol, 3) + ' at ' + fmtSol(d.sizing.nextTier.atSol, 1) + ' · ' + fmtSol(d.sizing.nextTier.remainingSol, 2) + ' to go'
-        : 'top tier'),
+        ? '→ ' + fmtSol(d.sizing.nextTier.buySol, 3) + ' at ' + fmtSol(d.sizing.nextTier.atSol, 1) + ' SOL'
+        : 'top tier · cap ' + fmtSol(d.sizing.maxDeployedSol, 2)),
   ].join('')
 
-  // --- feed pipeline ---
-  const pipeSection = document.getElementById('pipeline-section')
-  if (d.pipeline) {
-    pipeSection.hidden = false
-    const p2 = d.pipeline
+  /* ---- goal bar ---- */
+  const gb = document.getElementById('goalbar')
+  if (d.goal) {
+    gb.hidden = false
+    document.getElementById('goallabel').textContent =
+      'NEXT TIER · ' + d.goal.targetSol.toFixed(2) + ' SOL'
+    document.getElementById('goalfill').style.width = d.goal.pct.toFixed(1) + '%'
+    document.getElementById('goalpct').textContent = d.goal.pct.toFixed(0) + '%'
+  } else gb.hidden = true
+
+  /* ---- chart ---- */
+  drawChart(d.history, d.pnl.unrealizedSol)
+  document.getElementById('chartmeta').textContent =
+    d.history && d.history.length ? d.history.length + ' CLOSED · REALIZED ' + sgn(d.pnl.realizedTotalSol, 4) : ''
+
+  /* ---- activity log ---- */
+  const logEl = document.getElementById('log')
+  const acts = d.activity || []
+  document.getElementById('logmeta').textContent = acts.length ? acts.length + ' EVENTS' : ''
+  logEl.innerHTML = acts.length
+    ? acts.map((a) => {
+        const t = new Date(a.at).toLocaleTimeString([], { hour12: false })
+        const k = a.kind
+        return '<div><span style="color:var(--dimmer)">' + t + '</span> ' +
+          '<span class="tag t-' + esc(k) + '">[' + esc(k.toUpperCase()) + ']</span>' +
+          '<span>' + esc(a.text) + '</span></div>'
+      }).join('')
+    : '<div style="color:var(--dimmer)">waiting for the first trade…</div>'
+
+  /* ---- pipeline tiles ---- */
+  const tiles = document.getElementById('tiles')
+  if (pl) {
+    const stages = [
+      { k: 'Launches', n: pl.creates, c: 'var(--violet)', x: num(pl.messages) + ' msgs' },
+      { k: 'Observing', n: pl.watching, c: 'var(--cyan)', x: 'in window' },
+      { k: 'Screened', n: pl.screened, c: 'var(--cyan)', x: 'filter ran' },
+      { k: 'Entered', n: pl.entered, c: 'var(--green)', x: 'passed filter' },
+      { k: 'Explored', n: pl.explored ?? 0, c: 'var(--amber)', x: 'risk-taking' },
+      { k: 'Shadowed', n: pl.shadowTracked, c: 'var(--dimmer)', x: 'tracked only' },
+    ]
+    tiles.innerHTML = stages.map((s) =>
+      '<div class="tile" style="--accentc:' + s.c + '"><div class="n">' + num(s.n) + '</div>' +
+      '<div class="k">' + s.k + '</div><div class="x">' + s.x + '</div></div>').join('')
+
     const rows = []
-    if (p2.messages > 50 && !p2.parsing) {
-      rows.push('<span class="neg"><b>' + p2.messages + ' feed messages but none parsed</b> — field names in src/curve.js do not match this feed. Run <code>npm run record</code> then <code>npm run replay</code>.</span>')
-    } else if (!p2.messages) {
-      rows.push('<span style="color:var(--muted)">Connected, no messages yet…</span>')
+    if (pl.messages > 50 && !pl.parsing) {
+      rows.push('<span class="neg"><b>' + num(pl.messages) + ' feed messages, none parsed</b> — field names in <code>src/curve.js</code> do not match. Run <code>npm run record</code> then <code>npm run replay</code>.</span>')
+    } else if (!pl.messages) {
+      rows.push('Connected, no messages yet…')
     } else {
-      rows.push('Uptime <code>' + dur(p2.uptimeSeconds) + '</code> · feed messages <code>' + p2.messages.toLocaleString() + '</code> · parsing <code>' + (p2.parsing ? 'OK' : 'pending') + '</code>')
-      rows.push('Launches seen <code>' + p2.creates.toLocaleString() + '</code> → observing <code>' + p2.watching + '</code> → screened <code>' + p2.screened + '</code> → <b>entered <code>' + p2.entered + '</code></b>')
-      rows.push('Trade events <code>' + p2.trades.toLocaleString() + '</code> · shadow-tracked <code>' + p2.shadowTracked + '</code>')
-      if (p2.topRejects?.length) {
-        rows.push('Rejected on: ' + p2.topRejects.map((r) => '<code>' + esc(r.id) + ' ×' + r.n + '</code>').join(' · '))
+      rows.push('Feed <span class="pos">' + (pl.parsing ? 'PARSING OK' : 'pending') + '</span> · ' +
+        num(pl.messages) + ' messages · ' + num(pl.trades) + ' trade events')
+      if (pl.topRejects && pl.topRejects.length) {
+        rows.push('Rejected on: ' + pl.topRejects.map((r) => '<code>' + esc(r.id) + ' ×' + r.n + '</code>').join(' · '))
+      }
+      if (d.explore && (d.explore.closed || d.explore.open)) {
+        rows.push('Explore book (paper experiment, kept out of P&L above): <code>' +
+          sgn(d.explore.realizedSol, 4) + ' SOL</code> over ' + d.explore.closed + ' closed · ' +
+          d.explore.wins + 'W/' + d.explore.losses + 'L · ' + d.explore.open + ' open')
       }
     }
-    document.getElementById('pipeline').innerHTML = rows.join('<br>')
+    document.getElementById('pipenote').innerHTML = rows.join('<br>')
   } else {
-    pipeSection.hidden = true
+    tiles.innerHTML = ''
+    document.getElementById('pipenote').textContent = 'Pipeline stats unavailable.'
   }
 
-  // --- open positions ---
+  /* ---- open positions ---- */
   const open = document.getElementById('open')
-  if (!d.positions.length) {
-    open.innerHTML = '<div class="empty">No open positions.</div>'
-  } else {
-    open.innerHTML = '<table><thead><tr>' +
-      ['Token', 'Age', 'In', 'Out', 'Entry', 'Last', 'Change', 'Bag', 'P&L', ''].map((h) => '<th>' + h + '</th>').join('') +
+  open.innerHTML = !d.positions.length
+    ? '<div class="empty">no open positions</div>'
+    : '<table><thead><tr>' +
+      ['Token','Age','In','Out','Entry','Last','Chg','Bag','P&L',''].map((h) => '<th>' + h + '</th>').join('') +
       '</tr></thead><tbody>' +
       d.positions.map((x) =>
-        '<tr>' +
-        '<td><span class="sym">' + esc(x.symbol) + '</span><br><a class="mint" href="https://pump.fun/coin/' + esc(x.mint) + '" target="_blank" rel="noopener">' + esc(x.mint.slice(0, 10)) + '…</a></td>' +
+        '<tr' + (x.explore ? ' class="exp"' : '') + '>' +
+        '<td><span class="sym">' + esc(x.symbol) + '</span>' + (x.explore ? '<span class="chip a">EXPLORE</span>' : '') +
+          '<br><a class="mint" href="https://pump.fun/coin/' + esc(x.mint) + '" target="_blank" rel="noopener">' + esc(x.mint.slice(0, 10)) + '…</a></td>' +
         '<td>' + dur(x.ageSeconds) + '</td>' +
         '<td>' + fmtSol(x.solSpent, 4) + '</td>' +
         '<td>' + fmtSol(x.solRecovered, 4) + '</td>' +
@@ -238,80 +426,73 @@ function render(d) {
         '<td>' + (x.lastPriceSol ? x.lastPriceSol.toExponential(2) : '—') + '</td>' +
         '<td class="' + cls(x.changePct) + '">' + fmtPct(x.changePct) + '</td>' +
         '<td>' + fmtSol(x.markValueSol, 4) + '</td>' +
-        '<td class="' + cls(x.totalSol) + '">' + fmtSol(x.totalSol, 4) + '<br><span class="mint">' + fmtPct(x.totalPct) + '</span></td>' +
-        '<td>' + (x.initialsRecovered ? '<span class="pill">initials out</span>' : '') +
-                 (x.rungsHit.length ? '<span class="pill">' + x.rungsHit.map((r) => '+' + r + '%').join(' ') + '</span>' : '') +
-                 (x.failedSells ? '<span class="pill" style="background:var(--live-bg);color:var(--live-text)">' + x.failedSells + ' failed sells</span>' : '') + '</td>' +
-        '</tr>').join('') +
-      '</tbody></table>'
-  }
+        '<td class="' + cls(x.totalSol) + '">' + sgn(x.totalSol, 4) + '<br><span class="mint">' + fmtPct(x.totalPct) + '</span></td>' +
+        '<td class="l">' + (x.initialsRecovered ? '<span class="chip g">INITIALS OUT</span>' : '') +
+          (x.rungsHit.length ? '<span class="chip">' + x.rungsHit.map((r) => '+' + r + '%').join(' ') + '</span>' : '') +
+          (x.failedSells ? '<span class="chip r">' + x.failedSells + ' FAILED SELLS</span>' : '') +
+          (x.explore && x.failedChecks.length ? '<span class="chip a">' + x.failedChecks.map(esc).join(',') + '</span>' : '') +
+        '</td></tr>').join('') + '</tbody></table>'
 
-  // --- closed trades ---
+  /* ---- closed trades ---- */
   const closed = document.getElementById('closed')
-  if (!d.closed.length) {
-    closed.innerHTML = '<div class="empty">No closed trades yet.</div>'
-  } else {
-    closed.innerHTML = '<table><thead><tr>' +
-      ['Token', 'Closed', 'Held', 'In', 'Out', 'Realized', 'Reason']
-        .map((h) => '<th' + (h === 'Reason' ? ' class="left"' : '') + '>' + h + '</th>').join('') +
-      '</tr></thead><tbody>' +
+  closed.innerHTML = !d.closed.length
+    ? '<div class="empty">no closed trades yet</div>'
+    : '<table><thead><tr>' +
+      ['Token','Closed','Held','In','Out','Realized'].map((h) => '<th>' + h + '</th>').join('') +
+      '<th class="l">Reason</th></tr></thead><tbody>' +
       d.closed.map((x) =>
-        '<tr>' +
-        '<td><span class="sym">' + esc(x.symbol) + '</span><br><a class="mint" href="https://pump.fun/coin/' + esc(x.mint) + '" target="_blank" rel="noopener">' + esc(x.mint.slice(0, 10)) + '…</a></td>' +
-        '<td>' + new Date(x.closedAt).toLocaleTimeString() + '</td>' +
+        '<tr' + (x.explore ? ' class="exp"' : '') + '>' +
+        '<td><span class="sym">' + esc(x.symbol) + '</span>' + (x.explore ? '<span class="chip a">EXP</span>' : '') +
+          '<br><a class="mint" href="https://pump.fun/coin/' + esc(x.mint) + '" target="_blank" rel="noopener">' + esc(x.mint.slice(0, 10)) + '…</a></td>' +
+        '<td>' + new Date(x.closedAt).toLocaleTimeString([], { hour12: false }) + '</td>' +
         '<td>' + dur(x.heldSeconds) + '</td>' +
         '<td>' + fmtSol(x.solSpent, 4) + '</td>' +
         '<td>' + fmtSol(x.solRecovered, 4) + '</td>' +
-        '<td class="' + cls(x.realizedSol) + '">' + fmtSol(x.realizedSol, 4) + '<br><span class="mint">' + fmtPct(x.realizedPct) + '</span></td>' +
-        '<td style="text-align:left;white-space:normal;max-width:260px" class="mint">' + esc(x.reason ?? '') + '</td>' +
-        '</tr>').join('') +
-      '</tbody></table>'
-  }
+        '<td class="' + cls(x.realizedSol) + '">' + sgn(x.realizedSol, 4) + '<br><span class="mint">' + fmtPct(x.realizedPct) + '</span></td>' +
+        '<td class="l" style="white-space:normal;max-width:280px;color:var(--dim)">' + esc(x.reason ?? '') + '</td>' +
+        '</tr>').join('') + '</tbody></table>'
 
-  // --- learning ---
+  /* ---- learning ---- */
   const lrn = document.getElementById('learning')
-  if (!d.learning) {
-    lrn.innerHTML = '<span style="color:var(--muted)">Learning is disabled.</span>'
-  } else {
-    const n = d.learning
-    const rows = []
-    rows.push('Journal: <code>' + n.labelled + '</code> labelled · <code>' + n.pending + '</code> still in their outcome window · <code>' + n.bought + '</code> bought / <code>' + n.rejected + '</code> shadow-tracked rejects')
+  if (!d.learning) lrn.innerHTML = '<span style="color:var(--dimmer)">learning disabled</span>'
+  else {
+    const n = d.learning, rows = []
+    rows.push('Journal <code>' + n.labelled + '</code> labelled · <code>' + n.pending + '</code> in window · <code>' +
+      n.bought + '</code> bought / <code>' + n.rejected + '</code> declined')
     if (n.baseRatePct !== null) {
-      rows.push('Reached first rung — all seen <code>' + n.baseRatePct.toFixed(1) + '%</code>' +
+      rows.push('Reached first rung — all <code>' + n.baseRatePct.toFixed(1) + '%</code>' +
         (n.boughtRatePct !== null ? ' · bought <code>' + n.boughtRatePct.toFixed(1) + '%</code>' : '') +
-        (n.rejectedRatePct !== null ? ' · rejected <code>' + n.rejectedRatePct.toFixed(1) + '%</code>' : ''))
+        (n.rejectedRatePct !== null ? ' · declined <code>' + n.rejectedRatePct.toFixed(1) + '%</code>' : ''))
       rows.push('Filter verdict: <code>' + esc(n.filterEdge) + '</code>')
     }
     if (n.ev) {
-      const lo = n.ev.meanMultiple - 1.96 * n.ev.stdErr
-      const hi = n.ev.meanMultiple + 1.96 * n.ev.stdErr
-      const call = lo > 1 ? '<span class="pos">positive with support</span>'
-                 : hi < 1 ? '<span class="neg">negative with support</span>'
-                 : 'indistinguishable from break-even'
-      rows.push('Simulated ladder return: <code>' + n.ev.meanMultiple.toFixed(3) + 'x</code> mean (95% CI ' + lo.toFixed(3) + '–' + hi.toFixed(3) + ', n=' + n.ev.n + ') → ' + call)
+      const lo = n.ev.meanMultiple - 1.96 * n.ev.stdErr, hi = n.ev.meanMultiple + 1.96 * n.ev.stdErr
+      rows.push('Simulated ladder return <code>' + n.ev.meanMultiple.toFixed(3) + 'x</code> (95% CI ' +
+        lo.toFixed(3) + '–' + hi.toFixed(3) + ', n=' + n.ev.n + ') → ' +
+        (lo > 1 ? '<span class="pos">positive with support</span>'
+         : hi < 1 ? '<span class="neg">negative with support</span>'
+         : 'indistinguishable from break-even'))
     }
-    if (n.topMisses?.length) {
-      rows.push('Winners rejected by check: ' + n.topMisses.map((m) =>
-        '<code>' + esc(m.check) + '</code> ' + m.wouldHaveHit + '/' + m.total).join(' · '))
+    if (n.topMisses && n.topMisses.length) {
+      rows.push('Winners declined by check: ' + n.topMisses.map((m) => '<code>' + esc(m.check) + ' ' + m.wouldHaveHit + '/' + m.total + '</code>').join(' · '))
     }
-    if (!n.enoughData) {
-      rows.push('<span style="color:var(--muted)">No threshold suggestions until <code>' + n.minSamples + '</code> labelled samples — below that, apparent edges are noise.</span>')
-    } else if (n.suggestions?.length) {
-      rows.push('Proposals (not applied): ' + n.suggestions.map((s) =>
-        '<code>' + esc(s.feature) + ' ' + esc(s.keep) + ' ' + s.cut + '</code>').join(' · '))
-    } else {
-      rows.push('<span style="color:var(--muted)">No threshold beat sampling error. That is itself a result.</span>')
-    }
+    rows.push(!n.enoughData
+      ? '<span style="color:var(--dimmer)">no threshold suggestions until <code>' + n.minSamples + '</code> labelled samples — below that, apparent edges are noise</span>'
+      : n.suggestions && n.suggestions.length
+        ? 'Proposals (not applied): ' + n.suggestions.map((s) => '<code>' + esc(s.feature) + ' ' + esc(s.keep) + ' ' + s.cut + '</code>').join(' · ')
+        : '<span style="color:var(--dimmer)">no threshold beat sampling error — that is itself a result</span>')
     lrn.innerHTML = rows.join('<br>')
   }
 
+  /* ---- limits ---- */
   const L = d.limits
   document.getElementById('limits').innerHTML =
-    'Size <code>' + fmtSol(d.sizing.buySol, 3) + '</code> per trade · max <code>' + L.maxConcurrent + '</code> open · deploy cap <code>' + fmtSol(d.sizing.maxDeployedSol, 2) + '</code><br>' +
-    'Tiers ' + d.sizing.allTiers.map((t) => '<code>≥' + t.minEquitySol + ' SOL → ' + t.buySol + '</code>').join(' · ') + '<br>' +
-    'Ladder <code>' + L.ladder.map((r) => '+' + r.atPct + '% → sell ' + r.sellPct + '%').join('</code>, <code>') + '</code><br>' +
-    'Stop-loss <code>−' + L.stopLossPct + '%</code> · time stop <code>' + L.timeStopSeconds + 's</code><br>' +
-    'Daily loss limit <code>' + fmtSol(L.dailyLossLimitSol, 2) + '</code> · total loss limit <code>' + fmtSol(L.totalLossLimitSol, 2) + '</code>'
+    'Size <code>' + fmtSol(d.sizing.buySol, 3) + '</code>/trade · max <code>' + L.maxConcurrent +
+      '</code> open · deploy cap <code>' + fmtSol(d.sizing.maxDeployedSol, 2) + '</code><br>' +
+    'Tiers ' + d.sizing.allTiers.map((t) => '<code>≥' + t.minEquitySol + ' → ' + t.buySol + '</code>').join(' · ') + '<br>' +
+    'Ladder ' + L.ladder.map((r) => '<code>+' + r.atPct + '% → ' + r.sellPct + '%</code>').join(' · ') + '<br>' +
+    'Stop <code>−' + L.stopLossPct + '%</code> · time stop <code>' + L.timeStopSeconds + 's</code> · ' +
+    'daily limit <code>' + fmtSol(L.dailyLossLimitSol, 2) + '</code> · total <code>' + fmtSol(L.totalLossLimitSol, 2) + '</code>'
 }
 
 async function tick() {
@@ -319,11 +500,12 @@ async function tick() {
     const res = await fetch('/api/state' + location.search, { cache: 'no-store' })
     if (res.ok) render(await res.json())
   } catch {
-    document.getElementById('stamp').textContent = 'disconnected — retrying'
+    document.getElementById('hstat').textContent = 'DISCONNECTED — RETRYING'
   }
 }
 tick()
 setInterval(tick, 4000)
+window.addEventListener('resize', () => tick())
 </script>
 </body>
 </html>

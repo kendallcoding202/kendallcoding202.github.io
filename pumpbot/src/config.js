@@ -67,6 +67,32 @@ export const config = {
     chatId: str('TELEGRAM_CHAT_ID'),
   },
 
+  /**
+   * Exploration: deliberately take trades the filter would reject, to find out whether
+   * the filter is right.
+   *
+   * A strict filter in paper mode produces almost no trades, which produces almost no
+   * data — and the data it does produce is all from one side of every threshold, so it
+   * can never tell you a threshold is too tight. Paper money is free; spend it buying
+   * information.
+   *
+   * HARD-GATED TO PAPER. There is no env var to turn this on with real money. If you
+   * want live to take more trades, loosen the actual thresholds deliberately.
+   */
+  explore: {
+    enabled: bool('PAPER', true) && bool('EXPLORE', true),
+    // Fraction of filter-rejected candidates to buy anyway.
+    sampleRate: num('EXPLORE_SAMPLE_RATE', 0.25),
+    // Paper mode can carry far more positions than live — it is not risking anything.
+    maxConcurrent: num('EXPLORE_MAX_CONCURRENT', 15),
+    /**
+     * The only check never overridden. Everything else is a hypothesis worth testing;
+     * an unpriceable token is one whose exit we cannot manage, so an explore trade on it
+     * would produce a stuck position and no usable label.
+     */
+    neverRelax: ['priceable'],
+  },
+
   learning: {
     enabled: bool('LEARNING', true),
     // How long to follow a token after we decide on it, to label the outcome.

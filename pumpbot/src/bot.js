@@ -14,6 +14,7 @@ import {
   openPositions,
   blockCreator,
   halt,
+  logActivity,
 } from './store.js'
 import { decideExit, newPosition, applySell, markPrice, positionPnl } from './position.js'
 import { getPublicKey, getSolBalance, getAllTokenBalances } from './wallet.js'
@@ -51,6 +52,7 @@ export class Bot {
       trades: 0,
       screened: 0,
       entered: 0,
+      explored: 0,
       rejects: new Map(),
       firstParsedAt: null,
       startedAt: null,
@@ -67,6 +69,7 @@ export class Bot {
       trades: s.trades,
       screened: s.screened,
       entered: s.entered,
+      explored: s.explored,
       watching: this.candidates.size,
       shadowTracked: this.shadow?.size ?? 0,
       parsing: s.firstParsedAt !== null,
@@ -326,7 +329,14 @@ export class Bot {
       if (!verdict.pass) {
         log.debug(`skip ${candidate.symbol}: ${verdict.reason}`)
         this.#countReject(verdict)
-        // Keep watching rejects so we learn what the filter is throwing away.
+
+        // Buy a sample of rejects anyway, in paper, to find out if the filter is right.
+        if (this.#shouldExplore(verdict)) {
+          await this.#enter(candidate, verdict, { explore: true })
+          continue
+        }
+
+        // Keep watching the rest so we still learn what the filter throws away.
         this.shadow?.track({ candidate, verdict, action: 'rejected' })
         if (!this.shadow?.has(mint)) this.feed.unwatch(mint)
         continue
@@ -350,11 +360,36 @@ export class Bot {
     }
   }
 
-  async #enter(candidate, verdict) {
+  /**
+   * Whether to take a filter-rejected candidate anyway, for information.
+   *
+   * Only the un-relaxable checks veto this. Everything else our filter believes is a
+   * hypothesis, and the only way to learn that a threshold is too tight is to sometimes
+   * trade the other side of it.
+   */
+  #shouldExplore(verdict) {
+    const e = config.explore
+    if (!e.enabled) return false
+    if (verdict.failed.some((c) => e.neverRelax.includes(c.id))) return false
+    if (openPositions().length >= e.maxConcurrent) return false
+    return Math.random() < e.sampleRate
+  }
+
+  async #enter(candidate, verdict, { explore = false } = {}) {
     const mint = candidate.mint
     if (this.busy.has(mint)) return
 
-    const blocked = canOpen({ mint, creator: candidate.creator, walletSol: this.walletSol })
+    // Explore trades are paper-only and exist to gather data, so the exposure caps that
+    // protect real capital do not apply — but a halt still does, and so does not
+    // double-buying the same mint.
+    const blocked = explore
+      ? getState().halted
+        ? `halted: ${getState().halted.reason}`
+        : getState().positions[mint]
+          ? 'already holding this mint'
+          : null
+      : canOpen({ mint, creator: candidate.creator, walletSol: this.walletSol })
+
     if (blocked) {
       log.info(`not entering ${candidate.symbol}: ${blocked}`)
       this.shadow?.track({ candidate, verdict, action: 'rejected' })
@@ -367,7 +402,9 @@ export class Bot {
     try {
       const buySol = buySolFor(this.walletSol)
       log.info(
-        `ENTERING ${candidate.symbol} at ${sol(buySol)} — ${candidate.organicBuyers} buyers, mc ${candidate.marketCapSol?.toFixed(1)} SOL`,
+        `${explore ? 'EXPLORING' : 'ENTERING'} ${candidate.symbol} at ${sol(buySol)} — ` +
+          `${candidate.organicBuyers} buyers, mc ${candidate.marketCapSol?.toFixed(1)} SOL` +
+          (explore ? ` (would have skipped: ${verdict.reason})` : ''),
       )
 
       const fill = await buy({
@@ -394,17 +431,33 @@ export class Bot {
       })
       position.lastVSol = candidate.vSol
       position.lastVTokens = candidate.vTokens
+      position.explore = explore
+      // What the filter objected to — the whole point of the experiment.
+      position.failedChecks = explore ? verdict.failed.map((c) => c.id) : []
       addPosition(position)
+      logActivity(explore ? 'explore' : 'buy',
+        `${explore ? 'EXPLORE' : 'BUY'} ${position.symbol} ${sol(fill.solSpent)}` +
+          (explore ? ` · would skip: ${verdict.failed.map((c) => c.id).join(',')}` : ''),
+        { mint, sol: -fill.solSpent })
       this.walletSol -= fill.solSpent
 
-      this.stats.entered++
-      this.stats.sinceBeat.entered++
-      this.shadow?.track({ candidate, verdict, action: 'bought', entryPriceSol: fill.avgPriceSol })
-
-      await notifyEntry(position, {
-        buyers: candidate.organicBuyers,
-        devHoldPct: candidate.devHoldPct,
+      if (explore) this.stats.explored++
+      else {
+        this.stats.entered++
+        this.stats.sinceBeat.entered++
+      }
+      this.shadow?.track({
+        candidate, verdict,
+        action: explore ? 'explored' : 'bought',
+        entryPriceSol: fill.avgPriceSol,
       })
+
+      if (!explore) {
+        await notifyEntry(position, {
+          buyers: candidate.organicBuyers,
+          devHoldPct: candidate.devHoldPct,
+        })
+      }
     } finally {
       this.busy.delete(mint)
     }
@@ -445,12 +498,17 @@ export class Bot {
       this.walletSol += fill.solReceived
 
       const pnl = positionPnl(position)
-      await notifySell(position, fill, decision.reasons, pnl)
+      logActivity('sell', `SELL ${position.symbol} ${sol(fill.solReceived)} · ${decision.reasons[0] ?? ''}`,
+        { mint, sol: fill.solReceived, explore: Boolean(position.explore) })
+      if (!position.explore) await notifySell(position, fill, decision.reasons, pnl)
 
       if (decision.sellAll || position.tokensRemaining <= 0) {
         const closed = closePosition(mint, decision.reasons.join('; '))
         if (!this.shadow?.has(mint)) this.feed.unwatch(mint)
-        await notifyClose(closed, pnl)
+        logActivity(closed.realizedSol >= 0 ? 'win' : 'loss',
+          `${closed.explore ? 'EXPLORE ' : ''}CLOSE ${closed.symbol} ${sol(closed.realizedSol)} · ${closed.closeReason ?? ''}`,
+          { mint, sol: closed.realizedSol, explore: Boolean(closed.explore) })
+        if (!closed.explore) await notifyClose(closed, pnl)
 
         // A total loss on a launch is a signal about who deployed it.
         if (closed.realizedSol < 0 && position.creator) {

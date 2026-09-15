@@ -1,5 +1,5 @@
 import { config } from './config.js'
-import { getState, openPositions, deployedSol, todayPnl, isCreatorBlocked, halt } from './store.js'
+import { getState, strategyPositions, deployedSol, todayPnl, isCreatorBlocked, halt } from './store.js'
 import { buySolFor, maxDeployedFor, sizingSummary } from './sizing.js'
 import { sol } from './log.js'
 
@@ -33,7 +33,7 @@ export function canOpen({ mint, creator, walletSol }) {
   const buySol = buySolFor(walletSol)
   const maxDeployed = maxDeployedFor(walletSol)
 
-  const open = openPositions()
+  const open = strategyPositions()
   if (open.length >= sizing.maxConcurrentPositions) {
     return `already holding ${open.length} positions (max ${sizing.maxConcurrentPositions})`
   }
@@ -71,7 +71,7 @@ export function riskSummary(walletSol) {
   return {
     halted: s.halted,
     sizing: sizingSummary(walletSol),
-    openPositions: openPositions().length,
+    openPositions: strategyPositions().length,
     deployedSol: deployedSol(),
     todayRealizedSol: today.realizedSol,
     todayWins: today.wins,

@@ -10,8 +10,14 @@ const EMPTY = {
   daily: {}, // utc day -> { realizedSol, wins, losses }
   totalRealizedSol: 0,
   consecutiveLosses: 0,
+  // Exploration is an experiment, not the strategy. Its P&L is booked separately so it
+  // cannot trip the strategy's circuit breakers or distort the headline numbers.
+  exploreRealizedSol: 0,
+  exploreWins: 0,
+  exploreLosses: 0,
   blockedCreators: {}, // creator -> { at, reason }
   halted: null, // { at, reason } — set by a circuit breaker
+  activity: [], // rolling event feed for the dashboard, newest last
 }
 
 let state = null
@@ -45,8 +51,12 @@ export function save() {
 
 export const openPositions = () => Object.values(getState().positions).filter((p) => p.state !== 'closed')
 
+/** Real strategy positions. Explore trades must not consume the live exposure budget. */
+export const strategyPositions = () => openPositions().filter((p) => !p.explore)
+export const explorePositions = () => openPositions().filter((p) => p.explore)
+
 export const deployedSol = () =>
-  openPositions().reduce((sum, p) => sum + Math.max(0, p.solSpent - p.solRecovered), 0)
+  strategyPositions().reduce((sum, p) => sum + Math.max(0, p.solSpent - p.solRecovered), 0)
 
 export function addPosition(position) {
   getState().positions[position.mint] = position
@@ -72,17 +82,26 @@ export function closePosition(mint, reason) {
   if (!p) return null
 
   const realized = p.solRecovered - p.solSpent
-  const day = utcDay()
-  s.daily[day] ??= { realizedSol: 0, wins: 0, losses: 0 }
-  s.daily[day].realizedSol += realized
-  s.totalRealizedSol += realized
 
-  if (realized > 0) {
-    s.daily[day].wins++
-    s.consecutiveLosses = 0
-  } else if (realized < 0) {
-    s.daily[day].losses++
-    s.consecutiveLosses++
+  if (p.explore) {
+    // Booked apart from the strategy: an experiment that loses money on purpose must
+    // not halt the thing it is trying to measure.
+    s.exploreRealizedSol += realized
+    if (realized > 0) s.exploreWins++
+    else if (realized < 0) s.exploreLosses++
+  } else {
+    const day = utcDay()
+    s.daily[day] ??= { realizedSol: 0, wins: 0, losses: 0 }
+    s.daily[day].realizedSol += realized
+    s.totalRealizedSol += realized
+
+    if (realized > 0) {
+      s.daily[day].wins++
+      s.consecutiveLosses = 0
+    } else if (realized < 0) {
+      s.daily[day].losses++
+      s.consecutiveLosses++
+    }
   }
 
   p.state = 'closed'
@@ -96,6 +115,16 @@ export function closePosition(mint, reason) {
 
   save()
   return p
+}
+
+/**
+ * Rolling activity feed. Bounded hard — this is display state, and an unbounded array
+ * in a file the bot rewrites on every fill would grow without limit.
+ */
+export function logActivity(kind, text, extra = {}) {
+  const s = getState()
+  s.activity.push({ at: Date.now(), kind, text, ...extra })
+  if (s.activity.length > 300) s.activity = s.activity.slice(-300)
 }
 
 export function todayPnl() {

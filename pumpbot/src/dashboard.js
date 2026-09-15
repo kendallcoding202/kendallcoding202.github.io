@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { config } from './config.js'
-import { getState, openPositions, deployedSol, todayPnl } from './store.js'
+import { getState, openPositions, strategyPositions, explorePositions, deployedSol, todayPnl } from './store.js'
 import { positionPnl } from './position.js'
 import { sizingSummary } from './sizing.js'
 import { analyze } from './learn.js'
@@ -97,6 +97,8 @@ export function buildSnapshot(walletSol, stats = null) {
       changePct:
         p.entryPriceSol > 0 ? ((p.lastPriceSol - p.entryPriceSol) / p.entryPriceSol) * 100 : 0,
       rungsHit: p.rungsHit,
+      explore: Boolean(p.explore),
+      failedChecks: p.failedChecks ?? [],
       markValueSol: pnl.markValueSol,
       totalSol: pnl.totalSol,
       totalPct: pnl.totalPct,
@@ -105,8 +107,8 @@ export function buildSnapshot(walletSol, stats = null) {
     }
   })
 
-  const markValueSol = positions.reduce((s, p) => s + p.markValueSol, 0)
-  const unrealizedSol = positions.reduce((s, p) => s + p.totalSol, 0)
+  const markValueSol = positions.filter((p) => !p.explore).reduce((s, p) => s + p.markValueSol, 0)
+  const unrealizedSol = positions.filter((p) => !p.explore).reduce((s, p) => s + p.totalSol, 0)
 
   const closed = [...state.closed].reverse().slice(0, 100).map((p) => ({
     mint: p.mint,
@@ -119,11 +121,22 @@ export function buildSnapshot(walletSol, stats = null) {
     realizedSol: p.realizedSol,
     realizedPct: p.solSpent > 0 ? (p.realizedSol / p.solSpent) * 100 : 0,
     reason: p.closeReason,
+    explore: Boolean(p.explore),
     rungsHit: p.rungsHit,
   }))
 
-  const wins = state.closed.filter((p) => p.realizedSol > 0).length
-  const losses = state.closed.filter((p) => p.realizedSol < 0).length
+  const strategyClosed = state.closed.filter((p) => !p.explore)
+  const exploreClosed = state.closed.filter((p) => p.explore)
+  const wins = strategyClosed.filter((p) => p.realizedSol > 0).length
+  const losses = strategyClosed.filter((p) => p.realizedSol < 0).length
+
+  // Cumulative realized curve for the chart, oldest first.
+  let running = 0
+  const history = [...strategyClosed]
+    .sort((a, b) => a.closedAt - b.closedAt)
+    .map((p) => ({ at: p.closedAt, sol: (running += p.realizedSol) }))
+
+  const nextTierSol = sizingSummary(walletSol).nextTier?.atSol ?? null
 
   return {
     mode: config.paper ? 'paper' : 'live',
@@ -146,10 +159,22 @@ export function buildSnapshot(walletSol, stats = null) {
       losses,
       winRatePct: wins + losses > 0 ? (wins / (wins + losses)) * 100 : null,
       consecutiveLosses: state.consecutiveLosses,
-      tradesClosed: state.closed.length,
+      tradesClosed: strategyClosed.length,
     },
     sizing: sizingSummary(walletSol),
     pipeline: stats,
+    history,
+    goal: nextTierSol
+      ? { targetSol: nextTierSol, currentSol: walletSol ?? 0, pct: Math.min(100, ((walletSol ?? 0) / nextTierSol) * 100) }
+      : null,
+    activity: [...(state.activity ?? [])].reverse().slice(0, 60),
+    explore: {
+      realizedSol: state.exploreRealizedSol ?? 0,
+      wins: state.exploreWins ?? 0,
+      losses: state.exploreLosses ?? 0,
+      open: explorePositions().length,
+      closed: exploreClosed.length,
+    },
     learning: learningSnapshot(),
     limits: {
       maxConcurrent: config.sizing.maxConcurrentPositions,

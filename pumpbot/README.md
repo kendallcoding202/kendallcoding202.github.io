@@ -45,7 +45,7 @@ Believe the numbers it gives you over the numbers you hoped for.
 ```bash
 cd pumpbot
 npm install
-npm test                     # 173 offline checks, no network or keys needed
+npm test                     # 189 offline checks, no network or keys needed
 
 cp .env.example .env
 npm run keygen               # creates the burner, prints the address to fund
@@ -244,6 +244,45 @@ cannot replay hours later.
 
 ---
 
+## Exploration — taking risk on purpose, before it costs anything
+
+A strict filter in paper mode is self-defeating. It produces almost no trades, so almost
+no data — and every sample comes from one side of every threshold, which means it can
+never tell you a threshold is too tight. Paper money is free. Spend it buying information.
+
+In paper, the bot takes a random **`EXPLORE_SAMPLE_RATE`** (default 25%) of the
+candidates its filter *rejected*, and trades them for real (simulated) with the full exit
+ladder. Every check is treated as a hypothesis worth testing. The only one never
+overridden is `priceable` — a token we cannot price is one whose exit we cannot manage,
+so it would produce a stuck position and no usable label.
+
+**This is hard-gated to paper. There is no environment variable that turns it on with
+real money.** If you want live to take more trades, loosen the actual thresholds
+deliberately.
+
+Explore trades are kept in a **separate book**:
+
+- their P&L does not touch the headline numbers or the daily/total loss limits, so an
+  experiment that loses money on purpose cannot halt the thing it is measuring
+- they do not consume `MAX_CONCURRENT_POSITIONS` or the deploy cap, so they never crowd
+  out a real entry
+- they carry no Telegram alerts — at 25% of rejects they would flood the chat
+- the dashboard tints them amber and tags them with the checks they failed
+
+What you get for it is the one question that actually matters, answered with data:
+
+```
+Filtered vs explored, simulated ladder return:
+  filter said YES : 1.042x  n=63
+  filter said NO  : 0.883x  n=214
+  → the filter is adding value at this sample size.
+```
+
+If that ever reads *"the coins the filter REJECTS are outperforming"*, the filter is
+costing you money and the thresholds need to change before you go live.
+
+---
+
 ## Learning
 
 **What this is not:** a model that trains itself into profitability. At this trade volume
@@ -381,7 +420,7 @@ verification above.
 
 | Command | Does |
 |---|---|
-| `npm test` | 173 offline checks |
+| `npm test` | 189 offline checks |
 | `npm run keygen` | Create the burner wallet |
 | `npm run balance` | Address, balance, current size tier |
 | `npm run paper` | Paper instance, dashboard on :8081 |
@@ -417,7 +456,7 @@ src/
   commands.js   Telegram /status, /pause, /panic
   summary.js    shared status + digest text
 deploy/         systemd units for live and paper
-test/run.js     173 checks
+test/run.js     189 checks
 ```
 
 ## What is unverified

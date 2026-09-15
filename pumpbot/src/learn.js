@@ -136,11 +136,15 @@ export function bestThreshold(rows, feature, { minBucket = config.learning.minBu
 export function analyze(rows = readAll()) {
   const labelled = rows.filter((r) => typeof r.hitFirstRung === 'boolean' && r.decisionPriceSol > 0)
   const bought = labelled.filter((r) => r.action === 'bought')
-  const rejected = labelled.filter((r) => r.action === 'rejected')
+  const explored = labelled.filter((r) => r.action === 'explored')
+  // Everything the filter declined — whether we shadow-tracked it or bought it anyway
+  // to find out. Both are evidence about the filter's false negatives.
+  const rejected = labelled.filter((r) => r.action === 'rejected' || r.action === 'explored')
 
   const base = wilson(labelled.filter((r) => r.hitFirstRung).length, labelled.length)
   const boughtRate = wilson(bought.filter((r) => r.hitFirstRung).length, bought.length)
   const rejectedRate = wilson(rejected.filter((r) => r.hitFirstRung).length, rejected.length)
+  const exploredRate = wilson(explored.filter((r) => r.hitFirstRung).length, explored.length)
 
   // Which specific checks are throwing away winners.
   const missesByCheck = {}
@@ -200,10 +204,11 @@ export function analyze(rows = readAll()) {
       journalled: rows.length,
       labelled: labelled.length,
       bought: bought.length,
+      explored: explored.length,
       rejected: rejected.length,
       pending: rows.length - labelled.length,
     },
-    rates: { base, bought: boughtRate, rejected: rejectedRate },
+    rates: { base, bought: boughtRate, rejected: rejectedRate, explored: exploredRate },
     // Does our filter actually select better-than-random launches?
     filterEdge:
       bought.length >= config.learning.minBucketSamples && rejected.length >= config.learning.minBucketSamples
@@ -213,7 +218,7 @@ export function analyze(rows = readAll()) {
             ? 'WARNING: rejected launches outperformed the ones we bought'
             : 'no statistically supported difference yet'
         : 'not enough data on both sides yet',
-    ev: { bought: evOf(bought), all: evOf(labelled) },
+    ev: { bought: evOf(bought), explored: evOf(explored), all: evOf(labelled) },
     falseNegatives,
     suggestions,
     repeatCreators,
@@ -236,8 +241,25 @@ export function formatReport(a) {
   L.push(`  all launches seen : ${p(a.rates.base)}`)
   L.push(`  ones we bought    : ${p(a.rates.bought)}`)
   L.push(`  ones we rejected  : ${p(a.rates.rejected)}`)
+  if (a.rates.explored.n) L.push(`  explore trades    : ${p(a.rates.explored)}`)
   L.push(`  verdict: ${a.filterEdge}`)
   L.push('')
+
+  if (a.ev.bought && a.ev.explored) {
+    const f = a.ev.bought
+    const x = a.ev.explored
+    L.push('Filtered vs explored, simulated ladder return:')
+    L.push(`  filter said YES : ${f.meanMultiple.toFixed(3)}x  n=${f.n}`)
+    L.push(`  filter said NO  : ${x.meanMultiple.toFixed(3)}x  n=${x.n}`)
+    L.push(
+      f.meanMultiple - 1.96 * f.stdErr > x.meanMultiple + 1.96 * x.stdErr
+        ? '  → the filter is adding value at this sample size.'
+        : x.meanMultiple - 1.96 * x.stdErr > f.meanMultiple + 1.96 * f.stdErr
+          ? '  → the coins the filter REJECTS are outperforming. The filter is hurting you.'
+          : '  → cannot separate them yet. Keep exploring.',
+    )
+    L.push('')
+  }
 
   if (a.ev.bought) {
     const e = a.ev.bought
