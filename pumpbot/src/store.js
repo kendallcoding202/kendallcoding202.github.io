@@ -127,6 +127,22 @@ export function logActivity(kind, text, extra = {}) {
   if (s.activity.length > 300) s.activity = s.activity.slice(-300)
 }
 
+/**
+ * Paper balance, DERIVED from the ledger rather than tracked as a running counter.
+ *
+ * A counter drifts: it resets to the starting balance on restart, but positions opened
+ * before the restart still credit their sells with no matching debit, so every restart
+ * inflates it. Live mode self-corrects by reading the chain; paper had nothing to
+ * correct against, and an inflated balance silently bumps the size tier.
+ *
+ * Double-entry: start + everything realized - capital still tied up in open positions.
+ */
+export function paperWalletSol(startSol) {
+  const s = getState()
+  const tiedUp = openPositions().reduce((sum, p) => sum + Math.max(0, p.solSpent - p.solRecovered), 0)
+  return startSol + (s.totalRealizedSol ?? 0) + (s.exploreRealizedSol ?? 0) - tiedUp
+}
+
 export function todayPnl() {
   return getState().daily[utcDay()] ?? { realizedSol: 0, wins: 0, losses: 0 }
 }

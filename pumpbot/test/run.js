@@ -488,6 +488,61 @@ console.log('\nBonding curve account')
   check('PDA is stable across calls', bondingCurveAddress('So11111111111111111111111111111111111111112').toBase58() === addr)
 }
 
+// ------------------------------------------------------- paper balance
+console.log('\nPaper balance')
+{
+  const { paperWalletSol } = store
+  store.initStore()
+  const st = store.getState()
+  st.positions = {}; st.closed = []; st.daily = {}; st.totalRealizedSol = 0
+  st.exploreRealizedSol = 0; st.exploreWins = 0; st.exploreLosses = 0
+  st.consecutiveLosses = 0; st.halted = null
+  store.save()
+
+  const START = 0.5
+  check('a clean slate equals the starting balance', near(paperWalletSol(START), START))
+
+  // Open position: its cost is tied up, not spent-and-gone.
+  store.addPosition({ mint: 'W1', symbol: 'W1', state: 'open', openedAt: Date.now(),
+    solSpent: 0.075, solRecovered: 0, tokensRemaining: 1000, rungsHit: [] })
+  check('an open position ties up its cost', near(paperWalletSol(START), START - 0.075))
+
+  // Partial recovery frees part of it back.
+  store.getState().positions.W1.solRecovered = 0.05
+  check('partial recovery frees capital', near(paperWalletSol(START), START - 0.025))
+
+  // Closing at a loss books the loss and frees the rest.
+  store.closePosition('W1', 'stop-loss')
+  check('a closed loss lands in the balance', near(paperWalletSol(START), START - 0.025), String(paperWalletSol(START)))
+
+  // Explore P&L counts toward the balance even though it is a separate book.
+  store.addPosition({ mint: 'W2', symbol: 'W2', state: 'open', openedAt: Date.now(),
+    solSpent: 0.075, solRecovered: 0.12, tokensRemaining: 0, rungsHit: [], explore: true })
+  store.closePosition('W2', 'ladder')
+  check('explore P&L still moves real paper balance', near(paperWalletSol(START), START - 0.025 + 0.045))
+
+  /**
+   * The regression this exists for: a running counter resets to START on restart while
+   * pre-existing positions keep crediting their sells, so every restart inflated the
+   * balance — and an inflated balance silently bumps the size tier.
+   */
+  const beforeRestart = paperWalletSol(START)
+  store.initStore() // simulates a process restart re-reading the ledger
+  check('balance survives a restart unchanged', near(paperWalletSol(START), beforeRestart),
+    `${paperWalletSol(START)} vs ${beforeRestart}`)
+
+  // Many losing trades must drive it DOWN, never up.
+  for (let i = 0; i < 20; i++) {
+    store.addPosition({ mint: `L${i}`, symbol: `L${i}`, state: 'open', openedAt: Date.now(),
+      solSpent: 0.075, solRecovered: 0.059, tokensRemaining: 0, rungsHit: [], explore: true })
+    store.closePosition(`L${i}`, 'time stop')
+  }
+  check('twenty losing trades reduce the balance', paperWalletSol(START) < beforeRestart,
+    String(paperWalletSol(START)))
+  check('the drop matches the losses', near(paperWalletSol(START), beforeRestart - 20 * 0.016, 1e-9),
+    String(paperWalletSol(START)))
+}
+
 // ------------------------------------------------- feed subscription batching
 console.log('\nFeed subscriptions')
 {

@@ -15,6 +15,7 @@ import {
   blockCreator,
   halt,
   logActivity,
+  paperWalletSol,
 } from './store.js'
 import { decideExit, newPosition, applySell, markPrice, positionPnl } from './position.js'
 import { getPublicKey, getSolBalance, getAllTokenBalances } from './wallet.js'
@@ -140,8 +141,8 @@ export class Bot {
     const pubkey = getPublicKey().toBase58()
 
     if (config.paper) {
-      // Paper mode starts at the configured floor tier so sizing behaves identically.
-      this.walletSol = Number(process.env.PAPER_START_SOL ?? 0.5)
+      this.paperStartSol = Number(process.env.PAPER_START_SOL ?? 0.5)
+      this.walletSol = paperWalletSol(this.paperStartSol)
     } else {
       this.walletSol = await getSolBalance()
       const needed = buySolFor(this.walletSol) + config.sizing.reserveSol
@@ -221,7 +222,11 @@ export class Bot {
   }
 
   async #refreshBalance() {
-    if (config.paper) return
+    if (config.paper) {
+      // Recomputed rather than trusted, so any drift corrects itself every minute.
+      this.walletSol = paperWalletSol(this.paperStartSol)
+      return
+    }
     const before = this.walletSol
     this.walletSol = await getSolBalance()
 
@@ -482,7 +487,11 @@ export class Bot {
         `${explore ? 'EXPLORE' : 'BUY'} ${position.symbol} ${sol(fill.solSpent)}` +
           (explore ? ` · would skip: ${verdict.failed.map((c) => c.id).join(',')}` : ''),
         { mint, sol: -fill.solSpent })
-      this.walletSol -= fill.solSpent
+      // Paper derives from the ledger (which now includes this position); live keeps a
+      // running figure between the once-a-minute chain reads.
+      this.walletSol = config.paper
+        ? paperWalletSol(this.paperStartSol)
+        : this.walletSol - fill.solSpent
 
       if (explore) this.stats.explored++
       else {
@@ -538,7 +547,9 @@ export class Bot {
 
       applySell(position, fill, decision.reasons)
       position.rungsHit.push(...decision.rungs)
-      this.walletSol += fill.solReceived
+      this.walletSol = config.paper
+        ? paperWalletSol(this.paperStartSol)
+        : this.walletSol + fill.solReceived
 
       const pnl = positionPnl(position)
       logActivity('sell', `SELL ${position.symbol} ${sol(fill.solReceived)} · ${decision.reasons[0] ?? ''}`,
