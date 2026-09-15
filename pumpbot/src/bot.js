@@ -1,4 +1,4 @@
-import { config } from './config.js'
+import { config, envReport } from './config.js'
 import { Feed } from './feed.js'
 import { Candidate, evaluateEntry } from './filter.js'
 import { buy, sell } from './exec.js'
@@ -202,6 +202,15 @@ export class Bot {
     const summary = riskSummary(this.walletSol)
 
     log.info(`starting in ${config.paper ? 'PAPER' : 'LIVE'} mode as ${pubkey} · build ${config.version}`)
+
+    // Names and lengths only. Printed once at startup so "is the variable reaching the
+    // container" is answered by reading, not by inference.
+    log.info(
+      'env: ' +
+        envReport()
+          .map((e) => (e.present ? `${e.name}=${e.trimmedLength}ch` : `${e.name}=MISSING`))
+          .join(' · '),
+    )
     log.info(
       `tier: ${sol(summary.sizing.buySol)}/trade at ${sol(this.walletSol)} equity` +
         (summary.sizing.nextTier

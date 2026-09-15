@@ -399,8 +399,9 @@ function render(d) {
       const sub = pl.subscriptions
       if (sub) {
         rows.push('API key: ' + (sub.hasApiKey
-          ? '<span class="pos">detected</span>'
-          : '<span class="neg"><b>NOT SET</b> — PUMPPORTAL_API_KEY is missing or empty</span>'))
+          ? '<span class="pos">detected</span> (' + (sub.apiKeyLength ?? '?') + ' chars)'
+          : '<span class="neg"><b>NOT SET</b></span> — the process sees <code>' +
+            (sub.apiKeyLength ?? 0) + '</code> characters. Check the startup log line beginning <code>env:</code>.'))
         rows.push('Subscriptions <code>' + num(sub.watched) + '/' + num(sub.max) + '</code>' +
           (sub.dropped ? ' · <span class="neg">' + num(sub.dropped) + ' dropped</span>' : '') +
           ' · control msgs <code>' + num(sub.controlMessages ?? 0) + '</code>')

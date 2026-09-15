@@ -227,6 +227,7 @@ export class Feed extends EventEmitter {
       controlMessages: this.controlMessages,
       controlSamples: this.controlSamples,
       hasApiKey: this.hasApiKey,
+      apiKeyLength: config.feedApiKey.length,
       tradeFeedRefused: this.tradeFeedRefused,
       unparsed: unknownShapeStats(),
     }

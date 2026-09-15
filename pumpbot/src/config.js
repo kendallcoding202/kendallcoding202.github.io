@@ -320,6 +320,30 @@ function parseLadder(spec) {
   return rungs
 }
 
+/**
+ * What the process can actually see, by NAME and LENGTH only — never values.
+ *
+ * Six variables reaching the container and a seventh not is not something to reason
+ * about from the outside. This distinguishes the three cases that look identical from
+ * a distance: the variable is absent, it is present but empty, or it is present and
+ * populated and the remote end is rejecting it.
+ */
+export function envReport() {
+  const expected = [
+    'PAPER', 'DATA_DIR', 'PUMPPORTAL_API_KEY', 'RPC_URL', 'PRIVATE_KEY',
+    'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID', 'DASHBOARD_HOST', 'DASHBOARD_TOKEN', 'PORT',
+  ]
+  return expected.map((name) => {
+    const raw = process.env[name]
+    return {
+      name,
+      present: raw !== undefined,
+      length: raw === undefined ? 0 : raw.length,
+      trimmedLength: raw === undefined ? 0 : raw.trim().length,
+    }
+  })
+}
+
 export const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'
 export const TOKEN_2022_PROGRAM = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'
 

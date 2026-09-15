@@ -500,6 +500,38 @@ console.log('\nBonding curve account')
   check('PDA is stable across calls', bondingCurveAddress('So11111111111111111111111111111111111111112').toBase58() === addr)
 }
 
+// ------------------------------------------------- environment visibility
+console.log('\nEnvironment visibility')
+{
+  const { envReport } = await import('../src/config.js')
+  const report = envReport()
+  const byName = Object.fromEntries(report.map((e) => [e.name, e]))
+
+  check('the key we are debugging is reported on', Boolean(byName.PUMPPORTAL_API_KEY))
+  check('a set variable reports present', byName.PAPER.present && byName.PAPER.length > 0)
+  check('an unset variable reports missing', byName.PRIVATE_KEY.present === false)
+
+  // The three cases that look identical from outside must be distinguishable.
+  const before = process.env.PUMPPORTAL_API_KEY
+  process.env.PUMPPORTAL_API_KEY = ''
+  check('present-but-empty is distinct from missing',
+    envReport().find((e) => e.name === 'PUMPPORTAL_API_KEY').present === true &&
+    envReport().find((e) => e.name === 'PUMPPORTAL_API_KEY').trimmedLength === 0)
+  process.env.PUMPPORTAL_API_KEY = '  key-with-padding  '
+  const padded = envReport().find((e) => e.name === 'PUMPPORTAL_API_KEY')
+  check('whitespace padding is visible as a length difference',
+    padded.length > padded.trimmedLength, `${padded.length} vs ${padded.trimmedLength}`)
+  if (before === undefined) delete process.env.PUMPPORTAL_API_KEY
+  else process.env.PUMPPORTAL_API_KEY = before
+
+  // It must never be able to leak a value.
+  const src = fs.readFileSync(new URL('../src/config.js', import.meta.url), 'utf8')
+  const fn = src.slice(src.indexOf('export function envReport'))
+  check('the report exposes lengths, never values',
+    !/return\s*\{[^}]*raw[,}]/.test(fn) && fn.includes('length'),
+    'names and lengths only')
+}
+
 // ------------------------------------------------- graduation / venue routing
 console.log('\nGraduation handling')
 {
