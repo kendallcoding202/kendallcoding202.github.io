@@ -92,6 +92,9 @@ export class Bot {
       exploreOffered: 0,
       exploreTaken: 0,
       exploreSkips: { disabled: 0, unpriceable: 0, concurrency: 0, noTradeData: 0, bankroll: 0, sampledOut: 0 },
+      // Sampled, then refused at the entry gate. The gap between taken and explored.
+      exploreBlockedEntries: 0,
+      exploreBlockReason: null,
       uptimeHours() {
         return this.startedAt ? (Date.now() - this.startedAt) / 3_600_000 : 0
       },
@@ -118,6 +121,9 @@ export class Bot {
         sampleRate: config.explore.sampleRate,
         offered: s.exploreOffered,
         taken: s.exploreTaken,
+        traded: s.explored,
+        blockedEntries: s.exploreBlockedEntries,
+        blockReason: s.exploreBlockReason,
         skips: { ...s.exploreSkips },
       },
       parsing: s.firstParsedAt !== null,
@@ -713,6 +719,16 @@ export class Bot {
 
     if (blocked) {
       log.info(`not entering ${candidate.symbol}: ${blocked}`)
+      /**
+       * A sampled explore trade that never happened has to be counted, or the numbers
+       * contradict each other with no way to tell why. The dashboard read "took 82 of
+       * 307 rejects" beside "EXPLORED 0" — the sampler said yes 82 times and every one
+       * was refused downstream by a halt, and nothing on the page said so.
+       */
+      if (explore) {
+        this.stats.exploreBlockedEntries++
+        this.stats.exploreBlockReason = blocked
+      }
       /**
        * Journal the DECISION, not the outcome of the capital gate.
        *

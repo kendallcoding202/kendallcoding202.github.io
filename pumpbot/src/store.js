@@ -34,11 +34,29 @@ export function initStore() {
   try {
     const loaded = JSON.parse(fs.readFileSync(file, 'utf8'))
     state = loaded?.version === 1 ? { ...structuredClone(EMPTY), ...loaded } : structuredClone(EMPTY)
+    migrateHalt(state)
   } catch {
     state = structuredClone(EMPTY)
     log.info(`fresh ${config.paper ? 'paper' : 'live'} state at ${file}`)
   }
   return state
+}
+
+/**
+ * A halt written before `kind` existed has none, and an untagged halt is treated as
+ * manual — which means it can never be cleared automatically and the bot stays halted
+ * forever. That is exactly what happened: a halt from the 0.5 SOL era survived the raise
+ * to 50 SOL, and with entry blocked the bot screened 314 launches and took none.
+ *
+ * Infer it from the reason instead of defaulting, so a limit-raised halt can go stale the
+ * way it should while anything a human asked for stays put.
+ */
+function migrateHalt(s) {
+  if (!s?.halted || s.halted.kind) return
+  const reason = String(s.halted.reason ?? '').toLowerCase()
+  const fromALimit = /loss|drawdown|limit/.test(reason)
+  s.halted.kind = fromALimit ? 'drawdown' : 'manual'
+  log.warn(`tagged a legacy halt as '${s.halted.kind}': ${s.halted.reason}`)
 }
 
 export function getState() {

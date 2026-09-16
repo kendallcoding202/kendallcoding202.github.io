@@ -475,6 +475,12 @@ function render(d) {
             '% actual vs ' + Math.round(x.sampleRate * 100) + '% target)' +
             (blockers.length ? ' · blocked by ' + blockers.join(' · ')
                              : (x.taken ? '' : ' · none blocked, just sampling variance so far')))
+          // Sampled but refused at the entry gate — the gap between "took" and "explored".
+          if (x.blockedEntries) {
+            rows.push('<b style="color:var(--amber)">' + x.blockedEntries + ' sampled explore trades were refused at entry</b>' +
+              (x.blockReason ? ' — last reason: <code>' + esc(x.blockReason) + '</code>' : '') +
+              (x.traded === 0 ? '. That is why EXPLORED reads 0 despite the sampling above.' : ''))
+          }
         }
       }
       if (pl.topRejects && pl.topRejects.length) {

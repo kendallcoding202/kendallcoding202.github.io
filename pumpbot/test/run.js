@@ -441,6 +441,32 @@ console.log('\nRisk gates')
   store.clearHalt()
 
   s.daily = {}; s.totalRealizedSol = 0; s.baseEquitySol = 0; s.peakRealizedSol = 0
+  /**
+   * A halt written before `kind` existed has none. Treating an untagged halt as manual
+   * meant it could never go stale, so a halt from the 0.5 SOL era survived the raise to
+   * 50 SOL and the bot screened 314 launches while taking none of them.
+   */
+  {
+    const legacyLimit = { at: Date.now() - 3600_000, reason: 'total realized loss hit -0.3600 SOL (limit -0.3500 SOL)' }
+    s.halted = structuredClone(legacyLimit); s.baseEquitySol = 0.5; s.peakRealizedSol = 0; s.totalRealizedSol = -0.36
+    store.save(); store.initStore()
+    const s2 = store.getState()
+    check('a legacy limit halt is tagged as stale-able', s2.halted?.kind === 'drawdown', JSON.stringify(s2.halted))
+    check('so a top-up can clear it',
+      canOpen({ mint: 'L1', creator: 'C', walletSol: 50 }) === null && !s2.halted,
+      String(canOpen({ mint: 'L1', creator: 'C', walletSol: 50 })))
+
+    // A legacy halt a human asked for keeps blocking.
+    s2.halted = { at: Date.now(), reason: 'paused from Telegram' }
+    s2.baseEquitySol = 0.5; s2.totalRealizedSol = 0
+    store.save(); store.initStore()
+    const s3 = store.getState()
+    check('a legacy manual halt is not made stale-able', s3.halted?.kind === 'manual', JSON.stringify(s3.halted))
+    check('and it still blocks after a top-up',
+      String(canOpen({ mint: 'L2', creator: 'C', walletSol: 50 })).startsWith('halted'))
+    store.clearHalt()
+  }
+
   store.clearHalt()
 }
 
