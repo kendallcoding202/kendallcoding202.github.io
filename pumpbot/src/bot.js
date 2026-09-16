@@ -649,7 +649,23 @@ export class Bot {
 
     if (blocked) {
       log.info(`not entering ${candidate.symbol}: ${blocked}`)
-      this.shadow?.track({ candidate, verdict, action: 'rejected' })
+      /**
+       * Journal the DECISION, not the outcome of the capital gate.
+       *
+       * canOpen blocks for reasons that have nothing to do with the launch — four
+       * positions already open, the deploy cap, a daily loss limit, a blocklisted
+       * creator. Recording those as 'rejected' put launches the filter APPROVED into
+       * the arm that is supposed to measure what the filter turned down, and because
+       * rejectedFor is null for a passing verdict they were invisible in the
+       * "what our filter threw away" breakdown too. With positions held up to the
+       * 600s time stop, every approved launch in a ten-minute stretch landed there.
+       */
+      this.shadow?.track({
+        candidate,
+        verdict,
+        action: verdict?.pass ? 'blocked' : 'rejected',
+        blockedBy: blocked,
+      })
       if (!this.shadow?.has(mint)) this.feed.unwatch(mint)
       if (getState().halted) await notifyHalt(getState().halted.reason, riskSummary(this.walletSol))
       return
@@ -673,7 +689,13 @@ export class Bot {
 
       if (!fill.ok) {
         log.warn(`entry failed for ${candidate.symbol}: ${fill.error}`)
-        this.shadow?.track({ candidate, verdict, action: 'rejected' })
+        // Same reasoning: a failed fill is not the filter declining the launch.
+        this.shadow?.track({
+          candidate,
+          verdict,
+          action: verdict?.pass ? 'blocked' : 'rejected',
+          blockedBy: `entry failed: ${fill.error}`,
+        })
         if (!this.shadow?.has(mint)) this.feed.unwatch(mint)
         return
       }
@@ -802,8 +824,20 @@ export class Bot {
           { mint, sol: closed.realizedSol, explore: Boolean(closed.explore) })
         if (!closed.explore || config.telegram.exploreAlerts) await notifyClose(closed, pnl)
 
-        // A total loss on a launch is a signal about who deployed it.
-        if (closed.realizedSol < 0 && position.creator) {
+        /**
+         * A loss on a launch is a signal about who deployed it — but ONLY from a trade
+         * the strategy actually chose to take.
+         *
+         * Explore buys launches the filter rejected, on purpose, and they lose most of
+         * the time. Without the guard, ~90 explore closes an hour each permanently
+         * blocklisted their deployer, and the blocklist is read only by canOpen on the
+         * strategy path. So the experiment was quietly vetoing the strategy's own picks:
+         * any later launch the filter LIKED from a creator the experiment had lost money
+         * on was refused and then journalled as a reject. The one comparison this whole
+         * exercise exists to produce was being poisoned by the thing that was supposed
+         * to be isolated from it.
+         */
+        if (!closed.explore && closed.realizedSol < 0 && position.creator) {
           blockCreator(position.creator, `lost ${sol(closed.realizedSol)} on ${position.symbol}`)
         }
 

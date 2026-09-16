@@ -27,14 +27,19 @@ export function wilson(successes, n, z = 1.96) {
  * Replays the configured exit rules against a row's realised price path and returns the
  * multiple of stake we would have ended with. 1.00 is break-even.
  *
- * Three caveats, all of which push this OPTIMISTIC — treat it as an upper bound:
- *  1. Only peak/trough/end are recorded, not the order they happened in. When a token
- *     both spiked past a rung and dipped past the stop, this assumes the rung came
- *     first. Reality sometimes went the other way.
- *  2. A rung that was touched is assumed filled. A spike can cross a rung and retrace
+ * Remaining caveats, both of which push this OPTIMISTIC:
+ *  1. A rung that was touched is assumed filled. A spike can cross a rung and retrace
  *     before our sell actually lands.
- *  3. Stop-loss and trailing-stop fills are assumed to happen exactly at their trigger
+ *  2. Stop-loss and trailing-stop fills are assumed to happen exactly at their trigger
  *     price. In a fast rug they land far worse, or not at all.
+ *
+ * Ordering used to be a third caveat, and it was the one that made "upper bound" untrue:
+ * without knowing whether the dip came before or after the peak, the stop-loss could
+ * never knock us out of an eventual winner (optimistic) while ANY low counted as a
+ * trailing exit (pessimistic, and on the modal dip-then-run path large enough to turn a
+ * profitable configuration negative). Rows now carry peak/trough timestamps and both
+ * branches consult them. Rows recorded before that keep the old behaviour, so on a mixed
+ * dataset this is a bound in neither direction — exitSweep reports the split.
  *
  * Terminal value is the price at the end of the outcome window, not at liquidation —
  * a bag still open at the 15-minute mark is valued at its 15-minute price.
@@ -91,10 +96,21 @@ export function simulateLadder(
   }
 
   if (tokensLeft > 0) {
-    // The remainder is governed by the trailing stop off the peak, otherwise it is
-    // still held at the end of the window.
+    /**
+     * The remainder is governed by the trailing stop, which measures giveback FROM THE
+     * PEAK — so only a dip that came AFTER the peak can trigger it.
+     *
+     * Treating any low as a trailing exit was the one caveat that broke the header's
+     * "optimistic, treat as an upper bound" promise, and it broke it in the direction
+     * that matters: dip-then-run is the modal pump.fun path, so a profitable
+     * configuration could print below 1.00x and draw a "NEGATIVE with statistical
+     * support" verdict. With peak/trough ordering recorded we can just ask. Rows
+     * without it fall back to the old assumption, which is why the sweep reports what
+     * fraction carries ordering.
+     */
     const trailExit = peak * (1 - trailingPct / 100)
-    const drewDown = Number.isFinite(trough) && trough <= trailExit
+    const troughCouldTrail = row.hasOrdering ? !row.troughFirst : true
+    const drewDown = troughCouldTrail && Number.isFinite(trough) && trough <= trailExit
     recovered += tokensLeft * (drewDown ? trailExit : Math.max(end, 0))
   }
 
@@ -297,6 +313,50 @@ export function bestThreshold(rows, feature, { minBucket = config.learning.minBu
   return best
 }
 
+/**
+ * The best lift the scan can extract from data where the label is pure noise.
+ *
+ * Shuffling the outcomes destroys any real relationship while preserving the feature
+ * marginals, the sample size and the correlation structure between cut points — so the
+ * resulting distribution is what "nothing is there" actually looks like for THIS
+ * dataset, rather than an analytic approximation that assumes independent tests.
+ */
+export function permutationNull(rows, { trials = 60, seed = 1 } = {}) {
+  const features = numericFeatures(rows)
+  const labels = rows.map((r) => r.hitFirstRung)
+  // Deterministic PRNG: a report that changes its conclusions when re-run is not a
+  // report. Math.random would make suggestions flicker between invocations.
+  let state = seed >>> 0
+  const rand = () => {
+    state = (state * 1664525 + 1013904223) >>> 0
+    return state / 4294967296
+  }
+
+  const lifts = []
+  for (let t = 0; t < trials; t++) {
+    const shuffled = [...labels]
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1))
+      ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+    }
+    const permuted = rows.map((r, i) => ({ ...r, hitFirstRung: shuffled[i] }))
+    let best = 0
+    for (const f of features) {
+      const hit = bestThreshold(permuted, f)
+      if (hit && hit.lift > best) best = hit.lift
+    }
+    lifts.push(best)
+  }
+  lifts.sort((a, b) => a - b)
+  return {
+    trials,
+    p95: lifts[Math.floor(lifts.length * 0.95)] ?? 0,
+    median: lifts[Math.floor(lifts.length / 2)] ?? 0,
+    // How often the scan finds ANY "supported" split in data with no signal at all.
+    falsePositiveRate: lifts.filter((x) => x > 0).length / lifts.length,
+  }
+}
+
 export function analyze(rows = readAll()) {
   /**
    * Rows from an older schema are dropped, not averaged in. v1 rows were all recorded
@@ -313,6 +373,12 @@ export function analyze(rows = readAll()) {
   // Everything the filter declined — whether we shadow-tracked it or bought it anyway
   // to find out. Both are evidence about the filter's false negatives.
   const rejected = labelled.filter((r) => r.action === 'rejected' || r.action === 'explored')
+  /**
+   * Launches the FILTER approved but the capital gate refused — position cap full, daily
+   * loss limit, blocklisted creator. They belong to neither arm: counting them as
+   * rejects put the filter's own picks into the column measuring what it turned down.
+   */
+  const blocked = labelled.filter((r) => r.action === 'blocked')
 
   const base = wilson(labelled.filter((r) => r.hitFirstRung).length, labelled.length)
   const boughtRate = wilson(bought.filter((r) => r.hitFirstRung).length, bought.length)
@@ -345,6 +411,19 @@ export function analyze(rows = readAll()) {
       profitableShare: sims.filter((x) => x > 1).length / sims.length,
       // Standard error on the mean — the number that says whether meanMultiple means anything.
       stdErr: Math.sqrt(sims.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(1, sims.length - 1)) / Math.sqrt(sims.length),
+      /**
+       * Whether a confidence verdict may be drawn from this at all.
+       *
+       * At n=1 the Math.max(1, n-1) guard above turns an undefined variance into 0, so
+       * stdErr is exactly 0 and every interval collapses to a point — a single trade
+       * printed "positive with statistical support". Identical rows do the same at any
+       * n. This is the worst failure the report has: maximum confidence from minimum
+       * measurement, on the exact line that answers "should I fund this?". It is also
+       * the imminent case, because the filter currently accepts almost nothing, so the
+       * first accepted launch lands precisely here.
+       */
+      testable: sims.length >= config.learning.minBucketSamples &&
+        sims.some((x) => x !== sims[0]),
     }
   }
 
@@ -361,13 +440,29 @@ export function analyze(rows = readAll()) {
     : null
 
   const enoughData = labelled.length >= config.learning.minSamplesForSuggestion
-  const suggestions = enoughData
+  const raw = enoughData
     ? numericFeatures(labelled)
         .map((f) => bestThreshold(labelled, f))
         .filter(Boolean)
         .sort((a, b) => b.lift - a.lift)
-        .slice(0, 6)
     : []
+  /**
+   * Every suggestion must beat a PERMUTATION NULL before it is reported.
+   *
+   * The scan tests every interior cut point of every numeric feature — roughly 2000
+   * hypotheses at a few hundred rows — and keeps whichever separates best. Against pure
+   * noise that produced a "statistically supported" threshold the majority of the time,
+   * so the old output inverted the truth: finding nothing was the informative event, and
+   * finding something was the default. Bonferroni would be far too harsh here because
+   * the cuts are nested and heavily correlated, so instead the labels are shuffled and
+   * the whole scan re-run, building the distribution of the best lift obtainable from
+   * noise alone on this exact dataset. A real result has to clear that.
+   */
+  const nullDist = enoughData ? permutationNull(labelled) : null
+  const suggestions = raw
+    .filter((s) => !nullDist || s.lift > nullDist.p95)
+    .slice(0, 6)
+    .map((s) => ({ ...s, nullP95: nullDist?.p95 ?? null }))
 
   // Creators we have seen more than once.
   const byCreator = {}
@@ -392,6 +487,7 @@ export function analyze(rows = readAll()) {
       bought: bought.length,
       explored: explored.length,
       rejected: rejected.length,
+      blocked: blocked.length,
       pending: current.length - labelled.length,
       truncated,
       medianObservedSeconds,
@@ -411,6 +507,7 @@ export function analyze(rows = readAll()) {
     falseNegatives,
     suggestions,
     repeatCreators,
+    nullDist,
     // Would a different exit have done better on these same coins? The entry filter is
     // only half the strategy, and this is the half nothing was testing.
     exitSweep: exitSweep(labelled),
@@ -477,11 +574,14 @@ export function formatReport(a) {
     L.push(`  filter said YES : ${f.meanMultiple.toFixed(3)}x  n=${f.n}`)
     L.push(`  filter said NO  : ${x.meanMultiple.toFixed(3)}x  n=${x.n}`)
     L.push(
-      f.meanMultiple - 1.96 * f.stdErr > x.meanMultiple + 1.96 * x.stdErr
-        ? '  → the filter is adding value at this sample size.'
-        : x.meanMultiple - 1.96 * x.stdErr > f.meanMultiple + 1.96 * f.stdErr
-          ? '  → the coins the filter REJECTS are outperforming. The filter is hurting you.'
-          : '  → cannot separate them yet. Keep exploring.',
+      !f.testable || !x.testable
+        ? `  → NO VERDICT: needs ${config.learning.minBucketSamples}+ varying samples per arm ` +
+          `(have ${f.n} and ${x.n}). The means above are descriptive only.`
+        : f.meanMultiple - 1.96 * f.stdErr > x.meanMultiple + 1.96 * x.stdErr
+          ? '  → the filter is adding value at this sample size.'
+          : x.meanMultiple - 1.96 * x.stdErr > f.meanMultiple + 1.96 * f.stdErr
+            ? '  → the coins the filter REJECTS are outperforming. The filter is hurting you.'
+            : '  → cannot separate them yet. Keep exploring.',
     )
     L.push('')
   }
@@ -489,15 +589,19 @@ export function formatReport(a) {
   if (a.ev.bought) {
     const e = a.ev.bought
     L.push('Simulated ladder outcome on positions taken (1.00 = break even):')
-    L.push(`  mean ${e.meanMultiple.toFixed(3)}x ± ${(e.stdErr * 1.96).toFixed(3)} (95% CI) · median ${e.medianMultiple.toFixed(3)}x · ${(e.profitableShare * 100).toFixed(0)}% profitable · n=${e.n}`)
+    L.push(`  mean ${e.meanMultiple.toFixed(3)}x${e.testable ? ` ± ${(e.stdErr * 1.96).toFixed(3)} (95% CI)` : ''} · median ${e.medianMultiple.toFixed(3)}x · ${(e.profitableShare * 100).toFixed(0)}% profitable · n=${e.n}`)
     const lo = e.meanMultiple - 1.96 * e.stdErr
     const hi = e.meanMultiple + 1.96 * e.stdErr
     L.push(
-      lo > 1
-        ? '  → positive with statistical support at this sample size.'
-        : hi < 1
-          ? '  → NEGATIVE with statistical support. The strategy is losing money as configured.'
-          : '  → indistinguishable from break-even. Not enough evidence either way yet.',
+      !e.testable
+        ? `  → NO VERDICT from n=${e.n}. A confidence interval needs at least ` +
+          `${config.learning.minBucketSamples} samples that actually differ; below that the ` +
+          'interval collapses to a point and would read as certainty.'
+        : lo > 1
+          ? '  → positive with statistical support at this sample size.'
+          : hi < 1
+            ? '  → NEGATIVE with statistical support. The strategy is losing money as configured.'
+            : '  → indistinguishable from break-even. Not enough evidence either way yet.',
     )
     L.push('  (optimistic: assumes a rung that was touched was also filled)')
     L.push('')
@@ -575,17 +679,27 @@ export function formatReport(a) {
     L.push(`No threshold suggestions yet: ${a.totals.labelled}/${a.minSamples} labelled samples.`)
     L.push('Below that, apparent edges are sampling noise. Let it keep collecting.')
   } else if (!a.suggestions.length) {
-    L.push('No threshold separated winners from losers beyond sampling error.')
-    L.push('That is a real result: it means these features are not predictive here.')
+    L.push('No threshold beat what this scan extracts from pure noise.')
+    if (a.nullDist) {
+      L.push(`  (shuffling the outcomes ${a.nullDist.trials} times, the scan still finds an ` +
+        `apparently "significant" split ${(a.nullDist.falsePositiveRate * 100).toFixed(0)}% of the time —`)
+      L.push('  that is the bar a real finding has to clear, and nothing here did.)')
+    }
+    L.push('That is a real result: these features are not predictive at this sample size.')
   } else {
-    L.push('Thresholds with statistically supported separation:')
+    L.push('Thresholds that beat the noise floor:')
     for (const s of a.suggestions) {
       L.push(`  ${s.feature} ${s.keep} ${s.cut}`)
       L.push(`    keep side ${p(s.keep === '>=' ? s.above : s.below)} vs other ${p(s.keep === '>=' ? s.below : s.above)}`)
+      if (s.nullP95 !== null) {
+        L.push(`    lift ${(s.lift * 100).toFixed(1)}pp vs ${(s.nullP95 * 100).toFixed(1)}pp reachable by chance`)
+      }
     }
     L.push('')
     L.push('These are PROPOSALS. Auto-apply is off by default and should stay off —')
     L.push('tuning a live strategy on its own recent results is how you overfit into a hole.')
+    L.push('The lift shown is measured on the same data that selected the cut, so expect')
+    L.push('it to shrink on fresh data even when the finding is real.')
   }
 
   L.push('')

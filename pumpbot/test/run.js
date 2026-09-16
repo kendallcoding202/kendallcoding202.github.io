@@ -501,7 +501,97 @@ console.log('\nLearning')
   check('an EV estimate is produced', report.ev.bought?.n === 200)
   check('repeat creators are surfaced', report.repeatCreators.length > 0)
 
-  const { formatReport, exitSweep, criticalZ } = await import('../src/learn.js')
+  const { formatReport, exitSweep, criticalZ, permutationNull } = await import('../src/learn.js')
+
+  // ---- audit regressions: fabricated confidence ----
+
+  /**
+   * The worst output this report can produce: maximum certainty from minimum
+   * measurement. At n=1 the variance guard turns an undefined variance into 0, so the
+   * interval collapsed to a point and ONE trade printed "positive with statistical
+   * support" — on the exact line that answers "should I fund this?". Identical rows did
+   * the same at any n. This is the imminent case, not a contrived one: the filter
+   * accepts almost nothing, so the first accepted launch lands here.
+   */
+  const oneWinner = [{
+    v: JOURNAL_VERSION, action: 'bought', decisionPriceSol: 1, features: { organicBuyers: 20 },
+    hitFirstRung: true, peakMultiple: 4, troughMultiple: 0.9, endMultiple: 3, hasOrdering: true, troughFirst: false,
+  }]
+  const manyRejects = Array.from({ length: 60 }, (_, i) => ({
+    v: JOURNAL_VERSION, action: 'explored', decisionPriceSol: 1, features: { organicBuyers: 3 },
+    rejectedFor: ['buyers'], hitFirstRung: false,
+    peakMultiple: 1.05, troughMultiple: 0.1 + (i % 7) / 100, endMultiple: 0.2 + (i % 5) / 100,
+    hasOrdering: true, troughFirst: i % 2 === 0,
+  }))
+  const single = analyze([...oneWinner, ...manyRejects])
+  check('a single sample is marked untestable', single.ev.bought.testable === false)
+  const singleText = formatReport(single)
+  check('one trade does not claim statistical support', !singleText.includes('positive with statistical support'),
+    singleText.split('\n').filter((l) => l.includes('support')).join(' | '))
+  check('it says why instead', singleText.includes('NO VERDICT'))
+  check('and does not print a zero-width interval', !singleText.includes('± 0.000'))
+
+  // Zero variance at a respectable n is the same failure wearing a bigger number.
+  const identical = Array.from({ length: 40 }, () => ({
+    v: JOURNAL_VERSION, action: 'bought', decisionPriceSol: 1, features: { organicBuyers: 9 },
+    hitFirstRung: false, peakMultiple: 1.1, troughMultiple: 0.05, endMultiple: 0.05,
+    hasOrdering: true, troughFirst: false,
+  }))
+  check('40 identical rows are also untestable', analyze(identical).ev.bought.testable === false)
+  check('and draw no verdict', !formatReport(analyze(identical)).includes('with statistical support'))
+
+  /**
+   * The threshold scan tests ~2000 nested cut points and keeps the best. Against pure
+   * noise that reported a "statistically supported" threshold most of the time, so the
+   * old output inverted the truth: finding nothing was the informative event.
+   */
+  let ns = 3
+  const nrand = () => { ns = (ns * 1103515245 + 12345) % 2147483648; return ns / 2147483648 }
+  const pureNoise = Array.from({ length: 300 }, () => ({
+    v: JOURNAL_VERSION, action: 'bought', decisionPriceSol: 1,
+    features: { organicBuyers: Math.floor(nrand() * 40), marketCapSol: 20 + nrand() * 100, buys: Math.floor(nrand() * 60) },
+    hitFirstRung: nrand() < 0.2,
+    peakMultiple: 1 + nrand(), troughMultiple: nrand(), endMultiple: nrand(),
+    hasOrdering: true, troughFirst: nrand() < 0.5,
+  }))
+  const noiseReport = analyze(pureNoise)
+  check('pure noise yields no threshold suggestion', noiseReport.suggestions.length === 0,
+    JSON.stringify(noiseReport.suggestions.map((s) => s.feature + s.keep + s.cut)))
+  check('the noise floor is measured and reported', noiseReport.nullDist?.p95 >= 0)
+  check('the report states how often chance alone would find one',
+    formatReport(noiseReport).includes('% of the time'))
+
+  // The null must be deterministic — a report that changes conclusions when re-run is
+  // not a report.
+  check('the permutation null is reproducible',
+    permutationNull(pureNoise, { trials: 20 }).p95 === permutationNull(pureNoise, { trials: 20 }).p95)
+
+  // ...and genuinely planted signal must still survive the higher bar.
+  const planted = Array.from({ length: 400 }, (_, i) => {
+    const strong = i % 2 === 0
+    return {
+      v: JOURNAL_VERSION, action: 'bought', decisionPriceSol: 1,
+      features: { organicBuyers: strong ? 25 + (i % 10) : 2 + (i % 5) },
+      hitFirstRung: strong ? i % 10 < 8 : i % 10 < 1,
+      peakMultiple: strong ? 2 : 1.05, troughMultiple: 0.5, endMultiple: 1,
+      hasOrdering: true, troughFirst: false,
+    }
+  })
+  check('real signal still clears the noise floor', analyze(planted).suggestions.length > 0)
+
+  /**
+   * The trailing stop measures giveback FROM THE PEAK, so a dip that happened before
+   * the peak cannot trigger it. Treating any low as a trailing exit understated
+   * dip-then-run paths — the modal pump.fun shape — badly enough to turn a profitable
+   * configuration into a "NEGATIVE with statistical support" verdict.
+   */
+  const ranThenGaveBack = { peakMultiple: 2.5, troughMultiple: 1.2, endMultiple: 1.2, hasOrdering: true, troughFirst: false }
+  const dippedThenRanHigh = { peakMultiple: 2.5, troughMultiple: 1.2, endMultiple: 2.5, hasOrdering: true, troughFirst: true }
+  check('a giveback after the peak trails out',
+    simulateLadder(ranThenGaveBack) < simulateLadder(dippedThenRanHigh),
+    `${simulateLadder(ranThenGaveBack)} vs ${simulateLadder(dippedThenRanHigh)}`)
+  check('a dip before the peak does not count as giveback',
+    simulateLadder(dippedThenRanHigh) > simulateLadder({ ...dippedThenRanHigh, hasOrdering: false }))
 
   // ---- counterfactual exit search ----
 
@@ -643,6 +733,63 @@ console.log('\nShadow tracker')
   t.track({ candidate: mk(3), verdict, action: 'rejected' })
   check('eviction stays at capacity', t.size === 3)
   check('eviction drops the oldest', !t.has('M0') && t.has('M1') && t.has('M3'))
+
+  /**
+   * A launch the FILTER approved but the capital gate refused is not a reject.
+   *
+   * canOpen blocks for reasons unrelated to the launch — four positions already open,
+   * the deploy cap, a daily loss limit. Journalling those as 'rejected' put the filter's
+   * own picks into the arm measuring what it turned down, and since rejectedFor is null
+   * for a passing verdict they were invisible in the "what our filter threw away"
+   * breakdown too. With positions held to the 600s time stop, every approved launch in a
+   * ten-minute stretch landed in the wrong column.
+   */
+  {
+    const tb = new ShadowTracker({ windowMs: 60_000, max: 10 })
+    tb.track({
+      candidate: { mint: 'BLK', symbol: 'BLK', creator: 'D', createdAt: Date.now(), priceSol: 1e-7 },
+      verdict: { pass: true, failed: [] },
+      action: 'blocked',
+      blockedBy: 'already holding 4 positions (max 4)',
+    })
+    tb.onTrade({ mint: 'BLK', priceSol: 3e-7 })
+    const blockedRow = tb.finalize('BLK', 'test')
+    check('a capital-gate block is journalled as its own action', blockedRow.action === 'blocked')
+    check('and records why', blockedRow.blockedBy.includes('max 4'))
+
+    const withBlocked = analyze([blockedRow])
+    check('blocked rows count in neither arm',
+      withBlocked.totals.bought === 0 && withBlocked.totals.rejected === 0, JSON.stringify(withBlocked.totals))
+    check('but they are counted and visible', withBlocked.totals.blocked === 1)
+  }
+
+  /**
+   * Every arm is labelled against the SAME yardstick. Rows we traded used to be based on
+   * the fill price — fee, slippage and priority fee baked in, ~9% above mid — while
+   * rejected rows used mid. On an identical price path a bought row had to reach +63% to
+   * count as a winner while a reject needed +50%, so the headline comparison was rigged
+   * against the filter by a constant margin.
+   */
+  {
+    const tp = new ShadowTracker({ windowMs: 60_000, max: 10 })
+    const candidate = { mint: 'BASIS', symbol: 'B', creator: 'D', createdAt: Date.now(), priceSol: 1e-7 }
+    tp.track({ candidate, verdict: { pass: true, failed: [] }, action: 'bought', entryPriceSol: 1.09e-7 })
+    tp.onTrade({ mint: 'BASIS', priceSol: 1.5e-7 })
+    const boughtRow = tp.finalize('BASIS', 'test')
+
+    const tr = new ShadowTracker({ windowMs: 60_000, max: 10 })
+    tr.track({ candidate: { ...candidate, mint: 'BASIS2' }, verdict: { pass: false, failed: [{ id: 'buyers' }] }, action: 'rejected' })
+    tr.onTrade({ mint: 'BASIS2', priceSol: 1.5e-7 })
+    const rejectedRow = tr.finalize('BASIS2', 'test')
+
+    check('both arms use the same price basis',
+      near(boughtRow.peakMultiple, rejectedRow.peakMultiple, 1e-9),
+      `${boughtRow.peakMultiple} vs ${rejectedRow.peakMultiple}`)
+    check('an identical path labels identically in both arms',
+      boughtRow.hitFirstRung === rejectedRow.hitFirstRung && boughtRow.hitFirstRung === true)
+    check('the fill price is still recorded, just not used as the yardstick',
+      near(boughtRow.fillPriceSol, 1.09e-7, 1e-12))
+  }
 
   // Outcome rows record how long they were ACTUALLY watched, so a shortened window
   // cannot pass itself off as a full one.
@@ -975,6 +1122,44 @@ console.log('\nPump.fun log events')
 {
   const { decodeTradeEvent, tradeEventsFromLogs, toFeedEvent, rpcWebsocketUrl,
           TRADE_EVENT_DISCRIMINATOR } = await import('../src/pumpevents.js')
+
+  /**
+   * Market cap has to come off the trade's own reserves.
+   *
+   * Candidate.apply only assigns a market cap when the value is finite, and on the RPC
+   * feed the create event was the ONLY thing that ever carried one — so marketCapSol and
+   * peakMarketCapSol stayed frozen at their t=0 values for the whole observation window.
+   * A fresh curve implies ~28 SOL against a 25-120 band, so the market_cap check passed
+   * every launch: it was not calibrated, it was inert. The bot would also happily buy a
+   * token that had 10x'd during the 30s observation, still believing the cap was 28.
+   */
+  {
+    const { Candidate } = await import('../src/filter.js')
+    const { PUMP_TOTAL_SUPPLY } = await import('../src/config.js')
+    const priced = toFeedEvent({ mint: 'MC', trader: 'T', isBuy: true, solAmount: 5,
+      tokenAmount: 1e6, vSol: 90, vTokens: 9e8 })
+    check('a trade event carries a derived market cap',
+      near(priced.marketCapSol, (90 / 9e8) * PUMP_TOTAL_SUPPLY, 1e-9), String(priced.marketCapSol))
+
+    const c = new Candidate(normalizeEvent({ txType: 'create', mint: 'MC', traderPublicKey: 'DEV',
+      name: 'MCap Dog', symbol: 'MC', initialBuy: 20e6, solAmount: 0.5,
+      vSolInBondingCurve: 30, vTokensInBondingCurve: 1.073e9, marketCapSol: 28 }))
+    check('market cap starts at its deploy-time value', near(c.marketCapSol, 28, 0.5), String(c.marketCapSol))
+
+    // The curve runs hard during the observation window.
+    for (let i = 0; i < 10; i++) {
+      c.apply(toFeedEvent({ mint: 'MC', trader: `B${i}`, isBuy: true, solAmount: 5,
+        tokenAmount: 1e6, vSol: 30 + (i + 1) * 12, vTokens: 1.073e9 }))
+    }
+    check('market cap tracks the curve during observation', c.marketCapSol > 100, String(c.marketCapSol))
+    check('and the peak is recorded', c.peakMarketCapSol >= c.marketCapSol)
+
+    // Which means the band can now actually reject something.
+    const { evaluateEntry } = await import('../src/filter.js')
+    const mcapCheck = evaluateEntry(c).failed?.find((x) => x.id === 'market_cap')
+    check('a run-up token is now rejected on market cap', Boolean(mcapCheck),
+      JSON.stringify(evaluateEntry(c).failed?.map((x) => x.id)))
+  }
   const { createHash } = await import('node:crypto')
   const { PublicKey } = await import('@solana/web3.js')
 
@@ -1264,6 +1449,18 @@ console.log('\nExplore mode')
   store.closePosition('REALLOSS', 'stop-loss')
   check('a real loss still books to the strategy', near(st.totalRealizedSol, -0.025, 1e-9))
   check('a real loss still increments the streak', st.consecutiveLosses === 1)
+
+  /**
+   * Precondition for the guard that stops the experiment vetoing the strategy: a closed
+   * row must carry its explore flag, because that is what bot.js checks before writing
+   * to the creator blocklist. The behavioural test lives in the end-to-end section,
+   * where a real Bot drives the close.
+   */
+  store.addPosition({ mint: 'EXPFLAG', symbol: 'EF', state: 'open', openedAt: Date.now(),
+    creator: 'EXPDEV', solSpent: 0.075, solRecovered: 0.01, tokensRemaining: 0, rungsHit: [], explore: true })
+  const closedFlag = store.closePosition('EXPFLAG', 'stop-loss')
+  check('a closed explore row keeps its explore flag', closedFlag.explore === true)
+  check('and is a loss, which is what would have blocklisted', closedFlag.realizedSol < 0)
 
   // The experiment must stop when its budget is gone. Left unbounded it spent 1.58 SOL
   // from a 0.5 SOL paper account, driving the derived balance negative.
@@ -1683,10 +1880,106 @@ console.log('\nEnd-to-end bot loop')
   check('a ladder winner books a profit', closed && closed.realizedSol > 0, String(closed?.realizedSol))
   check('trade source is reported as the free one', bot.statsSnapshot().tradeSource === 'rpc-logs')
 
+  /**
+   * The experiment must not veto the strategy — driven through the real Bot, because
+   * the guard lives in #manage, not in the store.
+   *
+   * blockCreator had no explore guard, and the blocklist is read only on the strategy
+   * path. Explore buys launches the filter REJECTED, so they lose most of the time —
+   * roughly 90 closes an hour, each permanently blocklisting a deployer. Any later
+   * launch the filter LIKED from one of those creators was then refused, and journalled
+   * as a reject. The thing built to be isolated from the strategy was quietly
+   * adversely-selecting its picks and poisoning the exact comparison the report exists
+   * to make.
+   */
+  {
+    store.getState().blockedCreators = {}
+    const EXPMINT = 'ExploreLoserAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+    store.addPosition({
+      mint: EXPMINT, symbol: 'EXPL', creator: 'SHADYDEV', state: 'open',
+      openedAt: Date.now() - 700_000, entryPriceSol: 2e-7, lastPriceSol: 1e-8, peakPriceSol: 2e-7,
+      lastPriceAt: Date.now(), tokensBought: 1000, tokensRemaining: 1000,
+      solSpent: 0.075, solRecovered: 0, rungsHit: [], fills: [], explore: true,
+      failedChecks: ['buyers'], pool: 'pump', entryVSol: 40, lastVSol: 40, lastVTokens: 9e8,
+    })
+    await bot.tick()
+    check('the explore position closed at a loss',
+      !store.getState().positions[EXPMINT] &&
+      store.getState().closed.at(-1)?.realizedSol < 0,
+      JSON.stringify(store.getState().closed.at(-1)?.realizedSol))
+    check('an explore loss does NOT blocklist the deployer', !store.isCreatorBlocked('SHADYDEV'))
+    check('so the strategy may still take that creator later',
+      canOpen({ mint: 'LaterOne', creator: 'SHADYDEV', walletSol: 1 }) === null,
+      String(canOpen({ mint: 'LaterOne', creator: 'SHADYDEV', walletSol: 1 })))
+
+    // The same loss on a STRATEGY position must still blocklist — the signal is real,
+    // it just has to come from a trade the strategy actually chose.
+    const REALMINT = 'StrategyLoserAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+    store.addPosition({
+      mint: REALMINT, symbol: 'REALL', creator: 'RUGDEV', state: 'open',
+      openedAt: Date.now() - 700_000, entryPriceSol: 2e-7, lastPriceSol: 1e-8, peakPriceSol: 2e-7,
+      lastPriceAt: Date.now(), tokensBought: 1000, tokensRemaining: 1000,
+      solSpent: 0.075, solRecovered: 0, rungsHit: [], fills: [],
+      pool: 'pump', entryVSol: 40, lastVSol: 40, lastVTokens: 9e8,
+    })
+    await bot.tick()
+    check('a strategy loss still blocklists the deployer', store.isCreatorBlocked('RUGDEV'))
+    store.getState().blockedCreators = {}
+  }
+
+
+
   // Stats survive into the dashboard payload.
   const snap = buildSnapshot(0.5, bot.statsSnapshot())
   check('pipeline stats reach the dashboard', snap.pipeline?.creates === 1 && snap.pipeline.entered === 1)
   check('dashboard payload still serialises', typeof JSON.stringify(snap) === 'string')
+
+  /**
+   * A launch the FILTER approved but the capital gate refused must not be journalled as
+   * a reject — driven through the real Bot, because the mislabelling happened in #enter.
+   *
+   * canOpen blocks for reasons unrelated to the launch: four positions already open, the
+   * deploy cap, a daily loss limit, a blocklisted creator. Recording those as 'rejected'
+   * put the filter's OWN PICKS into the arm that measures what it turned down, and since
+   * rejectedFor is null for a passing verdict they were invisible in the "what our filter
+   * threw away" breakdown too. With positions held to the 600s time stop, every approved
+   * launch in a ten-minute stretch landed in the wrong column.
+   */
+  {
+    const st2 = store.getState()
+    st2.positions = {}; st2.halted = null
+    // Fill the strategy position cap so canOpen refuses on exposure, not on the launch.
+    for (let i = 0; i < config.sizing.maxConcurrentPositions; i++) {
+      store.addPosition({ mint: `CAPPED${i}`, symbol: `C${i}`, state: 'open', openedAt: Date.now(),
+        entryPriceSol: 1e-7, lastPriceSol: 1e-7, peakPriceSol: 1e-7, lastPriceAt: Date.now(),
+        tokensBought: 1000, tokensRemaining: 1000, solSpent: 0.075, solRecovered: 0,
+        rungsHit: [], fills: [], pool: 'pump' })
+    }
+
+    const BLOCKED = 'BlockedByCapAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+    const mkC = () => normalizeEvent({ txType: 'create', mint: BLOCKED, traderPublicKey: 'DEV2',
+      name: 'Blocked Dog', symbol: 'BLKD', initialBuy: 20_000_000, solAmount: 0.8,
+      vSolInBondingCurve: curve.vSol, vTokensInBondingCurve: curve.vTokens, marketCapSol: 44 })
+    feed.emit('create', mkC())
+    for (let i = 0; i < 20; i++) {
+      logFeed.emit('trade', normalizeEvent({ txType: 'buy', mint: BLOCKED, traderPublicKey: `QB${i}`,
+        tokenAmount: 1000, solAmount: 0.05, vSolInBondingCurve: curve.vSol,
+        vTokensInBondingCurve: curve.vTokens, marketCapSol: 44 }))
+    }
+    bot.candidates.get(BLOCKED).createdAt -= (config.entry.observeSeconds + 5) * 1000
+    await bot.tick()
+
+    check('the capital gate refused the entry', !store.getState().positions[BLOCKED])
+    const row = bot.shadow.finalize(BLOCKED, 'test')
+    check('a filter-approved launch is journalled as blocked, not rejected',
+      row?.action === 'blocked', JSON.stringify({ action: row?.action, rejectedFor: row?.rejectedFor }))
+    check('and records which gate refused it', typeof row?.blockedBy === 'string' && row.blockedBy.length > 0,
+      String(row?.blockedBy))
+    check('so it lands in neither arm of the comparison',
+      analyze([row]).totals.bought === 0 && analyze([row]).totals.rejected === 0)
+
+    st2.positions = {}
+  }
 
 
   // Regression: explore positions once counted toward MAX_CONCURRENT_POSITIONS in

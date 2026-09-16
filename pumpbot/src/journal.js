@@ -134,7 +134,7 @@ export class ShadowTracker {
     this.rows = new Map() // mint -> pending row
   }
 
-  track({ candidate, verdict, action, entryPriceSol }) {
+  track({ candidate, verdict, action, entryPriceSol, blockedBy = null }) {
     if (this.rows.size >= this.max) {
       /**
        * Drop the oldest rather than refuse — recent data is more representative.
@@ -148,7 +148,21 @@ export class ShadowTracker {
       if (oldest !== undefined) this.finalize(oldest, 'evicted')
     }
 
-    const price = entryPriceSol ?? candidate.priceSol
+    /**
+     * EVERY row is labelled against the same yardstick: the mid price off the curve.
+     *
+     * Rows we traded used to be based on the FILL price, which bakes in the trade fee,
+     * half the slippage tolerance and the priority fee — about 9% above mid on a 0.075
+     * SOL buy. Rejected rows used mid. So on an identical price path, a bought row had
+     * to reach +63% to be scored a winner while a rejected row only needed +50%, and
+     * the headline "did the filter pick better?" comparison was rigged against the
+     * filter by a constant margin. Worse, 'explored' rows count in the rejected arm, so
+     * that arm mixed both bases.
+     *
+     * The fill price is still recorded — as its own field, for P&L — but it is not what
+     * the outcome label is measured from.
+     */
+    const price = candidate.priceSol ?? entryPriceSol
     this.rows.set(candidate.mint, {
       v: JOURNAL_VERSION,
       mint: candidate.mint,
@@ -156,7 +170,12 @@ export class ShadowTracker {
       creator: candidate.creator,
       decidedAt: Date.now(),
       createdAt: candidate.createdAt,
-      action, // 'bought' | 'rejected'
+      action, // 'bought' | 'explored' | 'rejected' | 'blocked'
+      // Why the capital gate refused a launch the FILTER approved. Present only for
+      // action 'blocked', which belongs to neither arm of the comparison.
+      blockedBy,
+      // What we actually paid, kept apart from the yardstick above.
+      fillPriceSol: entryPriceSol ?? null,
       rejectedFor: verdict?.pass ? null : verdict?.failed?.map((c) => c.id) ?? null,
       features: featuresOf(candidate),
       decisionPriceSol: price,

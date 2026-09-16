@@ -1,5 +1,5 @@
 import { PublicKey } from '@solana/web3.js'
-import { config, LAMPORTS_PER_SOL, PUMP_DECIMALS } from './config.js'
+import { config, LAMPORTS_PER_SOL, PUMP_DECIMALS, PUMP_TOTAL_SUPPLY } from './config.js'
 import { log } from './log.js'
 
 /**
@@ -113,7 +113,17 @@ export function toFeedEvent(trade) {
     solAmount: trade.solAmount,
     tokenAmount: trade.tokenAmount,
     traderTokenBalance: undefined, // not in the event; dev holdings tracked by delta
-    marketCapSol: undefined,
+    /**
+     * Derived, not left undefined. Candidate.apply only assigns market cap when the
+     * value is finite, and on the RPC feed the create event is the ONLY thing that ever
+     * carried one — so marketCapSol and peakMarketCapSol were frozen at their t=0 values
+     * for the whole observation window. A fresh curve implies ~28 SOL and the band is
+     * 25-120, so the market_cap check passed every launch: it was not calibrated, it was
+     * inert. It also meant the bot would happily buy a token that 10x'd during the 30s
+     * observation, still believing the cap was 28.
+     */
+    marketCapSol:
+      trade.vTokens > 0 ? (trade.vSol / trade.vTokens) * PUMP_TOTAL_SUPPLY : undefined,
     vSol: trade.vSol,
     vTokens: trade.vTokens,
     pool: 'pump',
