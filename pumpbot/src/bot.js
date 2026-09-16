@@ -382,8 +382,30 @@ export class Bot {
       }
     }
 
-    if (this.stopping || getState().halted) return
+    if (this.stopping) return
     if (this.candidates.has(event.mint)) return
+
+    /**
+     * A HALT STOPS TRADING, NOT LEARNING.
+     *
+     * This used to return early when halted, which killed the entire pipeline: no
+     * candidates, so nothing observed, nothing screened, nothing shadow-tracked, and
+     * `interested()` false for every mint so the trade feed decoded tens of thousands of
+     * events and kept none. The dashboard read "312 launches · 0 observing · 0 screened"
+     * — a bot that looks alive and is learning nothing. Worse, a halt is exactly when
+     * you most want the data: it is the moment you need evidence about whether the
+     * strategy deserves to be restarted.
+     *
+     * Entry is still blocked — canOpen checks `halted` first and nothing gets past it.
+     * What continues is observation, screening and journalling, all of which are free.
+     */
+    if (getState().halted && !this.haltedNoticeShown) {
+      this.haltedNoticeShown = true
+      log.warn(
+        `HALTED (${getState().halted.reason}) — still observing and journalling, ` +
+          'but taking no positions. Clear it with /resume in Telegram.',
+      )
+    }
 
     /**
      * Observing is deliberately NOT gated on how many positions are open.

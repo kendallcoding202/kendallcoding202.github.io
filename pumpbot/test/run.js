@@ -338,10 +338,14 @@ console.log('\nRisk gates')
   check('the daily loss limit stops trading', canOpen({ mint: 'N3', creator: 'C', walletSol: 0.5 })?.includes('daily loss'))
 
   s.daily = {}
+  // Wallet and realized P&L must agree: losing 0.35 from a 0.5 SOL start leaves 0.15.
+  // `observed = wallet + deployed - realized` is invariant under trading precisely
+  // because of that, which is what makes it a deposit detector rather than a loss
+  // detector — so an inconsistent fixture reads as a top-up and re-anchors the limits.
   s.totalRealizedSol = -0.35
-  const blocked = canOpen({ mint: 'N4', creator: 'C', walletSol: 0.5 })
+  const blocked = canOpen({ mint: 'N4', creator: 'C', walletSol: 0.15 })
   check('the total loss limit halts the bot', blocked === 'total loss limit reached' && Boolean(s.halted), String(blocked))
-  check('a halt blocks everything after it', canOpen({ mint: 'N5', creator: 'C', walletSol: 1 })?.startsWith('halted'))
+  check('a halt blocks everything after it', canOpen({ mint: 'N5', creator: 'C', walletSol: 0.15 })?.startsWith('halted'))
   store.clearHalt()
 
   /**
@@ -389,6 +393,52 @@ console.log('\nRisk gates')
   const onBadRead = canOpen({ mint: 'G5', creator: 'C', walletSol: 0 })
   check('a zero balance reading does not trip the drawdown halt', !s.halted, String(onBadRead))
   check('it is refused for the ordinary reason instead', String(onBadRead).includes('below'), String(onBadRead))
+
+  /**
+   * TOPPING THE ACCOUNT UP MUST RE-ANCHOR THE LIMITS.
+   *
+   * The anchor is set from `wallet + deployed - realized`, which trading cannot move —
+   * a loss reduces the wallet and increases |realized| by the same amount. Only money in
+   * or out changes it, which is what makes it a deposit detector.
+   *
+   * Anchoring once and never revisiting meant a stale anchor outlived the account it
+   * described: raising the paper book 0.5 -> 50 SOL left the limits denominated in the
+   * old account, so the bot halted after 0.36 SOL of losses — 0.7% of its balance — and
+   * the raise accomplished nothing.
+   */
+  s.daily = {}; s.totalRealizedSol = 0; s.peakRealizedSol = 0; store.clearHalt()
+  s.baseEquitySol = 0.5 // left behind by the 0.5 SOL era
+  s.totalRealizedSol = -0.36
+  check('a top-up re-anchors instead of halting on the old limit',
+    canOpen({ mint: 'T1', creator: 'C', walletSol: 50 }) === null && !s.halted,
+    String(canOpen({ mint: 'T1', creator: 'C', walletSol: 50 })))
+  check('the anchor moved to the new account size', near(s.baseEquitySol, 50 + 0.36, 1e-9), String(s.baseEquitySol))
+
+  /**
+   * And a halt raised against the OLD size is cleared, because it is no longer a true
+   * statement about this account. The rule re-decides immediately, so a breach that is
+   * real at the new size halts again in the same call.
+   */
+  s.baseEquitySol = 0.5; s.peakRealizedSol = 0; s.totalRealizedSol = -0.36
+  store.halt('realized drawdown 0.3600 SOL from peak equity 0.5000 SOL (limit 0.3500 SOL)', 'drawdown')
+  check('a stale drawdown halt is cleared on a top-up',
+    canOpen({ mint: 'T2', creator: 'C', walletSol: 50 }) === null && !s.halted,
+    String(canOpen({ mint: 'T2', creator: 'C', walletSol: 50 })))
+
+  // A halt a human asked for is never cleared automatically.
+  s.baseEquitySol = 0.5; s.totalRealizedSol = -0.36
+  store.halt('paused from Telegram', 'manual')
+  check('a manual halt survives a top-up',
+    String(canOpen({ mint: 'T3', creator: 'C', walletSol: 50 })).startsWith('halted') && Boolean(s.halted))
+  store.clearHalt()
+
+  // A breach that is still real at the new size must still halt.
+  s.baseEquitySol = 0; s.peakRealizedSol = 0; s.totalRealizedSol = 0
+  canOpen({ mint: 'T4', creator: 'C', walletSol: 50 })       // anchor at 50
+  s.totalRealizedSol = -40                                    // lose 80% of it
+  check('a genuine breach at the new size still halts',
+    canOpen({ mint: 'T5', creator: 'C', walletSol: 10 }) === 'total loss limit reached' && Boolean(s.halted))
+  store.clearHalt()
 
   s.daily = {}; s.totalRealizedSol = 0; s.baseEquitySol = 0; s.peakRealizedSol = 0
   store.clearHalt()
@@ -1913,6 +1963,8 @@ console.log('\nEnd-to-end bot loop')
   check('a ladder winner books a profit', closed && closed.realizedSol > 0, String(closed?.realizedSol))
   check('trade source is reported as the free one', bot.statsSnapshot().tradeSource === 'rpc-logs')
 
+
+
   /**
    * The experiment must not veto the strategy — driven through the real Bot, because
    * the guard lives in #manage, not in the store.
@@ -1966,6 +2018,45 @@ console.log('\nEnd-to-end bot loop')
   const snap = buildSnapshot(0.5, bot.statsSnapshot())
   check('pipeline stats reach the dashboard', snap.pipeline?.creates === 1 && snap.pipeline.entered === 1)
   check('dashboard payload still serialises', typeof JSON.stringify(snap) === 'string')
+
+  /**
+   * A HALT STOPS TRADING, NOT LEARNING.
+   *
+   * #onCreate used to return early when halted, which killed the whole pipeline: no
+   * candidates, nothing observed or screened, nothing shadow-tracked, and interested()
+   * false for every mint so the feed decoded tens of thousands of trades and kept none.
+   * The dashboard read "312 launches · 0 observing · 0 screened" — alive, and learning
+   * nothing. A halt is precisely when the evidence matters most, because it is when you
+   * are deciding whether to start again.
+   */
+  {
+    const st3 = store.getState()
+    st3.positions = {}
+    // 'manual' so the re-anchor cannot clear it — this test is about observation
+    // continuing while halted, not about which halts are stale.
+    store.halt('test halt', 'manual')
+    const HALTMINT = 'HaltedButWatchingAAAAAAAAAAAAAAAAAAAAAAAAAA'
+    feed.emit('create', normalizeEvent({ txType: 'create', mint: HALTMINT, traderPublicKey: 'DEV3',
+      name: 'Halted Dog', symbol: 'HALT', initialBuy: 20_000_000, solAmount: 0.8,
+      vSolInBondingCurve: curve.vSol, vTokensInBondingCurve: curve.vTokens, marketCapSol: 44 }))
+    check('a halted bot still observes new launches', bot.candidates.has(HALTMINT))
+    check('and still subscribes to their trades', feed.watched.has(HALTMINT))
+
+    for (let i = 0; i < 20; i++) {
+      logFeed.emit('trade', normalizeEvent({ txType: 'buy', mint: HALTMINT, traderPublicKey: `HB${i}`,
+        tokenAmount: 1000, solAmount: 0.05, vSolInBondingCurve: curve.vSol,
+        vTokensInBondingCurve: curve.vTokens, marketCapSol: 44 }))
+    }
+    bot.candidates.get(HALTMINT).createdAt -= (config.entry.observeSeconds + 5) * 1000
+    await bot.tick()
+
+    check('it still screens them', bot.statsSnapshot().screened > 0)
+    check('it still journals the outcome for learning', bot.shadow.has(HALTMINT))
+    check('but takes no position', !store.getState().positions[HALTMINT])
+    check('and the block reason is the halt', String(canOpen({ mint: 'ANY', creator: 'C', walletSol: 50 })).startsWith('halted'))
+
+    store.clearHalt()
+  }
 
   /**
    * A launch the FILTER approved but the capital gate refused must not be journalled as

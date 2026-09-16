@@ -175,10 +175,12 @@ export function blockCreator(creator, reason) {
 
 export const isCreatorBlocked = (creator) => Boolean(creator && getState().blockedCreators[creator])
 
-export function halt(reason) {
+export function halt(reason, kind = 'manual') {
   const s = getState()
   if (s.halted) return s.halted
-  s.halted = { at: Date.now(), reason }
+  // `kind` lets a halt raised by a limit that no longer applies be distinguished from
+  // one a human asked for. Only the former is ever cleared automatically.
+  s.halted = { at: Date.now(), reason, kind }
   save()
   log.error(`HALTED: ${reason}`)
   return s.halted

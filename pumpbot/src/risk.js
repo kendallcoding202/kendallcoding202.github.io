@@ -1,7 +1,15 @@
 import { config } from './config.js'
-import { getState, strategyPositions, deployedSol, todayPnl, isCreatorBlocked, halt } from './store.js'
+import {
+  getState,
+  strategyPositions,
+  deployedSol,
+  todayPnl,
+  isCreatorBlocked,
+  halt,
+  clearHalt,
+} from './store.js'
 import { buySolFor, maxDeployedFor, sizingSummary } from './sizing.js'
-import { sol } from './log.js'
+import { log, sol } from './log.js'
 
 /**
  * Equity used by the drawdown breaker, derived from OUR LEDGER rather than from a live
@@ -21,10 +29,45 @@ import { sol } from './log.js'
  */
 function equityBasis(walletSol) {
   const s = getState()
-  // Anchor the account size once, from the first trustworthy reading we ever see.
-  if (!(s.baseEquitySol > 0)) {
-    const observed = (Number.isFinite(walletSol) ? walletSol : 0) + deployedSol() - s.totalRealizedSol
-    if (observed > 0) s.baseEquitySol = observed
+
+  /**
+   * `observed` is what the account started with, backed out of where it is now. Trading
+   * cannot move it: a loss reduces the wallet and increases |totalRealized| by the same
+   * amount, so the two cancel. Only money coming IN or OUT changes it.
+   *
+   * That makes it a deposit detector, and it has to be one. Anchoring once and never
+   * revisiting meant a stale anchor outlived the account it described: raising the paper
+   * book from 0.5 to 50 SOL left the limits denominated in the old account, so the bot
+   * halted permanently after 0.36 SOL of losses — 0.7% of its balance — and the whole
+   * point of the raise was lost. The same thing happens in live the first time you top up
+   * a wallet.
+   */
+  const observed = (Number.isFinite(walletSol) ? walletSol : 0) + deployedSol() - s.totalRealizedSol
+  const stored = s.baseEquitySol ?? 0
+  if (observed > 0 && (!(stored > 0) || Math.abs(observed - stored) > Math.max(0.02, stored * 0.05))) {
+    if (stored > 0) {
+      log.warn(
+        `account size changed ${sol(stored)} → ${sol(observed)} — re-anchoring the drawdown ` +
+          'limits to the new balance',
+      )
+    }
+    s.baseEquitySol = observed
+    /**
+     * A drawdown halt raised against the OLD account size is no longer a true statement
+     * about this one — "0.36 SOL from a 0.5 SOL peak" says nothing about a 50 SOL book.
+     * Topping an account up is a decision to continue, so the stale halt is cleared and
+     * the rule below immediately re-decides against the new base. If the breach is real
+     * at the new size it halts again in this same call, so this can only ever un-stick a
+     * limit that has genuinely stopped applying. A halt someone asked for is never
+     * touched.
+     */
+    // Only a genuine TOP-UP clears a halt, never a shrink. In live the wallet drifts
+    // down as fees are paid that realized P&L does not capture, and that slow leak must
+    // never accumulate into permission to trade again.
+    if (observed > stored * 1.25 && s.halted?.kind === 'drawdown') {
+      log.warn(`clearing a halt raised against the old account size: ${s.halted.reason}`)
+      clearHalt()
+    }
   }
   const base = s.baseEquitySol ?? 0
   if (!(base > 0)) return null // nothing trustworthy to measure against yet
@@ -44,6 +87,14 @@ export function canOpen({ mint, creator, walletSol }) {
   const s = getState()
   const { sizing, risk } = config
 
+  /**
+   * Equity FIRST, before the halt check — because re-anchoring can clear a halt that was
+   * raised against an account size which no longer exists. Checking `halted` first
+   * returned early and left the stale halt in place forever, which is the state a
+   * topped-up account would have been stuck in.
+   */
+  const equity = equityBasis(walletSol)
+
   if (s.halted) return `halted: ${s.halted.reason}`
 
   /**
@@ -58,7 +109,6 @@ export function canOpen({ mint, creator, walletSol }) {
    * 0.5 SOL start the two are equal by construction, so today's behaviour is unchanged —
    * and lets the percentage take over as the account grows.
    */
-  const equity = equityBasis(walletSol)
   const lossFromPeak = Math.max(0, (equity ? (s.peakRealizedSol ?? 0) : 0) - s.totalRealizedSol)
   const totalLimit = Math.max(
     risk.totalLossLimitSol,
@@ -68,6 +118,7 @@ export function canOpen({ mint, creator, walletSol }) {
     halt(
       `realized drawdown ${sol(lossFromPeak)}${equity ? ` from peak equity ${sol(equity.peak)}` : ''} ` +
         `(limit ${sol(totalLimit)})`,
+      'drawdown',
     )
     return 'total loss limit reached'
   }
