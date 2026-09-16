@@ -209,7 +209,7 @@ export class Bot {
     const pubkey = getPublicKey().toBase58()
 
     if (config.paper) {
-      this.paperStartSol = Number(process.env.PAPER_START_SOL ?? 0.5)
+      this.paperStartSol = config.paperStartSol
       this.walletSol = paperWalletSol(this.paperStartSol)
     } else {
       this.walletSol = await getSolBalance()

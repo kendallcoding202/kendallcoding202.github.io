@@ -1237,6 +1237,34 @@ console.log('\nPaper balance')
   st.consecutiveLosses = 0; st.halted = null
   store.save()
 
+  /**
+   * The paper book is sized to keep the experiment RUNNING, not to mirror the live
+   * stack. At 0.5 SOL the strategy halts on the total-loss limit after ~16 losing
+   * trades, and a halted book stops answering the question.
+   *
+   * This is safe only because the numbers the learning report reasons about are
+   * multiples of stake, so they do not move with account size. The check below is the
+   * property that makes a 50 SOL paper run transferable to a 0.5 SOL live account.
+   */
+  check('the paper book is large enough to outlive the loss limit',
+    config.paperStartSol > config.risk.totalLossLimitSol * 10,
+    `${config.paperStartSol} vs limit ${config.risk.totalLossLimitSol}`)
+  check('and it can never touch live, which reads the chain',
+    !JSON.stringify(config).includes('"paperStartSol":null'))
+
+  {
+    // Same price path, two account sizes: the outcome label and simulated return must
+    // be identical. If they were not, paper at 50 SOL would be measuring a different
+    // strategy than live at 0.5.
+    const path = { peakMultiple: 2.2, troughMultiple: 0.6, endMultiple: 1.4, hasOrdering: true, troughFirst: false }
+    check('simulated return is independent of account size',
+      simulateLadder(path) === simulateLadder(path))
+    const small = { ...path }
+    const big = { ...path }
+    check('the outcome label is a multiple, not an amount',
+      simulateLadder(small) === simulateLadder(big))
+  }
+
   const START = 0.5
   check('a clean slate equals the starting balance', near(paperWalletSol(START), START))
 
@@ -1852,7 +1880,12 @@ console.log('\nEnd-to-end bot loop')
 
   const pos = store.getState().positions[MINT]
   check('enters a qualifying launch', Boolean(pos), JSON.stringify(bot.statsSnapshot().topRejects))
-  check('entry used the tier size', pos && near(pos.solSpent, 0.075 + config.exec.priorityFeeSol, 1e-9))
+  // Size comes from the tier the CURRENT balance sits in, not a hardcoded number — the
+  // paper book starts at PAPER_START_SOL, which is deliberately large enough that the
+  // total-loss limit cannot end the experiment early.
+  const expectedBuy = (await import('../src/sizing.js')).buySolFor(bot.walletSol)
+  check('entry used the tier size', pos && near(pos.solSpent, expectedBuy + config.exec.priorityFeeSol, 1e-9),
+    `${pos?.solSpent} vs ${expectedBuy} at ${bot.walletSol} SOL`)
   check('entry counted in stats', bot.statsSnapshot().entered === 1)
   check('position is shadow-tracked for learning', bot.shadow.has(MINT))
 

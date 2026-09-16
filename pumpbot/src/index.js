@@ -227,7 +227,7 @@ function doKeygen() {
 
 async function balance() {
   const pubkey = getPublicKey().toBase58()
-  const bal = config.paper ? Number(process.env.PAPER_START_SOL ?? 0.5) : await getSolBalance()
+  const bal = config.paper ? config.paperStartSol : await getSolBalance()
   const s = sizingSummary(bal)
   console.log('')
   console.log(`  Wallet   ${pubkey}`)

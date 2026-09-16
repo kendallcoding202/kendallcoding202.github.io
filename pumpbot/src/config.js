@@ -128,6 +128,24 @@ export const config = {
     costWarnSol: num('FEED_COST_WARN_SOL', 0.02),
   },
 
+  /**
+   * Starting balance for the PAPER strategy book. No effect whatsoever in live mode,
+   * which reads the real chain balance — this number cannot put a single lamport at
+   * risk.
+   *
+   * Sized for running an experiment, not for mirroring the live stack. At 0.5 SOL the
+   * strategy book halts on the total-loss limit after roughly sixteen losing trades,
+   * which stops data collection an hour or two in — and a halted book is a book that
+   * stops answering the question. The per-trade figures the learning report actually
+   * reasons about (peakMultiple, hitFirstRung, simulated ladder return) are MULTIPLES OF
+   * STAKE, so they are scale-invariant: the filter verdict from a 50 SOL paper run
+   * carries over to a 0.5 SOL live account unchanged.
+   *
+   * What does NOT carry over is absolute P&L and the size tier — 50 SOL sits in the top
+   * tier, so paper trades 0.15 while a 0.5 SOL live account would trade 0.075.
+   */
+  paperStartSol: num('PAPER_START_SOL', 50),
+
   // How often the pipeline summary prints. The first beat always comes early so you
   // get confirmation the feed is alive without waiting a full interval.
   heartbeatSeconds: num('HEARTBEAT_SECONDS', 60),
