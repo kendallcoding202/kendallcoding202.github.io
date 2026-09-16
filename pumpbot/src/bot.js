@@ -13,6 +13,7 @@ import {
   addPosition,
   closePosition,
   openPositions,
+  explorePositions,
   blockCreator,
   halt,
   logActivity,
@@ -87,6 +88,10 @@ export class Bot {
       // Reset each heartbeat so the log shows rate, not just a running total.
       sinceBeat: { messages: 0, creates: 0, screened: 0, entered: 0 },
       costWarned: false,
+      // Explore sampling, counted rather than inferred. See #shouldExplore.
+      exploreOffered: 0,
+      exploreTaken: 0,
+      exploreSkips: { disabled: 0, unpriceable: 0, concurrency: 0, noTradeData: 0, bankroll: 0, sampledOut: 0 },
       uptimeHours() {
         return this.startedAt ? (Date.now() - this.startedAt) / 3_600_000 : 0
       },
@@ -108,6 +113,13 @@ export class Bot {
       explored: s.explored,
       watching: this.candidates.size,
       shadowTracked: this.shadow?.size ?? 0,
+      explore: {
+        enabled: config.explore.enabled,
+        sampleRate: config.explore.sampleRate,
+        offered: s.exploreOffered,
+        taken: s.exploreTaken,
+        skips: { ...s.exploreSkips },
+      },
       parsing: s.firstParsedAt !== null,
       uptimeSeconds: s.startedAt ? Math.round((Date.now() - s.startedAt) / 1000) : 0,
       topRejects: [...s.rejects.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([id, n]) => ({ id, n })),
@@ -610,9 +622,34 @@ export class Bot {
 
   #shouldExplore(verdict) {
     const e = config.explore
-    if (!e.enabled) return false
-    if (verdict.failed.some((c) => e.neverRelax.includes(c.id))) return false
-    if (openPositions().length >= e.maxConcurrent) return false
+    /**
+     * Every rejected candidate is OFFERED to the sampler, and each outcome is counted.
+     *
+     * Without this, "explored: 0" is unreadable: at a 25% sample rate four rejects
+     * produce no explore trade about a third of the time, so zero is equally consistent
+     * with healthy sampling and with the experiment being switched off, parked or
+     * starved. The counters below say which, instead of leaving it to be inferred from
+     * the outcome — the one habit that has resolved every silent failure in this bot.
+     */
+    this.stats.exploreOffered++
+    if (!e.enabled) {
+      this.stats.exploreSkips.disabled++
+      return false
+    }
+    if (verdict.failed.some((c) => e.neverRelax.includes(c.id))) {
+      this.stats.exploreSkips.unpriceable++
+      return false
+    }
+    /**
+     * Count EXPLORE positions, not every open position. The two books are separate
+     * money, and mixing them here let strategy positions eat the experiment's slots —
+     * the same class of bug that once deadlocked observation, where explore positions
+     * consumed the strategy's limit and the bot stopped watching launches entirely.
+     */
+    if (explorePositions().length >= e.maxConcurrent) {
+      this.stats.exploreSkips.concurrency++
+      return false
+    }
 
     /**
      * Without trade data every explore position is a forced blind exit at fee cost —
@@ -625,6 +662,7 @@ export class Bot {
         this.stats.exploreParked = true
         log.warn('exploration paused — no trade data, so explore trades can only lose fees')
       }
+      this.stats.exploreSkips.noTradeData++
       return false
     }
     this.stats.exploreParked = false
@@ -645,13 +683,17 @@ export class Bot {
           this.stats.exploreBudgetHit = true
           log.warn(`exploration paused — ${sol(left)} left of its ${sol(e.budgetSol)} bankroll`)
         }
+        this.stats.exploreSkips.bankroll++
         return false
       }
       // Recoverable: positions close and free capital, unlike the old one-way latch.
       this.stats.exploreBudgetHit = false
     }
 
-    return Math.random() < e.sampleRate
+    const take = Math.random() < e.sampleRate
+    if (take) this.stats.exploreTaken++
+    else this.stats.exploreSkips.sampledOut++
+    return take
   }
 
   async #enter(candidate, verdict, { explore = false } = {}) {

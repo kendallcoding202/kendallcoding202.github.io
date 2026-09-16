@@ -1561,6 +1561,49 @@ console.log('\nExplore mode')
     for (let i = 0; i < 200; i++) if (b.explorePermitted(verdict)) { any = true; break }
     check('explores when data flows and budget remains', any)
 
+    /**
+     * Every decision is counted, so "explored: 0" can be read rather than inferred. At a
+     * 25% rate four rejects produce no explore trade about a third of the time, which
+     * makes zero equally consistent with healthy sampling and with the experiment being
+     * off, parked or starved.
+     */
+    b.stats.exploreOffered = 0; b.stats.exploreTaken = 0
+    b.stats.exploreSkips = { disabled: 0, unpriceable: 0, concurrency: 0, noTradeData: 0, bankroll: 0, sampledOut: 0 }
+    for (let i = 0; i < 200; i++) b.explorePermitted(verdict)
+    const xs = b.statsSnapshot().explore
+    check('every reject offered to the sampler is counted', xs.offered === 200, String(xs.offered))
+    check('takes plus skips account for all of them',
+      xs.taken + Object.values(xs.skips).reduce((a, n) => a + n, 0) === 200)
+    check('the actual rate lands near the target',
+      Math.abs(xs.taken / xs.offered - config.explore.sampleRate) < 0.12,
+      `${xs.taken}/200 vs target ${config.explore.sampleRate}`)
+    check('and the target is reported for comparison', xs.sampleRate === config.explore.sampleRate)
+
+    // A blocked sampler must say WHY, not just decline.
+    const realMax = config.explore.maxConcurrent
+    config.explore.maxConcurrent = 0
+    b.stats.exploreSkips.concurrency = 0
+    b.explorePermitted(verdict)
+    check('a concurrency block is attributed', b.stats.exploreSkips.concurrency === 1)
+    config.explore.maxConcurrent = realMax
+
+    /**
+     * Explore concurrency counts EXPLORE positions only. Mixing the books here let
+     * strategy positions eat the experiment's slots — the same class of bug that once
+     * deadlocked observation.
+     */
+    for (let i = 0; i < 6; i++) {
+      store.addPosition({ mint: `STRAT${i}`, symbol: `S${i}`, state: 'open', openedAt: Date.now(),
+        solSpent: 0.15, solRecovered: 0, tokensRemaining: 1000, rungsHit: [] })
+    }
+    config.explore.maxConcurrent = 4
+    b.stats.exploreSkips.concurrency = 0
+    for (let i = 0; i < 40; i++) b.explorePermitted(verdict)
+    check('strategy positions do not consume explore slots',
+      b.stats.exploreSkips.concurrency === 0, String(b.stats.exploreSkips.concurrency))
+    for (let i = 0; i < 6; i++) delete store.getState().positions[`STRAT${i}`]
+    config.explore.maxConcurrent = realMax
+
     // Unlimited: heavy losses must NOT stop it. This is the point of the experiment —
     // the losses are the tuition, and stopping early is what leaves the report unable
     // to say anything about the launches the filter rejected.

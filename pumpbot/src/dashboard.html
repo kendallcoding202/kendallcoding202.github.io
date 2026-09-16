@@ -454,6 +454,29 @@ function render(d) {
             esc(JSON.stringify(sub.lastSubscribe)) + '</code></span>')
         }
       }
+      /**
+       * "Explored 0" is unreadable on its own — at a 25% rate, four rejects produce no
+       * explore trade about a third of the time, so zero is equally consistent with
+       * healthy sampling and with the experiment being off, parked or starved. Say which.
+       */
+      if (pl.explore) {
+        const x = pl.explore
+        if (!x.enabled) {
+          rows.push('Explore: <b style="color:var(--amber)">OFF</b> — no trades will be sampled.')
+        } else if (!x.offered) {
+          rows.push('Explore: <code>on</code>, target <code>' + Math.round(x.sampleRate * 100) +
+            '%</code> of rejects · nothing rejected yet, so nothing offered.')
+        } else {
+          const blockers = Object.entries(x.skips)
+            .filter(([k, n]) => n > 0 && k !== 'sampledOut')
+            .map(([k, n]) => '<code>' + esc(k) + ' ×' + n + '</code>')
+          rows.push('Explore sampling: took <code>' + x.taken + '</code> of <code>' + x.offered +
+            '</code> rejects (' + (x.offered ? Math.round((x.taken / x.offered) * 100) : 0) +
+            '% actual vs ' + Math.round(x.sampleRate * 100) + '% target)' +
+            (blockers.length ? ' · blocked by ' + blockers.join(' · ')
+                             : (x.taken ? '' : ' · none blocked, just sampling variance so far')))
+        }
+      }
       if (pl.topRejects && pl.topRejects.length) {
         rows.push('Rejected on: ' + pl.topRejects.map((r) => '<code>' + esc(r.id) + ' ×' + r.n + '</code>').join(' · '))
       }
