@@ -1,0 +1,15 @@
+---
+description: Do not overlap Claude's Solana tracker session
+alwaysApply: true
+---
+
+# Solana tracker coordination
+
+This checkout is the GitHub Pages repo, not cyber-brief.
+
+Before editing `pumpbot/` or `solana-tracker/`, read `SOLANA-HANDOFF.md` at the repo root.
+
+- Push Cursor work only to `cursor/solana-tracker`.
+- Never push to `claude/solana-meme-coin-tracker-gugfaj` unless Kendall says Claude's session is done.
+- Never force-push. Fetch first. Merge the other branch if it moved.
+- Claude cloud session: https://claude.ai/code/session_014J2AxPGBQb5ayF8k3tqWhN
