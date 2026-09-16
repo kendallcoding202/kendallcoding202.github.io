@@ -467,6 +467,53 @@ console.log('\nRisk gates')
     store.clearHalt()
   }
 
+  /**
+   * THE DEADLOCK: the anchor must be maintained without a trade happening.
+   *
+   * equityBasis used to run only inside canOpen, which is reached from exactly one place
+   * — the non-explore branch of #enter, and only for a candidate that PASSED the filter.
+   * With the filter passing 0 of 314, canOpen was never called, the anchor was never
+   * refreshed, and a stale halt could never clear. The only code that could un-stick the
+   * bot required the bot to already be unstuck.
+   */
+  {
+    const { syncEquityBasis } = await import('../src/risk.js')
+    const s4 = store.getState()
+    s4.halted = { at: Date.now(), reason: 'total realized loss hit -0.3600 SOL', kind: 'drawdown' }
+    s4.baseEquitySol = 0.5; s4.peakRealizedSol = 0; s4.totalRealizedSol = -0.36
+
+    // No entry attempt, no canOpen — just the balance refresh the timer performs.
+    syncEquityBasis(50)
+    check('the anchor updates without any entry attempt', near(s4.baseEquitySol, 50.36, 1e-9), String(s4.baseEquitySol))
+    check('and a stale halt clears without one', !s4.halted, JSON.stringify(s4.halted))
+    store.clearHalt()
+  }
+
+  /**
+   * ...and the bot must actually do that on startup, through its own code path. Calling
+   * syncEquityBasis directly proves the function works; it does not prove anything calls
+   * it, which was the entire bug.
+   */
+  {
+    const { Bot } = await import('../src/bot.js')
+    const { EventEmitter } = await import('node:events')
+    class Quiet extends EventEmitter { start() {} async stop() {} watch() {} unwatch() {} }
+
+    const s5 = store.getState()
+    s5.positions = {}
+    s5.halted = { at: Date.now(), reason: 'total realized loss hit -0.3600 SOL', kind: 'drawdown' }
+    s5.baseEquitySol = 0.5; s5.peakRealizedSol = 0; s5.totalRealizedSol = -0.36
+    store.save()
+
+    const booted = new Bot({ feed: new Quiet(), logFeed: new Quiet() })
+    await booted.start()
+    check('starting up clears a halt left by a smaller account',
+      !store.getState().halted, JSON.stringify(store.getState().halted))
+    check('and re-anchors to the balance it actually has',
+      store.getState().baseEquitySol > 40, String(store.getState().baseEquitySol))
+    await booted.stop()
+  }
+
   store.clearHalt()
 }
 
@@ -2121,7 +2168,38 @@ console.log('\nEnd-to-end bot loop')
 
     check('it still screens them', bot.statsSnapshot().screened > 0)
     check('it still journals the outcome for learning', bot.shadow.has(HALTMINT))
-    check('but takes no position', !store.getState().positions[HALTMINT])
+    check('but takes no STRATEGY position', !store.getState().positions[HALTMINT])
+
+    /**
+     * Explore keeps running through a halt. The halt protects capital; explore risks
+     * none — it is hard-gated to paper and runs on its own bankroll. Stopping it meant
+     * the bot learned nothing at exactly the moment the evidence mattered most.
+     */
+    const EXPHALT = 'ExploreWhileHaltedAAAAAAAAAAAAAAAAAAAAAAAAA'
+    feed.emit('create', normalizeEvent({ txType: 'create', mint: EXPHALT, traderPublicKey: 'DEV9',
+      name: 'Halted Explore', symbol: 'EXH', initialBuy: 20_000_000, solAmount: 0.8,
+      vSolInBondingCurve: curve.vSol, vTokensInBondingCurve: curve.vTokens, marketCapSol: 44 }))
+    // One buyer only, so the filter rejects it and it reaches the explore sampler.
+    logFeed.emit('trade', normalizeEvent({ txType: 'buy', mint: EXPHALT, traderPublicKey: 'ONE',
+      tokenAmount: 1000, solAmount: 0.05, vSolInBondingCurve: curve.vSol,
+      vTokensInBondingCurve: curve.vTokens, marketCapSol: 44 }))
+    bot.candidates.get(EXPHALT).createdAt -= (config.entry.observeSeconds + 5) * 1000
+
+    const realRate = config.explore.sampleRate
+    config.explore.sampleRate = 1 // take it deterministically rather than 1-in-4
+    const exploredBefore = bot.statsSnapshot().explored
+    await bot.tick()
+    config.explore.sampleRate = realRate
+
+    check('explore still trades while the strategy is halted',
+      bot.statsSnapshot().explored > exploredBefore,
+      JSON.stringify(bot.statsSnapshot().explore))
+    check('and the position is booked to the explore side',
+      store.getState().positions[EXPHALT]?.explore === true)
+    check('no sampled explore trade was refused at entry',
+      bot.statsSnapshot().explore.blockedEntries === 0,
+      String(bot.statsSnapshot().explore.blockReason))
+    delete store.getState().positions[EXPHALT]
     check('and the block reason is the halt', String(canOpen({ mint: 'ANY', creator: 'C', walletSol: 50 })).startsWith('halted'))
 
     store.clearHalt()

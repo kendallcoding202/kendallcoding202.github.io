@@ -3,7 +3,7 @@ import { Feed } from './feed.js'
 import { LogFeed } from './logfeed.js'
 import { Candidate, evaluateEntry } from './filter.js'
 import { buy, sell } from './exec.js'
-import { canOpen, riskSummary, rolloverDaily } from './risk.js'
+import { canOpen, riskSummary, rolloverDaily, syncEquityBasis } from './risk.js'
 import { buySolFor, tierFor, sizingSummary } from './sizing.js'
 import { ShadowTracker, saveShadow, loadShadow } from './journal.js'
 import {
@@ -240,6 +240,9 @@ export class Bot {
     }
 
     this.lastTierFloor = tierFor(this.walletSol).minEquitySol
+    // Before anything else reads the risk state: re-anchor to the balance we actually
+    // have, which is what lets a halt raised against a different account size go stale.
+    syncEquityBasis(this.walletSol)
     const summary = riskSummary(this.walletSol)
 
     log.info(`starting in ${config.paper ? 'PAPER' : 'LIVE'} mode as ${pubkey} · build ${config.version}`)
@@ -364,10 +367,12 @@ export class Bot {
     if (config.paper) {
       // Recomputed rather than trusted, so any drift corrects itself every minute.
       this.walletSol = paperWalletSol(this.paperStartSol)
+      syncEquityBasis(this.walletSol)
       return
     }
     const before = this.walletSol
     this.walletSol = await getSolBalance()
+    syncEquityBasis(this.walletSol)
 
     // Announce a tier change in either direction — size going down matters more.
     const floor = tierFor(this.walletSol).minEquitySol
@@ -709,12 +714,23 @@ export class Bot {
     // Explore trades are paper-only and exist to gather data, so the exposure caps that
     // protect real capital do not apply — but a halt still does, and so does not
     // double-buying the same mint.
+    /**
+     * A HALT DOES NOT STOP EXPLORE.
+     *
+     * The halt is a circuit breaker protecting capital, and explore risks none: it is
+     * hard-gated to paper, runs on its own notional bankroll, and exists purely to
+     * measure whether the filter is right. Blocking it meant the bot stopped learning at
+     * the exact moment the evidence mattered most — when you are deciding whether the
+     * strategy is salvageable. It is the same reasoning that keeps observation and
+     * journalling alive through a halt.
+     *
+     * Strategy entries are still refused; canOpen checks `halted` first and nothing gets
+     * past it. In live, explore is disabled outright, so this can never move real money.
+     */
     const blocked = explore
-      ? getState().halted
-        ? `halted: ${getState().halted.reason}`
-        : getState().positions[mint]
-          ? 'already holding this mint'
-          : null
+      ? getState().positions[mint]
+        ? 'already holding this mint'
+        : null
       : canOpen({ mint, creator: candidate.creator, walletSol: this.walletSol })
 
     if (blocked) {

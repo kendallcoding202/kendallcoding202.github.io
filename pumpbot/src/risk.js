@@ -27,6 +27,20 @@ import { log, sol } from './log.js'
  * Open positions are excluded — an unrealized dip is not a drawdown yet, and the
  * stop-loss already governs those.
  */
+/**
+ * Keeps the drawdown anchor current, independently of whether anything trades.
+ *
+ * This used to live only inside canOpen, which is reached exactly once — from the
+ * non-explore branch of #enter, and only for a candidate that PASSED the filter. With
+ * the filter passing 0 of 314, canOpen was never called, so the anchor was never
+ * refreshed and a stale halt could never clear: the only code that could un-stick the
+ * bot required the bot to already be unstuck. The balance refresh runs on a timer
+ * regardless, so it belongs there too.
+ */
+export function syncEquityBasis(walletSol) {
+  return equityBasis(walletSol)
+}
+
 function equityBasis(walletSol) {
   const s = getState()
 
