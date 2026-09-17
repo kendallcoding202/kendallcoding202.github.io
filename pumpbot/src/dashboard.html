@@ -594,7 +594,9 @@ function render(d) {
 
   /* ---- learning ---- */
   const lrn = document.getElementById('learning')
-  if (!d.learning) lrn.innerHTML = '<span style="color:var(--dimmer)">learning disabled</span>'
+  if (!d.learning) lrn.innerHTML = d.learningPending
+    ? '<span style="color:var(--dim)">building the first report… (runs off the request path so it cannot stall the bot)</span>'
+    : '<span style="color:var(--dimmer)">learning disabled</span>'
   else {
     const n = d.learning, rows = []
     rows.push('Journal <code>' + n.labelled + '</code> labelled · <code>' + n.pending + '</code> in window · <code>' +

@@ -279,25 +279,59 @@ function numericFeatures(rows) {
  * Scans cut points on one feature and returns the split with the strongest supported
  * separation, or null when nothing clears the noise floor.
  */
-export function bestThreshold(rows, feature, { minBucket = config.learning.minBucketSamples } = {}) {
+export function bestThreshold(rows, feature, { minBucket = config.learning.minBucketSamples, maxCuts = 40 } = {}) {
   const values = rows
     .map((r) => ({ v: r.features?.[feature], hit: r.hitFirstRung }))
     .filter((x) => typeof x.v === 'number' && Number.isFinite(x.v))
   if (values.length < minBucket * 2) return null
 
-  const sorted = [...new Set(values.map((x) => x.v))].sort((a, b) => a - b)
-  if (sorted.length < 3) return null
+  /**
+   * Sort once and sweep with a prefix sum, instead of re-filtering the whole array at
+   * every candidate cut.
+   *
+   * The old version was O(distinct x n) per feature. On continuous features almost every
+   * value is distinct, so that is O(n^2) — and the permutation null runs the entire scan
+   * dozens of times over. Measured on the real shape of this data: 10.4s at 4,000 rows,
+   * SYNCHRONOUS, which blocks the dashboard and the trade feed alike, and the journal
+   * grows by thousands of rows an hour. This is now O(n log n).
+   *
+   * Cuts are capped at `maxCuts` quantiles rather than every distinct value. Adjacent
+   * cut points on a continuous feature produce near-identical splits, so the extra
+   * thousands of hypotheses bought resolution nobody can act on while multiplying the
+   * multiple-comparisons problem the null then has to correct for.
+   */
+  const sorted = [...values].sort((a, b) => a.v - b.v)
+  const n = sorted.length
+  const hitsBefore = new Array(n + 1)
+  hitsBefore[0] = 0
+  for (let i = 0; i < n; i++) hitsBefore[i + 1] = hitsBefore[i] + (sorted[i].hit ? 1 : 0)
 
-  const base = wilson(values.filter((x) => x.hit).length, values.length)
+  const distinct = new Set(values.map((x) => x.v))
+  if (distinct.size < 3) return null
+
+  const base = wilson(hitsBefore[n], n)
   let best = null
 
-  for (const cut of sorted.slice(1, -1)) {
-    const above = values.filter((x) => x.v >= cut)
-    const below = values.filter((x) => x.v < cut)
-    if (above.length < minBucket || below.length < minBucket) continue
+  // Candidate split indices, evenly spaced through the sorted array.
+  const lo = minBucket
+  const hi = n - minBucket
+  if (hi <= lo) return null
+  const step = Math.max(1, Math.floor((hi - lo) / maxCuts))
 
-    const a = wilson(above.filter((x) => x.hit).length, above.length)
-    const b = wilson(below.filter((x) => x.hit).length, below.length)
+  for (let i = lo; i <= hi; i += step) {
+    // Only split between different values, or the two sides are not separable.
+    let split = i
+    while (split < hi && sorted[split].v === sorted[split - 1].v) split++
+    if (split >= hi || split <= lo) continue
+
+    const belowN = split
+    const aboveN = n - split
+    if (belowN < minBucket || aboveN < minBucket) continue
+
+    const belowHits = hitsBefore[split]
+    const aboveHits = hitsBefore[n] - belowHits
+    const b = wilson(belowHits, belowN)
+    const a = wilson(aboveHits, aboveN)
 
     // Only interesting if the better side's lower bound clears the worse side's upper.
     const keepAbove = a.p > b.p
@@ -306,7 +340,7 @@ export function bestThreshold(rows, feature, { minBucket = config.learning.minBu
 
     const lift = Math.abs(a.p - b.p)
     if (!best || lift > best.lift) {
-      best = { feature, cut, keep: keepAbove ? '>=' : '<', above: a, below: b, base, lift }
+      best = { feature, cut: sorted[split].v, keep: keepAbove ? '>=' : '<', above: a, below: b, base, lift }
     }
   }
 
@@ -366,7 +400,11 @@ export function analyze(rows = readAll()) {
    * filter out of nothing but missing data.
    */
   const stale = rows.filter((r) => (r.v ?? 1) < JOURNAL_VERSION).length
-  const current = rows.filter((r) => (r.v ?? 1) >= JOURNAL_VERSION)
+  // Newest first, bounded — see learning.maxRowsAnalyzed.
+  const cap = config.learning.maxRowsAnalyzed
+  const all = rows.filter((r) => (r.v ?? 1) >= JOURNAL_VERSION)
+  const current = cap > 0 && all.length > cap ? all.slice(-cap) : all
+  const olderThanCap = all.length - current.length
   const labelled = current.filter((r) => typeof r.hitFirstRung === 'boolean' && r.decisionPriceSol > 0)
   const bought = labelled.filter((r) => r.action === 'bought')
   const explored = labelled.filter((r) => r.action === 'explored')
@@ -490,6 +528,7 @@ export function analyze(rows = readAll()) {
       blocked: blocked.length,
       pending: current.length - labelled.length,
       truncated,
+      olderThanCap,
       medianObservedSeconds,
       intendedWindowSeconds: config.learning.outcomeWindowMinutes * 60,
     },
@@ -525,6 +564,12 @@ export function formatReport(a) {
   L.push('')
   L.push(`Journalled ${a.totals.journalled} decisions · ${a.totals.labelled} labelled · ${a.totals.pending} still in their outcome window`)
   L.push(`  bought ${a.totals.bought} · rejected (shadow-tracked) ${a.totals.rejected}`)
+  if (a.totals.olderThanCap) {
+    L.push(`  Analysing the most recent ${config.learning.maxRowsAnalyzed} rows; ` +
+      `${a.totals.olderThanCap} older ones are on disk but not in these numbers.`)
+    L.push('  (Raise MAX_ROWS_ANALYZED to widen it — an unbounded scan gets slower forever')
+    L.push('   and ends up describing a week of different market conditions at once.)')
+  }
   if (a.totals.stale) {
     L.push(`  ${a.totals.stale} older rows EXCLUDED — recorded before shadow tokens received prices,`)
     L.push('  so every one of them reads as "went nowhere" whatever the token actually did.')

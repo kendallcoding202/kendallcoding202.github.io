@@ -785,6 +785,24 @@ console.log('\nLearning')
    */
   const staleRows = labelled.map((r) => ({ ...r, v: 1, peakMultiple: 1, endMultiple: 1, hitFirstRung: false }))
   const mixed = analyze([...staleRows, ...labelled])
+  /**
+   * The scan is bounded. The journal is append-only and grows by thousands of rows an
+   * hour, and an uncapped analysis gets slower forever — measured at 22s for 50,000
+   * rows, synchronous, which freezes the dashboard and the trade feed together.
+   */
+  {
+    const realCap = config.learning.maxRowsAnalyzed
+    config.learning.maxRowsAnalyzed = 100
+    const many = Array.from({ length: 400 }, (_, i) => ({ ...labelled[i % labelled.length], creator: 'C' + i }))
+    const capped = analyze(many)
+    check('only the cap is analysed', capped.totals.labelled === 100, String(capped.totals.labelled))
+    check('the rows left out are counted', capped.totals.olderThanCap === 300, String(capped.totals.olderThanCap))
+    check('and the report says so rather than looking like data loss',
+      formatReport(capped).includes('older ones are on disk'))
+    config.learning.maxRowsAnalyzed = realCap
+    check('an uncapped run keeps everything', analyze(labelled).totals.olderThanCap === 0)
+  }
+
   check('older-schema rows are excluded', mixed.totals.labelled === labelled.length,
     `${mixed.totals.labelled} labelled of ${staleRows.length + labelled.length}`)
   check('the exclusion is counted', mixed.totals.stale === staleRows.length)

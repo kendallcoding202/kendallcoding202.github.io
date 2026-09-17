@@ -52,13 +52,36 @@ function storageSnapshot() {
   }
 }
 
+let learningComputing = false
+
 /**
- * The learning report is a full pass over the journal, so it is cached — the dashboard
- * polls every few seconds and this does not change that fast.
+ * NEVER computed on the request path.
+ *
+ * analyze() is synchronous and walks the whole journal; measured at 22s for 50,000 rows
+ * before the scan was rewritten, and the journal grows by thousands of rows an hour. On
+ * the request path that freezes the dashboard AND the trade feed, because they share one
+ * event loop — a report that is expensive to read stops the bot it is reporting on.
+ *
+ * So: serve whatever is cached, kick off a refresh behind it, and let the next poll pick
+ * up the new numbers. The page polls every few seconds, so a stale-by-one-cycle report is
+ * invisible; a frozen bot is not.
  */
 function learningSnapshot() {
   if (!config.learning.enabled) return null
-  if (Date.now() - learningCache.at < 30_000) return learningCache.data
+  if (Date.now() - learningCache.at > 30_000 && !learningComputing) {
+    learningComputing = true
+    setTimeout(() => {
+      try {
+        computeLearning()
+      } finally {
+        learningComputing = false
+      }
+    }, 0).unref?.()
+  }
+  return learningCache.data
+}
+
+function computeLearning() {
   try {
     const a = analyze()
     learningCache = {
@@ -237,6 +260,7 @@ export function buildSnapshot(walletSol, stats = null) {
       enabled: config.explore.enabled,
     },
     learning: learningSnapshot(),
+    learningPending: config.learning.enabled && learningCache.at === 0,
     storage: storageSnapshot(),
     /**
      * The EFFECTIVE settings, read back out of the live config rather than assumed.

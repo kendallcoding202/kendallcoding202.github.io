@@ -229,6 +229,14 @@ export const config = {
     // Minimum samples in a single bucket before that bucket's rate is reported.
     minBucketSamples: num('MIN_BUCKET_SAMPLES', 30),
     /**
+     * Most recent rows the analysis walks. The journal is append-only and grows by
+     * thousands of rows an hour, so an uncapped analysis gets slower forever — measured
+     * at 22s for 50,000 rows, synchronous, which freezes the dashboard and the trade
+     * feed together. Capping also keeps the report describing the market as it is now
+     * rather than averaging in a week of different conditions.
+     */
+    maxRowsAnalyzed: num('MAX_ROWS_ANALYZED', 4000),
+    /**
      * Auto-applying learned thresholds is OFF and should stay off. Tuning a live
      * strategy on its own recent results is the fastest way to overfit into a
      * drawdown. The analyser proposes; a human decides.
