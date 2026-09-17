@@ -14,12 +14,13 @@ Do **not** push to the other agent's branch. Do **not** force-push either branch
 Repo: `kendallcoding202/kendallcoding202.github.io`  
 Local clone: `/Users/kendallsorenson/kendallcoding202.github.io`
 
-## Now (2026-09-16, ~11:15 AM Denver)
+## Now (2026-09-17)
 
-- Claude hit **weekly limit** (resets 1:00 AM America/Denver). That session cannot run commands or commit until then. Treat it as **paused**, not abandoned.
-- Last Claude commit on `claude/solana-meme-coin-tracker-gugfaj`: `d417e4b` — halt deadlock / explore no longer blocked by halt (463 tests).
-- Cursor is **only** coordinating today. No feature work started. Next Cursor commits go on `cursor/solana-tracker`.
-- GitHub Actions **Solana tracker** workflow is on the Claude branch only, **not** on `main`, so the 5-minute cron has never fired. Repo is also missing `TELEGRAM_*` / `WALLET_ADDRESS` / `SOLANA_RPC_URL` secrets. Do not "fix" that on both branches at once — pick one owner in this file first.
+- Claude is **active again** on `claude/solana-meme-coin-tracker-gugfaj`. Working in `pumpbot/` only. Treat those files as taken.
+- Latest Claude commit: the learning-report performance fix (467 tests) — `analyze()` was O(n^2) and ran on the HTTP request path, so at 50,000 journal rows it blocked the event loop for 22s and froze the dashboard and the trade feed together. Now 1.2s, capped to the most recent 4,000 rows, and computed behind the response.
+- Claude rebased onto `9bfd31f` rather than force-pushing, per the rules below.
+- Cursor is **only** coordinating so far. No feature work started. Next Cursor commits go on `cursor/solana-tracker`.
+- GitHub Actions **Solana tracker** workflow is on the Claude branch only, **not** on `main`, so the 5-minute cron has never fired. Repo is also missing `TELEGRAM_*` / `WALLET_ADDRESS` / `SOLANA_RPC_URL` secrets. Still **unowned** — nobody should fix it until Kendall assigns it here. (Note: `pumpbot/` does not use that workflow; it runs on Railway. This concerns `solana-tracker/` only.)
 
 ## Rules that prevent collisions
 
