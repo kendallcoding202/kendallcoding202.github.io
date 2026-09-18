@@ -13,7 +13,8 @@ import { heldByAnother } from './lock.js'
 import { readAll } from './journal.js'
 import { normalizeEvent } from './curve.js'
 import { positionPnl } from './position.js'
-import { log, sol, pct, sleep } from './log.js'
+import { notify } from './notify.js'
+import { log, sol, pct, esc, sleep } from './log.js'
 
 const commands = {
   run,
@@ -175,7 +176,23 @@ async function run() {
   const bot = new Bot()
   await bot.start()
 
-  const server = startDashboard(() => ({ walletSol: bot.walletSol, stats: bot.statsSnapshot() }))
+  /**
+   * The dashboard must never be able to take the bot down.
+   *
+   * startDashboard throws when DASHBOARD_HOST is public and DASHBOARD_TOKEN is unset —
+   * correct on its own terms, but called unguarded it kills the process AFTER the bot
+   * has started and taken the ledger lock, so a hosted deploy crash-loops over a display
+   * setting while positions sit unmanaged. Trading is the job; the dashboard is a window
+   * onto it, and a broken window is not a reason to stop.
+   */
+  let server = null
+  try {
+    server = startDashboard(() => ({ walletSol: bot.walletSol, stats: bot.statsSnapshot() }))
+  } catch (err) {
+    log.error(`dashboard did not start: ${err.message}`)
+    log.error('Continuing WITHOUT it — the bot keeps trading. Fix the setting and redeploy.')
+    await notify(`⚠️ <b>Dashboard did not start</b>\n${esc(err.message)}\nThe bot is still running.`)
+  }
 
   const telegram = new CommandListener(bot)
   await telegram.start()
