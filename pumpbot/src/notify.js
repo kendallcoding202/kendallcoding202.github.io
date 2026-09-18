@@ -129,7 +129,15 @@ export const notifyClose = (position, pnl) =>
     [
       `${position.explore ? '🧪' : position.realizedSol >= 0 ? '✅' : '❌'} <b>${position.explore ? 'EXPLORE ' : ''}CLOSED ${esc(position.symbol)}</b> — ${esc(position.closeReason ?? '')}`,
       `In ${sol(position.solSpent)} · out ${sol(position.solRecovered)}`,
-      `Realized <b>${sol(position.realizedSol)}</b> (${pct((position.realizedSol / position.solSpent) * 100)})`,
+      /**
+       * An adopted position has solSpent 0 by design — what it originally cost is
+       * unknowable after the fact, and inventing a number would invent a profit. So the
+       * percentage is undefined, and dividing anyway printed NaN% or Infinity% on the
+       * one message that is supposed to tell you how a trade went.
+       */
+      position.solSpent > 0
+        ? `Realized <b>${sol(position.realizedSol)}</b> (${pct((position.realizedSol / position.solSpent) * 100)})`
+        : `Realized <b>${sol(position.realizedSol)}</b> <i>(no cost basis — adopted position)</i>`,
       `Held ${Math.round((position.closedAt - position.openedAt) / 1000)}s`,
       position.explore ? '<i>Experiment — kept out of the strategy P&L.</i>' : '',
     ]
@@ -145,7 +153,13 @@ export const notifyHalt = (reason, summary) =>
       esc(reason),
       `Today ${sol(summary.todayRealizedSol)} · total ${sol(summary.totalRealizedSol)}`,
       `${summary.openPositions} position(s) still open — they will still be managed to exit.`,
-      `Clear with <code>npm run panic -- resume</code> once you have looked at why.`,
+      /**
+       * Telegram first, because the CLI path cannot work here. `panic` checks the ledger
+       * lock before reaching its resume branch, and on a hosted deploy the bot always
+       * holds that lock — so the command this used to recommend always refuses.
+       */
+      `Clear with <code>/resume</code> here once you have looked at why.`,
+      `(<code>npm run panic -- resume</code> only works with the bot stopped.)`,
     ].join('\n'),
   )
 

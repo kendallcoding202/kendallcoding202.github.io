@@ -901,6 +901,113 @@ console.log('\nLearning')
   check('a clean run says nothing about truncation', !formatReport(report).includes('evicted before'))
 }
 
+// ------------------------------- telegram message contents vs the ledger
+console.log('\nTelegram message audit')
+{
+  const { notifyEntry, notifySell, notifyClose, notifyHalt, notifyStartup } = await import('../src/notify.js')
+  const { riskSummary } = await import('../src/risk.js')
+
+  const realToken = config.telegram.token, realChat = config.telegram.chatId
+  const realFetch = globalThis.fetch
+  config.telegram.token = 'tok'; config.telegram.chatId = '1'
+
+  // Capture what would actually be sent, rather than trusting the builders.
+  let sentText = ''
+  globalThis.fetch = async (_url, opts) => {
+    sentText = JSON.parse(opts.body).text
+    return { ok: true, json: async () => ({}) }
+  }
+  const has = (needle) => sentText.includes(needle)
+
+  /**
+   * Every figure in a message is checked against the ledger record it claims to
+   * describe. These are the surface relied on when away from a screen, and a message
+   * that is merely plausible is worse than none — the metered-spend alert was plausible
+   * for days.
+   */
+  const pos = {
+    mint: 'AuditMintAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', symbol: 'AUD',
+    explore: false, solSpent: 0.0755, tokensBought: 1_000_000, tokensRemaining: 330_000,
+    solRecovered: 0.1133, entryPriceSol: 7.55e-8, openedAt: 1000, closedAt: 61_000,
+    realizedSol: 0.0378, closeReason: 'gave back 50% from peak', rungsHit: [50],
+  }
+
+  await notifyEntry(pos, { buyers: 14, devHoldPct: 4.25 })
+  check('entry states what was spent', has('0.0755'), sentText)
+  check('entry states tokens received', has('1000000'), sentText)
+  check('entry states the buyer count it screened on', has('14'), sentText)
+  check('entry states the dev holding', has('4.2') || has('4.3'), sentText)
+  check('entry links the mint it actually bought', has(pos.mint), sentText)
+  check('a strategy buy is not labelled an experiment', !has('EXPLORE'), sentText)
+
+  await notifyEntry({ ...pos, explore: true, failedChecks: ['buyers', 'dev_hold'] }, { buyers: 3, devHoldPct: 19 })
+  check('an explore buy is labelled as one', has('EXPLORE BUY'), sentText)
+  check('and says what the filter objected to', has('buyers, dev_hold'), sentText)
+
+  const fill = { tokensSold: 670_000, solReceived: 0.1133 }
+  const pnl = { totalSol: 0.0378, totalPct: 50.1, initialsRecovered: true }
+  await notifySell(pos, fill, ['+50% rung → sell 67%'], pnl)
+  check('sell states tokens sold', has('670000'), sentText)
+  check('sell states SOL received', has('0.1133'), sentText)
+  check('sell states recovered against spent', has('0.1133') && has('0.0755'), sentText)
+  check('sell states the remaining bag', has('330000'), sentText)
+  check('sell gives the reason it fired', has('+50% rung'), sentText)
+  check('sell flags recovered initials', has('initials recovered'), sentText)
+
+  await notifyClose(pos, pnl)
+  check('close states in and out', has('0.0755') && has('0.1133'), sentText)
+  check('close states realized P&L', has('0.0378'), sentText)
+  check('close states the percentage', has('50.'), sentText)
+  check('close states how long it was held', has('60s'), sentText)
+  check('close states why it closed', has('gave back 50% from peak'), sentText)
+
+  /**
+   * An adopted position has solSpent 0 by design — the original cost is unknowable and
+   * inventing one would invent a profit. Dividing by it yielded Infinity, which pct()
+   * already renders as "n/a", so nothing crashed and nothing printed NaN. It printed a
+   * bare "(n/a)" on the one message meant to say how a trade went, with no indication of
+   * whether the figure was missing, broken, or zero. Say which.
+   */
+  await notifyClose({ ...pos, solSpent: 0, realizedSol: 0.02 }, pnl)
+  check('a position with no cost basis still reports what it realized', has('0.0200'), sentText)
+  check('and explains why there is no percentage', has('no cost basis'), sentText)
+  check('rather than a bare n/a', !has('(n/a)'), sentText)
+  check('no message ever prints a raw non-finite number', !has('NaN') && !has('Infinity'), sentText)
+
+  store.initStore()
+  const st = store.getState()
+  st.positions = {}; st.daily = {}; st.totalRealizedSol = -0.2; st.halted = null
+  st.daily[new Date().toISOString().slice(0, 10)] = { realizedSol: -0.12, wins: 1, losses: 3 }
+  store.addPosition({ mint: 'OPEN1', symbol: 'O1', state: 'open', openedAt: Date.now(),
+    solSpent: 0.075, solRecovered: 0, tokensRemaining: 10, rungsHit: [] })
+
+  await notifyHalt('total loss limit reached', riskSummary(1))
+  check('halt states the reason', has('total loss limit reached'), sentText)
+  check("halt states today's realized", has('-0.1200'), sentText)
+  check('halt states total realized', has('-0.2000'), sentText)
+  check('halt says open positions are still managed', has('1 position(s) still open'), sentText)
+  /**
+   * panic checks the ledger lock BEFORE its resume branch, and a hosted bot always holds
+   * that lock — so the CLI command this used to recommend can never run there.
+   */
+  check('halt points at the route that works while the bot runs', has('/resume'), sentText)
+  check('and marks the CLI route as needing the bot stopped', has('only works with the bot stopped'), sentText)
+
+  await notifyStartup('B94s4wuDqB8qXAJYEc5LK8FDNvhu5DAJyTzwJKfr7JMM', 50, riskSummary(50))
+  check('startup states the balance', has('50.0000'), sentText)
+  check('startup states the size it will trade', has(buySolFor(50).toFixed(4)), sentText)
+  check('startup states the concurrent cap', has(String(config.sizing.maxConcurrentPositions)), sentText)
+  check('startup states the real ladder', has('+50%→67%'), sentText)
+  check('startup states the stop', has(String(config.exit.stopLossPct)), sentText)
+  check('startup says it is resuming the open position', has('Resuming 1 open position'), sentText)
+  check('startup is labelled paper', has('PAPER'), sentText)
+  check('no message ever prints undefined', !has('undefined'), sentText)
+
+  st.positions = {}; st.daily = {}; st.totalRealizedSol = 0
+  globalThis.fetch = realFetch
+  config.telegram.token = realToken; config.telegram.chatId = realChat
+}
+
 // ------------------------------------------------- telegram delivery truthfulness
 console.log('\nTelegram delivery')
 {
