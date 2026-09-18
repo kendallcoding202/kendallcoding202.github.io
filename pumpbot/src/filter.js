@@ -26,6 +26,21 @@ export class Candidate {
     this.buyVolumeSol = 0
     this.sellVolumeSol = 0
 
+    /**
+     * Shape of the buying, not just its size.
+     *
+     * The filter could previously only ask "how many buyers and how much volume". Those
+     * two numbers cannot tell fifty wallets apart from one whale buying fifty times, or
+     * a launch accelerating apart from one already fading — and a threshold scan can only
+     * find an edge in something that was recorded. Rows cannot be back-filled, so a
+     * feature added later can never explain data collected today.
+     */
+    this.buyerVolume = new Map() // trader -> SOL bought, for concentration
+    this.firstBuyAt = null // how long the first organic buyer took to show up
+    this.earlyBuys = 0 // buys in the first third of the observation window
+    this.lateBuys = 0 // buys in the last third — the two give a velocity ratio
+    this.flippers = new Set() // wallets that bought and then sold inside the window
+
     this.devSold = false
     this.devTokens = createEvent.initialBuyTokens ?? 0
     this.devBuySol = createEvent.initialBuySol ?? 0
@@ -50,14 +65,30 @@ export class Candidate {
 
     const isDev = event.trader && event.trader === this.creator
 
+    const ageMs = event.at - this.createdAt
+    const windowMs = Math.max(1, config.entry.observeSeconds * 1000)
+
     if (event.kind === 'buy') {
       this.buys++
       this.buyVolumeSol += event.solAmount
-      if (event.trader) this.buyers.add(event.trader)
+      if (event.trader) {
+        this.buyers.add(event.trader)
+        if (!isDev) {
+          this.buyerVolume.set(event.trader, (this.buyerVolume.get(event.trader) ?? 0) + event.solAmount)
+          if (this.firstBuyAt === null) this.firstBuyAt = ageMs
+        }
+      }
+      // Thirds of the window, so "is this accelerating?" is answerable later.
+      if (ageMs <= windowMs / 3) this.earlyBuys++
+      else if (ageMs >= (windowMs * 2) / 3) this.lateBuys++
     } else if (event.kind === 'sell') {
       this.sells++
       this.sellVolumeSol += event.solAmount
-      if (event.trader) this.sellers.add(event.trader)
+      if (event.trader) {
+        this.sellers.add(event.trader)
+        // Bought and sold inside the window: a flipper, not a holder.
+        if (this.buyers.has(event.trader) && !isDev) this.flippers.add(event.trader)
+      }
       if (isDev) this.devSold = true
     }
 
@@ -82,6 +113,50 @@ export class Candidate {
     const set = new Set(this.buyers)
     set.delete(this.creator)
     return set.size
+  }
+
+  /**
+   * Share of organic buy volume taken by the single largest buyer.
+   *
+   * Twenty buyers where one is 90% of the volume is a different launch from twenty
+   * roughly equal ones, and the buyer COUNT cannot tell them apart. Whether that
+   * difference predicts anything is exactly what the threshold scan is for — but only
+   * if it is written down.
+   */
+  get topBuyerShare() {
+    if (!this.buyerVolume.size || !(this.buyVolumeSol > 0)) return 0
+    const largest = Math.max(...this.buyerVolume.values())
+    return largest / this.buyVolumeSol
+  }
+
+  /** Same question, less sensitive to one outlier. */
+  get top3BuyerShare() {
+    if (!this.buyerVolume.size || !(this.buyVolumeSol > 0)) return 0
+    const top = [...this.buyerVolume.values()].sort((a, b) => b - a).slice(0, 3)
+    return top.reduce((sum, v) => sum + v, 0) / this.buyVolumeSol
+  }
+
+  /** Buys per distinct buyer. High means a few wallets churning, not broad interest. */
+  get buysPerBuyer() {
+    const n = this.organicBuyers
+    return n > 0 ? this.buys / n : 0
+  }
+
+  /** Late-window buys over early-window buys. Above 1 means it is still accelerating. */
+  get buyAcceleration() {
+    if (this.earlyBuys === 0) return this.lateBuys > 0 ? this.lateBuys : 0
+    return this.lateBuys / this.earlyBuys
+  }
+
+  /** Share of buyers who already sold inside the observation window. */
+  get flipRate() {
+    const n = this.organicBuyers
+    return n > 0 ? this.flippers.size / n : 0
+  }
+
+  /** Seconds before the first organic buyer appeared. */
+  get secondsToFirstBuy() {
+    return this.firstBuyAt === null ? -1 : this.firstBuyAt / 1000
   }
 }
 

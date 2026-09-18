@@ -102,8 +102,48 @@ export function readAll() {
   }
 }
 
+/**
+ * What a deployer's previous launches did — the single strongest signal we were already
+ * collecting and never using.
+ *
+ * LEAKAGE IS THE WHOLE DIFFICULTY. A creator's hit rate computed over a set that includes
+ * the launch being scored would let the scan "discover" that creators whose launches hit
+ * tend to hit, which is circular and would look like a very strong edge. So this index is
+ * only ever updated when a row FINALIZES, and only ever read when a row is TRACKED —
+ * which happens strictly earlier. A launch can therefore only see outcomes that were
+ * already known before it existed.
+ */
+export class CreatorIndex {
+  constructor() {
+    this.byCreator = new Map() // creator -> { launches, hits }
+  }
+
+  /** Rebuild from history at startup, oldest first, so restarts do not lose the prior. */
+  static fromJournal(rows = readAll()) {
+    const idx = new CreatorIndex()
+    for (const r of [...rows].sort((a, b) => (a.finalizedAt ?? 0) - (b.finalizedAt ?? 0))) {
+      idx.note(r)
+    }
+    return idx
+  }
+
+  note(row) {
+    if (!row?.creator || typeof row.hitFirstRung !== 'boolean') return
+    const e = this.byCreator.get(row.creator) ?? { launches: 0, hits: 0 }
+    e.launches++
+    if (row.hitFirstRung) e.hits++
+    this.byCreator.set(row.creator, e)
+  }
+
+  priorFor(creator) {
+    const e = creator ? this.byCreator.get(creator) : null
+    if (!e || e.launches === 0) return { launches: 0, hitRate: -1 }
+    return { launches: e.launches, hitRate: e.hits / e.launches }
+  }
+}
+
 /** The feature vector we score a launch on. Keep this stable — it is the dataset schema. */
-export function featuresOf(candidate) {
+export function featuresOf(candidate, creatorIndex = null) {
   return {
     organicBuyers: candidate.organicBuyers,
     buys: candidate.buys,
@@ -119,19 +159,47 @@ export function featuresOf(candidate) {
     devSold: candidate.devSold,
     symbolLength: (candidate.symbol ?? '').length,
     nameLength: (candidate.name ?? '').length,
+    /**
+     * The shape of the buying, not just its size. Buyer count and volume cannot tell
+     * fifty wallets apart from one whale buying fifty times, or a launch that is
+     * accelerating apart from one already fading. Whether any of this predicts anything
+     * is the scan's job; recording it is the precondition for asking.
+     */
+    topBuyerShare: round4(candidate.topBuyerShare),
+    top3BuyerShare: round4(candidate.top3BuyerShare),
+    buysPerBuyer: round4(candidate.buysPerBuyer),
+    buyAcceleration: round4(candidate.buyAcceleration),
+    flipRate: round4(candidate.flipRate),
+    secondsToFirstBuy: round4(candidate.secondsToFirstBuy),
+    // Regime. Meme flow is not uniform across the day, and this is free to record.
+    launchHourUtc: new Date(candidate.createdAt ?? Date.now()).getUTCHours(),
+    /**
+     * This deployer's record BEFORE this launch. -1 means never seen, which is most of
+     * them — kept distinct from 0 (seen, never hit) because "unknown" and "known bad"
+     * are different things and a threshold on them should be able to say so.
+     */
+    creatorLaunchesSeen: creatorIndex ? creatorIndex.priorFor(candidate.creator).launches : 0,
+    creatorPriorHitRate: creatorIndex ? round4(creatorIndex.priorFor(candidate.creator).hitRate) : -1,
     observeSeconds: config.entry.observeSeconds,
   }
 }
+
+const round4 = (v) => (Number.isFinite(v) ? Number(v.toFixed(4)) : undefined)
 
 /**
  * Tracks what happened to a token after we made a call on it, so the row can be
  * labelled. Held in memory; flushed to the journal when the window closes.
  */
 export class ShadowTracker {
-  constructor({ windowMs = config.learning.outcomeWindowMinutes * 60_000, max = config.learning.maxShadowTracked } = {}) {
+  constructor({
+    windowMs = config.learning.outcomeWindowMinutes * 60_000,
+    max = config.learning.maxShadowTracked,
+    creatorIndex = null,
+  } = {}) {
     this.windowMs = windowMs
     this.max = max
     this.rows = new Map() // mint -> pending row
+    this.creatorIndex = creatorIndex
   }
 
   track({ candidate, verdict, action, entryPriceSol, blockedBy = null }) {
@@ -177,7 +245,7 @@ export class ShadowTracker {
       // What we actually paid, kept apart from the yardstick above.
       fillPriceSol: entryPriceSol ?? null,
       rejectedFor: verdict?.pass ? null : verdict?.failed?.map((c) => c.id) ?? null,
-      features: featuresOf(candidate),
+      features: featuresOf(candidate, this.creatorIndex),
       decisionPriceSol: price,
       peakPriceSol: price,
       troughPriceSol: price,
@@ -265,6 +333,9 @@ export class ShadowTracker {
     }
 
     append(finished)
+    // Only now does this outcome become visible to future launches. Updating any earlier
+    // would let a launch see its own result through its creator's prior.
+    this.creatorIndex?.note(finished)
     return finished
   }
 

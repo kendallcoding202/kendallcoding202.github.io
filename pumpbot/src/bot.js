@@ -5,7 +5,7 @@ import { Candidate, evaluateEntry } from './filter.js'
 import { buy, sell } from './exec.js'
 import { canOpen, riskSummary, rolloverDaily, syncEquityBasis } from './risk.js'
 import { buySolFor, tierFor, sizingSummary } from './sizing.js'
-import { ShadowTracker, saveShadow, loadShadow } from './journal.js'
+import { ShadowTracker, CreatorIndex, saveShadow, loadShadow } from './journal.js'
 import {
   initStore,
   getState,
@@ -58,7 +58,10 @@ export class Bot {
           })
         : null)
     this.candidates = new Map() // mint -> Candidate, pre-entry
-    this.shadow = config.learning.enabled ? new ShadowTracker() : null
+    // Built from history at startup so a restart does not forget what each deployer did.
+    this.shadow = config.learning.enabled
+      ? new ShadowTracker({ creatorIndex: CreatorIndex.fromJournal() })
+      : null
     this.walletSol = 0
     this.lastDay = utcDay()
     this.lastTierFloor = null

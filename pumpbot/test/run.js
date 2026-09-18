@@ -901,6 +901,119 @@ console.log('\nLearning')
   check('a clean run says nothing about truncation', !formatReport(report).includes('evicted before'))
 }
 
+// ------------------------------------------------- what the edge search can see
+console.log('\nFeature vector')
+{
+  const { Candidate } = await import('../src/filter.js')
+  const { featuresOf, CreatorIndex, ShadowTracker } = await import('../src/journal.js')
+
+  const mkCandidate = () => new Candidate(normalizeEvent({
+    txType: 'create', mint: 'FEAT', traderPublicKey: 'DEV', name: 'Feature Dog', symbol: 'FEAT',
+    initialBuy: 20_000_000, solAmount: 0.5, vSolInBondingCurve: 30,
+    vTokensInBondingCurve: 1.073e9, marketCapSol: 28,
+  }))
+  const buy = (c, trader, sol, atOffsetMs) => c.apply({
+    ...normalizeEvent({ txType: 'buy', mint: 'FEAT', traderPublicKey: trader, tokenAmount: 1000,
+      solAmount: sol, vSolInBondingCurve: 30, vTokensInBondingCurve: 1.073e9, marketCapSol: 28 }),
+    at: c.createdAt + atOffsetMs,
+  })
+
+  /**
+   * Buyer count and volume cannot tell fifty wallets apart from one whale buying fifty
+   * times. A threshold scan can only find an edge in something that was recorded, and
+   * rows cannot be back-filled — a feature added later can never explain data collected
+   * today.
+   */
+  const whale = mkCandidate()
+  buy(whale, 'WHALE', 9, 1000)
+  for (let i = 0; i < 9; i++) buy(whale, 'SMALL' + i, 0.1, 2000)
+  const spread = mkCandidate()
+  for (let i = 0; i < 10; i++) buy(spread, 'EVEN' + i, 0.99, 1000)
+
+  check('both launches look identical on buyer count', whale.organicBuyers === spread.organicBuyers)
+  check('and near-identical on volume', near(whale.buyVolumeSol, spread.buyVolumeSol, 0.05))
+  check('but concentration tells them apart',
+    whale.topBuyerShare > 0.8 && spread.topBuyerShare < 0.2,
+    `${whale.topBuyerShare} vs ${spread.topBuyerShare}`)
+
+  // Accelerating vs fading, which totals alone also cannot distinguish.
+  const rising = mkCandidate()
+  buy(rising, 'A', 0.1, 500)
+  for (let i = 0; i < 6; i++) buy(rising, 'R' + i, 0.1, 27_000)
+  const fading = mkCandidate()
+  for (let i = 0; i < 6; i++) buy(fading, 'F' + i, 0.1, 500)
+  buy(fading, 'Z', 0.1, 27_000)
+  check('acceleration separates a rising launch from a fading one',
+    rising.buyAcceleration > fading.buyAcceleration,
+    `${rising.buyAcceleration} vs ${fading.buyAcceleration}`)
+
+  // Wallets that bought and sold inside the window are flippers, not holders.
+  const flipped = mkCandidate()
+  buy(flipped, 'FLIP', 1, 1000)
+  buy(flipped, 'HOLD', 1, 1000)
+  flipped.apply({ ...normalizeEvent({ txType: 'sell', mint: 'FEAT', traderPublicKey: 'FLIP',
+    tokenAmount: 1000, solAmount: 1, vSolInBondingCurve: 30, vTokensInBondingCurve: 1.073e9 }),
+    at: flipped.createdAt + 5000 })
+  check('flip rate counts buyers who already sold', near(flipped.flipRate, 0.5, 1e-9), String(flipped.flipRate))
+  check('time to first buy is recorded', flipped.secondsToFirstBuy > 0)
+
+  /**
+   * THE CREATOR PRIOR MUST NOT LEAK.
+   *
+   * A hit rate computed over a set that includes the launch being scored would let the
+   * scan "discover" that creators whose launches hit tend to hit — circular, and it
+   * would look like an extremely strong edge. The index is only updated on finalize and
+   * only read on track, which happens strictly earlier.
+   */
+  const idx = new CreatorIndex()
+  const tracker = new ShadowTracker({ windowMs: 60_000, max: 50, creatorIndex: idx })
+  const track = (mint) => tracker.track({
+    candidate: { mint, symbol: mint, creator: 'REPEAT', createdAt: Date.now(), priceSol: 1e-7 },
+    verdict: { pass: false, failed: [{ id: 'buyers' }] }, action: 'rejected',
+  })
+
+  track('L1')
+  check('an unseen creator reads as unknown, not as zero',
+    tracker.rows.get('L1').features.creatorPriorHitRate === -1)
+  check('and its launch count is zero', tracker.rows.get('L1').features.creatorLaunchesSeen === 0)
+
+  // L1 hits. That outcome must not be visible to L1 itself, only to what comes after.
+  tracker.onTrade({ mint: 'L1', priceSol: 3e-7 })
+  const first = tracker.finalize('L1', 'test')
+  check('the first launch hit', first.hitFirstRung === true)
+  check('its own row still shows the prior it was scored with, not its result',
+    first.features.creatorPriorHitRate === -1, String(first.features.creatorPriorHitRate))
+
+  track('L2')
+  check('the next launch by that creator sees the earlier outcome',
+    tracker.rows.get('L2').features.creatorLaunchesSeen === 1 &&
+    tracker.rows.get('L2').features.creatorPriorHitRate === 1,
+    JSON.stringify(tracker.rows.get('L2').features.creatorPriorHitRate))
+
+  // A creator that never hits reads 0 — distinct from -1, because "known bad" and
+  // "never seen" are different things a threshold should be able to separate.
+  const idx2 = new CreatorIndex()
+  idx2.note({ creator: 'DUD', hitFirstRung: false })
+  idx2.note({ creator: 'DUD', hitFirstRung: false })
+  check('a known-bad creator is 0, not unknown', idx2.priorFor('DUD').hitRate === 0)
+  check('an unseen creator is -1', idx2.priorFor('NOBODY').hitRate === -1)
+
+  // Rebuilt from history, so a restart does not forget.
+  const rebuilt = CreatorIndex.fromJournal([
+    { creator: 'X', hitFirstRung: true, finalizedAt: 1 },
+    { creator: 'X', hitFirstRung: false, finalizedAt: 2 },
+  ])
+  check('the index survives a restart', rebuilt.priorFor('X').launches === 2 && rebuilt.priorFor('X').hitRate === 0.5)
+
+  // Every new feature must actually reach the scan, or none of this matters.
+  const f = featuresOf(spread, idx)
+  for (const key of ['topBuyerShare', 'top3BuyerShare', 'buysPerBuyer', 'buyAcceleration',
+                     'flipRate', 'secondsToFirstBuy', 'launchHourUtc', 'creatorLaunchesSeen',
+                     'creatorPriorHitRate']) {
+    check(`${key} reaches the journal`, typeof f[key] === 'number', `${key}=${f[key]}`)
+  }
+}
+
 // ------------------------------------------- shadow tracker capacity + windows
 console.log('\nShadow tracker')
 {
