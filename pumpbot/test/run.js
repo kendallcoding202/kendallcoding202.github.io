@@ -901,6 +901,52 @@ console.log('\nLearning')
   check('a clean run says nothing about truncation', !formatReport(report).includes('evicted before'))
 }
 
+// ------------------------------------------------- metered feed cost estimate
+console.log('\nFeed cost estimate')
+{
+  const { Bot } = await import('../src/bot.js')
+  const { EventEmitter } = await import('node:events')
+  class Quiet extends EventEmitter {
+    start() {} async stop() {} watch() {} unwatch() {}
+    subscriptionStats() { return { watched: 0, pending: 0, dropped: 0, max: 60 } }
+  }
+
+  /**
+   * Only the per-token trade tape is metered. subscribeNewToken and subscribeMigration
+   * are free, and the RPC log feed is free by construction.
+   *
+   * The estimate used to bill every message from every source, so on the free feed it
+   * invoiced traffic that costs nothing, projected ~2.97 SOL/day, and advised switching
+   * to the free RPC feed that was already in use. The free feed working WELL made the
+   * imaginary bill grow faster. An alarm that fires when there is no cost trains you to
+   * ignore the one that would matter.
+   */
+  const onRpc = new Bot({ feed: new Quiet(), logFeed: new Quiet() })
+  onRpc.stats.startedAt = Date.now() - 3600_000
+  onRpc.stats.messages = 500_000 // heavy free traffic
+  const rpcCost = onRpc.statsSnapshot().feedCost
+  check('the free RPC feed is never billed', rpcCost.metered === false && rpcCost.spentSol === 0,
+    JSON.stringify(rpcCost))
+  check('and free traffic is not counted as metered', rpcCost.messages === 0)
+
+  // With the metered tape actually in use, only its own messages are charged.
+  const realSource = config.feed.tradeSource
+  config.feed.tradeSource = 'pumpportal'
+  const onTape = new Bot({ feed: new Quiet() })
+  onTape.stats.startedAt = Date.now() - 3600_000
+  onTape.stats.messages = 500_000 // free new-token traffic, still not billable
+  const idleTape = onTape.statsSnapshot().feedCost
+  check('free traffic on the metered source is still not billed', idleTape.spentSol === 0,
+    JSON.stringify(idleTape))
+
+  onTape.stats.meteredMessages = 20_000
+  const used = onTape.statsSnapshot().feedCost
+  check('metered messages are billed at the published rate',
+    near(used.spentSol, (20_000 / 10_000) * config.feed.costPer10kMessagesSol, 1e-12), String(used.spentSol))
+  check('and the estimate is marked as a real one', used.metered === true)
+  config.feed.tradeSource = realSource
+}
+
 // ------------------------------------------------- what the edge search can see
 console.log('\nFeature vector')
 {

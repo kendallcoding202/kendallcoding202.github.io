@@ -91,6 +91,8 @@ export class Bot {
       // Reset each heartbeat so the log shows rate, not just a running total.
       sinceBeat: { messages: 0, creates: 0, screened: 0, entered: 0 },
       costWarned: false,
+      // Messages on the METERED per-token trade tape only. Everything else is free.
+      meteredMessages: 0,
       // Explore sampling, counted rather than inferred. See #shouldExplore.
       exploreOffered: 0,
       exploreTaken: 0,
@@ -144,10 +146,30 @@ export class Bot {
   #feedCost() {
     const rate = config.feed.costPer10kMessagesSol
     if (!(rate > 0)) return null
-    const spentSol = (this.stats.messages / 10_000) * rate
+
+    /**
+     * Only the PER-TOKEN TRADE TAPE is metered. subscribeNewToken and subscribeMigration
+     * are free, and the RPC log feed is free by construction — it is one subscription to
+     * the program, billed by nobody.
+     *
+     * This used to bill `stats.messages`, which is every message from every source. On
+     * the free RPC feed that produced an invoice for traffic that costs nothing, warned
+     * that it was heading for 2.97 SOL/day, and advised moving to the free RPC feed —
+     * which was already in use. It also meant the free feed working WELL made the
+     * imaginary bill grow faster, since its trade events were counted too.
+     *
+     * A cost estimate that fires when there is no cost is worse than no estimate: it
+     * trains you to ignore the one alarm that would matter if the metered tape were ever
+     * switched back on.
+     */
+    if (this.usingRpcTrades) return { metered: false, messages: 0, spentSol: 0, perDaySol: 0, warnAtSol: config.feed.costWarnSol }
+
+    const metered = this.stats.meteredMessages
+    const spentSol = (metered / 10_000) * rate
     const uptimeH = Math.max(this.stats.uptimeHours(), 1 / 60)
     return {
-      messages: this.stats.messages,
+      metered: true,
+      messages: metered,
       spentSol,
       perDaySol: (spentSol / uptimeH) * 24,
       warnAtSol: config.feed.costWarnSol,
@@ -197,7 +219,7 @@ export class Bot {
 
     // Metered feed: say something before the funding is gone, not after.
     const cost = this.#feedCost()
-    if (cost && !s.costWarned && cost.spentSol >= cost.warnAtSol) {
+    if (cost?.metered && !s.costWarned && cost.spentSol >= cost.warnAtSol) {
       s.costWarned = true
       log.error(
         `Estimated feed spend ${cost.spentSol.toFixed(4)} SOL from ${cost.messages} messages ` +
@@ -311,7 +333,13 @@ export class Bot {
     this.feed.on('migrate', (e) => this.#onMigrate(e).catch((err) => log.error(err)))
     this.feed.on('create', (e) => this.#onCreate(e))
     // Only take the metered tape when we are not decoding trades ourselves.
-    if (!this.usingRpcTrades) this.feed.on('trade', (e) => this.#onTrade(e))
+    if (!this.usingRpcTrades) {
+      this.feed.on('trade', (e) => {
+        // This tape, and only this tape, is billed per message.
+        this.stats.meteredMessages++
+        this.#onTrade(e)
+      })
+    }
     this.feed.start()
 
     if (this.logFeed) {
