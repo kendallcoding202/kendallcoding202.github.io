@@ -346,6 +346,50 @@ export function buildSnapshot(walletSol, stats = null) {
  * getContext() returns { walletSol, stats } — a getter rather than values so every
  * poll reflects live bot state.
  */
+/**
+ * The page a visitor without a valid token sees.
+ *
+ * It takes the token once and remembers it, rather than making someone hand-edit a query
+ * string on a phone. It also means the token does not have to live in the address bar:
+ * the main page strips it on arrival, which matters because screenshots of this dashboard
+ * get shared, and a token baked into the URL would be in every one of them.
+ *
+ * The token is never echoed into this page — the whole point of the check is that what it
+ * guards is a wallet and its P&L.
+ */
+function unlockPage(wasWrong) {
+  return `<!doctype html><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>pumpbot — unlock</title>
+<body style="background:#080b14;color:#e8edf7;font:15px/1.6 ui-sans-serif,system-ui;padding:32px 20px;max-width:560px;margin:0 auto">
+<h1 style="font-size:19px;margin:0 0 12px">pumpbot</h1>
+<p style="color:#6b7a99;margin:0 0 20px">This page shows a wallet balance, open positions and P&amp;L, so it needs your access token.</p>
+${wasWrong ? '<p style="color:#ff5c72;margin:0 0 14px">That token did not match. Try again.</p>' : ''}
+<form id="f" style="display:flex;gap:9px;flex-wrap:wrap">
+  <input id="t" type="password" autocomplete="current-password" placeholder="DASHBOARD_TOKEN"
+    style="flex:1;min-width:210px;background:#0e1422;border:1px solid #1e2942;border-radius:10px;
+    padding:12px 14px;color:#e8edf7;font:14px ui-monospace,monospace">
+  <button style="background:#a97bff;border:0;border-radius:10px;padding:12px 20px;color:#080b14;
+    font-weight:700;font-size:14px;cursor:pointer">Open</button>
+</form>
+<p style="color:#46536e;font-size:13px;margin:18px 0 0">Find it in your host's environment variables as
+<code style="color:#ffb347">DASHBOARD_TOKEN</code>. It is stored in this browser only, so you enter it once.</p>
+<script>
+  var KEY = 'pumpbot.token'
+  function saved() { try { return localStorage.getItem(KEY) || '' } catch (e) { return '' } }
+  // A token remembered from last time gets used automatically, so a refresh just works.
+  var prior = saved()
+  if (prior && !${wasWrong}) location.replace('/?token=' + encodeURIComponent(prior))
+  document.getElementById('f').addEventListener('submit', function (e) {
+    e.preventDefault()
+    var v = document.getElementById('t').value.trim()
+    if (!v) return
+    try { localStorage.setItem(KEY, v) } catch (err) {}
+    location.replace('/?token=' + encodeURIComponent(v))
+  })
+</script></body>`
+}
+
 export function startDashboard(getContext) {
   if (!config.dashboard.enabled) return null
 
@@ -371,28 +415,7 @@ export function startDashboard(getContext) {
          * page exposes a wallet and its P&L.
          */
         res.writeHead(401, { 'content-type': 'text/html; charset=utf-8' })
-        res.end(
-          '<!doctype html><meta charset="utf-8">' +
-            '<meta name="viewport" content="width=device-width,initial-scale=1">' +
-            '<title>pumpbot — token required</title>' +
-            '<body style="background:#080b14;color:#e8edf7;font:15px/1.6 ui-sans-serif,system-ui;' +
-            'padding:32px 20px;max-width:640px;margin:0 auto">' +
-            '<h1 style="font-size:19px;margin:0 0 14px">Token required</h1>' +
-            '<p style="color:#6b7a99;margin:0 0 18px">This page shows a wallet balance, open ' +
-            'positions and P&amp;L, so it is not reachable without one.</p>' +
-            '<p style="margin:0 0 10px">Add your token to the URL:</p>' +
-            '<pre style="background:#0e1422;border:1px solid #1e2942;border-radius:10px;padding:12px 14px;' +
-            'overflow-x:auto;font-size:13px;color:#4dd8ff">' +
-            (provided ? '…up.railway.app/?token=&lt;the correct token&gt;' : '…up.railway.app/?token=&lt;your token&gt;') +
-            '</pre>' +
-            '<p style="color:#6b7a99;font-size:13.5px;margin:16px 0 0">' +
-            (provided
-              ? 'A token was supplied but did not match. '
-              : 'No token was supplied. ') +
-            'It is the value of <code style="color:#ffb347">DASHBOARD_TOKEN</code> in your ' +
-            'host\u2019s environment variables. Once the page loads it keeps the token on every ' +
-            'refresh, so bookmark the full URL.</p></body>',
-        )
+        res.end(unlockPage(Boolean(provided)))
         return
       }
     }

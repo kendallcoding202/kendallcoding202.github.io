@@ -714,9 +714,38 @@ function storageLine(s) {
       'every restart starts from nothing.</span>')
 }
 
+/**
+ * The access token is kept in this browser, not in the address bar.
+ *
+ * Screenshots of this page get shared, and a token sitting in the URL would be in every
+ * one of them. So it is captured once on the unlock screen, stored locally, and stripped
+ * from the visible URL the moment the page loads — while still being sent on each poll.
+ */
+var TOKEN_KEY = 'pumpbot.token'
+var authToken = ''
+;(function captureToken() {
+  var fromUrl = new URLSearchParams(location.search).get('token')
+  if (fromUrl) {
+    authToken = fromUrl
+    try { localStorage.setItem(TOKEN_KEY, fromUrl) } catch (e) {}
+    // Drop it from the address bar without reloading.
+    history.replaceState(null, '', location.pathname)
+  } else {
+    try { authToken = localStorage.getItem(TOKEN_KEY) || '' } catch (e) { authToken = '' }
+  }
+})()
+
 async function tick() {
   try {
-    const res = await fetch('/api/state' + location.search, { cache: 'no-store' })
+    const q = authToken ? '?token=' + encodeURIComponent(authToken) : ''
+    const res = await fetch('/api/state' + q, { cache: 'no-store' })
+    // The token was rotated or cleared — go back to the unlock screen rather than
+    // silently showing a dead page.
+    if (res.status === 401) {
+      try { localStorage.removeItem(TOKEN_KEY) } catch (e) {}
+      location.replace('/')
+      return
+    }
     if (res.ok) render(await res.json())
   } catch {
     document.getElementById('hstat').textContent = 'DISCONNECTED — RETRYING'
