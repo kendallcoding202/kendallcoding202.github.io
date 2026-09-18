@@ -25,6 +25,13 @@
     --sans: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
+  /**
+   * An author `display` rule beats the UA stylesheet's [hidden] { display: none }, so
+   * .goal (display:flex) stayed visible with hidden=true — an empty pill taking space on
+   * every screen where there is no next tier, which is every screen now that the paper
+   * book sits in the top tier. Make hidden actually hide, for these and any added later.
+   */
+  [hidden] { display: none !important; }
   html, body { background: var(--bg); }
   body {
     margin: 0; color: var(--text); font-family: var(--sans);
@@ -153,6 +160,26 @@
     font-size: 11px; margin-left: 8px; }
 
   @media (max-width: 880px) { .g2 { grid-template-columns: 1fr; } }
+  /**
+   * Phones: two stat cards per row rather than one. Stacked, the four headline numbers
+   * alone ran about a screen and a half before the chart — and this dashboard is read on
+   * a phone far more often than on a desktop.
+   */
+  @media (max-width: 560px) {
+    .g4 { grid-template-columns: 1fr 1fr; gap: 9px; }
+    .card { padding: 12px 13px; }
+    .big { font-size: 22px; }
+    .label { font-size: 9px; letter-spacing: .1em; }
+    .sub { font-size: 10.5px; }
+    /**
+     * The donut is decorative — "0W / 0L" already carries the number — and at two cards
+     * per row it had nowhere to go, so it sat on top of its own caption. Drop it and let
+     * the figures use the whole card.
+     */
+    .winrate .donut { display: none; }
+    .winrate { gap: 0; }
+    .tiles { grid-template-columns: 1fr 1fr; }
+  }
   @media (max-width: 560px) {
     body { padding: 12px 10px 40px; }
     .big { font-size: 24px; }
