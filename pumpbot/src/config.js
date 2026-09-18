@@ -258,6 +258,14 @@ export const config = {
     host: str('DASHBOARD_HOST', '127.0.0.1'),
     // Only consulted when host is not loopback; then it is mandatory.
     token: str('DASHBOARD_TOKEN'),
+    /**
+     * Where the dashboard is reachable from outside, so the bot can hand you a working
+     * link. Railway injects RAILWAY_PUBLIC_DOMAIN; DASHBOARD_URL covers everywhere else.
+     * Only ever used to build a link — never to decide who may read the page.
+     */
+    publicUrl:
+      str('DASHBOARD_URL') ||
+      (str('RAILWAY_PUBLIC_DOMAIN') ? `https://${str('RAILWAY_PUBLIC_DOMAIN')}` : ''),
   },
 
   sizing: {

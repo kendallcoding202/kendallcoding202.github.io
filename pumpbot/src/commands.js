@@ -2,7 +2,7 @@ import { config } from './config.js'
 import { getState, openPositions, clearHalt, halt, save } from './store.js'
 import { statusText, positionsText } from './summary.js'
 import { notify } from './notify.js'
-import { log, sleep } from './log.js'
+import { log, esc, sleep } from './log.js'
 
 /**
  * Telegram command listener.
@@ -101,6 +101,7 @@ export class CommandListener {
             '<b>pumpbot commands</b>',
             '/status — balance, P&L, pipeline',
             '/positions — open positions',
+            '/dashboard — a link that opens, token included',
             '/pause — stop opening new positions',
             '/resume — allow new positions again',
             '/panic confirm — sell everything now',
@@ -113,6 +114,36 @@ export class CommandListener {
 
       case '/positions':
         return this.#reply(positionsText())
+
+      /**
+       * Hands over a link that actually opens.
+       *
+       * The dashboard is token-protected because it shows a wallet and its P&L, which
+       * means the URL alone is useless — and the token lives in the host's environment,
+       * not on a phone. This chat is already authenticated against a single chat id and
+       * already has /panic and /reset, so it can open the dashboard without granting
+       * anything it did not already have.
+       */
+      case '/dashboard':
+      case '/link': {
+        const { publicUrl, token: dashToken, host } = config.dashboard
+        if (!config.dashboard.enabled) return this.#reply('The dashboard is switched off (<code>DASHBOARD=0</code>).')
+        if (!publicUrl) {
+          return this.#reply(
+            'I do not know this bot\u2019s public URL.\n' +
+              'Set <code>DASHBOARD_URL</code> to the address you open, then ask again.' +
+              (host === '127.0.0.1' ? '\n\nThe dashboard is also bound to localhost only, so it is not reachable from a phone yet.' : ''),
+          )
+        }
+        const url = dashToken ? `${publicUrl}/?token=${encodeURIComponent(dashToken)}` : publicUrl
+        return this.#reply(
+          `📊 <b>Dashboard</b>\n<a href="${esc(url)}">${esc(publicUrl)}</a>\n\n` +
+            (dashToken
+              ? '<i>The link carries the access token. Your phone remembers it after the first open, ' +
+                'so later visits work from the plain address.</i>'
+              : '<i>No token set — this page is open to anyone with the address.</i>'),
+        )
+      }
 
       case '/pause': {
         halt('paused from Telegram')

@@ -2260,6 +2260,44 @@ console.log('\nTelegram commands')
   store.getState().exploreWins = 1
   store.getState().exploreLosses = 4
 
+  /**
+   * The dashboard is token-protected because it shows a wallet and its P&L, so the URL
+   * alone is useless — and the token lives in the host's environment, not on a phone.
+   * This chat is already authenticated against one chat id and already has /panic and
+   * /reset, so handing over a working link grants nothing it did not already have.
+   */
+  {
+    const realUrl = config.dashboard.publicUrl
+    const realTok = config.dashboard.token
+    const realEnabled = config.dashboard.enabled
+
+    config.dashboard.enabled = true
+    config.dashboard.publicUrl = 'https://example.up.railway.app'
+    config.dashboard.token = 's3cret'
+    const link = await listener.handle('/dashboard')
+    check('/dashboard returns a link that carries the token', link.includes('token=s3cret'), link)
+    check('and shows the bare address as the label', link.includes('example.up.railway.app'))
+    check('/link is the same command', (await listener.handle('/link')).includes('token=s3cret'))
+
+    // A token with URL-unsafe characters must survive the round trip.
+    config.dashboard.token = 'a b&c=d'
+    check('the token is URL-encoded', (await listener.handle('/dashboard')).includes('a%20b%26c%3Dd'),
+      await listener.handle('/dashboard'))
+
+    // Without a known public address, say so rather than hand over a broken link.
+    config.dashboard.publicUrl = ''
+    const noUrl = await listener.handle('/dashboard')
+    check('an unknown public URL is admitted, not guessed', noUrl.includes('DASHBOARD_URL'), noUrl)
+    check('and no half-built link is offered', !noUrl.includes('http'), noUrl)
+
+    config.dashboard.enabled = false
+    check('a disabled dashboard says so', (await listener.handle('/dashboard')).includes('switched off'))
+
+    config.dashboard.publicUrl = realUrl
+    config.dashboard.token = realTok
+    config.dashboard.enabled = realEnabled
+  }
+
   const split = await listener.handle('/status')
   check('/status separates the strategy book', split.includes('<b>Strategy</b>'))
   check('/status shows the explore book separately', split.includes('Explore book'))
