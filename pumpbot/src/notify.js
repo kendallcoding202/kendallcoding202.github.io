@@ -7,16 +7,28 @@ const LIMIT = 4000
  * Telegram notifications. Deliberately best-effort: a failed send must never take down
  * the trading loop or delay an exit, so every failure is logged and swallowed.
  */
+/**
+ * Delivery health, so "am I actually receiving these?" is answerable.
+ *
+ * Every failure here is swallowed on purpose — a Telegram outage must never delay an
+ * exit — but swallowed is not the same as invisible, and the difference matters: a
+ * silent channel and a healthy one looked identical from the outside.
+ */
+export const deliveryStats = { sent: 0, failed: 0, lastError: null, lastSentAt: null, configured: false }
+
 export async function notify(text, { silent = false } = {}) {
   const tag = config.paper ? '📝 <b>[PAPER]</b> ' : ''
   const body = tag + text
 
-  if (!config.telegram.token || !config.telegram.chatId) {
+  deliveryStats.configured = Boolean(config.telegram.token && config.telegram.chatId)
+  if (!deliveryStats.configured) {
     log.info(`[notify] ${body.replace(/<[^>]+>/g, '')}`)
     return false
   }
 
   const url = `https://api.telegram.org/bot${config.telegram.token}/sendMessage`
+  let allDelivered = true
+
   for (const part of split(body)) {
     try {
       const res = await fetch(url, {
@@ -33,14 +45,34 @@ export async function notify(text, { silent = false } = {}) {
       })
       if (!res.ok) {
         const info = await res.json().catch(() => ({}))
-        log.warn(`telegram send failed: ${res.status} ${info?.description ?? ''}`)
+        const why = `${res.status} ${info?.description ?? ''}`.trim()
+        log.warn(`telegram send failed: ${why}`)
+        deliveryStats.failed++
+        deliveryStats.lastError = why
+        allDelivered = false
+      } else {
+        deliveryStats.sent++
+        deliveryStats.lastSentAt = Date.now()
       }
     } catch (err) {
       log.warn(`telegram send error: ${err.message}`)
+      deliveryStats.failed++
+      deliveryStats.lastError = err.message
+      allDelivered = false
     }
     await sleep(300)
   }
-  return true
+
+  /**
+   * Report what actually happened.
+   *
+   * This returned `true` unconditionally, including when every send failed. The
+   * four-hourly summary re-baselines its deltas on a truthful return — "only after a
+   * successful send, so a failed send does not swallow a window's worth of activity" —
+   * so the guard silently did nothing, and a dropped summary took that window's activity
+   * with it. The next digest then measured from a baseline for a report nobody received.
+   */
+  return allDelivered
 }
 
 function split(text) {

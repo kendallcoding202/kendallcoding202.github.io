@@ -15,6 +15,7 @@ import {
 import { positionPnl } from './position.js'
 import { sizingSummary } from './sizing.js'
 import { analyze } from './learn.js'
+import { deliveryStats } from './notify.js'
 import { log } from './log.js'
 
 let learningCache = { at: 0, data: null }
@@ -304,6 +305,19 @@ export function buildSnapshot(walletSol, stats = null) {
     learning: learningSnapshot(),
     learningPending: config.learning.enabled && learningCache.at === 0,
     collection: collectionStatus(stats, storageSnapshot(), learningSnapshot()),
+    /**
+     * Whether Telegram is actually receiving anything. Sends are best-effort by design —
+     * an outage must never delay an exit — but a silent channel and a healthy one looked
+     * identical from the outside, which is a bad property for the surface you rely on
+     * when you are not at a screen.
+     */
+    telegram: {
+      configured: deliveryStats.configured,
+      sent: deliveryStats.sent,
+      failed: deliveryStats.failed,
+      lastError: deliveryStats.lastError,
+      lastSentAt: deliveryStats.lastSentAt,
+    },
     storage: storageSnapshot(),
     /**
      * The EFFECTIVE settings, read back out of the live config rather than assumed.

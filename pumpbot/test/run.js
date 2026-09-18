@@ -901,6 +901,50 @@ console.log('\nLearning')
   check('a clean run says nothing about truncation', !formatReport(report).includes('evicted before'))
 }
 
+// ------------------------------------------------- telegram delivery truthfulness
+console.log('\nTelegram delivery')
+{
+  const notifyMod = await import('../src/notify.js')
+  const { notify, deliveryStats } = notifyMod
+
+  const realToken = config.telegram.token
+  const realChat = config.telegram.chatId
+  const realFetch = globalThis.fetch
+
+  /**
+   * notify() returned true unconditionally, including when every send failed. The
+   * four-hourly summary re-baselines its deltas on that return value — "only after a
+   * successful send, so a failed send does not swallow a window's worth of activity" —
+   * so the guard silently did nothing and a dropped summary took its window with it.
+   */
+  config.telegram.token = 'test-token'
+  config.telegram.chatId = '123'
+  deliveryStats.sent = 0; deliveryStats.failed = 0; deliveryStats.lastError = null
+
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({}) })
+  check('a delivered message reports success', (await notify('hello')) === true)
+  check('and is counted', deliveryStats.sent === 1 && deliveryStats.failed === 0)
+
+  globalThis.fetch = async () => ({ ok: false, status: 429, json: async () => ({ description: 'Too Many Requests' }) })
+  check('a REFUSED message reports failure', (await notify('nope')) === false)
+  check('the failure is counted', deliveryStats.failed === 1)
+  check('and the reason is kept', String(deliveryStats.lastError).includes('429'))
+
+  globalThis.fetch = async () => { throw new Error('network unreachable') }
+  check('a network error reports failure too', (await notify('nope')) === false)
+  check('without throwing into the trading loop', deliveryStats.failed === 2)
+  check('and never blocks an exit', String(deliveryStats.lastError).includes('unreachable'))
+
+  // Unconfigured is a distinct state from failing, and must not read as delivered.
+  config.telegram.token = ''
+  check('an unconfigured channel does not claim delivery', (await notify('x')) === false)
+  check('and is marked unconfigured', deliveryStats.configured === false)
+
+  globalThis.fetch = realFetch
+  config.telegram.token = realToken
+  config.telegram.chatId = realChat
+}
+
 // ------------------------------------------------- metered feed cost estimate
 console.log('\nFeed cost estimate')
 {

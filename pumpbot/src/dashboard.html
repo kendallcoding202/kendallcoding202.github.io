@@ -694,7 +694,16 @@ function render(d) {
       fmtSol(L.exploreBankrollSol, 2) + '</code><br>' +
     '<span class="dim">These are the values this process actually resolved — a Railway ' +
       'variable of the same name overrides the default in code.</span>' +
-    (d.storage ? '<br>' + storageLine(d.storage) : '')
+    (d.storage ? '<br>' + storageLine(d.storage) : '') +
+    (d.telegram ? '<br>' + telegramLine(d.telegram) : '')
+}
+
+/** Is Telegram actually delivering? A silent channel used to look exactly like a healthy one. */
+function telegramLine(t) {
+  if (!t.configured) return 'Telegram <span style="color:var(--dimmer)">not configured</span> — alerts go to the log only'
+  const last = t.lastSentAt ? new Date(t.lastSentAt).toLocaleTimeString([], { hour12: false }) : 'never'
+  return 'Telegram <code>' + t.sent + '</code> delivered · <code>' + t.failed + '</code> failed · last <code>' + last + '</code>' +
+    (t.failed ? '<br><span style="color:var(--amber)">Last error: ' + esc(String(t.lastError)) + '</span>' : '')
 }
 
 /**
