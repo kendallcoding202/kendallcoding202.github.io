@@ -144,6 +144,45 @@ async function refreshSolPrice() {
   return solPriceUsd
 }
 
+/**
+ * One unambiguous answer to "is it collecting data right now?"
+ *
+ * That question has been asked repeatedly and every answer so far has come from reading
+ * a screenshot and inferring. The pieces were all on the page — launches, shadowed,
+ * journal size, halt banner — but assembling them into a verdict was left to the reader,
+ * and the reader is the one person who cannot see the code. So decide it here, from the
+ * same state the bot acts on, and say which link of the chain is broken when one is.
+ */
+function collectionStatus(stats, storage, learning) {
+  const reasons = []
+  if (!config.learning.enabled) reasons.push('LEARNING is off — nothing is being journalled')
+  if (!storage.writable) reasons.push(`${storage.dataDir} is not writable — nothing can be saved`)
+  if (stats) {
+    if (!stats.parsing && stats.messages > 50) reasons.push('the feed is not parsing')
+    if (stats.creates > 40 && stats.tradesMatched === 0) {
+      reasons.push('no trade events are reaching watched tokens, so no outcome can be labelled')
+    }
+    if (stats.creates > 20 && stats.watching === 0 && stats.shadowTracked === 0) {
+      reasons.push('launches are arriving but none are being observed')
+    }
+  }
+
+  // Rows per hour, measured rather than assumed.
+  const hours = stats?.uptimeSeconds ? stats.uptimeSeconds / 3600 : 0
+  const perHour = hours > 0.05 && learning ? Math.round((learning.labelled ?? 0) / hours) : null
+
+  return {
+    collecting: reasons.length === 0,
+    reasons,
+    tracking: stats?.shadowTracked ?? 0,
+    usableRows: learning?.labelled ?? 0,
+    rowsOnDisk: learning?.journalled ?? 0,
+    usablePerHour: perHour,
+    // Enough to say anything at all about the filter.
+    needed: config.learning.minSamplesForSuggestion,
+  }
+}
+
 export function buildSnapshot(walletSol, stats = null) {
   const state = getState()
   const open = openPositions()
@@ -264,6 +303,7 @@ export function buildSnapshot(walletSol, stats = null) {
     },
     learning: learningSnapshot(),
     learningPending: config.learning.enabled && learningCache.at === 0,
+    collection: collectionStatus(stats, storageSnapshot(), learningSnapshot()),
     storage: storageSnapshot(),
     /**
      * The EFFECTIVE settings, read back out of the live config rather than assumed.

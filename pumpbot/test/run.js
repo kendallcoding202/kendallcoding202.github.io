@@ -1044,6 +1044,34 @@ console.log('\nDashboard snapshot')
    * Persistence has to be stated, not assumed. A bot writing to ephemeral disk looks
    * perfectly healthy right up until a restart wipes every observation it ever made.
    */
+  /**
+   * "Is it collecting data right now?" has been asked repeatedly, and every answer so
+   * far came from reading a screenshot and inferring. The pieces were all on the page;
+   * assembling them into a verdict was left to the one person who cannot see the code.
+   * A status that only ever says "fine" would be worse than none, so both directions
+   * are pinned here.
+   */
+  check('a healthy bot reports that it is collecting',
+    buildSnapshot(50, { creates: 100, tradesMatched: 800, watching: 12, shadowTracked: 60,
+      parsing: true, messages: 5000, uptimeSeconds: 3600 }).collection.collecting === true)
+
+  const stalled = buildSnapshot(50, { creates: 100, tradesMatched: 0, watching: 0, shadowTracked: 0,
+    parsing: true, messages: 5000, uptimeSeconds: 3600 }).collection
+  check('a bot seeing launches but observing none reports NOT collecting', stalled.collecting === false)
+  check('and names both broken links', stalled.reasons.length >= 2, JSON.stringify(stalled.reasons))
+  check('it says no trades reach watched tokens',
+    stalled.reasons.some((r) => r.includes('no trade events')), JSON.stringify(stalled.reasons))
+  check('and that nothing is being observed',
+    stalled.reasons.some((r) => r.includes('none are being observed')), JSON.stringify(stalled.reasons))
+
+  const unparsed = buildSnapshot(50, { creates: 0, tradesMatched: 0, watching: 0, shadowTracked: 0,
+    parsing: false, messages: 5000, uptimeSeconds: 3600 }).collection
+  check('a feed that is not parsing is reported', unparsed.reasons.some((r) => r.includes('not parsing')))
+
+  check('the gap to a usable verdict is stated', buildSnapshot(50, { creates: 10, tradesMatched: 50,
+    watching: 5, shadowTracked: 5, parsing: true, messages: 500, uptimeSeconds: 600 })
+    .collection.needed === config.learning.minSamplesForSuggestion)
+
   check('the data directory is reported', snap.storage.dataDir === config.dataDir)
   check('writability is reported', snap.storage.writable === true)
   check('journal size is reported', typeof snap.storage.journalBytes === 'number')
