@@ -102,6 +102,9 @@ function computeLearning() {
         suggestions: a.suggestions.slice(0, 4),
         stale: a.totals.stale,
         truncated: a.totals.truncated,
+        journalled: a.totals.journalled,
+        olderThanCap: a.totals.olderThanCap,
+        explored: a.totals.explored,
       },
     }
   } catch (err) {
@@ -321,8 +324,35 @@ export function startDashboard(getContext) {
     if (!isLoopback) {
       const provided = new URL(req.url, 'http://x').searchParams.get('token') ?? ''
       if (provided !== token) {
-        res.writeHead(401, { 'content-type': 'text/plain' })
-        res.end('unauthorized')
+        /**
+         * Say what is missing, not just that something is. A bare "unauthorized" gives
+         * no way forward, and the answer — append ?token= — is not guessable from it.
+         * The token itself is never echoed: the whole point of the check is that this
+         * page exposes a wallet and its P&L.
+         */
+        res.writeHead(401, { 'content-type': 'text/html; charset=utf-8' })
+        res.end(
+          '<!doctype html><meta charset="utf-8">' +
+            '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+            '<title>pumpbot — token required</title>' +
+            '<body style="background:#080b14;color:#e8edf7;font:15px/1.6 ui-sans-serif,system-ui;' +
+            'padding:32px 20px;max-width:640px;margin:0 auto">' +
+            '<h1 style="font-size:19px;margin:0 0 14px">Token required</h1>' +
+            '<p style="color:#6b7a99;margin:0 0 18px">This page shows a wallet balance, open ' +
+            'positions and P&amp;L, so it is not reachable without one.</p>' +
+            '<p style="margin:0 0 10px">Add your token to the URL:</p>' +
+            '<pre style="background:#0e1422;border:1px solid #1e2942;border-radius:10px;padding:12px 14px;' +
+            'overflow-x:auto;font-size:13px;color:#4dd8ff">' +
+            (provided ? '…up.railway.app/?token=&lt;the correct token&gt;' : '…up.railway.app/?token=&lt;your token&gt;') +
+            '</pre>' +
+            '<p style="color:#6b7a99;font-size:13.5px;margin:16px 0 0">' +
+            (provided
+              ? 'A token was supplied but did not match. '
+              : 'No token was supplied. ') +
+            'It is the value of <code style="color:#ffb347">DASHBOARD_TOKEN</code> in your ' +
+            'host\u2019s environment variables. Once the page loads it keeps the token on every ' +
+            'refresh, so bookmark the full URL.</p></body>',
+        )
         return
       }
     }

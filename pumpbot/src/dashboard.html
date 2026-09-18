@@ -599,8 +599,17 @@ function render(d) {
     : '<span style="color:var(--dimmer)">learning disabled</span>'
   else {
     const n = d.learning, rows = []
-    rows.push('Journal <code>' + n.labelled + '</code> labelled · <code>' + n.pending + '</code> in window · <code>' +
-      n.bought + '</code> bought / <code>' + n.rejected + '</code> declined')
+    rows.push('Journal <code>' + n.journalled + '</code> rows on disk · <code>' + n.labelled +
+      '</code> usable · <code>' + n.pending + '</code> still in window · <code>' +
+      n.bought + '</code> bought / <code>' + n.rejected + '</code> declined / <code>' +
+      (n.explored ?? 0) + '</code> explored')
+    // Rows on disk that no longer count, and why. Without this a big journal beside a
+    // small "labelled" reads as data loss rather than a deliberate exclusion.
+    const dropped = []
+    if (n.stale) dropped.push('<code>' + n.stale + '</code> pre-dating the price-feed fix (no prices were recorded, so every one reads as "went nowhere")')
+    if (n.olderThanCap) dropped.push('<code>' + n.olderThanCap + '</code> older than the analysis window')
+    if (n.truncated) dropped.push('<code>' + n.truncated + '</code> cut short by eviction')
+    if (dropped.length) rows.push('<span style="color:var(--amber)">Excluded:</span> ' + dropped.join(' · '))
     if (n.baseRatePct !== null) {
       rows.push('Reached first rung — all <code>' + n.baseRatePct.toFixed(1) + '%</code>' +
         (n.boughtRatePct !== null ? ' · bought <code>' + n.boughtRatePct.toFixed(1) + '%</code>' : '') +
@@ -608,12 +617,22 @@ function render(d) {
       rows.push('Filter verdict: <code>' + esc(n.filterEdge) + '</code>')
     }
     if (n.ev) {
-      const lo = n.ev.meanMultiple - 1.96 * n.ev.stdErr, hi = n.ev.meanMultiple + 1.96 * n.ev.stdErr
-      rows.push('Simulated ladder return <code>' + n.ev.meanMultiple.toFixed(3) + 'x</code> (95% CI ' +
-        lo.toFixed(3) + '–' + hi.toFixed(3) + ', n=' + n.ev.n + ') → ' +
-        (lo > 1 ? '<span class="pos">positive with support</span>'
-         : hi < 1 ? '<span class="neg">negative with support</span>'
-         : 'indistinguishable from break-even'))
+      /**
+       * The same zero-width-interval trap the report has: at n=1, or with identical
+       * rows, stdErr is exactly 0 and the interval collapses to a point — so a single
+       * trade would render as "positive with support". `testable` is the gate.
+       */
+      if (!n.ev.testable) {
+        rows.push('Simulated ladder return <code>' + n.ev.meanMultiple.toFixed(3) + 'x</code> (n=' + n.ev.n +
+          ') · <span style="color:var(--dimmer)">too few varying samples to draw a verdict</span>')
+      } else {
+        const lo = n.ev.meanMultiple - 1.96 * n.ev.stdErr, hi = n.ev.meanMultiple + 1.96 * n.ev.stdErr
+        rows.push('Simulated ladder return <code>' + n.ev.meanMultiple.toFixed(3) + 'x</code> (95% CI ' +
+          lo.toFixed(3) + '–' + hi.toFixed(3) + ', n=' + n.ev.n + ') → ' +
+          (lo > 1 ? '<span class="pos">positive with support</span>'
+           : hi < 1 ? '<span class="neg">negative with support</span>'
+           : 'indistinguishable from break-even'))
+      }
     }
     if (n.topMisses && n.topMisses.length) {
       rows.push('Winners declined by check: ' + n.topMisses.map((m) => '<code>' + esc(m.check) + ' ' + m.wouldHaveHit + '/' + m.total + '</code>').join(' · '))
