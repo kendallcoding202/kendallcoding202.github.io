@@ -308,6 +308,15 @@ export const config = {
     sellSlippagePct: num('SELL_SLIPPAGE_PCT', 25),
     // pump.fun protocol fee plus the trade API's cut, used for paper fills and PnL.
     feePct: num('FEE_PCT', 1.5),
+    /**
+     * Price impact of one fill, as a percentage of the position, at the reference size
+     * below. Buying into a bonding curve moves the price against you; so does selling.
+     * An estimate, but leaving it at zero is not a neutral choice — it is a claim that
+     * trading is free, and that claim always flatters the strategy.
+     */
+    priceImpactPct: num('PRICE_IMPACT_PCT', 0.5),
+    // The position size the impact figure above was estimated for.
+    impactReferenceSol: num('IMPACT_REFERENCE_SOL', 0.075),
     maxRetries: num('EXEC_MAX_RETRIES', 3),
     // Sell attempts on one position before we stop retrying. Each failed attempt still
     // costs a priority fee that no circuit breaker can see.

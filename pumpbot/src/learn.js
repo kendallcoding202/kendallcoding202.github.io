@@ -24,6 +24,36 @@ export function wilson(successes, n, z = 1.96) {
 }
 
 /**
+ * Everything one round trip actually costs, as a fraction of the stake.
+ *
+ * The old model charged a flat fee x2 and nothing else, which understated the real cost
+ * by 2.7 to 3.8 percentage points — enough to print a losing configuration as a winner.
+ * Two of the three costs it ignored matter structurally:
+ *
+ *  - PRIORITY FEES ARE FIXED PER TRANSACTION, so they scale INVERSELY with position size
+ *    and multiply with the number of rungs. Four rungs plus a buy is five transactions:
+ *    1.67% of a 0.15 SOL position, 3.33% of a 0.075 SOL one. This is also why a sweep
+ *    over exit plans must charge them — otherwise every extra rung looks free and the
+ *    recommendation drifts toward selling in more and more pieces.
+ *  - PRICE IMPACT, because a bonding curve moves against you on the way in and again on
+ *    the way out.
+ *
+ * Costed at the LIVE position size by default, since the question this report exists to
+ * answer is whether to fund a live wallet — not how paper did at a paper size.
+ */
+function tradingCost({ sells, positionSol }) {
+  const sideFee = config.exec.feePct / 100
+  const impact = (config.exec.priceImpactPct / 100) * (positionSol / config.exec.impactReferenceSol)
+  const sides = 1 + sells // one buy, plus however many times we sold
+  const priority = (config.exec.priorityFeeSol * sides) / positionSol
+  return {
+    proportional: (sideFee + impact) * sides,
+    priority,
+    total: (sideFee + impact) * sides + priority,
+  }
+}
+
+/**
  * Replays the configured exit rules against a row's realised price path and returns the
  * multiple of stake we would have ended with. 1.00 is break-even.
  *
@@ -44,12 +74,44 @@ export function wilson(successes, n, z = 1.96) {
  * Terminal value is the price at the end of the outcome window, not at liquidation —
  * a bag still open at the 15-minute mark is valued at its 15-minute price.
  */
+/**
+ * The position size at which total cost is lowest.
+ *
+ * Cost is U-shaped: the priority fee is fixed per transaction so it punishes small
+ * positions, price impact is proportional so it punishes large ones. Setting the
+ * derivative of one against the other to zero gives sqrt(priorityFee x reference /
+ * impactAtReference). Worth knowing because it is one of the few levers here that is
+ * arithmetic rather than a hypothesis about the market.
+ */
+export function cheapestPositionSol() {
+  const impactAtRef = config.exec.priceImpactPct / 100
+  if (!(impactAtRef > 0) || !(config.exec.priorityFeeSol > 0)) return null
+  return Math.sqrt((config.exec.priorityFeeSol * config.exec.impactReferenceSol) / impactAtRef)
+}
+
+/**
+ * The size a LIVE account actually trades: the floor tier.
+ *
+ * Not tiers[0] — those are sorted highest-first so tier lookup can be a find(), so
+ * tiers[0] is the TOP tier. Costing at 0.15 instead of 0.075 halves the apparent
+ * priority-fee drag, which is exactly the error this cost model exists to stop making.
+ */
+export function livePositionSol() {
+  return config.sizing.tiers.find((t) => t.minEquitySol === 0)?.buySol ?? 0.075
+}
+
+/** Round-trip cost as a fraction of stake, for a plan that sells `sells` times. */
+export function roundTripCost({ sells = 1, positionSol = livePositionSol() } = {}) {
+  return tradingCost({ sells, positionSol })
+}
+
 export function simulateLadder(
   row,
   {
     ladder = config.exit.ladder,
     stopLossPct = config.exit.stopLossPct,
     trailingPct = config.exit.trailingDrawdownPct,
+    positionSol = livePositionSol(),
   } = {},
 ) {
   const peak = row.peakMultiple
@@ -57,14 +119,17 @@ export function simulateLadder(
   const trough = row.troughMultiple
   if (!(peak > 0)) return null
 
-  const fees = (config.exec.feePct / 100) * 2
   const firstTarget = 1 + (ladder[0]?.atPct ?? 50) / 100
   const stopMultiple = Math.max(0, 1 - stopLossPct / 100)
+  const net = (gross, sells) => {
+    const c = tradingCost({ sells, positionSol })
+    return Math.max(0, gross * (1 - c.proportional) - c.priority)
+  }
 
-  // Never reached the first rung: the stop-loss or the time stop got us out.
+  // Never reached the first rung: the stop-loss or the time stop got us out. One sell.
   if (peak < firstTarget) {
     const exit = Number.isFinite(trough) && trough <= stopMultiple ? stopMultiple : Math.max(end, 0)
-    return exit * (1 - fees)
+    return net(exit, 1)
   }
 
   /**
@@ -80,11 +145,12 @@ export function simulateLadder(
    * is why the sweep reports how many rows actually carry ordering.
    */
   if (row.hasOrdering && row.troughFirst && Number.isFinite(trough) && trough <= stopMultiple) {
-    return stopMultiple * (1 - fees)
+    return net(stopMultiple, 1)
   }
 
   let tokensLeft = 1 // fraction of the original bag
   let recovered = 0
+  let sells = 0 // every one of these is another transaction, and another priority fee
 
   for (const rung of ladder) {
     const target = 1 + rung.atPct / 100
@@ -92,6 +158,7 @@ export function simulateLadder(
     const fraction = Math.min(rung.sellPct / 100, tokensLeft)
     recovered += fraction * target
     tokensLeft -= fraction
+    sells++
     if (tokensLeft <= 0) break
   }
 
@@ -112,9 +179,10 @@ export function simulateLadder(
     const troughCouldTrail = row.hasOrdering ? !row.troughFirst : true
     const drewDown = troughCouldTrail && Number.isFinite(trough) && trough <= trailExit
     recovered += tokensLeft * (drewDown ? trailExit : Math.max(end, 0))
+    sells++ // closing the remainder is its own transaction
   }
 
-  return recovered * (1 - fees)
+  return net(recovered, sells)
 }
 
 /**
@@ -658,6 +726,27 @@ export function formatReport(a) {
       L.push(`  ${f.check.padEnd(18)} rejected ${String(f.total).padStart(4)} · ${String(f.wouldHaveHit).padStart(4)} would have hit · ${p(f.rate)}`)
     }
     L.push('  A check rejecting many winners is a candidate to loosen.')
+    L.push('')
+  }
+
+  /**
+   * What it costs to be in this game at all. Printed before any verdict, because a
+   * strategy has to clear this before its edge means anything — and because the number
+   * is arithmetic, not a hypothesis, so it is true before a single row is collected.
+   */
+  {
+    const size = livePositionSol()
+    const one = roundTripCost({ sells: 1, positionSol: size })
+    const full = roundTripCost({ sells: config.exit.ladder.length + 1, positionSol: size })
+    const best = cheapestPositionSol()
+    L.push(`Cost of a round trip at ${size} SOL/position:`)
+    L.push(`  losing trade (1 sell)      ${(one.total * 100).toFixed(1)}%`)
+    L.push(`  full ladder (${config.exit.ladder.length + 1} sells)      ${(full.total * 100).toFixed(1)}%  ← charged against your winners`)
+    if (best) {
+      L.push(`  cheapest size would be     ${best.toFixed(4)} SOL` +
+        (Math.abs(best - size) / size > 0.15 ? '  ← worth moving toward' : '  (you are close to it)'))
+    }
+    L.push('  Fewer, larger rungs cost less. Every rung is a transaction.')
     L.push('')
   }
 

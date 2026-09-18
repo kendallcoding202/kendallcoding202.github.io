@@ -576,9 +576,62 @@ console.log('\nLearning')
   const winner = simulateLadder({ peakMultiple: 5, endMultiple: 2, troughMultiple: 1 })
   check('a runner beats break-even', winner > 1.5, String(winner))
 
-  // Never reached the first rung and dumped: the stop-loss caps the damage at -30%.
+  /**
+   * Costs are charged as they are actually incurred, not as a flat haircut.
+   *
+   * The old model charged fee x2 and nothing else, understating a real round trip by
+   * 2.7-3.8 percentage points — enough to print a losing configuration as a winner.
+   * Expectations here are derived from config rather than hardcoded, so they stay honest
+   * if a fee moves, and they assert the SHAPE of the cost rather than one number.
+   */
+  const POS = config.sizing.tiers.find((t) => t.minEquitySol === 0).buySol
+  // Tiers are sorted highest-first so lookup can be a find(), which makes tiers[0] the
+  // TOP tier. Costing at that size instead of the entry size halves the apparent
+  // priority-fee drag — the exact error this cost model exists to prevent.
+  check('costs are charged at the size a live account trades, not the top tier',
+    POS === 0.075 && config.sizing.tiers[0].buySol === 0.15,
+    JSON.stringify(config.sizing.tiers))
+  const costFor = (sells) => {
+    const side = config.exec.feePct / 100 + (config.exec.priceImpactPct / 100) * (POS / config.exec.impactReferenceSol)
+    const sides = 1 + sells
+    return { proportional: side * sides, priority: (config.exec.priorityFeeSol * sides) / POS }
+  }
+  const netOf = (gross, sells) => {
+    const c = costFor(sells)
+    return gross * (1 - c.proportional) - c.priority
+  }
+
+  // Never reached the first rung and dumped: the stop-loss caps the damage at -30%,
+  // then one buy and one sell are paid for.
   const dud = simulateLadder({ peakMultiple: 1.1, endMultiple: 0.05, troughMultiple: 0.05 })
-  check('a coin that dies is capped by the stop-loss', near(dud, 0.7 * 0.97, 0.01), String(dud))
+  check('a coin that dies is capped by the stop-loss, net of one round trip',
+    near(dud, netOf(0.7, 1), 1e-9), `${dud} vs ${netOf(0.7, 1)}`)
+  check('and that is meaningfully worse than the old flat-fee model claimed',
+    dud < 0.7 * 0.97 - 0.01, `${dud} vs old ${0.7 * 0.97}`)
+
+  // A fixed priority fee per transaction hurts a smaller position more.
+  /**
+   * Cost is U-SHAPED in position size, because the two components pull opposite ways:
+   * a priority fee is fixed per transaction, so it punishes small positions, while price
+   * impact is proportional, so it punishes large ones. There is an interior optimum, and
+   * assuming either cost alone gets the direction wrong — I assumed it myself here, and
+   * the test caught it.
+   */
+  const path = { peakMultiple: 1.1, endMultiple: 0.05, troughMultiple: 0.05 }
+  const tiny = simulateLadder(path, { positionSol: 0.01 })
+  const mid = simulateLadder(path, { positionSol: 0.0866 })
+  const huge = simulateLadder(path, { positionSol: 1.0 })
+  check('a tiny position is eaten by fixed priority fees', tiny < mid, `${tiny} vs ${mid}`)
+  check('a huge position is eaten by price impact', huge < mid, `${huge} vs ${mid}`)
+  check('the optimum sits between them', mid > tiny && mid > huge)
+
+  // And every extra rung is another transaction, so a sweep cannot treat rungs as free.
+  const oneRung = simulateLadder({ peakMultiple: 5, endMultiple: 5, troughMultiple: 4 },
+    { ladder: [{ atPct: 50, sellPct: 100 }] })
+  const fourRungs = simulateLadder({ peakMultiple: 5, endMultiple: 5, troughMultiple: 4 },
+    { ladder: [{ atPct: 50, sellPct: 25 }, { atPct: 100, sellPct: 25 }, { atPct: 200, sellPct: 25 }, { atPct: 400, sellPct: 25 }] })
+  check('rungs are not free — each one is charged',
+    fourRungs < oneRung * 5, `${fourRungs} vs ${oneRung}`)
 
   // Never ran, never crashed — the time stop exits near flat, losing only fees.
   const flat = simulateLadder({ peakMultiple: 1.1, endMultiple: 0.95, troughMultiple: 0.8 })
@@ -595,8 +648,10 @@ console.log('\nLearning')
   )
 
   // Held to the end at the rung price, no drawdown — the bag keeps its value.
+  // One rung fires, the remainder is closed at the window price: two sells.
   const held = simulateLadder({ peakMultiple: 1.5, endMultiple: 1.5, troughMultiple: 1.2 })
-  check('a bag still up at window close is valued there', near(held, 1.5 * 0.97, 0.01), String(held))
+  check('a bag still up at window close is valued there, net of costs',
+    near(held, netOf(1.5, 2), 1e-9), `${held} vs ${netOf(1.5, 2)}`)
 
   // A feature that genuinely separates outcomes should be found...
   const signal = []
@@ -732,7 +787,8 @@ console.log('\nLearning')
   const dippedThenRan = { peakMultiple: 3, troughMultiple: 0.5, endMultiple: 2.5, hasOrdering: true, troughFirst: true }
   const ranThenDied = { peakMultiple: 3, troughMultiple: 0.5, endMultiple: 0.5, hasOrdering: true, troughFirst: false }
   const stoppedOut = simulateLadder(dippedThenRan, { stopLossPct: 30 })
-  check('a dip before the run stops us out of it', near(stoppedOut, 0.7 * 0.97, 0.01), String(stoppedOut))
+  check('a dip before the run stops us out of it', near(stoppedOut, netOf(0.7, 1), 1e-9),
+    `${stoppedOut} vs ${netOf(0.7, 1)}`)
   check('the same path in the other order still rides the ladder',
     simulateLadder(ranThenDied, { stopLossPct: 30 }) > 1, String(simulateLadder(ranThenDied, { stopLossPct: 30 })))
   check('a stop too deep to trigger does not fire',
