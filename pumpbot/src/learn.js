@@ -612,6 +612,28 @@ function analyzeRows(rows, onDisk) {
    */
   const blocked = labelled.filter((r) => r.action === 'blocked')
 
+  /**
+   * WHY the capital gate refused the launches the filter approved.
+   *
+   * These rows carry blockedBy and nothing printed it, so a report could say "bought 0"
+   * and "the filter is rejecting everything" while the filter was in fact approving
+   * launches that were then refused downstream — a completely different problem with a
+   * completely different fix. The distinction is invisible without this.
+   */
+  const blockedReasons = Object.entries(
+    blocked.reduce((acc, r) => {
+      // Collapse the variable parts so "already holding 4 positions (max 4)" and
+      // "wallet 0.31 below 0.38 needed" group instead of each being unique.
+      const why = String(r.blockedBy ?? 'unknown')
+        .replace(/[\d.]+/g, 'N')
+        .slice(0, 80)
+      acc[why] = (acc[why] ?? 0) + 1
+      return acc
+    }, {}),
+  )
+    .map(([reason, n]) => ({ reason, n }))
+    .sort((a, b) => b.n - a.n)
+
   const base = wilson(labelled.filter((r) => r.hitFirstRung).length, labelled.length)
   const boughtRate = wilson(bought.filter((r) => r.hitFirstRung).length, bought.length)
   const rejectedRate = wilson(rejected.filter((r) => r.hitFirstRung).length, rejected.length)
@@ -798,6 +820,7 @@ function analyzeRows(rows, onDisk) {
       explored: explored.length,
       rejected: rejected.length,
       blocked: blocked.length,
+      blockedReasons,
       pending: current.length - labelled.length,
       truncated,
       olderThanCap,
@@ -888,9 +911,23 @@ export function formatReport(a) {
     L.push('Filtered vs explored: NOT AVAILABLE.')
     if (!a.ev.bought) {
       L.push(`  No labelled positions the filter ACCEPTED (bought n=${a.totals.bought}).`)
-      L.push('  The filter is rejecting everything, so there is nothing to compare its')
-      L.push('  picks against. Loosen entry thresholds until this arm has samples —')
-      L.push('  until then the report cannot tell you whether the filter is worth having.')
+      /**
+       * "The filter rejects everything" and "the filter approves launches that are then
+       * refused downstream" are different problems with different fixes, and this used
+       * to assert the first without checking. The blocked count is the difference.
+       */
+      if (a.totals.blocked > 0) {
+        L.push(`  But the filter DID approve ${a.totals.blocked} — every one was refused at the`)
+        L.push('  capital gate, so this is not an entry-threshold problem:')
+        for (const b of a.totals.blockedReasons.slice(0, 5)) {
+          L.push(`    ${String(b.n).padStart(5)} ×  ${b.reason}`)
+        }
+        L.push('  (N stands in for numbers that varied.) Fix the gate before touching the filter.')
+      } else {
+        L.push('  The filter is rejecting everything and nothing reached the capital gate,')
+        L.push('  so this IS an entry-threshold problem. Loosen until this arm has samples —')
+        L.push('  until then the report cannot say whether the filter is worth having.')
+      }
     }
     if (!a.ev.explored) {
       L.push(`  No labelled explore trades (explored n=${a.totals.explored}).`)

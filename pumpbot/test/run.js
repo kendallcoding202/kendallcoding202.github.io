@@ -1670,7 +1670,32 @@ console.log('\nLearning')
   const oneArm = formatReport(analyze(rejectsOnly))
   check('a missing arm is announced, not omitted', oneArm.includes('NOT AVAILABLE'))
   check('it names which side is empty', oneArm.includes('No labelled positions the filter ACCEPTED'))
-  check('and says what to do about it', oneArm.includes('Loosen entry thresholds'))
+  check('and says what to do about it', oneArm.includes('Loosen until this arm has samples'))
+
+  /**
+   * "The filter rejects everything" and "the filter approves launches that are then
+   * refused downstream" are different problems with different fixes, and the report
+   * asserted the first without checking. Live, it printed "the filter is rejecting
+   * everything" while 15 approved launches had been refused at the capital gate.
+   */
+  const withBlocked = formatReport(analyze([
+    ...rejectsOnly,
+    ...Array.from({ length: 7 }, (_, i) => ({
+      ...rejectsOnly[0], mint: 'BLK' + i, action: 'blocked',
+      blockedBy: 'already holding 4 positions (max 4)',
+    })),
+    ...Array.from({ length: 2 }, (_, i) => ({
+      ...rejectsOnly[0], mint: 'BLC' + i, action: 'blocked', blockedBy: 'creator is blocklisted',
+    })),
+  ]))
+  check('an empty bought arm caused by the GATE is not blamed on the filter',
+    !withBlocked.includes('The filter is rejecting everything'), 'still blames the filter')
+  check('and the gate reasons are named and counted',
+    /7 ×\s+already holding N positions/.test(withBlocked) &&
+    /2 ×\s+creator is blocklisted/.test(withBlocked),
+    withBlocked.slice(withBlocked.indexOf('NOT AVAILABLE'), withBlocked.indexOf('NOT AVAILABLE') + 400))
+  check('with the varying numbers collapsed so they group',
+    withBlocked.includes('already holding N positions (max N)'))
 
   const bothArms = formatReport(analyze(labelled.map((r) =>
     r.action === 'rejected' ? { ...r, action: 'explored' } : r)))
