@@ -449,8 +449,29 @@ export function startDashboard(getContext) {
 
     if (url.pathname === '/api/state') {
       await refreshSolPrice()
-      const ctx = getContext() ?? {}
-      const body = JSON.stringify(buildSnapshot(ctx.walletSol, ctx.stats ?? null))
+      /**
+       * The page now comes up BEFORE the bot, so this has to survive being asked for a
+       * snapshot while the bot is still starting — or has failed to. Reporting the
+       * failure is the entire reason the page starts first; throwing here would put us
+       * back where we were, with a healthy-looking container and nothing to read.
+       */
+      let ctx = {}
+      let snapshotError = null
+      try {
+        ctx = getContext() ?? {}
+      } catch (err) {
+        snapshotError = err?.message ?? String(err)
+      }
+      let payload
+      try {
+        payload = buildSnapshot(ctx.walletSol, ctx.stats ?? null)
+      } catch (err) {
+        payload = { mode: config.paper ? 'paper' : 'live', version: config.version, updatedAt: Date.now() }
+        snapshotError = err?.message ?? String(err)
+      }
+      payload.startupError = ctx.startupError ?? null
+      payload.snapshotError = snapshotError
+      const body = JSON.stringify(payload)
       res.writeHead(200, {
         'content-type': 'application/json',
         'cache-control': 'no-store',

@@ -174,24 +174,47 @@ async function run() {
   }
 
   const bot = new Bot()
-  await bot.start()
 
   /**
-   * The dashboard must never be able to take the bot down.
+   * The dashboard comes up FIRST, before the bot starts.
    *
-   * startDashboard throws when DASHBOARD_HOST is public and DASHBOARD_TOKEN is unset —
-   * correct on its own terms, but called unguarded it kills the process AFTER the bot
-   * has started and taken the ledger lock, so a hosted deploy crash-loops over a display
-   * setting while positions sit unmanaged. Trading is the job; the dashboard is a window
-   * onto it, and a broken window is not a reason to stop.
+   * It used to start afterwards, which made the one tool for diagnosing a broken bot
+   * the first casualty of a broken bot: anything slow or fatal in bot.start() — a
+   * journal that takes seconds to index, a feed that will not connect, an RPC that
+   * hangs — left the platform reporting a healthy container and nothing to look at.
+   * The page is the diagnostic surface, so it must not depend on the thing it is
+   * diagnosing.
+   *
+   * It also still must never be able to take the bot down: startDashboard throws when
+   * DASHBOARD_HOST is public and DASHBOARD_TOKEN is unset, and unguarded that kills a
+   * hosted deploy over a display setting while positions sit unmanaged. Trading is the
+   * job; the dashboard is a window onto it, and a broken window is not a reason to stop.
    */
+  let startupError = null
   let server = null
   try {
-    server = startDashboard(() => ({ walletSol: bot.walletSol, stats: bot.statsSnapshot() }))
+    server = startDashboard(() => ({
+      walletSol: bot.walletSol,
+      stats: bot.statsSnapshot(),
+      startupError,
+    }))
   } catch (err) {
     log.error(`dashboard did not start: ${err.message}`)
     log.error('Continuing WITHOUT it — the bot keeps trading. Fix the setting and redeploy.')
     await notify(`⚠️ <b>Dashboard did not start</b>\n${esc(err.message)}\nThe bot is still running.`)
+  }
+
+  /**
+   * A failed start is REPORTED, not swallowed into a silent process. The container
+   * stays up so the page can say what happened, rather than crash-looping with the
+   * explanation scrolling past in logs nobody has open.
+   */
+  try {
+    await bot.start()
+  } catch (err) {
+    startupError = err?.message ?? String(err)
+    log.error(`bot failed to start: ${startupError}`)
+    await notify(`🛑 <b>Bot failed to start</b>\n${esc(startupError)}\nThe dashboard is up; nothing is trading.`)
   }
 
   const telegram = new CommandListener(bot)

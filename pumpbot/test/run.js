@@ -3618,6 +3618,17 @@ console.log('\nEnd-to-end bot loop')
    * reactions. With the analysis worker down there are no row counts, and the banner
    * printed "0 usable rows" — indistinguishable from the journal being empty.
    */
+  /**
+   * The page must answer even when the bot has not started, because it now comes up
+   * FIRST for exactly that reason. It used to start afterwards, which made the one tool
+   * for diagnosing a broken bot the first casualty of a broken bot — the platform
+   * reported a healthy container and there was nothing to look at.
+   */
+  check('a snapshot survives having no bot stats at all',
+    typeof JSON.stringify(buildSnapshot(undefined, null)) === 'string')
+  check('and still reports the build, so a deploy can be confirmed with nothing running',
+    buildSnapshot(undefined, null).version === config.version)
+
   check('the banner distinguishes missing COUNTS from missing DATA',
     typeof snap.collection.countsUnavailable === 'boolean',
     JSON.stringify(snap.collection.countsUnavailable))

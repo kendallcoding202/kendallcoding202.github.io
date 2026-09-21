@@ -417,7 +417,17 @@ function render(d) {
   } else col.hidden = true
 
   const banner = document.getElementById('banner')
-  if (d.halted) {
+  /**
+   * A bot that failed to start outranks a halt. The page comes up before the bot now
+   * precisely so this can be said out loud, instead of the platform reporting a healthy
+   * container while nothing trades.
+   */
+  if (d.startupError || d.snapshotError) {
+    banner.hidden = false
+    banner.textContent = d.startupError
+      ? '🛑 BOT FAILED TO START — ' + d.startupError + ' · nothing is trading'
+      : '⚠️ Dashboard could not read bot state — ' + d.snapshotError
+  } else if (d.halted) {
     banner.hidden = false
     banner.textContent = '🛑 HALTED — ' + d.halted.reason + ' · open positions are still managed to exit'
   } else banner.hidden = true
