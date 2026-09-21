@@ -389,11 +389,18 @@ function render(d) {
      * reading the page, so name the one that is actually broken.
      */
     if (c.collecting && c.countsUnavailable) {
+      /**
+       * "Still starting" and "broken" are different, and saying the alarming one on
+       * every restart is how a warning stops being read. The first analysis takes a few
+       * seconds against a journal this size, so for that window there is nothing wrong.
+       */
+      const why = c.analysisFailing
+        ? '<span style="color:var(--amber)">Row counts unavailable — the analysis worker is failing' +
+          (c.analysisRetryInSeconds ? ', retrying in ' + c.analysisRetryInSeconds + 's' : '') + '.</span>'
+        : '<span class="dim">Row counts pending — the first analysis since startup is still running.</span>'
       col.innerHTML = '● COLLECTING · watching <b>' + c.tracking + '</b> tokens' +
-        '<span class="why"><span style="color:var(--amber)">Row counts unavailable — the ' +
-        'analysis worker is not running' +
-        (c.analysisRetryInSeconds ? ', retrying in ' + c.analysisRetryInSeconds + 's' : '') +
-        '.</span><br>Journalling is unaffected — launches are still being written to disk.' +
+        '<span class="why">' + why +
+        '<br>Journalling is unaffected — launches are still being written to disk.' +
         (c.analysisError ? '<br>Last error: ' + esc(String(c.analysisError)) : '') +
         (c.storage ? '<br>' + storageLine(c.storage) : '') +
         (c.creatorPrior ? '<br>' + priorLine(c.creatorPrior) : '') + '</span>'
