@@ -439,29 +439,59 @@ const mkPosition = (over = {}) => ({
     decideExit(mkPosition(), { priceSol: 2e-7, vSol: 8 }).reasons[0].includes('drained'),
   )
 
-  // Stale price: every other rule reasons from a price, so a frozen one silently
-  // disables the stop-loss and the trailing stop. Holding blind is the worst state.
+  /**
+   * SILENCE IS NOT A SELL SIGNAL, and the rule that said it was has been removed.
+   *
+   * On a bonding curve the price is vSol/vTokens and those move only when somebody
+   * trades. No trades therefore means the price has NOT CHANGED — the stop-loss was
+   * never silently disabled, it simply had not triggered. The old rule turned "nobody
+   * traded for three minutes" into a guaranteed realized loss, and the live log was
+   * full of it closing positions at -20% and worse.
+   */
   const staleMs = (config.exit.stalePriceSeconds + 30) * 1000
   const stale = decideExit(mkPosition({ lastPriceAt: Date.now() - staleMs }), { priceSol: 1e-7, vSol: 30 })
-  check('a frozen price forces an exit', stale.sellAll && stale.reasons[0].includes('no price update'))
+  check('a quiet token is no longer dumped for being quiet', stale.sellTokens === 0,
+    JSON.stringify(stale.reasons))
 
   const staleButWinning = decideExit(
     mkPosition({ lastPriceAt: Date.now() - staleMs, rungsHit: [50, 100], peakPriceSol: 3e-7 }),
     { priceSol: 2.9e-7, vSol: 50 },
   )
-  check('stale price beats even a winning ladder', staleButWinning.sellAll && staleButWinning.reasons[0].includes('no price update'))
+  check('and silence certainly does not close a winner', !staleButWinning.sellAll,
+    JSON.stringify(staleButWinning.reasons))
 
-  const freshEnough = decideExit(
-    mkPosition({ lastPriceAt: Date.now() - (config.exit.stalePriceSeconds - 30) * 1000 }),
+  // The rules that DO reason about price still work on a quiet token, because the
+  // price they are reasoning about is still correct.
+  const quietAndFalling = decideExit(
+    mkPosition({ lastPriceAt: Date.now() - staleMs }), { priceSol: 0.5e-7, vSol: 30 },
+  )
+  check('a quiet token that has fallen through the stop is still sold',
+    quietAndFalling.sellAll && /stop/i.test(quietAndFalling.reasons.join(' ')),
+    JSON.stringify(quietAndFalling.reasons))
+
+  /**
+   * What genuinely IS dangerous: not being able to price the position at all. A
+   * graduated token's curve account is gone, or the RPC will not answer. The bot reads
+   * the curve directly when the feed goes quiet, so reaching this state means those
+   * reads failed repeatedly — one timeout is a bad moment, several in a row is real.
+   */
+  const unpriceable = decideExit(
+    mkPosition({ lastPriceAt: Date.now() - staleMs, blindReads: config.exit.blindExitAfterReads }),
     { priceSol: 1e-7, vSol: 30 },
   )
-  check('a price just inside the window does not force an exit', freshEnough.sellTokens === 0)
+  check('a position that cannot be priced at all IS exited',
+    unpriceable.sellAll && /cannot price/.test(unpriceable.reasons[0]), JSON.stringify(unpriceable.reasons))
+  check('but one failed read is not enough',
+    decideExit(mkPosition({ lastPriceAt: Date.now() - staleMs, blindReads: 1 }),
+      { priceSol: 1e-7, vSol: 30 }).sellTokens === 0)
 
-  const noPriceAt = decideExit(
-    { ...mkPosition(), lastPriceAt: undefined, openedAt: Date.now() - staleMs },
-    { priceSol: 1e-7, vSol: 30 },
-  )
-  check('missing lastPriceAt falls back to open time', noPriceAt.sellAll && noPriceAt.reasons[0].includes('no price update'))
+  // The old behaviour is still reachable, because the sweep prices it against the new.
+  const wasOn = config.exit.sellOnStalePrice
+  config.exit.sellOnStalePrice = true
+  check('the old silence rule still works when switched back on',
+    decideExit(mkPosition({ lastPriceAt: Date.now() - staleMs }), { priceSol: 1e-7, vSol: 30 })
+      .reasons[0].includes('no price update'))
+  config.exit.sellOnStalePrice = wasOn
 
   const empty = decideExit(mkPosition({ tokensRemaining: 0 }), { priceSol: 2e-7, vSol: 34 })
   check('an empty position closes', empty.sellAll)
@@ -826,11 +856,19 @@ console.log('\nExit replay vs the real holding window')
   check('and the exit is the price held at the time stop, not the price at minute fifteen',
     lateRung < 0.98 && lateRung > 0.85, String(lateRung))
 
-  // Feed went quiet before the rung: the bot sold blind, at the last price it had.
-  const wentQuiet = simulateLadder(row({
+  /**
+   * The silence rule is off now, so the replay must not apply it either — but it stays
+   * switchable, because the sweep prices the old behaviour against the same coins.
+   */
+  const quietRow = row({
     firstRungAtSeconds: 500, staleExitAtSeconds: 300, staleExitMultiple: 0.7, timeStopMultiple: 1.4,
-  }))
-  check('a stale-price exit beats a later rung', wentQuiet < 0.75, String(wentQuiet))
+  })
+  check('the replay no longer sells on silence by default',
+    simulateLadder(quietRow) > 1, String(simulateLadder(quietRow)))
+  const withOldRule = simulateLadder(quietRow, { sellOnStalePrice: true })
+  check('and does when the old rule is switched on', withOldRule < 0.75, String(withOldRule))
+  check('which is the comparison the sweep needs',
+    withOldRule < simulateLadder(quietRow), `${withOldRule} vs ${simulateLadder(quietRow)}`)
 
   // Whichever rule fires first wins, including the stop.
   const stoppedFirst = simulateLadder(row({
@@ -3673,6 +3711,102 @@ console.log('\nEnd-to-end bot loop')
 
   await bot.stop()
   check('bot stops cleanly', !feed.started)
+}
+
+// ------------------------------- a quiet position gets a price, not a market order
+console.log('\nStale price refresh, through the bot')
+{
+  const { EventEmitter } = await import('node:events')
+  const { Bot } = await import('../src/bot.js')
+  class Quiet extends EventEmitter {
+    constructor() { super(); this.watched = new Set() }
+    start() {} async stop() {} watch(m) { this.watched.add(m) } unwatch(m) { this.watched.delete(m) }
+    feedStats() { return { notifications: 0, decoded: 0, kept: 0, connected: true } }
+  }
+
+  const s = store.getState()
+  s.positions = {}; s.closed = []; s.daily = {}; s.totalRealizedSol = 0
+  s.exploreRealizedSol = 0; s.exploreWins = 0; s.exploreLosses = 0
+  s.consecutiveLosses = 0; s.blockedCreators = {}; s.halted = null
+  store.save()
+
+  const STALE = (config.exit.stalePriceSeconds + 60) * 1000
+  const openStale = (mint) => store.addPosition({
+    mint, symbol: mint, state: 'open', openedAt: Date.now() - STALE,
+    entryPriceSol: 1e-7, lastPriceSol: 1e-7, peakPriceSol: 1e-7,
+    lastPriceAt: Date.now() - STALE, tokensBought: 1000, tokensRemaining: 1000,
+    solSpent: 0.15, solRecovered: 0, rungsHit: [], fills: [],
+    // vSol/vTokens must PRICE to the entry, or the refresh correctly finds a collapse
+    // and the stop-loss correctly fires — which is a different test than this one.
+    pool: 'pump', entryVSol: 100, lastVSol: 100, lastVTokens: 1e9,
+  })
+
+  /**
+   * The curve says the price is unchanged — which is exactly what silence MEANS on a
+   * bonding curve, since vSol/vTokens only move on a trade. The position must survive.
+   */
+  let reads = 0
+  const botA = new Bot({
+    feed: new Quiet(), logFeed: new Quiet(),
+    readCurve: async () => { reads++; return { vSol: 100, vTokens: 1e9 } },
+  })
+  await botA.start()
+  clearInterval(botA.sweepTimer); clearInterval(botA.balanceTimer); clearInterval(botA.heartbeatTimer)
+  openStale('QUIETMINT')
+  await botA.tick()
+  check('a stale position is refreshed from the chain', reads > 0, `${reads} reads`)
+  check('and is NOT sold just for being quiet', Boolean(store.getState().positions.QUIETMINT))
+  check('the refresh clears the staleness rather than papering over it',
+    Date.now() - store.getState().positions.QUIETMINT.lastPriceAt < 5000)
+  await botA.stop()
+
+  /**
+   * The other half of the rule, and the half that was being lost: a quiet token that
+   * has actually FALLEN is still sold. The stop-loss was never broken by silence — it
+   * just had no fresh price to fire on. Now it gets one.
+   */
+  store.getState().positions = {}; store.save()
+  const botFall = new Bot({
+    feed: new Quiet(), logFeed: new Quiet(),
+    // Same curve, collapsed: 100 -> 20 SOL of reserves is -80% on the price.
+    readCurve: async () => ({ vSol: 20, vTokens: 1e9 }),
+  })
+  await botFall.start()
+  clearInterval(botFall.sweepTimer); clearInterval(botFall.balanceTimer); clearInterval(botFall.heartbeatTimer)
+  openStale('FALLENMINT')
+  await botFall.tick()
+  check('a quiet token that has collapsed is still sold', !store.getState().positions.FALLENMINT)
+  check('on the price, not on the silence',
+    !/no price update/.test(store.getState().closed.at(-1)?.closeReason ?? ''),
+    store.getState().closed.at(-1)?.closeReason)
+  await botFall.stop()
+
+  /**
+   * The curve read FAILING is the genuine can't-price case — a graduated token, or an
+   * RPC that will not answer. One failure is a bad moment; several in a row is real,
+   * and only then is exiting right.
+   */
+  store.getState().positions = {}; store.save()
+  const botB = new Bot({
+    feed: new Quiet(), logFeed: new Quiet(),
+    readCurve: async () => null,
+  })
+  await botB.start()
+  clearInterval(botB.sweepTimer); clearInterval(botB.balanceTimer); clearInterval(botB.heartbeatTimer)
+  openStale('DEADMINT')
+  await botB.tick()
+  check('one failed read does not close the position', Boolean(store.getState().positions.DEADMINT))
+  check('but it is counted', store.getState().positions.DEADMINT.blindReads === 1)
+  for (let i = 0; i < config.exit.blindExitAfterReads; i++) await botB.tick()
+  check('a position that truly cannot be priced is eventually closed',
+    !store.getState().positions.DEADMINT,
+    JSON.stringify(store.getState().positions.DEADMINT))
+  check('and the reason says so rather than blaming silence',
+    /cannot price/.test(store.getState().closed.at(-1)?.closeReason ?? ''),
+    store.getState().closed.at(-1)?.closeReason)
+  await botB.stop()
+
+  store.getState().positions = {}; store.getState().closed = []; store.save()
 }
 
 // ------------------------------- the prior actually reaches the filter

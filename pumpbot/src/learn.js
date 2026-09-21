@@ -131,6 +131,9 @@ export function simulateLadder(
     stopLossPct = config.exit.stopLossPct,
     trailingPct = config.exit.trailingDrawdownPct,
     timeStopSeconds = config.exit.timeStopSeconds,
+    // The replay has to model the rule the bot actually runs. It is a switch rather than
+    // a deletion so the sweep can price the old behaviour against the same coins.
+    sellOnStalePrice = config.exit.sellOnStalePrice,
     positionSol = livePositionSol(),
   } = {},
 ) {
@@ -158,7 +161,9 @@ export function simulateLadder(
    * than being silently dropped or silently guessed at, and the report states coverage.
    */
   if (row.hasExitTiming) {
-    const stale = Number.isFinite(row.staleExitAtSeconds) ? row.staleExitAtSeconds : Infinity
+    const stale = sellOnStalePrice && Number.isFinite(row.staleExitAtSeconds)
+      ? row.staleExitAtSeconds
+      : Infinity
     const deadline = Math.min(timeStopSeconds, stale)
     const rungAt = Number.isFinite(row.firstRungAtSeconds) ? row.firstRungAtSeconds : Infinity
     const stoppedAt =
@@ -326,6 +331,7 @@ export function exitSweep(rows, { minSamples = config.learning.minSamplesForSugg
     stopLossPct: config.exit.stopLossPct,
     trailingPct: config.exit.trailingDrawdownPct,
     timeStopSeconds: config.exit.timeStopSeconds,
+    sellOnStalePrice: config.exit.sellOnStalePrice,
   }
 
   const firstAt = config.exit.ladder[0]?.atPct ?? 50
@@ -363,6 +369,20 @@ export function exitSweep(rows, { minSamples = config.learning.minSamplesForSugg
    * a variant nothing can price would just inherit the incumbent's numbers and look
    * like a tie.
    */
+  /**
+   * What the silence rule is worth, measured rather than argued.
+   *
+   * It was on until today, dumping positions because nobody had traded for three
+   * minutes — which on a bonding curve means the price had not moved, not that it was
+   * unknown. This prices both against the same coins, so the change can be checked
+   * instead of believed.
+   */
+  variants.push({
+    axis: 'sell on silence',
+    label: base.sellOnStalePrice ? 'off' : 'on (the old rule)',
+    plan: { ...base, sellOnStalePrice: !base.sellOnStalePrice },
+  })
+
   const windowSeconds = config.learning.outcomeWindowMinutes * 60
   for (const timeStopSeconds of [300, 450, 600, 900, 1200]) {
     if (timeStopSeconds !== base.timeStopSeconds && timeStopSeconds <= windowSeconds) {

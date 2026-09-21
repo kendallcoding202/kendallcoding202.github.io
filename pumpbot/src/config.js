@@ -504,14 +504,40 @@ export const config = {
     // Abandon-ship if the curve drains — the pump.fun analogue of an LP pull.
     liquidityDropPct: num('LIQUIDITY_DROP_PCT', 60),
     /**
-     * Exit if the price has not updated in this long.
+     * How long without a trade before this price counts as stale.
      *
-     * Holding a position we cannot price is the worst state this bot can be in: the
-     * stop-loss can never fire because the price never moves, and the time stop is
-     * disabled once a rung is hit. A token that spiked and then collapsed would be
-     * held indefinitely. Getting out blind beats holding blind.
+     * It is now a REFRESH trigger, not a sell trigger. See sellOnStalePrice.
      */
     stalePriceSeconds: num('STALE_PRICE_SECONDS', 180),
+    /** Go and read the curve from the chain after this much silence. */
+    staleRefreshSeconds: num('STALE_REFRESH_SECONDS', 45),
+    /**
+     * Consecutive FAILED chain reads before a position is dumped for being unpriceable.
+     *
+     * The genuine can't-price cases are a graduated token whose curve account is gone
+     * and an RPC that will not answer — not a token nobody happens to be trading.
+     */
+    blindExitAfterReads: num('BLIND_EXIT_AFTER_READS', 3),
+    /**
+     * Sell purely because the price stopped arriving. OFF, and the reasoning that had
+     * it on was imported from a market this is not.
+     *
+     * On a bonding curve the price is vSol/vTokens and those move only on a trade, so
+     * silence does not mean the price is unknown — it means the price is exactly what
+     * it was. There is no blindness to escape, and the rule was converting "no
+     * information" into a guaranteed realized loss. The live log was full of
+     * "no price update in 211s — exiting blind" closing positions at -20% or worse.
+     *
+     * The one real risk it half-covered is our VIEW going stale rather than the price:
+     * the RPC log feed drops events when Solana truncates long transaction logs, and a
+     * graduated token stops trading on the curve entirely while its price moves on
+     * Raydium. The answer to that is to go and read the curve — which the bot can
+     * already do — not to sell at the last thing we happened to see.
+     *
+     * Kept as a switch rather than deleted so the exit sweep can price both against the
+     * same coins and say what the old rule cost.
+     */
+    sellOnStalePrice: bool('SELL_ON_STALE_PRICE', false),
   },
 }
 

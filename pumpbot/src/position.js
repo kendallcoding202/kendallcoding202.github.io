@@ -35,11 +35,31 @@ export function decideExit(position, { priceSol, vSol, now = Date.now() }) {
   const ageSeconds = (now - position.openedAt) / 1000
   const exitAll = (reason) => ({ sellTokens: position.tokensRemaining, sellAll: true, reasons: [reason], rungs: [] })
 
-  // 0. We have stopped receiving prices for this token. Everything below reasons from
-  //    a price, so a stale one silently disables the stop-loss and the trailing stop.
-  //    Exiting blind is strictly better than holding blind.
+  /**
+   * 0. Can we price this position at all?
+   *
+   * This used to sell on SILENCE, and that was wrong. On a bonding curve the price is
+   * vSol/vTokens, and those move only when somebody trades — so no trades means the
+   * price has not changed, not that it is unknown. The stop-loss was never "silently
+   * disabled"; it simply had not triggered. The rule turned no information into a
+   * guaranteed loss, and the log shows it closing positions at -20% and worse for the
+   * offence of nobody having traded for three minutes.
+   *
+   * What IS dangerous is being unable to price the position: a graduated token whose
+   * curve account is gone, or an RPC that will not answer. The bot refreshes from the
+   * chain when the feed goes quiet (see Bot.#refreshStalePrice), so reaching here means
+   * those reads have failed repeatedly and there is genuinely no price to reason from.
+   */
   const priceAgeSeconds = (now - (position.lastPriceAt ?? position.openedAt)) / 1000
-  if (priceAgeSeconds >= config.exit.stalePriceSeconds) {
+  if ((position.blindReads ?? 0) >= config.exit.blindExitAfterReads) {
+    return {
+      sellTokens: position.tokensRemaining,
+      sellAll: true,
+      reasons: [`cannot price this position (${position.blindReads} failed curve reads) — exiting`],
+      rungs: [],
+    }
+  }
+  if (config.exit.sellOnStalePrice && priceAgeSeconds >= config.exit.stalePriceSeconds) {
     return {
       sellTokens: position.tokensRemaining,
       sellAll: true,

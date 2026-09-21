@@ -11,6 +11,7 @@ import {
   getState,
   save,
   addPosition,
+  updatePosition,
   closePosition,
   openPositions,
   explorePositions,
@@ -26,6 +27,7 @@ import { notifyEntry, notifySell, notifyClose, notifyHalt, notifyStartup, notify
 import { summaryText, summaryBaseline } from './summary.js'
 import { acquire as acquireLock, release as releaseLock } from './lock.js'
 import { stopAnalysis } from './analysis.js'
+import { readBondingCurve } from './onchain.js'
 import { log, sol, esc, utcDay } from './log.js'
 
 /**
@@ -36,8 +38,13 @@ import { log, sol, esc, utcDay } from './log.js'
  * rather than a timer, so a rung fires on the tick that crosses it.
  */
 export class Bot {
-  /** `feed` is injectable so the whole loop can be driven by a synthetic feed in tests. */
-  constructor({ feed, logFeed } = {}) {
+  /**
+   * `feed` is injectable so the whole loop can be driven by a synthetic feed in tests,
+   * and `readCurve` for the same reason — the stale-price refresh is an RPC call, and a
+   * test that has to reach the chain to check an exit rule is a test nobody trusts.
+   */
+  constructor({ feed, logFeed, readCurve = readBondingCurve } = {}) {
+    this.readCurve = readCurve
     this.feed = feed ?? new Feed()
     this.usingRpcTrades = config.feed.tradeSource === 'rpc'
     // One subscription to the program covers every token, so the per-token tape is
@@ -193,6 +200,48 @@ export class Bot {
    * assumed. `refused` is the count of entries it has actually blocked this run — the
    * difference between a rule that is switched on and a rule that is working.
    */
+  /**
+   * A quiet position gets a PRICE, not a market order.
+   *
+   * The feed only speaks when somebody trades, so a token nobody is trading goes silent
+   * while its curve price sits exactly where it was. The bot used to read that silence
+   * as blindness and dump the position; it is not blindness, and the curve account says
+   * so authoritatively. One RPC read per stale position per sweep, at most four open
+   * positions — cheap next to the losses the old rule was booking.
+   *
+   * Consecutive failures are counted rather than acted on immediately: one timeout is a
+   * bad moment, several in a row means the position genuinely cannot be priced (a
+   * graduated token's curve account is gone), and only then is exiting right.
+   */
+  async #refreshStalePrice(position) {
+    const ageSeconds = (Date.now() - (position.lastPriceAt ?? position.openedAt)) / 1000
+    if (ageSeconds < config.exit.staleRefreshSeconds) return
+
+    const curve = await this.readCurve(position.mint)
+    const price = curve && curve.vTokens > 0 ? curve.vSol / curve.vTokens : null
+    if (!(price > 0)) {
+      const blindReads = (position.blindReads ?? 0) + 1
+      updatePosition(position.mint, { blindReads })
+      position.blindReads = blindReads
+      log.debug(`curve read failed for ${position.symbol} (${blindReads} in a row)`)
+      return
+    }
+
+    updatePosition(position.mint, {
+      lastPriceSol: price,
+      lastPriceAt: Date.now(),
+      lastVSol: curve.vSol,
+      lastVTokens: curve.vTokens,
+      // A good read clears the streak — the test is CONSECUTIVE failures.
+      blindReads: 0,
+    })
+    position.lastPriceSol = price
+    position.lastPriceAt = Date.now()
+    position.lastVSol = curve.vSol
+    position.lastVTokens = curve.vTokens
+    position.blindReads = 0
+  }
+
   #creatorPriorStats() {
     if (!config.entry.creatorHistory) return { enabled: false }
     const idx = this.shadow?.creatorIndex
@@ -686,6 +735,7 @@ export class Bot {
     // Positions whose feed has gone quiet still need the time stop and stop-loss run.
     for (const position of openPositions()) {
       if (position.state !== 'open') continue
+      await this.#refreshStalePrice(position)
       await this.#manage(position, position.lastPriceSol, position.lastVSol)
     }
   }
