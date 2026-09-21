@@ -6,6 +6,8 @@ import {
   deployedSol,
   exploreDeployedSol,
   todayPnl,
+  strategyRecord,
+  exploreRecord,
 } from './store.js'
 import { positionPnl } from './position.js'
 import { sizingSummary } from './sizing.js'
@@ -56,7 +58,9 @@ export function statusText(bot) {
   }
 
   const strategyOpen = strategyPositions()
-  lines.push('', `<b>Strategy</b>: ${strategyOpen.length} open · ${state.closed.filter((p) => !p.explore).length} closed`)
+  // From the counter, not from state.closed — that list is bounded per book, and
+  // counting it once reported "0 closed" on an account down 4.92 SOL.
+  lines.push('', `<b>Strategy</b>: ${strategyOpen.length} open · ${strategyRecord().closed} closed`)
   lines.push(exploreText())
   return lines.join('\n')
 }
@@ -68,8 +72,9 @@ export function statusText(bot) {
 export function exploreText() {
   const state = getState()
   const open = explorePositions()
-  const closed = state.closed.filter((p) => p.explore).length
-  const realized = state.exploreRealizedSol ?? 0
+  const book = exploreRecord()
+  const closed = book.closed
+  const realized = book.realizedSol
   if (!open.length && !closed && !realized) return ''
 
   const unrealized = open.reduce((sum, p) => sum + positionPnl(p).totalSol, 0)
@@ -79,7 +84,8 @@ export function exploreText() {
     '',
     `🧪 <b>Explore book</b> — separate bankroll, not the strategy's money`,
     `  P&L <b>${sol(realized + unrealized)}</b> · realized ${sol(realized)} · open ${sol(unrealized)}`,
-    `  ${state.exploreWins ?? 0}W/${state.exploreLosses ?? 0}L over ${closed} closed · ${open.length} open`,
+    `  ${book.wins}W/${book.losses}L over ${closed} closed · ${open.length} open` +
+      (closed ? ` · ${sol(realized / closed)} avg` : ''),
     capped
       ? `  Bankroll ${sol(config.explore.budgetSol + realized - exploreDeployedSol())} left of ${sol(config.explore.budgetSol)}`
       : `  Bankroll unlimited (paper only) · ${sol(exploreDeployedSol())} deployed now`,

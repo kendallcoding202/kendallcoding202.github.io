@@ -136,11 +136,71 @@ export function closePosition(mint, reason) {
   p.realizedSol = realized
 
   s.closed.push(p)
-  if (s.closed.length > 500) s.closed = s.closed.slice(-500)
+  trimClosed(s)
   delete s.positions[mint]
 
   save()
   return p
+}
+
+/**
+ * Retained closed trades, PER BOOK.
+ *
+ * This was one shared list capped at 500, and the experiment ate the strategy alive.
+ * Explore closed 25,922 trades against the strategy's ~143, so the last 500 entries
+ * were 100% explore and every strategy trade had been evicted. The dashboard then
+ * showed "0W / 0L · 0 closed" and "no closed trades yet" on an account whose realized
+ * P&L was -4.92 SOL, because that figure is a counter and the trade list is not.
+ *
+ * The strategy's own trades are the scarcest evidence this bot produces — a few hundred
+ * against six figures of shadow rows. They must never be crowded out by the thing that
+ * exists to be compared against them.
+ */
+const KEEP_CLOSED = { strategy: 300, explore: 300 }
+
+function trimClosed(s) {
+  const strategy = []
+  const explore = []
+  for (const p of s.closed) (p.explore ? explore : strategy).push(p)
+  /**
+   * Checked per book rather than on the combined length. A total under the sum of the
+   * two caps does not mean both are under their own — 0 strategy trades beside 500
+   * explore ones is exactly the state this exists to prevent, and it clears any check
+   * on the total.
+   */
+  if (strategy.length <= KEEP_CLOSED.strategy && explore.length <= KEEP_CLOSED.explore) return
+  s.closed = [...strategy.slice(-KEEP_CLOSED.strategy), ...explore.slice(-KEEP_CLOSED.explore)].sort(
+    (a, b) => (a.closedAt ?? 0) - (b.closedAt ?? 0),
+  )
+}
+
+/**
+ * Trade counts from the COUNTERS, not from the retained list.
+ *
+ * Same lesson as the balance: anything derived from a bounded array silently starts
+ * describing the bound instead of the account. The explore panel divided realized P&L
+ * by the retained length and reported -1.7659 SOL average on a 0.1505 SOL position —
+ * a loss twelve times the stake, on a long-only paper trade, which is not a number that
+ * can exist. These are the totals for all time.
+ */
+export function strategyRecord() {
+  const s = getState()
+  let wins = 0
+  let losses = 0
+  for (const day of Object.values(s.daily ?? {})) {
+    wins += day.wins ?? 0
+    losses += day.losses ?? 0
+  }
+  // Trades that closed at exactly break-even increment neither counter, so this is the
+  // count of DECIDED trades. It is the denominator a win rate actually wants.
+  return { wins, losses, closed: wins + losses }
+}
+
+export function exploreRecord() {
+  const s = getState()
+  const wins = s.exploreWins ?? 0
+  const losses = s.exploreLosses ?? 0
+  return { wins, losses, closed: wins + losses, realizedSol: s.exploreRealizedSol ?? 0 }
 }
 
 /**

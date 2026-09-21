@@ -11,6 +11,8 @@ import {
   deployedSol,
   exploreDeployedSol,
   todayPnl,
+  strategyRecord,
+  exploreRecord,
 } from './store.js'
 import { positionPnl } from './position.js'
 import { sizingSummary } from './sizing.js'
@@ -264,15 +266,23 @@ export function buildSnapshot(walletSol, stats = null) {
   }))
 
   const strategyClosed = state.closed.filter((p) => !p.explore)
-  const exploreClosed = state.closed.filter((p) => p.explore)
-  const wins = strategyClosed.filter((p) => p.realizedSol > 0).length
-  const losses = strategyClosed.filter((p) => p.realizedSol < 0).length
+  const record = strategyRecord()
+  const exploreBook = exploreRecord()
+  const { wins, losses } = record
 
-  // Cumulative realized curve for the chart, oldest first.
-  let running = 0
-  const history = [...strategyClosed]
-    .sort((a, b) => a.closedAt - b.closedAt)
-    .map((p) => ({ at: p.closedAt, sol: (running += p.realizedSol) }))
+  /**
+   * Cumulative realized curve, oldest first — but STARTED from what the account had
+   * already realized before the oldest trade we still retain, not from zero.
+   *
+   * The list is bounded, so on an account with more history than that the curve would
+   * otherwise begin at 0 and end somewhere that is not the account's actual P&L. A
+   * chart whose last point disagrees with the headline figure beside it teaches you to
+   * distrust both.
+   */
+  const retained = [...strategyClosed].sort((a, b) => a.closedAt - b.closedAt)
+  const retainedSum = retained.reduce((sum, p) => sum + (p.realizedSol ?? 0), 0)
+  let running = (state.totalRealizedSol ?? 0) - retainedSum
+  const history = retained.map((p) => ({ at: p.closedAt, sol: (running += p.realizedSol) }))
 
   const nextTierSol = sizingSummary(walletSol).nextTier?.atSol ?? null
 
@@ -298,7 +308,9 @@ export function buildSnapshot(walletSol, stats = null) {
       losses,
       winRatePct: wins + losses > 0 ? (wins / (wins + losses)) * 100 : null,
       consecutiveLosses: state.consecutiveLosses,
-      tradesClosed: strategyClosed.length,
+      tradesClosed: record.closed,
+      // How much of that history the chart can actually draw.
+      tradesCharted: retained.length,
     },
     sizing: sizingSummary(walletSol),
     pipeline: stats,
@@ -312,11 +324,12 @@ export function buildSnapshot(walletSol, stats = null) {
       : null,
     activity: [...(state.activity ?? [])].reverse().slice(0, 60),
     explore: {
-      realizedSol: state.exploreRealizedSol ?? 0,
-      wins: state.exploreWins ?? 0,
-      losses: state.exploreLosses ?? 0,
+      realizedSol: exploreBook.realizedSol,
+      wins: exploreBook.wins,
+      losses: exploreBook.losses,
       open: explorePositions().length,
-      closed: exploreClosed.length,
+      // All of them, not the retained slice — this is the average's denominator.
+      closed: exploreBook.closed,
       // The experiment's separate bankroll, so it is obvious at a glance that none of
       // this is coming out of the strategy's money. null means unlimited — the panel
       // shows what has been spent instead of what is left, which is the useful number

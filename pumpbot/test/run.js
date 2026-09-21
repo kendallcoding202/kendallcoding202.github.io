@@ -792,6 +792,78 @@ console.log('\nLedger')
   check('deployed nets out recovered capital', near(store.deployedSol(), 0), String(store.deployedSol()))
 }
 
+// ------------------------------- the experiment must not evict the strategy
+console.log('\nClosed-trade retention')
+{
+  /**
+   * THE BUG, reproduced: one shared closed[] capped at 500, with explore closing orders
+   * of magnitude more trades than the strategy. Live, explore had closed 25,922 against
+   * the strategy's ~143, so every strategy trade had been evicted and the dashboard read
+   * "0W / 0L · 0 closed" and "no closed trades yet" on an account down 4.92 SOL — while
+   * the P&L itself was right, because that is a counter and the list is not.
+   *
+   * The strategy's own trades are the scarcest evidence this bot makes. A few hundred of
+   * them against six figures of shadow rows, and they were being deleted by the thing
+   * that exists to be compared against them.
+   */
+  store.initStore()
+  const s = store.getState()
+  s.positions = {}; s.closed = []; s.daily = {}; s.totalRealizedSol = 0
+  s.exploreRealizedSol = 0; s.exploreWins = 0; s.exploreLosses = 0; s.consecutiveLosses = 0
+
+  const closeOne = (mint, { explore, spent = 0.15, recovered }) => {
+    store.addPosition({ mint, symbol: mint, state: 'open', openedAt: Date.now(),
+      solSpent: spent, solRecovered: recovered, tokensRemaining: 0, rungsHit: [], explore })
+    store.closePosition(mint, 'test')
+  }
+
+  closeOne('STRAT_WIN', { explore: false, recovered: 0.21 })
+  closeOne('STRAT_LOSS', { explore: false, recovered: 0.10 })
+  // Now bury them under an explore book of the size that actually occurs.
+  for (let i = 0; i < 2000; i++) closeOne(`EXP${i}`, { explore: true, recovered: 0.11 })
+
+  const rec = store.strategyRecord()
+  check('the strategy record survives a large explore book',
+    rec.closed === 2 && rec.wins === 1 && rec.losses === 1, JSON.stringify(rec))
+  check('and its trades are still in the retained list',
+    s.closed.filter((p) => !p.explore).length === 2,
+    String(s.closed.filter((p) => !p.explore).length))
+  check('while the explore side is still bounded',
+    s.closed.filter((p) => p.explore).length <= 300,
+    String(s.closed.filter((p) => p.explore).length))
+
+  const book = store.exploreRecord()
+  check('the explore count is every trade, not the retained slice',
+    book.closed === 2000, String(book.closed))
+  /**
+   * The tell that made this findable: -1.7659 SOL average on a 0.1505 SOL position.
+   * A long-only paper trade cannot lose twelve times its stake, so the divisor had to
+   * be wrong. Pin it — an average may never exceed the size of a position.
+   */
+  check('the explore average cannot exceed what a trade could possibly lose',
+    Math.abs(book.realizedSol / book.closed) <= 0.15 + 1e-9,
+    `${book.realizedSol / book.closed} per trade on 0.15 SOL positions`)
+
+  const snap = buildSnapshot(45, null)
+  check('the dashboard reports the strategy trades it actually made',
+    snap.pnl.tradesClosed === 2 && snap.pnl.wins === 1 && snap.pnl.losses === 1,
+    JSON.stringify(snap.pnl))
+  check('a losing account never shows an empty trade history',
+    !(snap.pnl.netSol !== 0 && snap.pnl.tradesClosed === 0))
+  check('the explore average uses the full count',
+    near(snap.explore.realizedSol / snap.explore.closed, book.realizedSol / 2000, 1e-9))
+
+  /**
+   * The P&L curve has to END at the headline figure. Bounded history drawn from zero
+   * would disagree with the number printed beside it, which teaches you to trust
+   * neither.
+   */
+  const lastPoint = snap.history[snap.history.length - 1]
+  check('the P&L curve ends at the account\'s actual realized total',
+    lastPoint && near(lastPoint.sol, s.totalRealizedSol, 1e-9),
+    `${lastPoint?.sol} vs ${s.totalRealizedSol}`)
+}
+
 // ---------------------------------------------------------------- paper fills
 console.log('\nPaper execution')
 {
