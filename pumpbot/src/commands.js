@@ -81,9 +81,14 @@ export class CommandListener {
           continue
         }
 
-        await this.handle(msg.text.trim()).catch((err) =>
-          log.error(`command "${msg.text}" failed: ${err.message}`),
-        )
+        /**
+         * A command that throws used to reply with nothing at all — indistinguishable
+         * from a command that does not exist, or from the bot being dead. Say so.
+         */
+        await this.handle(msg.text.trim()).catch(async (err) => {
+          log.error(`command "${msg.text}" failed: ${err.message}`)
+          await notify(`⚠️ <code>${esc(msg.text)}</code> failed: ${esc(err.message)}`).catch(() => {})
+        })
       }
     }
   }
@@ -161,9 +166,10 @@ export class CommandListener {
       case '/report': {
         const { analyze, formatReport } = await import('./learn.js')
         const text = formatReport(analyze())
-        // Telegram counts UTF-16 units; notify() already splits, but keep it plain so
-        // the report's alignment survives.
-        return this.#reply(`<pre>${esc(text)}</pre>`)
+        // Monospaced so the report's columns survive, and wrapped per split part rather
+        // than around the whole thing — see notify().
+        await notify(esc(text), { pre: true })
+        return text
       }
 
       case '/pause': {

@@ -16,7 +16,16 @@ const LIMIT = 4000
  */
 export const deliveryStats = { sent: 0, failed: 0, lastError: null, lastSentAt: null, configured: false }
 
-export async function notify(text, { silent = false } = {}) {
+/**
+ * `pre` wraps EACH split part, rather than the whole message.
+ *
+ * Wrapping first and splitting after tears the tag pair apart: the first part opens <pre>
+ * and never closes it, the last closes one that was never opened, and Telegram rejects
+ * malformed HTML outright — so a long report simply never arrives, with nothing to show
+ * for it. Short reports fit in one part and look fine, which is why this hides until the
+ * data grows.
+ */
+export async function notify(text, { silent = false, pre = false } = {}) {
   const tag = config.paper ? '📝 <b>[PAPER]</b> ' : ''
   const body = tag + text
 
@@ -29,7 +38,8 @@ export async function notify(text, { silent = false } = {}) {
   const url = `https://api.telegram.org/bot${config.telegram.token}/sendMessage`
   let allDelivered = true
 
-  for (const part of split(body)) {
+  for (const raw of split(body)) {
+    const part = pre ? `<pre>${raw}</pre>` : raw
     try {
       const res = await fetch(url, {
         method: 'POST',

@@ -2335,7 +2335,28 @@ console.log('\nTelegram commands')
     check('/learn returns the report', report.includes('pumpbot learning report'), report.slice(0, 120))
     check('it leads with what trading costs', report.includes('Cost of a round trip'))
     check('/report is the same command', (await listener.handle('/report')).includes('pumpbot learning report'))
-    check('it is sent as preformatted text so the columns survive', report.startsWith('<pre>'))
+    /**
+     * Wrapped per split part, not around the whole message. Wrapping first and splitting
+     * after tears the tag pair apart — the first part opens <pre> and never closes it —
+     * and Telegram rejects malformed HTML outright, so a long report never arrives at
+     * all. It fits in one part while the journal is small, which is why this stays hidden
+     * until the data grows.
+     */
+    const { notify } = await import('../src/notify.js')
+    const realFetch2 = globalThis.fetch
+    const savedTok = config.telegram.token, savedChat = config.telegram.chatId
+    config.telegram.token = 'tok'; config.telegram.chatId = '1'
+    const parts = []
+    globalThis.fetch = async (_u, o) => { parts.push(JSON.parse(o.body).text); return { ok: true, json: async () => ({}) } }
+    const longText = Array.from({ length: 400 }, (_, i) => 'line ' + i + ' of a long report').join('\n')
+    await notify(longText, { pre: true })
+    check('a long report is split into several messages', parts.length > 1, String(parts.length))
+    check('and every part is independently well-formed',
+      parts.every((p) => (p.match(/<pre>/g) || []).length === (p.match(/<\/pre>/g) || []).length),
+      parts.map((p) => (p.match(/<pre>/g) || []).length + '/' + (p.match(/<\/pre>/g) || []).length).join(' '))
+    check('every part is monospaced', parts.every((p) => p.includes('<pre>')))
+    globalThis.fetch = realFetch2
+    config.telegram.token = savedTok; config.telegram.chatId = savedChat
   }
 
   const link = await listener.handle('/dashboard')
