@@ -17,13 +17,28 @@ Local clone: `/Users/kendallsorenson/kendallcoding202.github.io`
 ## Now (2026-09-21)
 
 - Claude is **active again** on `claude/solana-meme-coin-tracker-gugfaj`. Working in `pumpbot/` only. Treat those files as taken.
-- Latest Claude commit: the **deployer track record** wired into the entry filter (600 tests). The first real dataset had repeat deployers 0-for-111 and 0-for-102 beside one at 23% over 126, and the bot was recording that and ignoring it. A deployer is now refused only when the Wilson **upper** bound on their hit rate is below the market's own base rate, so an unknown or short-record deployer still passes. `src/stats.js` is new (holds `wilson`, breaking a journal↔learn import cycle).
-- The journal is now **streamed, not materialised** (`streamRows` / `readRecent` in `journal.js`). It was holding three copies of the file plus a fourth array copy at startup: 165 MB retained and 373 MB peak RSS on a 76 MB journal. Now 38 MB at startup. `MAX_ROWS_ANALYZED` (default raised 4,000 → 200,000) bounds memory for the first time; before, the parse happened in full and the slice came afterwards, so lowering it saved nothing.
-- **Do not go back to `readFileSync().split()` here.** The read goes through a `StringDecoder` because a 1 MiB chunk boundary splits multi-byte characters and a naive decode silently drops those rows — 6 of 9 byte alignments, measured. pump.fun token names are mostly emoji.
-- Open questions, not yet answered:
-  - The thresholds in `config.js` (buyers ≥ 60, acceleration ≥ 0.5, mcap ≤ 2000) were **selected on the same data that scored them**. They need out-of-sample confirmation before anyone treats them as an edge.
-  - The deployer prior blocks 216 of 999 eligible deployers. Under the null ~25 of those would be chance alone (999 tests at ~2.5%), so the signal is real but roughly a tenth of the blocks are not. Explore samples 25% of prior-refused launches, so this **measures itself** within days — read it before tightening anything.
-  - Journal still has no rotation. Less urgent now that memory is bounded, but it grows forever.
+- Live build `e8c7644`. Collecting on a ~179 MB journal, 153,000 labelled launches, 37,000 deployers indexed. **Leave it collecting** — the next checkpoint is a `/learn` a day out.
+
+### Where the strategy actually stands
+
+- 174 closed strategy trades: **35W/139L, −4.92 SOL**, ≈ −0.028 SOL/trade on 0.15 stakes. Explore (buying what the filter rejects) is −0.034/trade over 26,000 trades — so **the filter does select**, it just does not yet clear costs. Break-even needs ≈33% realized win rate against today's 20%.
+- The one candidate big enough: **`proven deployer` × `fast crowd` = 47.9% [43.7–52.2]**, and the lift survives *within* each crowd column, so the deployer record and the crowd are independent signals rather than one wearing two hats. That table was computed on rows collected AFTER the thresholds were chosen — the first genuinely out-of-sample confirmation this project has had.
+
+### Do not undo these without reading why
+
+- **`readFileSync().split()` in the journal read.** It goes through a `StringDecoder` because a 1 MiB chunk boundary splits multi-byte characters and a naive decode silently drops those rows — 6 of 9 byte alignments, measured. pump.fun names are mostly emoji.
+- **Selling on a stale price** (`SELL_ON_STALE_PRICE=false`). On a bonding curve the price is vSol/vTokens and moves only on a trade, so silence means the price has not changed, not that it is unknown. The old rule turned no information into a guaranteed loss. Stale positions are refreshed via `readBondingCurve` and exit only after `BLIND_EXIT_AFTER_READS` consecutive FAILED reads.
+- **`MAX_ROWS_ANALYZED` (now 10,000).** It has been set twice from benchmarks taken on a different machine than the one that runs it, and both times the container paid: 200,000 is 77s of blocked event loop and 1.2 GB. The dashboard now prints resident/peak memory — set this against THAT number and Railway's limit, not against a local run.
+- **`hydrate()` in `journal.js`.** The shadow checkpoint is live in-memory state, not a journal row: a missing field there is a crash, not a skipped row. Adding `pathPrices` without it killed startup with 264 observations restored. Any new field `track()` seeds needs a default in `hydrate()`.
+- **The dashboard starts before the bot** (`index.js`). Otherwise the only tool for diagnosing a broken bot is the first casualty of one.
+
+### Open questions
+
+- Entry thresholds in `config.js` were selected on the data that scored them. `proven × fast` is the exception and needs a second fresh batch.
+- The deployer prior blocks ~239 of ~1,068 eligible deployers; under the null ~25 would be chance. Real, but roughly a tenth of the blocks are not. Explore samples prior-refused launches, so it measures itself.
+- **Replay vs reality was ~20pp apart** (replay 0.976x, account 0.812x). `analyze()` now reports this calibration above the exit sweep, and `simulateLadder` models the real time stop and stale exit — but only on rows carrying `hasExitTiming`, so the gap closes as rows age in. **Do not act on exit proposals narrower than that gap.**
+- Journal has no rotation. Memory is bounded now, but it grows forever.
+- `RPC_URL` is unset in Railway, so curve reads go to the public mainnet endpoint. Worth pointing at a real provider now that stale positions trigger reads.
 - Earlier: the learning-report performance fix — `analyze()` was O(n^2) and ran on the HTTP request path, so at 50,000 journal rows it blocked the event loop for 22s and froze the dashboard and the trade feed together. Now 1.2s, capped to the most recent 4,000 rows, and computed behind the response.
 - Claude rebased onto `9bfd31f` rather than force-pushing, per the rules below.
 - Cursor is **only** coordinating so far. No feature work started. Next Cursor commits go on `cursor/solana-tracker`.
