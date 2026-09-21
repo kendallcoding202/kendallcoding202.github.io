@@ -120,9 +120,23 @@ export function newPosition({ mint, symbol, creator, fill, curve, pool }) {
   }
 }
 
+/**
+ * Smallest holding worth tracking. A pump.fun mint has six decimals, so anything below
+ * one base unit cannot be sold and is not a position — it is subtraction error.
+ */
+const DUST_TOKENS = 1e-6
+
 /** Folds a completed sell back into the position. */
 export function applySell(position, fill, reasons) {
-  position.tokensRemaining = Math.max(0, position.tokensRemaining - fill.tokensSold)
+  const left = Math.max(0, position.tokensRemaining - fill.tokensSold)
+  /**
+   * Snap dust to zero. Selling 100% of a bag leaves a floating-point residue — measured
+   * at 4.7e-10 tokens — which is not sellable but is still greater than zero, so the
+   * position stayed open, kept being managed, and eventually exited again on the stale
+   * price or time stop. That second exit is a real priority fee paid on nothing, and it
+   * matters now that the default exit sells the whole position at one rung.
+   */
+  position.tokensRemaining = left < DUST_TOKENS ? 0 : left
   position.solRecovered += fill.solReceived
   position.fills.push({
     side: 'sell',

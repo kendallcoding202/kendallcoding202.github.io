@@ -371,10 +371,34 @@ export const config = {
      * price. The first rung recovers the full stake: selling 67% at +50% returns
      * ~1.0x cost, so everything after it is house money.
      */
+    /**
+     * One sell, all out, at +50%.
+     *
+     * The four-rung ladder cost 16% of a winner — five transactions, each paying a fee,
+     * a priority fee and slippage — against 5.3% for a single exit. Scaling out reads as
+     * prudent but on a bonding curve it is the expensive choice, and it raised the hit
+     * rate needed to break even rather than lowering it.
+     *
+     * What this gives up is the moon bag: a coin that runs 10x now pays 1.5x, not more.
+     * That is the trade, and it is the right way round only if big runners are rare
+     * enough that their rarity does not pay for the fees on everything else. The exit
+     * sweep measures exactly that against the recorded paths, so this is a hypothesis
+     * with a test attached rather than a preference.
+     */
     ladder: parseLadder(
-      str('LADDER', '50:67,100:10,200:10,400:10'),
+      str('LADDER', '50:100'),
     ),
-    stopLossPct: num('STOP_LOSS_PCT', 30),
+    /**
+     * Tightened from 30%. Every loser used to cost 34% of stake, which at any realistic
+     * hit rate is what buries the account: break-even needed ~44% of launches to reach
+     * +50%, against a real rate nearer 10-25%. At 15% the requirement drops to ~32%.
+     *
+     * The risk runs the other way and is real: too tight and the stop knocks you out of
+     * winners that dip before they run. At 10% the arithmetic goes impossible — the stop
+     * fires on the dip and you are never in for the recovery. 15% is deliberately close
+     * to that edge, so the sweep needs watching once there are labelled rows either side.
+     */
+    stopLossPct: num('STOP_LOSS_PCT', 15),
     // Exit anything that has not reached the first rung within this many seconds.
     timeStopSeconds: num('TIME_STOP_SECONDS', 600),
     // Give back at most this much of the peak once the first rung is hit.

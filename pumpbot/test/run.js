@@ -179,15 +179,37 @@ const mkPosition = (over = {}) => ({
   check('no action while flat', flat.sellTokens === 0)
 
   const up50 = decideExit(mkPosition(), { priceSol: 1.5e-7, vSol: 34 })
-  check('first rung fires at +50%', up50.rungs.includes(50))
-  check('first rung sells 67% of the bag', near(up50.sellTokens, 670_000), String(up50.sellTokens))
+  check('first rung fires at +50%', up50.rungs.includes(config.exit.ladder[0].atPct))
+  check('the first rung sells the configured fraction',
+    near(up50.sellTokens, 1_000_000 * (config.exit.ladder[0].sellPct / 100)), String(up50.sellTokens))
 
-  // 67% sold at 1.5x returns ~1.005x of the stake — initials out, rest is house money.
-  check('first rung recovers the stake', 0.67 * 1.5 >= 1.0)
+  /**
+   * Multi-rung mechanics, exercised against an EXPLICIT ladder rather than whatever the
+   * shipped default happens to be. The default is now a single all-out sell — four rungs
+   * cost 16% of a winner against 5.3% for one — but the laddering logic still has to work
+   * for anyone who configures one.
+   */
+  {
+    const realLadder = config.exit.ladder
+    config.exit.ladder = [
+      { atPct: 50, sellPct: 67 }, { atPct: 100, sellPct: 10 },
+      { atPct: 200, sellPct: 10 }, { atPct: 400, sellPct: 10 },
+    ]
+    const laddered = decideExit(mkPosition(), { priceSol: 1.5e-7, vSol: 34 })
+    check('a laddered first rung sells 67% of the bag', near(laddered.sellTokens, 670_000), String(laddered.sellTokens))
+    // 67% sold at 1.5x returns ~1.005x of the stake — initials out, rest is house money.
+    check('which recovers the stake', 0.67 * 1.5 >= 1.0)
 
-  const gap = decideExit(mkPosition(), { priceSol: 3e-7, vSol: 60 })
-  check('a gap up clears several rungs at once', gap.rungs.length === 3, gap.rungs.join(','))
-  check('gapped rungs sell the sum, not one rung', near(gap.sellTokens, 870_000), String(gap.sellTokens))
+    const gap = decideExit(mkPosition(), { priceSol: 3e-7, vSol: 60 })
+    check('a gap up clears several rungs at once', gap.rungs.length === 3, gap.rungs.join(','))
+    check('gapped rungs sell the sum, not one rung', near(gap.sellTokens, 870_000), String(gap.sellTokens))
+    config.exit.ladder = realLadder
+  }
+
+  // The shipped default takes the whole position at the first rung.
+  check('the default exit is a single all-out sell',
+    config.exit.ladder.length === 1 && config.exit.ladder[0].sellPct === 100,
+    JSON.stringify(config.exit.ladder))
 
   const already = decideExit(mkPosition({ rungsHit: [50] }), { priceSol: 1.6e-7, vSol: 34 })
   check('a rung never fires twice', already.sellTokens === 0)
@@ -282,6 +304,28 @@ console.log('\nPosition accounting')
   const pnl = positionPnl(p)
   check('initials flagged recovered', pnl.initialsRecovered)
   check('remaining bag tracked', p.tokensRemaining === 330_000)
+
+  /**
+   * Selling 100% of a bag leaves a floating-point residue — measured at 4.7e-10 tokens.
+   * Not sellable, but greater than zero, so the position stayed open, kept being managed,
+   * and exited a second time on the stale price or time stop. That second exit is a real
+   * priority fee paid on nothing, and it matters now that the default sells the whole
+   * position at one rung.
+   */
+  {
+    const whole = newPosition({ mint: 'DUST', symbol: 'DUST', creator: 'C',
+      fill: { avgPriceSol: 1e-7, tokensReceived: 1_000_000, solSpent: 0.075 }, curve: { vSol: 30 } })
+    applySell(whole, { tokensSold: 1_000_000 * (100 / 100), solReceived: 0.11 }, ['all out'])
+    check('a full sell leaves exactly zero, not dust', whole.tokensRemaining === 0, String(whole.tokensRemaining))
+    check('and the position reads as finished',
+      decideExit(whole, { priceSol: 1e-7, vSol: 30 }).sellAll === true)
+
+    // A real remainder is still a real remainder.
+    const part = newPosition({ mint: 'PART', symbol: 'PART', creator: 'C',
+      fill: { avgPriceSol: 1e-7, tokensReceived: 1_000_000, solSpent: 0.075 }, curve: { vSol: 30 } })
+    applySell(part, { tokensSold: 500_000, solReceived: 0.06 }, ['half'])
+    check('a partial sell keeps what is left', part.tokensRemaining === 500_000)
+  }
   check('mark value uses the live price', near(pnl.markValueSol, 330_000 * 1.5e-7))
   check('total P&L combines realized and mark', near(pnl.totalSol, 0.0755 + 330_000 * 1.5e-7 - 0.075))
 
@@ -574,7 +618,7 @@ console.log('\nLearning')
   check('wilson interval narrows with sample size', tight.hi - tight.lo < loose.hi - loose.lo)
 
   const winner = simulateLadder({ peakMultiple: 5, endMultiple: 2, troughMultiple: 1 })
-  check('a runner beats break-even', winner > 1.5, String(winner))
+  check('a runner beats break-even', winner > 1.2, String(winner))
 
   /**
    * Costs are charged as they are actually incurred, not as a flat haircut.
@@ -603,11 +647,12 @@ console.log('\nLearning')
 
   // Never reached the first rung and dumped: the stop-loss caps the damage at -30%,
   // then one buy and one sell are paid for.
+  const stopKeeps = 1 - config.exit.stopLossPct / 100
   const dud = simulateLadder({ peakMultiple: 1.1, endMultiple: 0.05, troughMultiple: 0.05 })
   check('a coin that dies is capped by the stop-loss, net of one round trip',
-    near(dud, netOf(0.7, 1), 1e-9), `${dud} vs ${netOf(0.7, 1)}`)
+    near(dud, netOf(stopKeeps, 1), 1e-9), `${dud} vs ${netOf(stopKeeps, 1)}`)
   check('and that is meaningfully worse than the old flat-fee model claimed',
-    dud < 0.7 * 0.97 - 0.01, `${dud} vs old ${0.7 * 0.97}`)
+    dud < stopKeeps * 0.97 - 0.01, `${dud} vs old ${stopKeeps * 0.97}`)
 
   // A fixed priority fee per transaction hurts a smaller position more.
   /**
@@ -634,7 +679,8 @@ console.log('\nLearning')
     fourRungs < oneRung * 5, `${fourRungs} vs ${oneRung}`)
 
   // Never ran, never crashed — the time stop exits near flat, losing only fees.
-  const flat = simulateLadder({ peakMultiple: 1.1, endMultiple: 0.95, troughMultiple: 0.8 })
+  // A fade that never trips the stop exits at the window price, losing only costs.
+  const flat = simulateLadder({ peakMultiple: 1.1, endMultiple: 0.95, troughMultiple: 0.9 })
   check('a flat coin exits near break-even', flat > 0.85 && flat < 1.0, String(flat))
 
   // Touched the rung, then round-tripped to zero: initials are out, the bag is caught
@@ -649,9 +695,10 @@ console.log('\nLearning')
 
   // Held to the end at the rung price, no drawdown — the bag keeps its value.
   // One rung fires, the remainder is closed at the window price: two sells.
+  // One rung, all out: a single sell.
   const held = simulateLadder({ peakMultiple: 1.5, endMultiple: 1.5, troughMultiple: 1.2 })
   check('a bag still up at window close is valued there, net of costs',
-    near(held, netOf(1.5, 2), 1e-9), `${held} vs ${netOf(1.5, 2)}`)
+    near(held, netOf(1.5, 1), 1e-9), `${held} vs ${netOf(1.5, 1)}`)
 
   // A feature that genuinely separates outcomes should be found...
   const signal = []
@@ -763,13 +810,16 @@ console.log('\nLearning')
    * dip-then-run paths — the modal pump.fun shape — badly enough to turn a profitable
    * configuration into a "NEGATIVE with statistical support" verdict.
    */
+  // The trailing stop only governs a REMAINDER, so this needs a ladder that leaves one.
+  // The shipped default sells everything at the first rung and never trails.
+  const partial = { ladder: [{ atPct: 50, sellPct: 50 }], stopLossPct: 60 }
   const ranThenGaveBack = { peakMultiple: 2.5, troughMultiple: 1.2, endMultiple: 1.2, hasOrdering: true, troughFirst: false }
   const dippedThenRanHigh = { peakMultiple: 2.5, troughMultiple: 1.2, endMultiple: 2.5, hasOrdering: true, troughFirst: true }
   check('a giveback after the peak trails out',
-    simulateLadder(ranThenGaveBack) < simulateLadder(dippedThenRanHigh),
-    `${simulateLadder(ranThenGaveBack)} vs ${simulateLadder(dippedThenRanHigh)}`)
+    simulateLadder(ranThenGaveBack, partial) < simulateLadder(dippedThenRanHigh, partial),
+    `${simulateLadder(ranThenGaveBack, partial)} vs ${simulateLadder(dippedThenRanHigh, partial)}`)
   check('a dip before the peak does not count as giveback',
-    simulateLadder(dippedThenRanHigh) > simulateLadder({ ...dippedThenRanHigh, hasOrdering: false }))
+    simulateLadder(dippedThenRanHigh, partial) > simulateLadder({ ...dippedThenRanHigh, hasOrdering: false }, partial))
 
   // ---- counterfactual exit search ----
 
@@ -997,7 +1047,8 @@ console.log('\nTelegram message audit')
   check('startup states the balance', has('50.0000'), sentText)
   check('startup states the size it will trade', has(buySolFor(50).toFixed(4)), sentText)
   check('startup states the concurrent cap', has(String(config.sizing.maxConcurrentPositions)), sentText)
-  check('startup states the real ladder', has('+50%→67%'), sentText)
+  check('startup states the real ladder',
+    has('+' + config.exit.ladder[0].atPct + '%→' + config.exit.ladder[0].sellPct + '%'), sentText)
   check('startup states the stop', has(String(config.exit.stopLossPct)), sentText)
   check('startup says it is resuming the open position', has('Resuming 1 open position'), sentText)
   check('startup is labelled paper', has('PAPER'), sentText)
@@ -2518,28 +2569,33 @@ console.log('\nEnd-to-end bot loop')
   check('entry counted in stats', bot.statsSnapshot().entered === 1)
   check('position is shadow-tracked for learning', bot.shadow.has(MINT))
 
-  // Price doubles -> first two rungs fire.
+  /**
+   * Price doubles. With the shipped single all-out rung this closes the whole position
+   * in one sell — the four-rung ladder that would have left a moon bag here cost 16% of
+   * a winner against 5.3%, which is why it is gone.
+   */
   const beforeTokens = pos.tokensRemaining
   logFeed.emit('trade', mkTrade('buy', 'WHALE', 2))
   await new Promise((r) => setImmediate(r))
   await bot.tick()
 
   const after = store.getState().positions[MINT]
-  check('ladder fired on the price move', !after || after.tokensRemaining < beforeTokens)
-  if (after) {
-    check('initials were recovered', after.solRecovered >= after.solSpent, `${after.solRecovered} vs ${after.solSpent}`)
-    check('rungs recorded', after.rungsHit.length >= 1, after.rungsHit.join(','))
-  }
+  check('the rung fired on the price move', !after || after.tokensRemaining < beforeTokens)
+  check('a single all-out rung closes the position outright', !after, JSON.stringify(after?.tokensRemaining))
 
-  // Curve collapses -> emergency exit closes the position.
+  const closed = store.getState().closed.at(-1)
+  check('closed trade was booked', closed?.mint === MINT, JSON.stringify(closed?.symbol))
+  check('the winner books a profit', closed && closed.realizedSol > 0, String(closed?.realizedSol))
+  check('initials were recovered', closed && closed.solRecovered >= closed.solSpent,
+    `${closed?.solRecovered} vs ${closed?.solSpent}`)
+  check('the rung is recorded', closed && closed.rungsHit.includes(config.exit.ladder[0].atPct),
+    String(closed?.rungsHit))
+
+  // A later collapse has nothing left to sell, which is the point of exiting whole.
   logFeed.emit('trade', mkTrade('sell', 'RUGGER', 0.2))
   await new Promise((r) => setImmediate(r))
   await bot.tick()
-
-  check('collapse closes the position', !store.getState().positions[MINT])
-  const closed = store.getState().closed.at(-1)
-  check('closed trade was booked', closed?.mint === MINT, JSON.stringify(closed?.symbol))
-  check('a ladder winner books a profit', closed && closed.realizedSol > 0, String(closed?.realizedSol))
+  check('a collapse after a full exit costs nothing', !store.getState().positions[MINT])
   check('trade source is reported as the free one', bot.statsSnapshot().tradeSource === 'rpc-logs')
 
 
