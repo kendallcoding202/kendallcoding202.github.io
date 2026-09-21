@@ -1365,6 +1365,76 @@ console.log('\nTelegram delivery')
   check('without throwing into the trading loop', deliveryStats.failed === 2)
   check('and never blocks an exit', String(deliveryStats.lastError).includes('unreachable'))
 
+  /**
+   * MULTI-PART DELIVERY, which is where the real loss was.
+   *
+   * The learning report outgrew one message and now arrives as several. Telegram takes
+   * about one message per second to a chat; the gap was 300ms and a 429 was treated as
+   * permanent, so the later parts of a long report were rate-limited, dropped, and
+   * logged at warn — and a report that begins in the middle reads as the bot having
+   * less to say, not as a channel that lost half of it.
+   */
+  const longText = ('x'.repeat(200) + '\n').repeat(40) // comfortably over the 4000 limit
+  let calls = 0
+  deliveryStats.sent = 0; deliveryStats.failed = 0; deliveryStats.lastMultipart = null
+  config.telegram.token = 'test-token'
+
+  globalThis.fetch = async () => { calls++; return { ok: true, json: async () => ({}) } }
+  const okLong = await notify(longText)
+  check('a long message is split and every part sent', okLong === true && calls > 1, `${calls} parts`)
+  check('and the parts actually delivered are recorded',
+    deliveryStats.lastMultipart?.parts === calls &&
+    deliveryStats.lastMultipart?.delivered === calls,
+    JSON.stringify(deliveryStats.lastMultipart))
+
+  // 429 carries retry_after. It is the most recoverable error there is — it says
+  // exactly how long to wait — and it was being treated as fatal.
+  let first = true
+  calls = 0
+  globalThis.fetch = async () => {
+    calls++
+    if (first) {
+      first = false
+      return { ok: false, status: 429, json: async () => ({ description: 'Too Many Requests', parameters: { retry_after: 0.1 } }) }
+    }
+    return { ok: true, json: async () => ({}) }
+  }
+  check('a rate-limited part is retried rather than dropped', (await notify('short one')) === true)
+  check('which took more than one call', calls === 2, `${calls} calls`)
+
+  // A malformed message fails identically forever, so retrying it just multiplies the
+  // damage. Only 429 and 5xx are worth another go.
+  calls = 0
+  globalThis.fetch = async () => { calls++; return { ok: false, status: 400, json: async () => ({ description: 'Bad Request: unsupported tag' }) } }
+  check('a malformed message is not retried', (await notify('bad')) === false && calls === 1, `${calls} calls`)
+
+  // Permanent rate limiting on part of a long message must be REPORTED, not hidden.
+  calls = 0
+  globalThis.fetch = async () => {
+    calls++
+    // First part lands, everything after is refused outright.
+    return calls === 1
+      ? { ok: true, json: async () => ({}) }
+      : { ok: false, status: 400, json: async () => ({ description: 'nope' }) }
+  }
+  const partial = await notify(longText)
+  check('an incompletely delivered report does not claim success', partial === false)
+  check('and says how much of it arrived',
+    deliveryStats.lastMultipart.delivered === 1 &&
+    deliveryStats.lastMultipart.parts > 1,
+    JSON.stringify(deliveryStats.lastMultipart))
+
+  /**
+   * Pacing applies BETWEEN parts only. Every entry, sell and halt alert is one part,
+   * and the comment at the top of notify.js promises a failed or slow send never delays
+   * an exit — a fixed delay on single-part messages would quietly break that.
+   */
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({}) })
+  const startedAt = Date.now()
+  await notify('a single short alert')
+  check('a one-part alert is not slowed by multi-part pacing',
+    Date.now() - startedAt < 500, `${Date.now() - startedAt}ms`)
+
   // Unconfigured is a distinct state from failing, and must not read as delivered.
   config.telegram.token = ''
   check('an unconfigured channel does not claim delivery', (await notify('x')) === false)

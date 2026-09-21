@@ -14,7 +14,36 @@ const LIMIT = 4000
  * exit — but swallowed is not the same as invisible, and the difference matters: a
  * silent channel and a healthy one looked identical from the outside.
  */
-export const deliveryStats = { sent: 0, failed: 0, lastError: null, lastSentAt: null, configured: false }
+export const deliveryStats = {
+  sent: 0,
+  failed: 0,
+  lastError: null,
+  lastSentAt: null,
+  configured: false,
+  /**
+   * How the last MULTI-PART message went, because that is the failure that hides.
+   *
+   * A dropped part of a ten-part report does not look like an error from the outside;
+   * it looks like a report that begins in the middle, which reads as the bot having
+   * less to say rather than the channel having lost some of it.
+   */
+  lastMultipart: null, // { at, parts, delivered }
+}
+
+/**
+ * Telegram accepts roughly one message per second to a single chat. The gap here was
+ * 300ms, which is fine for the one- or two-part messages this started with and too fast
+ * for a report that now needs ten — the later parts come back 429, and a 429 was logged
+ * and swallowed, so parts of the learning report simply never arrived.
+ */
+const PART_GAP_MS = 1100
+const MAX_ATTEMPTS = 3
+/**
+ * Never wait longer than this on a retry, even when Telegram asks for more. notify() is
+ * awaited from the trade path, and a rate limit on a chat must not be able to stall an
+ * exit — dropping one alert is recoverable, holding the loop for half a minute is not.
+ */
+const MAX_RETRY_WAIT_MS = 4000
 
 /**
  * `pre` wraps EACH split part, rather than the whole message.
@@ -36,10 +65,47 @@ export async function notify(text, { silent = false, pre = false } = {}) {
   }
 
   const url = `https://api.telegram.org/bot${config.telegram.token}/sendMessage`
-  let allDelivered = true
+  const parts = split(body)
+  let delivered = 0
 
-  for (const raw of split(body)) {
-    const part = pre ? `<pre>${raw}</pre>` : raw
+  for (let i = 0; i < parts.length; i++) {
+    // Only BETWEEN parts. A single-part alert — every entry, sell and halt — must not
+    // pay a pacing delay it cannot benefit from.
+    if (i > 0) await sleep(PART_GAP_MS)
+    const part = pre ? `<pre>${parts[i]}</pre>` : parts[i]
+    if (await sendPart(url, part, silent)) delivered++
+  }
+
+  if (parts.length > 1) {
+    deliveryStats.lastMultipart = { at: Date.now(), parts: parts.length, delivered }
+    if (delivered < parts.length) {
+      log.warn(`telegram delivered ${delivered}/${parts.length} parts — the message arrived incomplete`)
+    }
+  }
+  const allDelivered = delivered === parts.length
+
+  /**
+   * Report what actually happened.
+   *
+   * This returned `true` unconditionally, including when every send failed. The
+   * four-hourly summary re-baselines its deltas on a truthful return — "only after a
+   * successful send, so a failed send does not swallow a window's worth of activity" —
+   * so the guard silently did nothing, and a dropped summary took that window's activity
+   * with it. The next digest then measured from a baseline for a report nobody received.
+   */
+  return allDelivered
+}
+
+/**
+ * One part, with bounded retries.
+ *
+ * 429 is the case that mattered: Telegram returns it with `parameters.retry_after`, and
+ * the old code treated it as a permanent failure — so a rate-limited part of a long
+ * report was dropped and never mentioned. It is the most RECOVERABLE error there is;
+ * it says exactly how long to wait.
+ */
+async function sendPart(url, part, silent) {
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       const res = await fetch(url, {
         method: 'POST',
@@ -53,36 +119,38 @@ export async function notify(text, { silent = false, pre = false } = {}) {
         }),
         signal: AbortSignal.timeout(10000),
       })
-      if (!res.ok) {
-        const info = await res.json().catch(() => ({}))
-        const why = `${res.status} ${info?.description ?? ''}`.trim()
-        log.warn(`telegram send failed: ${why}`)
-        deliveryStats.failed++
-        deliveryStats.lastError = why
-        allDelivered = false
-      } else {
+      if (res.ok) {
         deliveryStats.sent++
         deliveryStats.lastSentAt = Date.now()
+        return true
       }
+      const info = await res.json().catch(() => ({}))
+      const why = `${res.status} ${info?.description ?? ''}`.trim()
+      const askedFor = Number(info?.parameters?.retry_after) * 1000
+      // 429 says wait; 5xx is Telegram's own problem and usually passes. A 400 is a
+      // malformed message and will fail identically forever, so it is not retried.
+      const wait = res.status === 429 ? (Number.isFinite(askedFor) && askedFor > 0 ? askedFor + 250 : 1500) : attempt * 800
+      if ((res.status === 429 || res.status >= 500) && attempt < MAX_ATTEMPTS && wait <= MAX_RETRY_WAIT_MS) {
+        log.debug(`telegram ${why} — retrying in ${wait}ms (${attempt}/${MAX_ATTEMPTS})`)
+        await sleep(wait)
+        continue
+      }
+      log.warn(`telegram send failed: ${why}`)
+      deliveryStats.failed++
+      deliveryStats.lastError = why
+      return false
     } catch (err) {
+      if (attempt < MAX_ATTEMPTS) {
+        await sleep(attempt * 800)
+        continue
+      }
       log.warn(`telegram send error: ${err.message}`)
       deliveryStats.failed++
       deliveryStats.lastError = err.message
-      allDelivered = false
+      return false
     }
-    await sleep(300)
   }
-
-  /**
-   * Report what actually happened.
-   *
-   * This returned `true` unconditionally, including when every send failed. The
-   * four-hourly summary re-baselines its deltas on a truthful return — "only after a
-   * successful send, so a failed send does not swallow a window's worth of activity" —
-   * so the guard silently did nothing, and a dropped summary took that window's activity
-   * with it. The next digest then measured from a baseline for a report nobody received.
-   */
-  return allDelivered
+  return false
 }
 
 function split(text) {

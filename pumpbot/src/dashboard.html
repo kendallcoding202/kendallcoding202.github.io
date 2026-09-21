@@ -741,8 +741,18 @@ function render(d) {
 function telegramLine(t) {
   if (!t.configured) return 'Telegram <span style="color:var(--dimmer)">not configured</span> — alerts go to the log only'
   const last = t.lastSentAt ? new Date(t.lastSentAt).toLocaleTimeString([], { hour12: false }) : 'never'
+  // A long report arrives as several messages. Losing one of them looks like a shorter
+  // report rather than an error, so say it outright.
+  const mp = t.lastMultipart
+  const partial = mp && mp.delivered < mp.parts
+    ? '<br><span style="color:var(--amber)">Last long message arrived INCOMPLETE — ' +
+      mp.delivered + ' of ' + mp.parts + ' parts</span>'
+    : mp
+      ? '<br><span class="dim">Last long message: ' + mp.parts + '/' + mp.parts + ' parts delivered</span>'
+      : ''
   return 'Telegram <code>' + t.sent + '</code> delivered · <code>' + t.failed + '</code> failed · last <code>' + last + '</code>' +
-    (t.failed ? '<br><span style="color:var(--amber)">Last error: ' + esc(String(t.lastError)) + '</span>' : '')
+    (t.failed ? '<br><span style="color:var(--amber)">Last error: ' + esc(String(t.lastError)) + '</span>' : '') +
+    partial
 }
 
 /**

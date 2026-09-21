@@ -357,6 +357,7 @@ export function buildSnapshot(walletSol, stats = null) {
       failed: deliveryStats.failed,
       lastError: deliveryStats.lastError,
       lastSentAt: deliveryStats.lastSentAt,
+      lastMultipart: deliveryStats.lastMultipart,
     },
     storage: storageSnapshot(),
     /**
