@@ -639,6 +639,20 @@ function analyzeRows(rows, onDisk) {
     generatedAt: Date.now(),
     totals: {
       journalled: onDisk,
+      /**
+       * Rows finalized in the last hour, from the ROWS' OWN timestamps.
+       *
+       * The dashboard used to derive this as labelled / process-uptime, which is a
+       * cumulative numerator over a since-restart denominator. Twenty-five minutes after
+       * a redeploy that read "about 339,985/hr" against a true rate in the low thousands
+       * — the whole history divided by the time since the last deploy. The mismatch is
+       * invisible on a long-running process and absurd on a fresh one, which is exactly
+       * when someone is looking at it to check the deploy worked.
+       *
+       * Measured from finalizedAt, so it means the same thing whatever the process has
+       * been doing, and reads 0 when collection has genuinely stopped.
+       */
+      labelledLastHour: labelled.filter((r) => (r.finalizedAt ?? 0) > Date.now() - 3_600_000).length,
       stale,
       labelled: labelled.length,
       bought: bought.length,

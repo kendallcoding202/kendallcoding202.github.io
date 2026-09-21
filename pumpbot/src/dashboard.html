@@ -382,7 +382,9 @@ function render(d) {
     col.hidden = false
     col.className = 'collect ' + (c.collecting ? 'on' : 'off')
     if (c.collecting) {
-      const rate = c.usablePerHour !== null ? ' · about <b>' + c.usablePerHour + '</b>/hr' : ''
+      // "in the last hour", not "about N/hr" — it is a count over a real window, and
+      // the vaguer phrasing is what let an impossible extrapolation look plausible.
+      const rate = c.usablePerHour !== null ? ' · <b>' + num(c.usablePerHour) + '</b> in the last hour' : ''
       const togo = c.usableRows >= c.needed
         ? 'enough to report on'
         : '<b>' + Math.max(0, c.needed - c.usableRows) + '</b> more before the filter verdict unlocks'

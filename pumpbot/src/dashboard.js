@@ -112,6 +112,7 @@ function computeLearning() {
         stale: a.totals.stale,
         truncated: a.totals.truncated,
         journalled: a.totals.journalled,
+        labelledLastHour: a.totals.labelledLastHour,
         olderThanCap: a.totals.olderThanCap,
         explored: a.totals.explored,
       },
@@ -176,9 +177,16 @@ function collectionStatus(stats, storage, learning) {
     }
   }
 
-  // Rows per hour, measured rather than assumed.
-  const hours = stats?.uptimeSeconds ? stats.uptimeSeconds / 3600 : 0
-  const perHour = hours > 0.05 && learning ? Math.round((learning.labelled ?? 0) / hours) : null
+  /**
+   * Rows per hour, from the rows' own timestamps rather than from uptime.
+   *
+   * This was `labelled / uptimeHours`, which divides a total accumulated over days by
+   * the time since the last restart. Twenty-five minutes after a redeploy it claimed
+   * 339,985 rows/hr on a journal of 140,055 — it was reporting the entire history as if
+   * all of it had arrived since the deploy. Worse, the error is largest right after a
+   * restart, which is precisely when the banner is being read to check a deploy landed.
+   */
+  const perHour = learning && typeof learning.labelledLastHour === 'number' ? learning.labelledLastHour : null
 
   return {
     collecting: reasons.length === 0,

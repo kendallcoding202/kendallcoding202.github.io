@@ -3015,6 +3015,51 @@ console.log('\nEnd-to-end bot loop')
    * something you do not want anyone to read — and storage decides whether a redeploy
    * costs you months of evidence.
    */
+  /**
+   * The collection rate must come from the ROWS, not from process uptime.
+   *
+   * The bug this pins: labelled / uptimeHours put a total accumulated over days over a
+   * denominator that resets on restart. Twenty-five minutes after a redeploy the banner
+   * read "about 339,985/hr" on a 140,055-row journal — it was reporting the entire
+   * history as though it had all arrived since the deploy, and the error is worst right
+   * after a restart, which is exactly when the number is being read.
+   */
+  {
+    const { analyze } = await import('../src/learn.js')
+    const now = Date.now()
+    const mkRow = (finalizedAt, hit) => ({
+      v: JOURNAL_VERSION, mint: 'M' + finalizedAt, creator: 'C', at: finalizedAt, finalizedAt,
+      action: 'rejected', failedChecks: ['buyers'], hitFirstRung: hit, peakMultiple: hit ? 2 : 0.8,
+      troughMultiple: 0.5, decisionPriceSol: 1e-7, observedSeconds: 900, ticks: 10, features: {},
+    })
+    // 5,000 rows from days ago, 12 in the last hour.
+    const old = Array.from({ length: 5000 }, (_, i) => mkRow(now - 72 * 3600_000 + i, i % 9 === 0))
+    const fresh = Array.from({ length: 12 }, (_, i) => mkRow(now - 60_000 * (i + 1), i % 3 === 0))
+    const a = analyze([...old, ...fresh], old.length + fresh.length)
+    check('the collection rate counts only rows finalized in the last hour',
+      a.totals.labelledLastHour === 12, String(a.totals.labelledLastHour))
+    check('and does not grow with the size of the back catalogue',
+      analyze([...old, ...old.map((r) => ({ ...r, mint: r.mint + 'b' })), ...fresh],
+        old.length * 2 + fresh.length).totals.labelledLastHour === 12)
+    check('a journal that stopped collecting reports zero, not a stale average',
+      analyze(old, old.length).totals.labelledLastHour === 0)
+  }
+
+  /**
+   * And the BANNER has to actually use it. Testing analyze() in isolation proves
+   * nothing about what the page renders — the previous two bugs in this file were both
+   * a correct function nobody called. Uptime is the input that was wrong, so vary only
+   * that: the rate must not move.
+   */
+  {
+    const withUptime = (uptimeSeconds) => buildSnapshot(0.5, { ...bot.statsSnapshot(), uptimeSeconds })
+    const justStarted = withUptime(60)
+    const dayOld = withUptime(86_400)
+    check('the banner rate is independent of how long the process has been up',
+      justStarted.collection.usablePerHour === dayOld.collection.usablePerHour,
+      `${justStarted.collection.usablePerHour} at 1m vs ${dayOld.collection.usablePerHour} at 24h`)
+  }
+
   check('the banner carries where data is being written',
     typeof snap.collection?.storage?.dataDir === 'string' &&
     typeof snap.collection.storage.writable === 'boolean',
