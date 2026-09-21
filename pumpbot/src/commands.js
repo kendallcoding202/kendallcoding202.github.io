@@ -102,6 +102,7 @@ export class CommandListener {
             '/status — balance, P&L, pipeline',
             '/positions — open positions',
             '/dashboard — a link that opens, token included',
+            '/learn — the full learning report',
             '/pause — stop opening new positions',
             '/resume — allow new positions again',
             '/panic confirm — sell everything now',
@@ -143,6 +144,26 @@ export class CommandListener {
                 'so later visits work from the plain address.</i>'
               : '<i>No token set — this page is open to anyone with the address.</i>'),
         )
+      }
+
+      /**
+       * The learning report, on the phone.
+       *
+       * It already existed as `npm run learn`, which cannot be run against a hosted bot:
+       * the CLI refuses while another process holds the ledger lock, and rightly so. So
+       * the one output the whole exercise exists to produce was unreachable from the only
+       * device it gets checked on.
+       *
+       * analyse() is capped and takes about a second, which is fine for an explicit
+       * command — unlike the dashboard, nothing is polling this.
+       */
+      case '/learn':
+      case '/report': {
+        const { analyze, formatReport } = await import('./learn.js')
+        const text = formatReport(analyze())
+        // Telegram counts UTF-16 units; notify() already splits, but keep it plain so
+        // the report's alignment survives.
+        return this.#reply(`<pre>${esc(text)}</pre>`)
       }
 
       case '/pause': {

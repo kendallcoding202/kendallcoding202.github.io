@@ -2274,7 +2274,20 @@ console.log('\nTelegram commands')
     config.dashboard.enabled = true
     config.dashboard.publicUrl = 'https://example.up.railway.app'
     config.dashboard.token = 's3cret'
-    const link = await listener.handle('/dashboard')
+    /**
+   * The learning report is the one output this whole exercise exists to produce, and it
+   * was only reachable through `npm run learn` — which refuses while a hosted bot holds
+   * the ledger lock. Unreachable from the only device it gets checked on.
+   */
+  {
+    const report = await listener.handle('/learn')
+    check('/learn returns the report', report.includes('pumpbot learning report'), report.slice(0, 120))
+    check('it leads with what trading costs', report.includes('Cost of a round trip'))
+    check('/report is the same command', (await listener.handle('/report')).includes('pumpbot learning report'))
+    check('it is sent as preformatted text so the columns survive', report.startsWith('<pre>'))
+  }
+
+  const link = await listener.handle('/dashboard')
     check('/dashboard returns a link that carries the token', link.includes('token=s3cret'), link)
     check('and shows the bare address as the label', link.includes('example.up.railway.app'))
     check('/link is the same command', (await listener.handle('/link')).includes('token=s3cret'))
