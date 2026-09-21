@@ -1397,6 +1397,110 @@ console.log('\nFeature vector')
   }
 }
 
+// ------------------------------------------- journal reading, streamed
+console.log('\nJournal streaming')
+{
+  const { streamRows, readAll: jReadAll, readRecent, append } = await import('../src/journal.js')
+  const jfile = path.join(config.dataDir, 'journal-paper.jsonl')
+  const saved = fs.existsSync(jfile) ? fs.readFileSync(jfile) : null
+  const write = (text) => fs.writeFileSync(jfile, text)
+
+  write('')
+  check('an empty journal reads as no rows', jReadAll().length === 0)
+  check('and readRecent reports a zero total', readRecent(50).total === 0)
+
+  fs.rmSync(jfile, { force: true })
+  check('a missing journal is not an error', jReadAll().length === 0)
+
+  write([
+    JSON.stringify({ i: 1, creator: 'A' }),
+    'this line is not json at all',
+    JSON.stringify({ i: 2, creator: 'B' }),
+    '{"i": 3, "truncated": ',
+  ].join('\n') + '\n')
+  check('a corrupt line is skipped, not fatal', jReadAll().length === 2, String(jReadAll().length))
+  check('and the rows either side of it survive',
+    jReadAll().map((r) => r.i).join(',') === '1,2')
+
+  // A half-written final line, which is what an OOM kill mid-append leaves behind.
+  write(JSON.stringify({ i: 1 }) + '\n' + '{"i":2,"half')
+  check('a half-written final row is dropped and the rest kept', jReadAll().length === 1)
+
+  /**
+   * THE reason this reads through a StringDecoder rather than buf.toString('utf8').
+   *
+   * Chunks are 1 MiB. Sooner or later a boundary lands in the middle of a multi-byte
+   * character, and a naive decode emits U+FFFD for the split bytes — which makes that
+   * row unparseable and silently drops it. Token names on pump.fun are mostly emoji, so
+   * this is not a corner case; it is most of the file. Padded so the emoji sits astride
+   * the boundary on purpose.
+   */
+  {
+    const CHUNK = 1 << 20
+    const name = '🐕🚀 доге 日本語' // 🐕 and 🚀 are four UTF-8 bytes each
+    /**
+     * Sweeping the padding rather than picking one length, because a single guess is how
+     * this test was vacuous the first time: the boundary landed exactly BETWEEN two
+     * emoji, split nothing, and passed against the very bug it was written to catch.
+     * Nine consecutive byte offsets cannot all miss a four-byte character.
+     */
+    let intact = 0
+    let attempts = 0
+    for (let pad = CHUNK - 40; pad <= CHUNK - 32; pad++) {
+      const rows = [
+        JSON.stringify({ i: 0, pad: 'x'.repeat(pad) }),
+        JSON.stringify({ i: 1, name }),
+        JSON.stringify({ i: 2, name }),
+      ]
+      write(rows.join('\n') + '\n')
+      const got = jReadAll()
+      attempts++
+      if (got.length === 3 && got[1].name === name && got[2].name === name) intact++
+    }
+    check('multi-byte characters survive every chunk-boundary alignment',
+      intact === attempts, `${intact}/${attempts} alignments read back intact`)
+  }
+
+  // Ring buffer: order preserved, newest kept, total still truthful.
+  write(Array.from({ length: 250 }, (_, i) => JSON.stringify({ i })).join('\n') + '\n')
+  const recent = readRecent(100)
+  check('readRecent keeps the most recent rows', recent.rows.length === 100 && recent.rows[0].i === 150)
+  check('in order, oldest of the window first',
+    recent.rows[99].i === 249 && recent.rows[50].i === 200)
+  check('and reports the true total on disk, not the capped count', recent.total === 250)
+  check('a cap larger than the journal returns everything',
+    readRecent(10_000).rows.length === 250 && readRecent(10_000).total === 250)
+  check('a zero cap reads nothing', readRecent(0).rows.length === 0)
+
+  // The index must not care what order it sees rows in — the sort that used to copy
+  // the whole array at startup was doing nothing for correctness.
+  {
+    const rows = [
+      { creator: 'X', hitFirstRung: true }, { creator: 'X', hitFirstRung: false },
+      { creator: 'Y', hitFirstRung: false }, { creator: 'X', hitFirstRung: false },
+    ]
+    const forward = CreatorIndex.fromJournal(rows).priorFor('X')
+    const backward = CreatorIndex.fromJournal([...rows].reverse()).priorFor('X')
+    check('the creator index is order-independent',
+      forward.launches === backward.launches && near(forward.hitRate, backward.hitRate))
+  }
+
+  // And it builds from the file without being handed an array.
+  write([
+    JSON.stringify({ creator: 'Z', hitFirstRung: true }),
+    JSON.stringify({ creator: 'Z', hitFirstRung: false }),
+  ].join('\n') + '\n')
+  check('fromJournal streams the file when given no rows',
+    CreatorIndex.fromJournal().priorFor('Z').launches === 2)
+
+  let counted = 0
+  const returned = streamRows(() => counted++)
+  check('streamRows reports how many rows it handed over', counted === 2 && returned === 2)
+
+  if (saved) fs.writeFileSync(jfile, saved)
+  else fs.rmSync(jfile, { force: true })
+}
+
 // ------------------------------------------- shadow tracker capacity + windows
 console.log('\nShadow tracker')
 {

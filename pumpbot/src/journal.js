@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { StringDecoder } from 'node:string_decoder'
 import { config } from './config.js'
 import { log } from './log.js'
 import { wilson } from './stats.js'
@@ -84,23 +85,109 @@ export function clearShadow() {
   }
 }
 
-export function readAll() {
+/**
+ * Walk the journal one row at a time, never holding the file in memory.
+ *
+ * The old readAll() did `readFileSync(utf8).split('\n').map(JSON.parse)`, which has
+ * THREE full-size copies of the journal live at once: the decoded file as a JS string,
+ * the array of per-line substrings, and the parsed objects. On a 73 MB journal that
+ * measured at 351 MB RSS — and it OOMs a small container long before the file troubles
+ * a 5 GB volume, which is the failure this bot was actually heading for.
+ *
+ * Reading in fixed chunks means only the chunk, the partial trailing line, and whatever
+ * the caller chooses to retain are ever live. A caller that keeps nothing (CreatorIndex)
+ * now costs nothing.
+ *
+ * A truncated or half-written final line is skipped rather than throwing. Appends are
+ * single writes of one line, but a process killed mid-append can still leave one.
+ */
+export function streamRows(onRow) {
+  let fd
   try {
-    return fs
-      .readFileSync(file(), 'utf8')
-      .split('\n')
-      .filter(Boolean)
-      .map((line) => {
-        try {
-          return JSON.parse(line)
-        } catch {
-          return null
-        }
-      })
-      .filter(Boolean)
+    fd = fs.openSync(file(), 'r')
   } catch {
-    return []
+    return 0
   }
+  const CHUNK = 1 << 20 // 1 MiB
+  const buf = Buffer.allocUnsafe(CHUNK)
+  let carry = ''
+  let n = 0
+
+  const handle = (line) => {
+    if (!line) return
+    try {
+      const row = JSON.parse(line)
+      if (row) {
+        onRow(row)
+        n++
+      }
+    } catch {
+      /* a corrupt line is skipped, not fatal — the rest of the journal is still good */
+    }
+  }
+
+  /**
+   * StringDecoder, not buf.toString('utf8'), and the difference is not cosmetic: a 1 MiB
+   * boundary lands mid-character sooner or later, and toString() would emit U+FFFD for
+   * the split bytes. Token names on pump.fun are full of emoji, so that is a JSON.parse
+   * failure on a row whose only crime was where it sat in the file — a silently dropped
+   * row, which is the kind of corruption this journal exists to avoid.
+   */
+  const decoder = new StringDecoder('utf8')
+
+  try {
+    for (;;) {
+      const read = fs.readSync(fd, buf, 0, CHUNK, null)
+      if (read <= 0) break
+      const text = carry + decoder.write(buf.subarray(0, read))
+      let start = 0
+      for (;;) {
+        const nl = text.indexOf('\n', start)
+        if (nl === -1) break
+        handle(text.slice(start, nl))
+        start = nl + 1
+      }
+      carry = text.slice(start)
+    }
+    handle(carry + decoder.end())
+  } finally {
+    fs.closeSync(fd)
+  }
+  return n
+}
+
+/**
+ * Every row, materialised. Same contract as before; the peak cost is now the rows
+ * themselves rather than the rows plus two copies of the file.
+ *
+ * Prefer streamRows() or readRecent() where the whole history is not needed at once.
+ */
+export function readAll() {
+  const rows = []
+  streamRows((r) => rows.push(r))
+  return rows
+}
+
+/**
+ * The most recent `cap` rows, via a ring buffer, so a journal far larger than the
+ * analysis window costs the window rather than the journal. Order is preserved.
+ *
+ * `total` is the true row count on disk, which the caller cannot recover from `rows`
+ * once they have been capped — the dashboard reports it as "rows on disk in total" and
+ * the report uses it to say how many were left out. Returning only the rows would make
+ * the page quietly understate the dataset the moment the cap started biting.
+ */
+export function readRecent(cap) {
+  if (!(cap > 0)) return { rows: [], total: 0 }
+  const ring = new Array(cap)
+  let n = 0
+  streamRows((r) => {
+    ring[n % cap] = r
+    n++
+  })
+  if (n <= cap) return { rows: ring.slice(0, n), total: n }
+  const start = n % cap
+  return { rows: ring.slice(start).concat(ring.slice(0, start)), total: n }
 }
 
 /**
@@ -124,11 +211,25 @@ export class CreatorIndex {
     this.summaryCache = null
   }
 
-  /** Rebuild from history at startup, oldest first, so restarts do not lose the prior. */
-  static fromJournal(rows = readAll()) {
+  /**
+   * Rebuild from history at startup, so restarts do not lose the prior.
+   *
+   * Streamed, and the sort is gone. Both were costing real memory for nothing: the old
+   * version materialised all 141k rows and then `[...rows]` copied the array again, at
+   * startup, purely to order rows for a loop that is order-INDEPENDENT — note() only
+   * increments two counters. The journal is appended at finalize time, so it is already
+   * in finalization order anyway.
+   *
+   * What this index keeps is one small entry per DEPLOYER, not per launch: 141,090
+   * launches collapse to ~34,000 counters. Streaming means the rows themselves are
+   * garbage the moment they are counted.
+   */
+  static fromJournal(rows = null) {
     const idx = new CreatorIndex()
-    for (const r of [...rows].sort((a, b) => (a.finalizedAt ?? 0) - (b.finalizedAt ?? 0))) {
-      idx.note(r)
+    if (rows) {
+      for (const r of rows) idx.note(r)
+    } else {
+      streamRows((r) => idx.note(r))
     }
     return idx
   }

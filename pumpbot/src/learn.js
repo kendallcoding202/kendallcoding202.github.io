@@ -1,5 +1,5 @@
 import { config } from './config.js'
-import { readAll, JOURNAL_VERSION } from './journal.js'
+import { readAll, readRecent, JOURNAL_VERSION } from './journal.js'
 import { wilson } from './stats.js'
 
 /**
@@ -452,7 +452,25 @@ export function permutationNull(rows, { trials = config.learning.nullTrials, see
   }
 }
 
-export function analyze(rows = readAll()) {
+/**
+ * `rows` is left injectable for tests. Left to itself, this reads only the analysis
+ * window through a ring buffer rather than materialising the journal: the cap now bounds
+ * MEMORY as well as work, which it never did while readAll() parsed the whole file and
+ * the slice happened afterwards.
+ *
+ * `onDisk` is the true row count, which a capped read cannot recover from `rows` — the
+ * dashboard reports it and the truncation notice is derived from it.
+ */
+export function analyze(rows = null, onDisk = null) {
+  if (rows === null) {
+    const recent = readRecent(config.learning.maxRowsAnalyzed)
+    rows = recent.rows
+    onDisk = recent.total
+  }
+  return analyzeRows(rows, onDisk ?? rows.length)
+}
+
+function analyzeRows(rows, onDisk) {
   /**
    * Rows from an older schema are dropped, not averaged in. v1 rows were all recorded
    * while shadow-tracked tokens received no price updates at all, so every one of them
@@ -465,7 +483,10 @@ export function analyze(rows = readAll()) {
   const cap = config.learning.maxRowsAnalyzed
   const all = rows.filter((r) => (r.v ?? 1) >= JOURNAL_VERSION)
   const current = cap > 0 && all.length > cap ? all.slice(-cap) : all
-  const olderThanCap = all.length - current.length
+  // Rows on disk that these numbers do not describe. With a capped read the excluded
+  // rows were never materialised, so this comes from the on-disk count rather than from
+  // the difference between two arrays we happen to be holding.
+  const olderThanCap = Math.max(0, onDisk - rows.length) + (all.length - current.length)
   const labelled = current.filter((r) => typeof r.hitFirstRung === 'boolean' && r.decisionPriceSol > 0)
   const bought = labelled.filter((r) => r.action === 'bought')
   const explored = labelled.filter((r) => r.action === 'explored')
@@ -580,7 +601,7 @@ export function analyze(rows = readAll()) {
   return {
     generatedAt: Date.now(),
     totals: {
-      journalled: rows.length,
+      journalled: onDisk,
       stale,
       labelled: labelled.length,
       bought: bought.length,

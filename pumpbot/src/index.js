@@ -10,7 +10,7 @@ import { sizingSummary } from './sizing.js'
 import { analyze, formatReport } from './learn.js'
 import { readBondingCurve } from './onchain.js'
 import { heldByAnother } from './lock.js'
-import { readAll } from './journal.js'
+import { readRecent } from './journal.js'
 import { normalizeEvent } from './curve.js'
 import { positionPnl } from './position.js'
 import { notify } from './notify.js'
@@ -318,12 +318,14 @@ async function panic() {
 }
 
 function learn() {
-  const rows = readAll()
-  if (!rows.length) {
+  // The capped, streamed read — same path the dashboard and /learn take, so the CLI
+  // cannot quietly hold the whole journal in memory to print the same report.
+  const { rows, total } = readRecent(config.learning.maxRowsAnalyzed)
+  if (!total) {
     console.log('\n  Journal is empty — nothing to analyse yet.\n')
     return
   }
-  console.log(formatReport(analyze(rows)))
+  console.log(formatReport(analyze(rows, total)))
 }
 
 /**
