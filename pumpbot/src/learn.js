@@ -598,6 +598,43 @@ function analyzeRows(rows, onDisk) {
     .sort((a, b) => b.launches - a.launches)
     .slice(0, 10)
 
+  /**
+   * Hit rate by deployer standing, crossed with whether the crowd showed up.
+   *
+   * The scan found `creatorPriorHitRate >= 0.40` at 39.4% and `buyAcceleration >= 1.0`
+   * at 45.7%, but a list of thresholds cannot say whether those are two signals or one
+   * — and the whole question is whether the deployer's record tells you anything you
+   * did not already learn from watching the first thirty seconds. If the lift survives
+   * WITHIN each acceleration bucket, they are independent and worth combining. If it
+   * collapses, proven deployers simply attract faster crowds and there is one signal
+   * here, not two.
+   *
+   * Measured, not acted on. Nothing in the entry path reads this.
+   */
+  const accelerationOf = (r) => r.features?.buyAcceleration
+  const crowdBuckets = [
+    { id: 'quiet', label: 'acceleration < 1.0', test: (v) => v < 1 },
+    { id: 'fast', label: 'acceleration >= 1.0', test: (v) => v >= 1 },
+  ]
+  const creatorTiers = ['poor', 'unknown', 'ordinary', 'proven'].map((name, value) => {
+    const inTier = labelled.filter((r) => r.features?.creatorTier === value)
+    const crowd = crowdBuckets.map((b) => {
+      const rows = inTier.filter((r) => {
+        const v = accelerationOf(r)
+        return typeof v === 'number' && Number.isFinite(v) && b.test(v)
+      })
+      return { id: b.id, label: b.label, n: rows.length, rate: wilson(rows.filter((r) => r.hitFirstRung).length, rows.length) }
+    })
+    return {
+      name,
+      value,
+      n: inTier.length,
+      rate: wilson(inTier.filter((r) => r.hitFirstRung).length, inTier.length),
+      crowd,
+    }
+  })
+  const tiersMeasured = creatorTiers.some((t) => t.n > 0)
+
   return {
     generatedAt: Date.now(),
     totals: {
@@ -628,6 +665,8 @@ function analyzeRows(rows, onDisk) {
     falseNegatives,
     suggestions,
     repeatCreators,
+    creatorTiers,
+    tiersMeasured,
     nullDist,
     // Would a different exit have done better on these same coins? The entry filter is
     // only half the strategy, and this is the half nothing was testing.
@@ -820,6 +859,27 @@ export function formatReport(a) {
     for (const c of a.repeatCreators) {
       L.push(`  ${c.creator.slice(0, 8)}… ${String(c.launches).padStart(3)} launches · ${(c.rate * 100).toFixed(0)}% hit rate`)
     }
+    L.push('')
+  }
+
+  if (a.tiersMeasured) {
+    const band = (w) => (w.n ? `${(w.p * 100).toFixed(1)}% [${(w.lo * 100).toFixed(1)}-${(w.hi * 100).toFixed(1)}]` : '—')
+    L.push('Deployer standing vs the crowd — are these two signals or one?')
+    L.push('  tier       overall                n         quiet crowd      fast crowd')
+    for (const t of a.creatorTiers) {
+      const quiet = t.crowd.find((c) => c.id === 'quiet')
+      const fast = t.crowd.find((c) => c.id === 'fast')
+      L.push(
+        `  ${t.name.padEnd(9)} ${band(t.rate).padEnd(22)} ${String(t.n).padStart(7)}   ` +
+          `${band(quiet.rate).padEnd(16)} ${band(fast.rate)}`,
+      )
+    }
+    L.push('  Read DOWN the last two columns, not across the first.')
+    L.push('  If proven still beats unknown WITHIN the same crowd column, the deployer\'s')
+    L.push('  record knows something the first 30 seconds does not, and the two combine.')
+    L.push('  If the gap vanishes there, proven deployers just draw faster crowds and')
+    L.push('  there is only one signal — in which case use the crowd, it has more samples.')
+    L.push('  Nothing in the entry path reads this yet. It is here to be measured.')
     L.push('')
   }
 

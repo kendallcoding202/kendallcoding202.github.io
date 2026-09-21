@@ -212,13 +212,29 @@ export function evaluateEntry(candidate, { creatorPrior = null } = {}) {
     ),
   )
 
+  /**
+   * Floor and ceiling as SEPARATE checks, because as one line they were unreadable.
+   *
+   * The report said `market_cap` rejected 30,450 launches of which 27.7% would have hit,
+   * against an 11.6% base — which looks like the filter throwing away its best material.
+   * It was one number covering two opposite failures, and only the scan's own threshold
+   * list showed which: `marketCapSol < 3.2` hits at 41.6%. That is the FLOOR, and those
+   * launches are not an opportunity — a fresh pump.fun curve is ~28 SOL by construction
+   * and only rises, so a 3.2 SOL cap is either a non-standard supply or a bad read, and
+   * either way 0.075 SOL into it is buying ~2% of the token at a price impact nothing in
+   * the cost model describes.
+   *
+   * Split, each side can be judged on its own evidence instead of averaging a real
+   * ceiling against an artefact.
+   */
   const mc = candidate.marketCapSol
+  const priced = Number.isFinite(mc)
+  const shown = priced ? mc.toFixed(1) : 'n/a'
   checks.push(
-    check(
-      'market_cap',
-      Number.isFinite(mc) && mc >= e.minMarketCapSol && mc <= e.maxMarketCapSol,
-      `${Number.isFinite(mc) ? mc.toFixed(1) : 'n/a'} SOL (want ${e.minMarketCapSol}–${e.maxMarketCapSol})`,
-    ),
+    check('market_cap_floor', priced && mc >= e.minMarketCapSol, `${shown} SOL (want ≥ ${e.minMarketCapSol})`),
+  )
+  checks.push(
+    check('market_cap_ceiling', priced && mc <= e.maxMarketCapSol, `${shown} SOL (want ≤ ${e.maxMarketCapSol})`),
   )
 
   checks.push(

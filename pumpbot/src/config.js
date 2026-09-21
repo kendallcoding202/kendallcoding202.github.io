@@ -394,7 +394,21 @@ export const config = {
      * test the claim out of sample, which is the only test that counts.
      */
     minUniqueBuyers: num('MIN_UNIQUE_BUYERS', 60),
-    minBuysPerSell: num('MIN_BUY_SELL_RATIO', 1.4),
+    /**
+     * Lowered 1.4 -> 1.0 because at 1.4 this check was measurably doing nothing.
+     *
+     * Over 71,979 rejected launches it threw away winners at 11.6% [11.4-11.8] — the
+     * base rate is 11.6% [11.4-11.8]. Identical, at a sample size where a real effect of
+     * even half a point would be visible. It was not selecting; it was shrinking the
+     * sample and costing entries for free. The threshold scan never surfaced buy/sell
+     * ratio as a useful cut either, which is the same verdict from the other direction.
+     *
+     * Not removed outright: the evidence says 1.4 discriminates nothing, NOT that a
+     * launch already being dumped is fine to buy. 1.0 keeps that degenerate guard —
+     * more buys than sells — and drops the part that was an unevidenced guess. If the
+     * next report shows 1.0 rejecting at the base rate too, it has earned deletion.
+     */
+    minBuysPerSell: num('MIN_BUY_SELL_RATIO', 1.0),
     /**
      * Late-window buys over early-window buys: is this still accelerating?
      *

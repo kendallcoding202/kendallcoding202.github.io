@@ -150,8 +150,18 @@ function buildCandidate({ create = {}, buyers = 70, sells = 2, devSells = false,
   const thin = evaluateEntry(buildCandidate({ buyers: 4 }))
   check('too few organic buyers is rejected', !thin.pass && thin.failed.some((c) => c.id === 'buyers'))
 
-  const dumping = evaluateEntry(buildCandidate({ buyers: 20, sells: 18 }))
-  check('heavy early selling is rejected', !dumping.pass && dumping.failed.some((c) => c.id === 'buy_pressure'))
+  /**
+   * More sells than buys. The bar was 1.4x, which over 71,979 rejected launches threw
+   * away winners at exactly the base rate — so it is 1.0x now and this fixture has to
+   * be an actual net distribution rather than merely a slow one.
+   */
+  const dumping = evaluateEntry(buildCandidate({ buyers: 20, sells: 25 }))
+  check('a launch being net distributed out of is rejected',
+    !dumping.pass && dumping.failed.some((c) => c.id === 'buy_pressure'),
+    JSON.stringify(dumping.failed?.map((c) => c.id)))
+  check('but merely having some sellers is not',
+    evaluateEntry(buildCandidate({ buyers: 70, sells: 60 })).pass,
+    JSON.stringify(evaluateEntry(buildCandidate({ buyers: 70, sells: 60 })).failed?.map((c) => c.id)))
 
   const devDump = evaluateEntry(buildCandidate({ devSells: true, sells: 1 }))
   check('dev selling is disqualifying', !devDump.pass && devDump.failed.some((c) => c.id === 'dev_not_selling'))
@@ -173,7 +183,8 @@ function buildCandidate({ create = {}, buyers = 70, sells = 2, devSells = false,
     evaluateEntry(buildCandidate({ mcap: 900 })).pass,
     JSON.stringify(evaluateEntry(buildCandidate({ mcap: 900 })).failed?.map((c) => c.id)))
   const tooBig = evaluateEntry(buildCandidate({ mcap: 5000 }))
-  check('a fully distributed market cap is still rejected', !tooBig.pass && tooBig.failed.some((c) => c.id === 'market_cap'))
+  check('a fully distributed market cap is still rejected',
+    !tooBig.pass && tooBig.failed.some((c) => c.id === 'market_cap_ceiling'))
 
   // The check the filter never had: is the buying still happening?
   const fading = evaluateEntry(buildCandidate({ fading: true }))
@@ -181,8 +192,28 @@ function buildCandidate({ create = {}, buyers = 70, sells = 2, devSells = false,
     JSON.stringify(fading.failed?.map((c) => c.id)))
   check('an accelerating one is not', evaluateEntry(buildCandidate()).pass)
 
+  /**
+   * Floor and ceiling report SEPARATELY now. As one `market_cap` line the report said
+   * it rejected 30,450 launches at a 27.7% hit rate, which reads as the filter binning
+   * its best material — while the scan showed the damage was all on the floor side
+   * (`marketCapSol < 3.2` at 41.6%), a population too thin to trade rather than an
+   * opportunity. One id cannot carry two opposite verdicts.
+   */
   const tooSmall = evaluateEntry(buildCandidate({ mcap: 5 }))
-  check('a market cap nobody has bid up is rejected', !tooSmall.pass && tooSmall.failed.some((c) => c.id === 'market_cap'))
+  check('a market cap nobody has bid up is rejected by the FLOOR',
+    !tooSmall.pass && tooSmall.failed.some((c) => c.id === 'market_cap_floor'))
+  check('and the ceiling does not also claim that rejection',
+    !tooSmall.failed.some((c) => c.id === 'market_cap_ceiling'))
+  check('a too-large cap is not blamed on the floor',
+    !evaluateEntry(buildCandidate({ mcap: 5000 })).failed.some((c) => c.id === 'market_cap_floor'))
+  check('an unpriceable market cap fails both, not neither',
+    (() => {
+      const c = buildCandidate()
+      c.marketCapSol = undefined
+      const v = evaluateEntry(c)
+      return v.failed.some((x) => x.id === 'market_cap_floor') &&
+        v.failed.some((x) => x.id === 'market_cap_ceiling')
+    })())
 
   const c = buildCandidate({ buyers: 20 })
   check('dev is excluded from the organic buyer count', c.organicBuyers === 20, String(c.organicBuyers))
@@ -267,6 +298,40 @@ console.log('\nCreator prior')
 
   check('an empty index reports nothing to act on',
     new CreatorIndex().summary().launches === 0 && new CreatorIndex().summary().blocked === 0)
+
+  /**
+   * The positive arm. Same interval, other end: a deployer is only "proven" when even
+   * the most PESSIMISTIC reading of their record beats the market, so two-for-two is no
+   * more a track record here than nought-for-two was on the blocking side.
+   */
+  const proven = idx.verdict('GOODDEV')
+  check('a deployer well above the market is marked proven',
+    proven.betterThanMarket && proven.lowerBound > proven.base,
+    JSON.stringify({ lo: proven.lowerBound, base: proven.base }))
+  check('the 0-for-120 deployer is not', !bad.betterThanMarket)
+  check('an unremarkable record is neither', (() => {
+    const i = new CreatorIndex()
+    for (let k = 0; k < 400; k++) i.note({ creator: 'MKT', hitFirstRung: k < 60 })
+    for (let k = 0; k < 60; k++) i.note({ creator: 'MID', hitFirstRung: k < 9 }) // 15%, same as base
+    const v = i.verdict('MID')
+    return v.known && !v.worseThanMarket && !v.betterThanMarket
+  })())
+  check('a tiny winning streak is not proven', (() => {
+    const i = new CreatorIndex()
+    for (let k = 0; k < 400; k++) i.note({ creator: 'MKT', hitFirstRung: k < 60 })
+    for (let k = 0; k < 2; k++) i.note({ creator: 'LUCKY', hitFirstRung: true })
+    return !i.verdict('LUCKY').betterThanMarket
+  })())
+
+  const CT = (await import('../src/journal.js')).CREATOR_TIER
+  check('tiers are ordered worst to best',
+    CT.poor < CT.unknown && CT.unknown < CT.ordinary && CT.ordinary < CT.proven)
+  check('a bad deployer tiers as poor', idx.tier('BADDEV') === CT.poor)
+  check('a good deployer tiers as proven', idx.tier('GOODDEV') === CT.proven)
+  check('an unseen deployer tiers as unknown', idx.tier('NOBODY') === CT.unknown)
+  check('unknown sits above poor, so a scan cannot read "no record" as "bad record"',
+    CT.unknown > CT.poor)
+  check('summary counts the proven end too', typeof idx.summary().proven === 'number')
   check('an empty index has no opinion about anyone',
     new CreatorIndex().baseRate() === null && !new CreatorIndex().verdict('X').worseThanMarket)
 

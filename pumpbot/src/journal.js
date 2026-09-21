@@ -30,6 +30,16 @@ import { wilson } from './stats.js'
  */
 export const JOURNAL_VERSION = 2
 
+/**
+ * A deployer's standing relative to the market, as an ordered scale.
+ *
+ * `poor` and `proven` are the two ends the Wilson interval can actually justify;
+ * `ordinary` means we have a record and it is unremarkable; `unknown` means not enough
+ * of a record to say anything, which is most launches and must never be confused with
+ * `ordinary`. Kept between the two so the scale stays monotone for a threshold scan.
+ */
+export const CREATOR_TIER = { poor: 0, unknown: 1, ordinary: 2, proven: 3 }
+
 let journalPath = null
 
 function file() {
@@ -259,11 +269,14 @@ export class CreatorIndex {
     let launches = 0
     let eligible = 0
     let blocked = 0
+    let proven = 0
     for (const [creator, e] of this.byCreator) {
       launches += e.launches
       if (e.launches < minLaunches) continue
       eligible++
-      if (this.verdict(creator, { minLaunches }).worseThanMarket) blocked++
+      const v = this.verdict(creator, { minLaunches })
+      if (v.worseThanMarket) blocked++
+      else if (v.betterThanMarket) proven++
     }
     this.summaryCache = {
       minLaunches,
@@ -271,6 +284,7 @@ export class CreatorIndex {
       launches,
       eligible,
       blocked,
+      proven,
       baseRate: base,
     }
     return this.summaryCache
@@ -319,10 +333,36 @@ export class CreatorIndex {
       hits: e.hits,
       hitRate: e.hits / e.launches,
       upperBound: w.hi,
+      lowerBound: w.lo,
       // Even the most generous reading of their record is below the market's.
       worseThanMarket: w.hi < base,
+      /**
+       * The mirror image, and the one we were not asking for. The same index that knows
+       * a deployer is 0-for-120 knows another is 29-for-126, and the data says launches
+       * from proven deployers hit at roughly four times the base rate — an axis entirely
+       * independent of what the crowd did in the last thirty seconds, which is where a
+       * second signal is actually worth something.
+       *
+       * Judged on the LOWER bound for the same reason the block is judged on the upper:
+       * "2 for 2" is not a track record.
+       */
+      betterThanMarket: w.lo > base,
       base,
     }
+  }
+
+  /**
+   * The verdict collapsed to one ordered number, so it can be journalled and scanned.
+   *
+   * Ordinal rather than categorical on purpose — the threshold scan works on numbers,
+   * and "higher is better" is the whole claim being tested.
+   */
+  tier(creator, opts = {}) {
+    const v = this.verdict(creator, opts)
+    if (!v.known) return CREATOR_TIER.unknown
+    if (v.worseThanMarket) return CREATOR_TIER.poor
+    if (v.betterThanMarket) return CREATOR_TIER.proven
+    return CREATOR_TIER.ordinary
   }
 }
 
@@ -364,6 +404,17 @@ export function featuresOf(candidate, creatorIndex = null) {
      */
     creatorLaunchesSeen: creatorIndex ? creatorIndex.priorFor(candidate.creator).launches : 0,
     creatorPriorHitRate: creatorIndex ? round4(creatorIndex.priorFor(candidate.creator).hitRate) : -1,
+    /**
+     * The same record as a statistical verdict rather than a raw rate.
+     *
+     * creatorPriorHitRate alone cannot tell 1-for-2 from 60-for-120: both read 0.5, and
+     * a scan on that column happily "discovers" an edge built out of two coin flips.
+     * This applies the interval first, so a cut on it means what it appears to mean.
+     * Recorded at TRACK time from outcomes already finalized, so it carries no leakage.
+     */
+    creatorTier: creatorIndex
+      ? creatorIndex.tier(candidate.creator, { minLaunches: config.entry.minCreatorLaunches })
+      : CREATOR_TIER.unknown,
     observeSeconds: config.entry.observeSeconds,
   }
 }

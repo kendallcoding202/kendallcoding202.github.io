@@ -776,7 +776,8 @@ function priorLine(p) {
   const base = p.baseRate === null ? 'n/a' : (p.baseRate * 100).toFixed(1) + '%'
   return 'Deployer prior · <code>' + num(p.launches) + '</code> past launches over <code>' +
     num(p.creators) + '</code> deployers · <code>' + p.eligible + '</code> with ' + p.minLaunches +
-    '+ launches · <b>' + p.blocked + '</b> blocked · refused <b>' + (p.refused || 0) + '</b> this run' +
+    '+ launches · <b>' + p.blocked + '</b> blocked · <b>' + (p.proven || 0) + '</b> proven' +
+    ' · refused <b>' + (p.refused || 0) + '</b> this run' +
     '<br><span style="color:var(--dimmer)">market base rate ' + base +
     (p.eligible === 0 ? ' · no deployer has a long enough record yet, so none can be blocked' : '') + '</span>'
 }
