@@ -381,7 +381,23 @@ function render(d) {
     const c = d.collection
     col.hidden = false
     col.className = 'collect ' + (c.collecting ? 'on' : 'off')
-    if (c.collecting) {
+    /**
+     * Journalling and analysing fail SEPARATELY, and the banner must not conflate them.
+     * When the analysis worker is down there are no row counts, so this printed
+     * "0 usable rows" — which reads as data loss while the bot is in fact recording
+     * every launch to disk. Those two states want opposite reactions from whoever is
+     * reading the page, so name the one that is actually broken.
+     */
+    if (c.collecting && c.countsUnavailable) {
+      col.innerHTML = '● COLLECTING · watching <b>' + c.tracking + '</b> tokens' +
+        '<span class="why"><span style="color:var(--amber)">Row counts unavailable — the ' +
+        'analysis worker is not running' +
+        (c.analysisRetryInSeconds ? ', retrying in ' + c.analysisRetryInSeconds + 's' : '') +
+        '.</span><br>Journalling is unaffected — launches are still being written to disk.' +
+        (c.analysisError ? '<br>Last error: ' + esc(String(c.analysisError)) : '') +
+        (c.storage ? '<br>' + storageLine(c.storage) : '') +
+        (c.creatorPrior ? '<br>' + priorLine(c.creatorPrior) : '') + '</span>'
+    } else if (c.collecting) {
       // "in the last hour", not "about N/hr" — it is a count over a real window, and
       // the vaguer phrasing is what let an impossible extrapolation look plausible.
       const rate = c.usablePerHour !== null ? ' · <b>' + num(c.usablePerHour) + '</b> in the last hour' : ''

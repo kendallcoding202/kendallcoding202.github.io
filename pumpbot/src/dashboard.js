@@ -111,7 +111,7 @@ async function refreshSolPrice() {
  * and the reader is the one person who cannot see the code. So decide it here, from the
  * same state the bot acts on, and say which link of the chain is broken when one is.
  */
-function collectionStatus(stats, storage, learning) {
+function collectionStatus(stats, storage, learning, analysis = null) {
   const reasons = []
   if (!config.learning.enabled) reasons.push('LEARNING is off — nothing is being journalled')
   if (!storage.writable) reasons.push(`${storage.dataDir} is not writable — nothing can be saved`)
@@ -156,6 +156,20 @@ function collectionStatus(stats, storage, learning) {
      */
     storage,
     creatorPrior: stats?.creatorPrior ?? null,
+    /**
+     * COLLECTING and ANALYSING are different things, and the banner must not conflate
+     * them. Journalling is the bot writing rows; the analysis is a separate worker that
+     * reads them afterwards. When that worker fails, learningSnapshot() is null, so
+     * usableRows and rowsOnDisk both read 0 — which looks exactly like the data being
+     * gone while the bot is in fact journalling perfectly well.
+     *
+     * "Collecting fine, the report is broken" and "we are losing data" want opposite
+     * reactions, so say which one it is.
+     */
+    countsUnavailable: Boolean(learning === null && config.learning.enabled),
+    analysisFailing: (analysis?.failures ?? 0) > 0,
+    analysisRetryInSeconds: analysis?.nextAttemptInSeconds ?? 0,
+    analysisError: analysis?.lastError ?? null,
   }
 }
 
@@ -291,7 +305,7 @@ export function buildSnapshot(walletSol, stats = null) {
     learning: learningSnapshot(),
     learningPending: config.learning.enabled && analysisHealth().at === 0,
     analysis: analysisHealth(),
-    collection: collectionStatus(stats, storageSnapshot(), learningSnapshot()),
+    collection: collectionStatus(stats, storageSnapshot(), learningSnapshot(), analysisHealth()),
     /**
      * Whether Telegram is actually receiving anything. Sends are best-effort by design —
      * an outage must never delay an exit — but a silent channel and a healthy one looked

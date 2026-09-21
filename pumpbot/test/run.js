@@ -3613,6 +3613,17 @@ console.log('\nEnd-to-end bot loop')
       `${justStarted.collection.usablePerHour} at 1m vs ${dayOld.collection.usablePerHour} at 24h`)
   }
 
+  /**
+   * "Collecting fine, the report is broken" and "we are losing data" want opposite
+   * reactions. With the analysis worker down there are no row counts, and the banner
+   * printed "0 usable rows" — indistinguishable from the journal being empty.
+   */
+  check('the banner distinguishes missing COUNTS from missing DATA',
+    typeof snap.collection.countsUnavailable === 'boolean',
+    JSON.stringify(snap.collection.countsUnavailable))
+  check('and carries why the analysis is unavailable when it is',
+    'analysisFailing' in snap.collection && 'analysisRetryInSeconds' in snap.collection)
+
   check('the banner carries where data is being written',
     typeof snap.collection?.storage?.dataDir === 'string' &&
     typeof snap.collection.storage.writable === 'boolean',
