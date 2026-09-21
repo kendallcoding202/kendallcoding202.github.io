@@ -16,11 +16,10 @@ import {
 } from './store.js'
 import { positionPnl } from './position.js'
 import { sizingSummary } from './sizing.js'
-import { analyze } from './learn.js'
+import { refreshIfStale, snapshot as analysisSnapshot, analysisHealth } from './analysis.js'
 import { deliveryStats } from './notify.js'
 import { log } from './log.js'
 
-let learningCache = { at: 0, data: null }
 
 /**
  * Is the data actually being kept? On a hosted platform DATA_DIR has to point at a
@@ -55,75 +54,22 @@ function storageSnapshot() {
   }
 }
 
-let learningComputing = false
 
 /**
- * NEVER computed on the request path.
+ * Serve what was last computed; ask the WORKER for a fresh one if it is due.
  *
- * analyze() is synchronous and walks the whole journal; measured at 22s for 50,000 rows
- * before the scan was rewritten, and the journal grows by thousands of rows an hour. On
- * the request path that freezes the dashboard AND the trade feed, because they share one
- * event loop — a report that is expensive to read stops the bot it is reporting on.
- *
- * So: serve whatever is cached, kick off a refresh behind it, and let the next poll pick
- * up the new numbers. The page polls every few seconds, so a stale-by-one-cycle report is
- * invisible; a frozen bot is not.
+ * Deferring with setTimeout(0) was not enough and the reasoning above was wrong about
+ * why. It moved the work off the request path but left it on the event loop, and the
+ * cost had been measured on an unrepresentative sample: on the real journal, 152,000
+ * rows carrying the full 24-feature vector, analyze() takes 73 SECONDS. That is not a
+ * slow report — for 73 seconds the websocket is not read, so prices go stale and the
+ * stale-price rule force-closes live positions blind. Every few minutes. The analysis
+ * was corrupting the data it analyses and losing money doing it.
  */
 function learningSnapshot() {
   if (!config.learning.enabled) return null
-  /**
-   * Refreshed every few minutes, not every 30 seconds.
-   *
-   * Moving analyse() off the request path stopped it blocking the DASHBOARD, but it still
-   * blocks the event loop while it runs — measured at ~2s for 4,000 rows across 22
-   * features — and the feed shares that loop. At a 30-second interval that is ~7% of all
-   * time spent frozen, dropping trade events for a report whose numbers move over hours.
-   */
-  if (Date.now() - learningCache.at > config.learning.refreshSeconds * 1000 && !learningComputing) {
-    learningComputing = true
-    setTimeout(() => {
-      try {
-        computeLearning()
-      } finally {
-        learningComputing = false
-      }
-    }, 0).unref?.()
-  }
-  return learningCache.data
-}
-
-function computeLearning() {
-  try {
-    const a = analyze()
-    learningCache = {
-      at: Date.now(),
-      data: {
-        labelled: a.totals.labelled,
-        pending: a.totals.pending,
-        bought: a.totals.bought,
-        rejected: a.totals.rejected,
-        minSamples: a.minSamples,
-        enoughData: a.enoughData,
-        baseRatePct: a.rates.base.n ? a.rates.base.p * 100 : null,
-        boughtRatePct: a.rates.bought.n ? a.rates.bought.p * 100 : null,
-        rejectedRatePct: a.rates.rejected.n ? a.rates.rejected.p * 100 : null,
-        filterEdge: a.filterEdge,
-        ev: a.ev.bought,
-        topMisses: a.falseNegatives.slice(0, 4),
-        suggestions: a.suggestions.slice(0, 4),
-        stale: a.totals.stale,
-        truncated: a.totals.truncated,
-        journalled: a.totals.journalled,
-        labelledLastHour: a.totals.labelledLastHour,
-        olderThanCap: a.totals.olderThanCap,
-        explored: a.totals.explored,
-      },
-    }
-  } catch (err) {
-    log.debug(`learning snapshot failed: ${err.message}`)
-    learningCache = { at: Date.now(), data: null }
-  }
-  return learningCache.data
+  refreshIfStale()
+  return analysisSnapshot()
 }
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -343,7 +289,8 @@ export function buildSnapshot(walletSol, stats = null) {
       enabled: config.explore.enabled,
     },
     learning: learningSnapshot(),
-    learningPending: config.learning.enabled && learningCache.at === 0,
+    learningPending: config.learning.enabled && analysisHealth().at === 0,
+    analysis: analysisHealth(),
     collection: collectionStatus(stats, storageSnapshot(), learningSnapshot()),
     /**
      * Whether Telegram is actually receiving anything. Sends are best-effort by design —

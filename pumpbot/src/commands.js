@@ -164,8 +164,24 @@ export class CommandListener {
        */
       case '/learn':
       case '/report': {
-        const { analyze, formatReport } = await import('./learn.js')
-        const text = formatReport(analyze())
+        /**
+         * Through the WORKER. Computing this inline is what made /learn dangerous: on
+         * the real journal it is 73 seconds of synchronous work and over a gigabyte of
+         * peak memory, on the same thread that manages open positions. Asking for a
+         * report should never be able to stop the bot trading, and until now it was the
+         * single most reliable way to do it.
+         */
+        const { request } = await import('./analysis.js')
+        const result = await request()
+        const text = result.report
+        if (!text) {
+          return this.#reply(
+            '<b>No report yet.</b> ' +
+              (result.lastError
+                ? `The last analysis failed: <code>${esc(result.lastError)}</code>`
+                : 'The first analysis is still running — try again in a minute.'),
+          )
+        }
         // Monospaced so the report's columns survive, and wrapped per split part rather
         // than around the whole thing — see notify().
         await notify(esc(text), { pre: true })

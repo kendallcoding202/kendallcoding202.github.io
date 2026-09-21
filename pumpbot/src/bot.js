@@ -25,6 +25,7 @@ import { getPublicKey, getSolBalance, getAllTokenBalances } from './wallet.js'
 import { notifyEntry, notifySell, notifyClose, notifyHalt, notifyStartup, notify } from './notify.js'
 import { summaryText, summaryBaseline } from './summary.js'
 import { acquire as acquireLock, release as releaseLock } from './lock.js'
+import { stopAnalysis } from './analysis.js'
 import { log, sol, esc, utcDay } from './log.js'
 
 /**
@@ -425,6 +426,9 @@ export class Bot {
     clearInterval(this.shadowTimer)
     await this.feed.stop()
     await this.logFeed?.stop()
+    // The analysis thread is unref'd so it cannot hold the process open, but a shutdown
+    // should still take it down rather than leave it mid-scan holding a few hundred MB.
+    await stopAnalysis()
     save()
     saveShadow(this.shadow)
     releaseLock()

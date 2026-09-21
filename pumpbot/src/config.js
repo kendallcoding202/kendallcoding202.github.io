@@ -231,30 +231,31 @@ export const config = {
     /**
      * Most recent rows the analysis walks.
      *
-     * This was 4,000, set when bestThreshold() was O(n^2) and 50,000 rows took 22
-     * synchronous seconds. That scan is O(n log n) now, and at 141,000 real rows the cap
-     * turned out to buy NOTHING — measured, min of 9 runs on a journal of that size:
+     * Raised to 200,000 on a benchmark that was WRONG, and this is the correction.
      *
-     *   readAll() alone   574 ms      analyze() @ 20,000    619 ms
-     *   analyze() @ 4,000 646 ms      analyze() @ 141,090   575 ms
+     * That benchmark showed the cap buying nothing — flat time whatever the value — and
+     * concluded that analysing the whole journal was free. Its synthetic rows carried a
+     * handful of feature fields where the real ones carry twenty-four, so it almost
+     * entirely missed the cost that matters: the threshold scan runs PER FEATURE, and
+     * the permutation null runs the whole scan 60 times over.
      *
-     * Flat, because the entire cost is readAll() parsing the whole file, which happens
-     * whatever the cap is. So the cap was discarding 97% of the evidence to save nothing,
-     * and the banner's "4,000 usable rows" was reporting this ceiling as if it were a
-     * measurement.
+     * Re-measured on a journal matching the live one, 152,000 rows with the real feature
+     * vector:
      *
-     * It stays a number rather than becoming unbounded, but be clear about what that
-     * does and does not buy: readAll() parses the WHOLE file and analyze() slices
-     * afterwards, so the cap has never bounded memory at all. Measured on a 73 MB
-     * journal: 152 MB of heap held by the parsed rows, 351 MB RSS — at 4,000 and at
-     * 141,090 alike, because the parse happens either way.
+     *    10,000 rows    3.2s     198 MB        100,000 rows   44.0s    823 MB
+     *    25,000 rows    8.6s     303 MB        200,000 rows   77.5s  1,175 MB
+     *    50,000 rows   16.9s     467 MB
      *
-     * So the real ceiling on this bot is the journal's SIZE, and it is a memory ceiling
-     * rather than the disk one it looks like: the file will OOM a small container long
-     * before it fills a 5 GB volume. Fixing that means streaming the file instead of
-     * materialising it — not raising or lowering this number.
+     * Linear in both, and at 200,000 it is 77 seconds and 1.2 GB — enough to OOM a small
+     * container, and (before the work moved to a worker) enough to freeze the trading
+     * loop for over a minute every refresh, which force-closed live positions on stale
+     * prices. The analysis was corrupting the data it analyses.
+     *
+     * 25,000 keeps base rates to about +/-0.4pp and leaves thousands of rows on the keep
+     * side of a useful threshold, which is ample — the deployer-tier result was decisive
+     * on 3,000. Raise it only against these numbers and the container's memory limit.
      */
-    maxRowsAnalyzed: num('MAX_ROWS_ANALYZED', 200_000),
+    maxRowsAnalyzed: num('MAX_ROWS_ANALYZED', 25_000),
     /**
      * How often the dashboard's cached report is rebuilt. analyse() is synchronous and
      * the feed shares its event loop, so this is a duty cycle, not a freshness setting:
