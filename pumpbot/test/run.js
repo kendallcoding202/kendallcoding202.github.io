@@ -886,6 +886,58 @@ console.log('\nExit replay vs the real holding window')
   check('and records the price it would have sold blind at, not the one that broke the silence',
     near(finished.staleExitMultiple, 3.0, 1e-4), String(finished.staleExitMultiple))
   check('the row is marked replayable against the real rules', finished.hasExitTiming === true)
+  /**
+   * The coarse price path, which is what lets the sweep ask whether holding longer pays.
+   * Every exit price recorded before it was pinned to the config value in force at the
+   * time, so a sweep over the time stop had nothing to price a different boundary with.
+   */
+  {
+    const { PATH_CHECKPOINTS } = await import('../src/journal.js')
+    const t3 = new ShadowTracker({ maxTracked: 10, windowMs: 900_000 })
+    const base = Date.now()
+    t3.track({
+      candidate: { mint: 'PATH', symbol: 'P', creator: 'D', createdAt: base, priceSol: 1e-7 },
+      verdict: { pass: true, failed: [] }, action: 'bought',
+    })
+    /**
+     * Deliberately tops out BELOW the rung, at 1.3x, then decays to 0.3x. A coin that
+     * reaches the rung exits at the rung whatever the time stop is — correctly — so it
+     * cannot show the sweep varying anything. The first draft of this test used one, and
+     * the two time stops came back identical because they should have.
+     *
+     * Ticks every 20s so no stale gap intrudes and the time stop is the deciding rule.
+     */
+    for (let sec = 20; sec <= 900; sec += 20) {
+      const m = sec <= 100 ? 1 + (0.3 * sec) / 100 : Math.max(0.3, 1.3 - (sec - 100) / 800)
+      t3.onTrade({ mint: 'PATH', priceSol: m * 1e-7 }, base + sec * 1000)
+    }
+    const r = t3.finalize('PATH')
+    check('the row carries a price path', Array.isArray(r.pathMultiples) &&
+      r.pathMultiples.length === PATH_CHECKPOINTS.length, JSON.stringify(r.pathMultiples))
+    const at = (s) => r.pathMultiples[PATH_CHECKPOINTS.indexOf(s)]
+    check('which records the climb', at(60) > 1.0 && at(60) < 1.35, String(at(60)))
+    check('and the decay afterwards', at(600) < at(120), `${at(600)} vs ${at(120)}`)
+
+    /**
+     * The payoff: the same coin priced at two different time stops. This one peaks early
+     * and fades, so selling sooner must beat selling later — if the two come out equal
+     * the sweep is not actually varying anything.
+     */
+    const early = simulateLadder(r, { timeStopSeconds: 120 })
+    const late = simulateLadder(r, { timeStopSeconds: 900 })
+    check('the replay prices different time stops differently',
+      early !== late, `${early} vs ${late}`)
+
+    // A row with no path must not be silently priced at minute fifteen instead.
+    const noPath = simulateLadder(
+      { ...r, pathMultiples: undefined, pathCheckpoints: undefined, timeStopMultiple: null,
+        firstRungAtSeconds: 800, staleExitAtSeconds: null },
+      { timeStopSeconds: 300 },
+    )
+    check('a row with no path still yields a number rather than throwing',
+      Number.isFinite(noPath), String(noPath))
+  }
+
   check('a rung that never fired is recorded as null, not zero', (() => {
     const t2 = new ShadowTracker({ maxTracked: 10, windowMs: 900_000 })
     t2.track({ candidate: { ...candidate, mint: 'FLAT' }, verdict: { pass: true, failed: [] }, action: 'bought' })

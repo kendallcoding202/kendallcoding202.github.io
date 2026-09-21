@@ -99,12 +99,38 @@ export function roundTripCost({ sells = 1, positionSol = livePositionSol() } = {
   return tradingCost({ sells, positionSol })
 }
 
+/**
+ * The multiple this row was trading at `seconds` after the decision.
+ *
+ * Reads the coarse path, falling back to the value recorded at the live time stop and
+ * then to `end`. The fallback matters: 150,000 rows predate the path, and a sweep over
+ * the time stop simply cannot say anything about them — it must not quietly price them
+ * at minute fifteen and call that an answer.
+ */
+function multipleAt(row, seconds) {
+  const points = row.pathCheckpoints
+  const values = row.pathMultiples
+  if (Array.isArray(points) && Array.isArray(values)) {
+    // The last checkpoint at or before the moment asked about.
+    let best = null
+    for (let i = 0; i < points.length; i++) {
+      if (points[i] <= seconds && values[i] !== null && values[i] > 0) best = values[i]
+    }
+    if (best !== null) return best
+  }
+  if (Number.isFinite(row.timeStopMultiple) && seconds >= config.exit.timeStopSeconds) {
+    return row.timeStopMultiple
+  }
+  return null
+}
+
 export function simulateLadder(
   row,
   {
     ladder = config.exit.ladder,
     stopLossPct = config.exit.stopLossPct,
     trailingPct = config.exit.trailingDrawdownPct,
+    timeStopSeconds = config.exit.timeStopSeconds,
     positionSol = livePositionSol(),
   } = {},
 ) {
@@ -133,7 +159,7 @@ export function simulateLadder(
    */
   if (row.hasExitTiming) {
     const stale = Number.isFinite(row.staleExitAtSeconds) ? row.staleExitAtSeconds : Infinity
-    const deadline = Math.min(config.exit.timeStopSeconds, stale)
+    const deadline = Math.min(timeStopSeconds, stale)
     const rungAt = Number.isFinite(row.firstRungAtSeconds) ? row.firstRungAtSeconds : Infinity
     const stoppedAt =
       Number.isFinite(trough) && trough <= stopMultiple && Number.isFinite(row.troughAtSeconds)
@@ -151,9 +177,9 @@ export function simulateLadder(
        * be the old mistake in a smaller form: `end` is the price at minute fifteen, and
        * we were not there.
        */
-      const exit = stale <= config.exit.timeStopSeconds
+      const exit = stale <= timeStopSeconds
         ? row.staleExitMultiple
-        : row.timeStopMultiple
+        : multipleAt(row, timeStopSeconds)
       return net(Math.max(Number.isFinite(exit) ? exit : Math.max(end, 0), 0), 1)
     }
   }
@@ -299,6 +325,7 @@ export function exitSweep(rows, { minSamples = config.learning.minSamplesForSugg
     ladder: config.exit.ladder,
     stopLossPct: config.exit.stopLossPct,
     trailingPct: config.exit.trailingDrawdownPct,
+    timeStopSeconds: config.exit.timeStopSeconds,
   }
 
   const firstAt = config.exit.ladder[0]?.atPct ?? 50
@@ -323,6 +350,27 @@ export function exitSweep(rows, { minSamples = config.learning.minSamplesForSugg
   for (const trailingPct of [25, 35, 50, 65]) {
     if (trailingPct !== base.trailingPct) {
       variants.push({ axis: 'trailing stop', label: `${trailingPct}% giveback`, plan: { ...base, trailingPct } })
+    }
+  }
+  /**
+   * SHOULD WE HOLD LONGER? The exit sweep could not ask until rows carried a price path
+   * — every recorded exit price was pinned to the 600s the time stop happens to be, so
+   * there was nothing to price a different boundary against.
+   *
+   * It matters because the journal watches for 15 minutes and the bot sells at 10, and
+   * the gap between those two numbers is a large part of why the replay disagreed with
+   * the account. Bounded by the observation window: beyond it there is no evidence, and
+   * a variant nothing can price would just inherit the incumbent's numbers and look
+   * like a tie.
+   */
+  const windowSeconds = config.learning.outcomeWindowMinutes * 60
+  for (const timeStopSeconds of [300, 450, 600, 900, 1200]) {
+    if (timeStopSeconds !== base.timeStopSeconds && timeStopSeconds <= windowSeconds) {
+      variants.push({
+        axis: 'time stop',
+        label: `${Math.round(timeStopSeconds / 60)}m`,
+        plan: { ...base, timeStopSeconds },
+      })
     }
   }
 

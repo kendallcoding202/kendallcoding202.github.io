@@ -40,6 +40,20 @@ export const JOURNAL_VERSION = 2
  */
 export const CREATOR_TIER = { poor: 0, unknown: 1, ordinary: 2, proven: 3 }
 
+/**
+ * Where the price stood at fixed moments after the decision, in seconds.
+ *
+ * Eight numbers per row, and they unlock the question the exit sweep could not ask:
+ * SHOULD WE HOLD LONGER? Every exit price recorded so far is pinned to the config value
+ * in force when the row was written — timeStopMultiple is the price at 600s because the
+ * time stop is 600s — so a sweep over the time stop had nothing to read. With a coarse
+ * path it can price any of these boundaries against the same coins.
+ *
+ * Coarse on purpose. A full tick history would multiply the journal's size by a hundred,
+ * and the journal is already the binding memory constraint on this bot.
+ */
+export const PATH_CHECKPOINTS = [30, 60, 120, 180, 300, 450, 600, 900]
+
 let journalPath = null
 
 function file() {
@@ -497,6 +511,8 @@ export class ShadowTracker {
       staleExitAt: null, // when the feed first went quiet for longer than the rule allows
       staleExitPriceSol: null, // the price the bot would have sold blind at
       timeStopPriceSol: null, // the price at the time-stop boundary
+      // Price held at each PATH_CHECKPOINTS moment; null until that moment passes.
+      pathPrices: PATH_CHECKPOINTS.map(() => null),
       ticks: 0,
     })
   }
@@ -520,6 +536,12 @@ export class ShadowTracker {
     const timeStopMs = config.exit.timeStopSeconds * 1000
     if (row.timeStopPriceSol === null && now - row.decidedAt >= timeStopMs) {
       row.timeStopPriceSol = heldPrice
+    }
+    // Same rule for every checkpoint the clock has passed: the price we were HOLDING
+    // when that moment arrived, not the one on the tick that happens to notice it.
+    const elapsed = (now - row.decidedAt) / 1000
+    for (let i = 0; i < PATH_CHECKPOINTS.length; i++) {
+      if (row.pathPrices[i] === null && elapsed >= PATH_CHECKPOINTS[i]) row.pathPrices[i] = heldPrice
     }
     row.lastTickAt = now
 
@@ -634,6 +656,19 @@ export class ShadowTracker {
             )
           : null,
       hasExitTiming: true,
+      /**
+       * The coarse price path, as multiples. A checkpoint the row never reached — the
+       * window closed first, or the coin stopped trading — stays null rather than being
+       * filled with the last price, so a replay can tell "flat" from "we were not there".
+       */
+      pathCheckpoints: PATH_CHECKPOINTS,
+      // A slot is non-null only because onTrade saw that moment pass, so no second
+      // check against the wall clock — which is a DIFFERENT clock from the one the
+      // ticks carry, and disagreeing with it nulled the whole path.
+      pathMultiples: row.pathPrices.map((p) => (p > 0 ? Number((p / base).toFixed(4)) : null)),
+      // The raw prices were working state; the multiples are the record. Keeping both
+      // would grow every row for nothing, and the journal is the memory ceiling here.
+      pathPrices: undefined,
       /**
        * The same label, restricted to what the live exit rules could actually have
        * captured. Kept ALONGSIDE hitFirstRung rather than replacing it: 150,000 existing
