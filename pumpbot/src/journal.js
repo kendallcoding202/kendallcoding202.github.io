@@ -439,6 +439,39 @@ const round4 = (v) => (Number.isFinite(v) ? Number(v.toFixed(4)) : undefined)
  * Tracks what happened to a token after we made a call on it, so the row can be
  * labelled. Held in memory; flushed to the journal when the window closes.
  */
+/**
+ * Bring a checkpointed row up to the shape the current code expects.
+ *
+ * The shadow checkpoint is LIVE IN-MEMORY STATE, not a journal row, and the two
+ * degrade differently. A journal row missing a field is just a row the analysis skips;
+ * a checkpointed row missing a field is a crash, because the tracker goes on to call
+ * methods on it. Adding pathPrices did exactly that: 264 observations restored from a
+ * checkpoint written by the previous build, the first one to mature hit
+ * `row.pathPrices.map(...)` on undefined, and the bot died on startup with the platform
+ * still reporting a healthy container.
+ *
+ * So every field track() seeds gets a default here. Restoring is deliberately preferred
+ * over discarding the checkpoint: those observations are hours of watching that cannot
+ * be recreated, and throwing them away to dodge a migration would lose real evidence.
+ */
+function hydrate(row) {
+  const at = row.decidedAt ?? Date.now()
+  return {
+    ticks: 0,
+    ...row,
+    peakAt: row.peakAt ?? at,
+    troughAt: row.troughAt ?? at,
+    lastTickAt: row.lastTickAt ?? at,
+    firstRungAt: row.firstRungAt ?? null,
+    staleExitAt: row.staleExitAt ?? null,
+    staleExitPriceSol: row.staleExitPriceSol ?? null,
+    timeStopPriceSol: row.timeStopPriceSol ?? null,
+    pathPrices: Array.isArray(row.pathPrices) && row.pathPrices.length === PATH_CHECKPOINTS.length
+      ? row.pathPrices
+      : PATH_CHECKPOINTS.map(() => null),
+  }
+}
+
 export class ShadowTracker {
   constructor({
     windowMs = config.learning.outcomeWindowMinutes * 60_000,
@@ -665,7 +698,11 @@ export class ShadowTracker {
       // A slot is non-null only because onTrade saw that moment pass, so no second
       // check against the wall clock — which is a DIFFERENT clock from the one the
       // ticks carry, and disagreeing with it nulled the whole path.
-      pathMultiples: row.pathPrices.map((p) => (p > 0 ? Number((p / base).toFixed(4)) : null)),
+      // Defensive as well as hydrated on restore: finalize() is reached from several
+      // paths and a missing field here kills the process, not just the row.
+      pathMultiples: (row.pathPrices ?? PATH_CHECKPOINTS.map(() => null)).map((p) =>
+        p > 0 ? Number((p / base).toFixed(4)) : null,
+      ),
       // The raw prices were working state; the multiples are the record. Keeping both
       // would grow every row for nothing, and the journal is the memory ceiling here.
       pathPrices: undefined,
@@ -744,7 +781,7 @@ export class ShadowTracker {
     for (const row of snapshot.rows ?? []) {
       if (!row?.mint || !(row.decidedAt > 0)) continue
       // Oldest first, so the Map's insertion order still means "oldest" for eviction.
-      this.rows.set(row.mint, row)
+      this.rows.set(row.mint, hydrate(row))
       restored++
     }
     // Sorting after the fact is cheap here (once per process) and keeps eviction O(1).

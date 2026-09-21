@@ -976,6 +976,63 @@ console.log('\nExit replay vs the real holding window')
       Number.isFinite(noPath), String(noPath))
   }
 
+  /**
+   * THE CRASH, reproduced: a checkpoint written by the PREVIOUS build.
+   *
+   * The shadow checkpoint is live in-memory state, not a journal row, and the two
+   * degrade differently. A journal row missing a field is one the analysis skips; a
+   * checkpointed row missing a field is a crash, because the tracker calls methods on
+   * it. Live, 264 observations restored from a checkpoint written before pathPrices
+   * existed, the first to mature hit `row.pathPrices.map(...)` on undefined, and the
+   * bot died during startup while the platform reported a healthy container.
+   */
+  {
+    const older = new ShadowTracker({ maxTracked: 50, windowMs: 900_000 })
+    const decidedAt = Date.now() - 20 * 60_000 // already past the window
+    // Exactly what the previous build wrote: no pathPrices, no exit-timing fields.
+    const legacySnapshot = {
+      v: JOURNAL_VERSION,
+      rows: [{
+        v: JOURNAL_VERSION, mint: 'LEGACY', symbol: 'LEG', creator: 'DEV', decidedAt,
+        createdAt: decidedAt, action: 'rejected', failedChecks: ['buyers'], features: {},
+        decisionPriceSol: 1e-7, peakPriceSol: 2e-7, troughPriceSol: 5e-8, lastPriceSol: 1e-7,
+        peakAt: decidedAt + 60_000, troughAt: decidedAt + 30_000, ticks: 12,
+      }],
+    }
+    const { restored, expired } = older.restore(legacySnapshot)
+    check('a checkpoint from an older build still restores', restored === 1 && expired.length === 1)
+
+    let finished = null
+    let threw = null
+    try {
+      finished = older.finalize('LEGACY', 'window closed during downtime')
+    } catch (err) {
+      threw = err.message
+    }
+    check('and finalizing it does not throw', threw === null, String(threw))
+    check('the row is journalled rather than lost', Boolean(finished) && finished.mint === 'LEGACY')
+    check('with the new fields defaulted, not undefined',
+      Array.isArray(finished.pathMultiples) && finished.firstRungAtSeconds === null,
+      JSON.stringify({ path: finished.pathMultiples?.length, rung: finished.firstRungAtSeconds }))
+
+    // And a restored row must still TRACK correctly afterwards, not just survive.
+    const live = new ShadowTracker({ maxTracked: 50, windowMs: 900_000 })
+    const freshAt = Date.now()
+    live.restore({
+      v: JOURNAL_VERSION,
+      rows: [{
+        v: JOURNAL_VERSION, mint: 'RESUMED', symbol: 'RES', creator: 'DEV', decidedAt: freshAt,
+        createdAt: freshAt, action: 'bought', failedChecks: [], features: {},
+        decisionPriceSol: 1e-7, peakPriceSol: 1e-7, troughPriceSol: 1e-7, lastPriceSol: 1e-7,
+        peakAt: freshAt, troughAt: freshAt, ticks: 0,
+      }],
+    })
+    live.onTrade({ mint: 'RESUMED', priceSol: 1.6e-7 }, freshAt + 30_000)
+    const resumed = live.finalize('RESUMED')
+    check('a restored row still records the rung it later hits',
+      resumed.firstRungAtSeconds === 30, String(resumed.firstRungAtSeconds))
+  }
+
   check('a rung that never fired is recorded as null, not zero', (() => {
     const t2 = new ShadowTracker({ maxTracked: 10, windowMs: 900_000 })
     t2.track({ candidate: { ...candidate, mint: 'FLAT' }, verdict: { pass: true, failed: [] }, action: 'bought' })
