@@ -792,6 +792,195 @@ console.log('\nLedger')
   check('deployed nets out recovered capital', near(store.deployedSol(), 0), String(store.deployedSol()))
 }
 
+// ------------------------------- replaying the REAL holding window
+console.log('\nExit replay vs the real holding window')
+{
+  const { simulateLadder } = await import('../src/learn.js')
+  const { ShadowTracker } = await import('../src/journal.js')
+  const TIME_STOP = config.exit.timeStopSeconds // 600
+  const STALE = config.exit.stalePriceSeconds // 180
+
+  const row = (over = {}) => ({
+    v: JOURNAL_VERSION, peakMultiple: 2, endMultiple: 1.1, troughMultiple: 0.95,
+    hasOrdering: true, troughFirst: false, troughAtSeconds: 400,
+    hasExitTiming: true, firstRungAtSeconds: 120, staleExitAtSeconds: null,
+    staleExitMultiple: null, timeStopMultiple: 1.0, ...over,
+  })
+
+  /**
+   * THE CASE A NAIVE FIX GETS WRONG.
+   *
+   * peakAt is the time of the GLOBAL peak. A coin can cross +50% at two minutes and top
+   * out at twelve, and gating the replay on peakAt would discard that as "unreachable"
+   * when the bot had already sold it at the rung, for a profit. Only the FIRST crossing
+   * decides whether the ladder ran.
+   */
+  const earlyRungLatePeak = simulateLadder(row({ firstRungAtSeconds: 120, peakAtSeconds: 700 }))
+  check('a rung that fired early still counts when the PEAK came after the time stop',
+    earlyRungLatePeak > 1.2, String(earlyRungLatePeak))
+
+  // The rung itself out of reach: sold by the clock, at the price then standing.
+  const lateRung = simulateLadder(row({ firstRungAtSeconds: TIME_STOP + 100, timeStopMultiple: 0.98 }))
+  check('a rung first touched after the time stop is not banked',
+    lateRung < 1, String(lateRung))
+  check('and the exit is the price held at the time stop, not the price at minute fifteen',
+    lateRung < 0.98 && lateRung > 0.85, String(lateRung))
+
+  // Feed went quiet before the rung: the bot sold blind, at the last price it had.
+  const wentQuiet = simulateLadder(row({
+    firstRungAtSeconds: 500, staleExitAtSeconds: 300, staleExitMultiple: 0.7, timeStopMultiple: 1.4,
+  }))
+  check('a stale-price exit beats a later rung', wentQuiet < 0.75, String(wentQuiet))
+
+  // Whichever rule fires first wins, including the stop.
+  const stoppedFirst = simulateLadder(row({
+    troughMultiple: 0.5, troughAtSeconds: 60, firstRungAtSeconds: 300,
+  }))
+  check('a stop-loss before the rung still closes the trade',
+    stoppedFirst < 0.9, String(stoppedFirst))
+  const rungFirst = simulateLadder(row({
+    troughMultiple: 0.5, troughAtSeconds: 300, firstRungAtSeconds: 60,
+  }))
+  check('but a rung before the dip is not undone by it', rungFirst > 1.2, String(rungFirst))
+
+  /**
+   * 150,000 rows predate these fields. They must keep the old behaviour rather than
+   * being silently dropped or silently guessed at — the report states the coverage.
+   */
+  const legacy = simulateLadder({
+    v: JOURNAL_VERSION, peakMultiple: 2, endMultiple: 1.1, troughMultiple: 0.95,
+    hasOrdering: true, troughFirst: false,
+  })
+  check('rows without the timing replay exactly as before', legacy > 1.2, String(legacy))
+
+  /**
+   * AND THE TRACKER HAS TO PRODUCE THE FIELDS. Testing simulateLadder against
+   * hand-written rows proves nothing about what the journal actually writes — which is
+   * the shape of every wiring bug in this file so far.
+   */
+  const t = new ShadowTracker({ maxTracked: 10, windowMs: 900_000 })
+  const t0 = Date.now()
+  const candidate = { mint: 'TIMING', symbol: 'TMG', creator: 'DEV', createdAt: t0, priceSol: 1e-7 }
+  t.track({ candidate, verdict: { pass: true, failed: [] }, action: 'bought' })
+  /**
+   * Crosses +50% at 60s, keeps trading (no gap long enough to count), peaks at 500s,
+   * and only THEN goes quiet past the stale bar. The intermediate ticks matter: without
+   * them the first silence is the 60s->500s gap, and the tracker would be right to flag
+   * that one instead — which is what it did on the first draft of this test.
+   */
+  t.onTrade({ mint: 'TIMING', priceSol: 1.6e-7 }, t0 + 60_000)
+  t.onTrade({ mint: 'TIMING', priceSol: 2.0e-7 }, t0 + 200_000)
+  t.onTrade({ mint: 'TIMING', priceSol: 2.5e-7 }, t0 + 350_000)
+  t.onTrade({ mint: 'TIMING', priceSol: 3.0e-7 }, t0 + 500_000)
+  t.onTrade({ mint: 'TIMING', priceSol: 1.2e-7 }, t0 + 500_000 + STALE * 1000 + 5_000)
+  const finished = t.finalize('TIMING')
+
+  check('the tracker records when the rung FIRST fired, not when the peak was',
+    finished.firstRungAtSeconds === 60,
+    `${finished.firstRungAtSeconds} (peak at ${finished.peakAtSeconds})`)
+  check('which is a different number from the peak time',
+    finished.peakAtSeconds === 500 && finished.firstRungAtSeconds !== finished.peakAtSeconds,
+    String(finished.peakAtSeconds))
+  check('it notices the first silence longer than the stale bar',
+    finished.staleExitAtSeconds === 500 + STALE, String(finished.staleExitAtSeconds))
+  check('and records the price it would have sold blind at, not the one that broke the silence',
+    near(finished.staleExitMultiple, 3.0, 1e-4), String(finished.staleExitMultiple))
+  check('the row is marked replayable against the real rules', finished.hasExitTiming === true)
+  check('a rung that never fired is recorded as null, not zero', (() => {
+    const t2 = new ShadowTracker({ maxTracked: 10, windowMs: 900_000 })
+    t2.track({ candidate: { ...candidate, mint: 'FLAT' }, verdict: { pass: true, failed: [] }, action: 'bought' })
+    t2.onTrade({ mint: 'FLAT', priceSol: 1.05e-7 }, t0 + 30_000)
+    return t2.finalize('FLAT').firstRungAtSeconds === null
+  })())
+}
+
+/**
+ * Does the change actually make the replay MORE ACCURATE, or just different?
+ *
+ * Built on a population where the truth is known: every coin has a full price path, and
+ * walking that path with the live rules gives what the strategy would really have
+ * returned. Then both replays are scored against it. Without this the fix is an
+ * assertion — the numbers move, and nothing says they moved toward reality.
+ */
+{
+  const { simulateLadder } = await import('../src/learn.js')
+  const TIME_STOP = config.exit.timeStopSeconds
+  const STALE = config.exit.stalePriceSeconds
+  const RUNG = 1 + (config.exit.ladder[0]?.atPct ?? 50) / 100
+  const STOP = 1 - config.exit.stopLossPct / 100
+
+  let seed = 11
+  const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648
+  const paths = []
+  for (let i = 0; i < 800; i++) {
+    const path = []
+    let m = 1
+    let t = 0
+    // Over half of pump.fun launches simply stop trading, which is what makes the
+    // stale-price exit the dominant rule rather than an edge case.
+    const deathAt = rnd() < 0.55 ? 60 + rnd() * 600 : Infinity
+    const drift = rnd() < 0.3 ? 1.004 : 0.997
+    while (t < 900) {
+      t += 5 + rnd() * 25
+      if (t > deathAt) break
+      m = Math.max(0.01, m * drift * (0.92 + rnd() * 0.17))
+      path.push({ t: Math.round(t), m })
+    }
+    paths.push(path.length ? path : [{ t: 5, m: 1 }])
+  }
+
+  const truth = (path) => {
+    let last = { t: 0, m: 1 }
+    for (const p of path) {
+      if (p.t - last.t >= STALE) return last.m
+      if (p.t > TIME_STOP) return last.m
+      if (p.m <= STOP) return STOP
+      if (p.m >= RUNG) return RUNG
+      last = p
+    }
+    return last.m
+  }
+
+  const rowFrom = (path, withTiming) => {
+    const peak = Math.max(1, ...path.map((p) => p.m))
+    const trough = Math.min(1, ...path.map((p) => p.m))
+    const peakAt = (path.find((p) => p.m === peak) ?? { t: 0 }).t
+    const troughAt = (path.find((p) => p.m === trough) ?? { t: 0 }).t
+    const base = {
+      v: JOURNAL_VERSION, peakMultiple: peak, endMultiple: path[path.length - 1].m,
+      troughMultiple: trough, hasOrdering: true, troughFirst: troughAt < peakAt,
+      peakAtSeconds: peakAt, troughAtSeconds: troughAt,
+    }
+    if (!withTiming) return base
+    let rungAt = null, staleAt = null, staleM = null, tsM = null, last = { t: 0, m: 1 }
+    for (const p of path) {
+      if (staleAt === null && p.t - last.t >= STALE) { staleAt = last.t + STALE; staleM = last.m }
+      if (tsM === null && p.t >= TIME_STOP) tsM = last.m
+      if (rungAt === null && p.m >= RUNG) rungAt = p.t
+      last = p
+    }
+    if (staleAt === null && last.t < 900 - STALE) { staleAt = last.t + STALE; staleM = last.m }
+    return { ...base, hasExitTiming: true, firstRungAtSeconds: rungAt,
+      staleExitAtSeconds: staleAt, staleExitMultiple: staleM, timeStopMultiple: tsM ?? last.m }
+  }
+
+  const mean = (xs) => xs.reduce((s, x) => s + x, 0) / xs.length
+  // Costs are charged by the replay but not by truth(), so net them out to compare like
+  // with like — a flat coin priced through the same cost model.
+  const costDrag = 1 - mean(paths.map((p) => simulateLadder({
+    ...rowFrom(p, true), peakMultiple: 1, endMultiple: 1, troughMultiple: 1,
+    firstRungAtSeconds: null, staleExitAtSeconds: null, staleExitMultiple: 1, timeStopMultiple: 1,
+  })))
+  const actual = mean(paths.map(truth)) * (1 - costDrag)
+  const before = Math.abs(mean(paths.map((p) => simulateLadder(rowFrom(p, false)))) - actual)
+  const after = Math.abs(mean(paths.map((p) => simulateLadder(rowFrom(p, true)))) - actual)
+
+  check('replaying the real holding window is closer to the truth than ignoring it',
+    after < before, `${(after * 100).toFixed(1)}pp vs ${(before * 100).toFixed(1)}pp`)
+  check('and close enough to choose between exit plans',
+    after < 0.015, `${(after * 100).toFixed(1)}pp error`)
+}
+
 // ------------------------------- is the replay anywhere near reality?
 console.log('\nBacktest calibration')
 {

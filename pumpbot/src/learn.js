@@ -120,6 +120,44 @@ export function simulateLadder(
     return Math.max(0, gross * (1 - c.proportional) - c.priority)
   }
 
+  /**
+   * THE HOLDING WINDOW, which this replay used to ignore entirely.
+   *
+   * Outcomes are observed for OUTCOME_WINDOW_MINUTES (15) while the live bot exits at
+   * TIME_STOP_SECONDS (10 minutes) or after STALE_PRICE_SECONDS without a price. So a
+   * coin that ran at minute twelve was banked here as a win the strategy had already
+   * sold out of, and the replay came out 16pp above what the account actually returned.
+   *
+   * Gated on rows that carry the timing. Older rows keep the idealised behaviour rather
+   * than being silently dropped or silently guessed at, and the report states coverage.
+   */
+  if (row.hasExitTiming) {
+    const stale = Number.isFinite(row.staleExitAtSeconds) ? row.staleExitAtSeconds : Infinity
+    const deadline = Math.min(config.exit.timeStopSeconds, stale)
+    const rungAt = Number.isFinite(row.firstRungAtSeconds) ? row.firstRungAtSeconds : Infinity
+    const stoppedAt =
+      Number.isFinite(trough) && trough <= stopMultiple && Number.isFinite(row.troughAtSeconds)
+        ? row.troughAtSeconds
+        : Infinity
+
+    // Whichever rule fires FIRST is the one that closed the position.
+    if (stoppedAt < Math.min(rungAt, deadline)) return net(stopMultiple, 1)
+
+    if (rungAt > deadline) {
+      /**
+       * Sold by the clock, not by the plan. Exit at the price actually held at that
+       * moment — the stale rule sells at the last price seen before the silence, the
+       * time stop at the price standing when it came due. Falling back to `end` would
+       * be the old mistake in a smaller form: `end` is the price at minute fifteen, and
+       * we were not there.
+       */
+      const exit = stale <= config.exit.timeStopSeconds
+        ? row.staleExitMultiple
+        : row.timeStopMultiple
+      return net(Math.max(Number.isFinite(exit) ? exit : Math.max(end, 0), 0), 1)
+    }
+  }
+
   // Never reached the first rung: the stop-loss or the time stop got us out. One sell.
   if (peak < firstTarget) {
     const exit = Number.isFinite(trough) && trough <= stopMultiple ? stopMultiple : Math.max(end, 0)
@@ -252,6 +290,10 @@ const withFirstSell = (ladder, sellPct) =>
 export function exitSweep(rows, { minSamples = config.learning.minSamplesForSuggestion } = {}) {
   const usable = rows.filter((r) => r.peakMultiple > 0)
   const withOrdering = usable.filter((r) => r.hasOrdering).length
+  // Rows on which the replay can apply the real holding window rather than an
+  // idealised one. Reported for the same reason as withOrdering: a mixed sample is
+  // fine, a mixed sample nobody mentions is not.
+  const withExitTiming = usable.filter((r) => r.hasExitTiming).length
 
   const base = {
     ladder: config.exit.ladder,
@@ -313,6 +355,7 @@ export function exitSweep(rows, { minSamples = config.learning.minSamplesForSugg
   return {
     n: incumbentSims.length,
     withOrdering,
+    withExitTiming,
     enoughData: usable.length >= minSamples,
     comparisons: variants.length,
     criticalZ: z,
@@ -927,6 +970,23 @@ export function formatReport(a) {
       L.push('  until this reaches ~100%, which it will as older rows age out.')
     } else {
       L.push(`  ${pct}% of rows carry dip-before-run ordering, so the stop-loss comparison is sound.`)
+    }
+
+    /**
+     * Separate coverage line, because it governs a different failure. Ordering decides
+     * whether the stop-loss is judged fairly; this decides whether the replay is
+     * replaying the bot's actual holding window or a fifteen-minute fantasy.
+     */
+    const tPct = x.n ? Math.round(((x.withExitTiming ?? 0) / x.n) * 100) : 0
+    if (tPct < 90) {
+      L.push(`  ⚠ Only ${x.withExitTiming ?? 0}/${x.n} rows (${tPct}%) can be replayed against the real`)
+      L.push(`  holding window — the ${Math.round(config.exit.timeStopSeconds / 60)}m time stop and the ` +
+        `${config.exit.stalePriceSeconds}s stale-price exit. On the rest the replay`)
+      L.push(`  still banks peaks from the full ${config.learning.outcomeWindowMinutes}m window, which the ` +
+        'strategy would have sold before.')
+      L.push('  This is the gap the calibration line above is measuring. It closes as rows age in.')
+    } else {
+      L.push(`  ${tPct}% of rows replay against the real time stop and stale-price exit.`)
     }
     L.push('')
   }

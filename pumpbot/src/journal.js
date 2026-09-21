@@ -488,6 +488,15 @@ export class ShadowTracker {
       // Seeded to the decision moment so ordering is defined even with zero ticks.
       peakAt: Date.now(),
       troughAt: Date.now(),
+      /**
+       * Everything a replay needs to apply the LIVE exit rules rather than an idealised
+       * version of them. See onTrade for why each one is necessary.
+       */
+      firstRungAt: null, // first crossing of the rung, which is not when the peak happened
+      lastTickAt: Date.now(), // gap detection for the stale-price exit
+      staleExitAt: null, // when the feed first went quiet for longer than the rule allows
+      staleExitPriceSol: null, // the price the bot would have sold blind at
+      timeStopPriceSol: null, // the price at the time-stop boundary
       ticks: 0,
     })
   }
@@ -495,8 +504,40 @@ export class ShadowTracker {
   onTrade(event, now = Date.now()) {
     const row = this.rows.get(event.mint)
     if (!row || !(event.priceSol > 0)) return
+
+    /**
+     * Checked BEFORE lastPriceSol is overwritten, because the price that matters for
+     * both of these is the one the bot was holding at the moment the rule fired — not
+     * the price on the tick that happens to end the silence.
+     */
+    const heldPrice = row.lastPriceSol
+    const staleMs = config.exit.stalePriceSeconds * 1000
+    if (row.staleExitAt === null && now - row.lastTickAt >= staleMs) {
+      // The feed went quiet long enough that the live bot would have exited blind.
+      row.staleExitAt = row.lastTickAt + staleMs
+      row.staleExitPriceSol = heldPrice
+    }
+    const timeStopMs = config.exit.timeStopSeconds * 1000
+    if (row.timeStopPriceSol === null && now - row.decidedAt >= timeStopMs) {
+      row.timeStopPriceSol = heldPrice
+    }
+    row.lastTickAt = now
+
     row.ticks++
     row.lastPriceSol = event.priceSol
+
+    /**
+     * WHEN THE RUNG FIRST FIRED, which is emphatically not when the peak happened.
+     *
+     * A coin can cross +50% at two minutes and top out at twelve. Gating the replay on
+     * peakAt would throw that trade away as "unreachable" when the bot had in fact
+     * already sold it at the rung, for a profit. The two questions are different and
+     * only this one decides whether the ladder ran.
+     */
+    if (row.firstRungAt === null && row.decisionPriceSol > 0) {
+      const target = 1 + (config.exit.ladder[0]?.atPct ?? 50) / 100
+      if (event.priceSol / row.decisionPriceSol >= target) row.firstRungAt = now
+    }
     /**
      * WHEN the peak and trough happened, not just their values.
      *
@@ -568,6 +609,31 @@ export class ShadowTracker {
        */
       peakAtSeconds: Math.max(0, Math.round((row.peakAt - row.decidedAt) / 1000)),
       troughAtSeconds: Math.max(0, Math.round((row.troughAt - row.decidedAt) / 1000)),
+      /**
+       * The live exit rules, made replayable. `firstRungAtSeconds` is null when the rung
+       * was never touched; the two stale fields are null when the feed never went quiet
+       * for long enough. Presence of this field is what tells the replay it may apply
+       * the real rules — rows written before it exists keep the idealised behaviour, and
+       * the report states the coverage rather than mixing the two silently.
+       */
+      firstRungAtSeconds:
+        row.firstRungAt === null ? null : Math.max(0, Math.round((row.firstRungAt - row.decidedAt) / 1000)),
+      staleExitAtSeconds:
+        row.staleExitAt === null ? null : Math.max(0, Math.round((row.staleExitAt - row.decidedAt) / 1000)),
+      staleExitMultiple:
+        row.staleExitPriceSol > 0 ? Number((row.staleExitPriceSol / base).toFixed(4)) : null,
+      /**
+       * Where the position stood when the time stop came due. Filled at finalize when no
+       * tick arrived after the boundary — a coin that simply stopped trading never
+       * produces one, and the bot would have sold at the last price it had.
+       */
+      timeStopMultiple:
+        (row.timeStopPriceSol ?? (observedSeconds >= config.exit.timeStopSeconds ? row.lastPriceSol : null)) > 0
+          ? Number(
+              ((row.timeStopPriceSol ?? row.lastPriceSol) / base).toFixed(4),
+            )
+          : null,
+      hasExitTiming: true,
       /**
        * The same label, restricted to what the live exit rules could actually have
        * captured. Kept ALONGSIDE hitFirstRung rather than replacing it: 150,000 existing
