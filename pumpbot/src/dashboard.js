@@ -16,6 +16,7 @@ import {
 } from './store.js'
 import { positionPnl } from './position.js'
 import { sizingSummary } from './sizing.js'
+import { consecutiveLossLimit } from './risk.js'
 import { refreshIfStale, snapshot as analysisSnapshot, analysisHealth } from './analysis.js'
 import { deliveryStats } from './notify.js'
 import { log } from './log.js'
@@ -268,6 +269,15 @@ export function buildSnapshot(walletSol, stats = null) {
       losses,
       winRatePct: wins + losses > 0 ? (wins / (wins + losses)) * 100 : null,
       consecutiveLosses: state.consecutiveLosses,
+      /**
+       * Whether the ENTRY GATE is currently refusing everything. A bot that screens
+       * thousands of launches and takes none looks identical to a bot with a strict
+       * filter, and for a full day the difference was invisible: the streak breaker was
+       * paused and the only trace was a 'blocked' count nothing printed.
+       */
+      streakLimit: consecutiveLossLimit(),
+      pausedByStreak: state.consecutiveLosses >= consecutiveLossLimit(),
+      blockedCreators: Object.keys(state.blockedCreators ?? {}).length,
       tradesClosed: record.closed,
       // How much of that history the chart can actually draw.
       tradesCharted: retained.length,

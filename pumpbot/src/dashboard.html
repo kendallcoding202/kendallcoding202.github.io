@@ -429,7 +429,16 @@ function render(d) {
    * precisely so this can be said out loud, instead of the platform reporting a healthy
    * container while nothing trades.
    */
-  if (d.startupError || d.snapshotError) {
+  /**
+   * A paused entry gate is indistinguishable from a strict filter from the outside —
+   * both look like "screening a lot, taking nothing" — and for a full day it was. Say it.
+   */
+  if (!d.startupError && !d.snapshotError && !d.halted && d.pnl && d.pnl.pausedByStreak) {
+    banner.hidden = false
+    banner.textContent = '⏸ ENTRY PAUSED — ' + d.pnl.consecutiveLosses +
+      ' consecutive losses (limit ' + d.pnl.streakLimit + ') · the filter still screens, ' +
+      'but every approved launch is refused until a win or the next UTC day'
+  } else if (d.startupError || d.snapshotError) {
     banner.hidden = false
     banner.textContent = d.startupError
       ? '🛑 BOT FAILED TO START — ' + d.startupError + ' · nothing is trading'

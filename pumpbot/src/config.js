@@ -341,7 +341,26 @@ export const config = {
     dailyLossLimitPct: num('DAILY_LOSS_LIMIT_PCT', 40),
     maxDrawdownPct: num('MAX_DRAWDOWN_PCT', 70),
     // Consecutive losing trades that halt new entries for the day.
+    /**
+     * Floor for the losing-streak pause. The EFFECTIVE limit scales with the strategy's
+     * own win rate — see consecutiveLossLimit() in risk.js.
+     *
+     * A fixed 6 silently assumes a roughly even win rate. At the 20.1% this strategy
+     * actually runs, P(6 losses in a row) is 26% and the expected wait for one is about
+     * 14 trades — so the breaker fired within a few trades of every UTC day and stayed
+     * on until the next one, which is exactly what it did: 0 bought and 15 launches the
+     * filter approved refused at the gate. A circuit breaker that trips on ordinary
+     * behaviour is not protecting anything, it is just switching the strategy off.
+     */
     maxConsecutiveLosses: num('MAX_CONSECUTIVE_LOSSES', 6),
+    /** Closed trades before the streak limit is derived from the win rate rather than fixed. */
+    minTradesForAdaptiveStreak: num('MIN_TRADES_FOR_ADAPTIVE_STREAK', 30),
+    /**
+     * How unlikely a losing run must be, under the strategy's own win rate, before it
+     * counts as evidence that something has changed rather than as variance. 0.01 means
+     * "a run this long happens less than 1% of the time by chance".
+     */
+    streakAlpha: num('STREAK_ALPHA', 0.01),
   },
 
   exec: {

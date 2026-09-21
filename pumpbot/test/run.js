@@ -1260,6 +1260,76 @@ console.log('\nBacktest calibration')
   s.daily = {}; s.totalRealizedSol = 0; s.closed = []
 }
 
+// ------------------------------- the losing-streak breaker must fit the strategy
+console.log('\nConsecutive-loss limit')
+{
+  const { consecutiveLossLimit } = await import('../src/risk.js')
+  store.initStore()
+  const s = store.getState()
+  s.positions = {}; s.closed = []; s.daily = {}; s.totalRealizedSol = 0; s.consecutiveLosses = 0
+  const day = new Date().toISOString().slice(0, 10)
+  const setRecord = (wins, losses) => {
+    s.daily = { [day]: { realizedSol: -1, wins, losses, stakedSol: (wins + losses) * 0.15 } }
+  }
+
+  setRecord(2, 5)
+  check('below the sample floor it uses the configured number',
+    consecutiveLossLimit() === config.risk.maxConsecutiveLosses, String(consecutiveLossLimit()))
+
+  /**
+   * THE BUG: a fixed 6 assumes a roughly even win rate. At the 20.1% this strategy
+   * actually runs, six losses in a row is a 26% event arriving after about fourteen
+   * trades — so the breaker tripped a few trades into every UTC day and stayed on,
+   * which is why 15 filter-approved launches were refused and nothing was bought.
+   */
+  setRecord(35, 139) // the real ledger: 20.1%
+  const atRealRate = consecutiveLossLimit()
+  check('at a 20% win rate the limit is far above six', atRealRate >= 18, String(atRealRate))
+  check('and matches ln(alpha)/ln(1-w)',
+    atRealRate === Math.ceil(Math.log(config.risk.streakAlpha) / Math.log(1 - 35 / 174)),
+    String(atRealRate))
+
+  // At a coin flip it lands near the old fixed value — which is the assumption that
+  // number was quietly carrying.
+  setRecord(87, 87)
+  check('at a 50% win rate it lands near the old fixed six',
+    consecutiveLossLimit() >= 6 && consecutiveLossLimit() <= 8, String(consecutiveLossLimit()))
+
+  // A higher win rate must never loosen it below the configured floor.
+  setRecord(170, 4)
+  check('it never goes below the configured floor',
+    consecutiveLossLimit() >= config.risk.maxConsecutiveLosses, String(consecutiveLossLimit()))
+
+  // A strategy that has never won has no rate to reason from.
+  setRecord(0, 60)
+  check('a strategy with no wins falls back to the floor',
+    consecutiveLossLimit() === config.risk.maxConsecutiveLosses, String(consecutiveLossLimit()))
+
+  /**
+   * And the GATE has to use it. Testing the helper alone proves nothing about canOpen,
+   * which is the shape of every wiring bug in this file.
+   */
+  setRecord(35, 139)
+  s.baseEquitySol = 50; s.peakRealizedSol = 0; s.totalRealizedSol = -4.9; s.halted = null
+  s.consecutiveLosses = 10 // over the old six, under the adaptive limit
+  check('ten losses no longer pauses a 20%-win-rate strategy',
+    canOpen({ mint: 'STREAK1', creator: 'C', walletSol: 45 }) === null,
+    String(canOpen({ mint: 'STREAK1', creator: 'C', walletSol: 45 })))
+  s.consecutiveLosses = atRealRate
+  const paused = canOpen({ mint: 'STREAK2', creator: 'C', walletSol: 45 })
+  check('but a genuinely improbable run still does',
+    typeof paused === 'string' && paused.includes('consecutive losses'), String(paused))
+  check('and the reason names the limit it tripped', String(paused).includes(`limit ${atRealRate}`))
+
+  // The page has to show it, or a paused gate looks exactly like a strict filter.
+  const snap = buildSnapshot(45, null)
+  check('the dashboard reports the entry gate being paused',
+    snap.pnl.pausedByStreak === true && snap.pnl.streakLimit === atRealRate,
+    JSON.stringify({ paused: snap.pnl.pausedByStreak, limit: snap.pnl.streakLimit }))
+
+  s.consecutiveLosses = 0; s.daily = {}; s.totalRealizedSol = 0; s.baseEquitySol = 0
+}
+
 // ------------------------------- the experiment must not evict the strategy
 console.log('\nClosed-trade retention')
 {

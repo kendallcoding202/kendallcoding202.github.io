@@ -5,6 +5,7 @@ import {
   deployedSol,
   todayPnl,
   isCreatorBlocked,
+  strategyRecord,
   halt,
   clearHalt,
 } from './store.js'
@@ -93,6 +94,35 @@ function equityBasis(walletSol) {
 }
 
 /**
+ * How long a losing run has to be before it means anything.
+ *
+ * A fixed threshold encodes an assumed win rate, and gets this badly wrong when the
+ * real one is different. At the 20.1% this strategy runs, six losses in a row is a 26%
+ * event and arrives after about fourteen trades — so a limit of six paused the bot a
+ * few trades into every UTC day and left it paused until the next one. It was not
+ * catching a broken strategy; it was switching off a working one for behaving normally.
+ *
+ * So ask the question that actually matters: is this run unlikely UNDER THIS
+ * STRATEGY'S OWN win rate? P(k losses) = (1-w)^k, so the run length that happens less
+ * than `streakAlpha` of the time is ln(alpha)/ln(1-w). At w=0.20 that is 21; at a
+ * coin-flip 0.50 it is 7, near the old fixed value — which is the assumption the old
+ * number was carrying all along.
+ *
+ * Never tighter than the configured floor, and only used once there are enough trades
+ * to estimate a win rate at all.
+ */
+export function consecutiveLossLimit() {
+  const { wins, closed } = strategyRecord()
+  const floor = config.risk.maxConsecutiveLosses
+  if (closed < config.risk.minTradesForAdaptiveStreak) return floor
+  const winRate = wins / closed
+  // A strategy that has never won gives no rate to reason from; fall back to the floor.
+  if (!(winRate > 0) || winRate >= 1) return floor
+  const k = Math.ceil(Math.log(config.risk.streakAlpha) / Math.log(1 - winRate))
+  return Math.max(floor, k)
+}
+
+/**
  * Every buy passes through here. Each rule returns a reason string to block, or null.
  * The checks are ordered cheapest-first, and the hard limits come before anything
  * discretionary — a circuit breaker must not be reachable only after a network call.
@@ -146,8 +176,9 @@ export function canOpen({ mint, creator, walletSol }) {
   if (dailyLimit > 0 && today.realizedSol <= -dailyLimit) {
     return `daily loss limit hit (${sol(today.realizedSol)} today, limit ${sol(dailyLimit)})`
   }
-  if (s.consecutiveLosses >= risk.maxConsecutiveLosses) {
-    return `${s.consecutiveLosses} consecutive losses — paused for the day`
+  const streakLimit = consecutiveLossLimit()
+  if (s.consecutiveLosses >= streakLimit) {
+    return `${s.consecutiveLosses} consecutive losses (limit ${streakLimit}) — paused for the day`
   }
 
   // --- Exposure limits, sized to the tier the account is currently in ---
@@ -199,5 +230,13 @@ export function riskSummary(walletSol) {
     todayLosses: today.losses,
     totalRealizedSol: s.totalRealizedSol,
     consecutiveLosses: s.consecutiveLosses,
+    /**
+     * The gate's own state, so a bot that is silently refusing every entry says so.
+     * Nothing on the page reported this, and the only trace of it was a 'blocked' count
+     * nobody was printing — 15 approved launches refused with no indication anywhere.
+     */
+    streakLimit: consecutiveLossLimit(),
+    pausedByStreak: s.consecutiveLosses >= consecutiveLossLimit(),
+    blockedCreators: Object.keys(s.blockedCreators ?? {}).length,
   }
 }
