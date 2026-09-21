@@ -6,6 +6,7 @@ import { buy, sell } from './exec.js'
 import { canOpen, riskSummary, rolloverDaily, syncEquityBasis } from './risk.js'
 import { buySolFor, tierFor, sizingSummary } from './sizing.js'
 import { ShadowTracker, CreatorIndex, saveShadow, loadShadow } from './journal.js'
+import { WalletIndex, saveWallets, loadWallets } from './wallets.js'
 import {
   initStore,
   getState,
@@ -67,8 +68,18 @@ export class Bot {
         : null)
     this.candidates = new Map() // mint -> Candidate, pre-entry
     // Built from history at startup so a restart does not forget what each deployer did.
+    /**
+     * The wallet index is NOT rebuilt from the journal, unlike the creator one: the
+     * buyer lists it is built from are deliberately never journalled, so it persists to
+     * its own file and accumulates from live observation.
+     */
+    this.wallets = config.learning.enabled && config.learning.walletPrior ? new WalletIndex() : null
+    if (this.wallets) {
+      const n = this.wallets.restore(loadWallets())
+      if (n) log.info(`wallet prior restored: ${n} wallets with a track record`)
+    }
     this.shadow = config.learning.enabled
-      ? new ShadowTracker({ creatorIndex: CreatorIndex.fromJournal() })
+      ? new ShadowTracker({ creatorIndex: CreatorIndex.fromJournal(), walletIndex: this.wallets })
       : null
     this.walletSol = 0
     this.lastDay = utcDay()
@@ -130,6 +141,7 @@ export class Bot {
       watching: this.candidates.size,
       shadowTracked: this.shadow?.size ?? 0,
       creatorPrior: this.#creatorPriorStats(),
+      walletPrior: this.wallets ? this.wallets.summary() : null,
       explore: {
         enabled: config.explore.enabled,
         sampleRate: config.explore.sampleRate,
@@ -470,7 +482,10 @@ export class Bot {
      * hurts most.
      */
     if (this.shadow) {
-      this.shadowTimer = setInterval(() => saveShadow(this.shadow), 30_000)
+      this.shadowTimer = setInterval(() => {
+        saveShadow(this.shadow)
+        saveWallets(this.wallets)
+      }, 30_000)
       this.shadowTimer.unref?.()
     }
     if (config.telegram.summaryHours > 0) {
@@ -502,6 +517,7 @@ export class Bot {
     await stopAnalysis()
     save()
     saveShadow(this.shadow)
+    saveWallets(this.wallets)
     releaseLock()
   }
 

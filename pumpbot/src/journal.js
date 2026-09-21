@@ -381,8 +381,17 @@ export class CreatorIndex {
 }
 
 /** The feature vector we score a launch on. Keep this stable — it is the dataset schema. */
-export function featuresOf(candidate, creatorIndex = null) {
+export function featuresOf(candidate, creatorIndex = null, walletIndex = null) {
+  /**
+   * What this launch's early buyers have done before. Read HERE, at track time, from
+   * outcomes that finalized earlier — the same discipline the deployer prior uses, and
+   * the reason neither can see its own result.
+   */
+  const buyers = walletIndex ? walletIndex.scoreBuyers([...(candidate.buyers ?? [])]) : null
   return {
+    smartBuyers: buyers?.smartBuyers ?? 0,
+    knownBuyers: buyers?.knownBuyers ?? 0,
+    smartBuyerShare: buyers ? round4(buyers.smartBuyerShare) : 0,
     organicBuyers: candidate.organicBuyers,
     buys: candidate.buys,
     sells: candidate.sells,
@@ -469,6 +478,9 @@ function hydrate(row) {
     pathPrices: Array.isArray(row.pathPrices) && row.pathPrices.length === PATH_CHECKPOINTS.length
       ? row.pathPrices
       : PATH_CHECKPOINTS.map(() => null),
+    // A checkpoint from before the wallet prior has no buyer list; those rows simply
+    // credit nothing when they mature, which is correct — we did not record who bought.
+    buyers: Array.isArray(row.buyers) ? row.buyers : [],
   }
 }
 
@@ -477,7 +489,9 @@ export class ShadowTracker {
     windowMs = config.learning.outcomeWindowMinutes * 60_000,
     max = config.learning.maxShadowTracked,
     creatorIndex = null,
+    walletIndex = null,
   } = {}) {
+    this.walletIndex = walletIndex
     this.windowMs = windowMs
     this.max = max
     this.rows = new Map() // mint -> pending row
@@ -527,7 +541,7 @@ export class ShadowTracker {
       // What we actually paid, kept apart from the yardstick above.
       fillPriceSol: entryPriceSol ?? null,
       rejectedFor: verdict?.pass ? null : verdict?.failed?.map((c) => c.id) ?? null,
-      features: featuresOf(candidate, this.creatorIndex),
+      features: featuresOf(candidate, this.creatorIndex, this.walletIndex),
       decisionPriceSol: price,
       peakPriceSol: price,
       troughPriceSol: price,
@@ -546,6 +560,13 @@ export class ShadowTracker {
       timeStopPriceSol: null, // the price at the time-stop boundary
       // Price held at each PATH_CHECKPOINTS moment; null until that moment passes.
       pathPrices: PATH_CHECKPOINTS.map(() => null),
+      /**
+       * The wallets that bought inside the observation window, kept IN MEMORY ONLY so
+       * the wallet index can be credited when this row's outcome is known. Sixty
+       * addresses at 44 characters would add ~2.6 KB to every journalled row and roughly
+       * triple a file that is already the memory ceiling, so it is dropped at append.
+       */
+      buyers: config.learning.walletPrior ? [...(candidate.buyers ?? [])] : [],
       ticks: 0,
     })
   }
@@ -706,6 +727,9 @@ export class ShadowTracker {
       // The raw prices were working state; the multiples are the record. Keeping both
       // would grow every row for nothing, and the journal is the memory ceiling here.
       pathPrices: undefined,
+      // Likewise the buyer list: it exists to credit the wallet index, and the derived
+      // counts are already in `features`. Journalling it would triple the file.
+      buyers: undefined,
       /**
        * The same label, restricted to what the live exit rules could actually have
        * captured. Kept ALONGSIDE hitFirstRung rather than replacing it: 150,000 existing
@@ -730,6 +754,15 @@ export class ShadowTracker {
     // Only now does this outcome become visible to future launches. Updating any earlier
     // would let a launch see its own result through its creator's prior.
     this.creatorIndex?.note(finished)
+    /**
+     * Same moment, same reason, for the buyers. Credited from `row` rather than
+     * `finished` because the buyer list is deliberately stripped before the row is
+     * appended — the index is built from what we saw, not from what we store.
+     */
+    if (this.walletIndex && Array.isArray(row.buyers)) {
+      for (const w of row.buyers) this.walletIndex.note(w, finished.hitFirstRung, finished.finalizedAt)
+      this.walletIndex.prune()
+    }
     return finished
   }
 

@@ -1260,6 +1260,107 @@ console.log('\nBacktest calibration')
   s.daily = {}; s.totalRealizedSol = 0; s.closed = []
 }
 
+// ------------------------------- what the BUYERS have done before
+console.log('\nWallet prior')
+{
+  const { WalletIndex } = await import('../src/wallets.js')
+  const { ShadowTracker } = await import('../src/journal.js')
+
+  const idx = new WalletIndex({ maxWallets: 10_000 })
+  // A market of ordinary wallets at ~10%, one sharp wallet, one that only buys losers.
+  // 100 wallets x 20 launches each, so an ordinary wallet clears minWalletLaunches and
+  // "known but not smart" is actually exercised rather than collapsing into "unknown".
+  for (let i = 0; i < 2000; i++) idx.note('ORD' + (i % 100), i % 10 === 0, i)
+  for (let i = 0; i < 60; i++) idx.note('SHARP', i % 2 === 0, i) // 50%
+  for (let i = 0; i < 60; i++) idx.note('DUD', false, i) // 0%
+
+  const base = idx.baseRate()
+  check('the base rate is a running total, not a scan',
+    near(base, (200 + 30) / 2120, 1e-9), String(base))
+
+  const sharp = idx.verdict('SHARP')
+  check('a wallet well above the market is marked smart',
+    sharp.known && sharp.betterThanMarket, JSON.stringify(sharp))
+  check('judged on the LOWER bound, so a streak is not a record',
+    sharp.lowerBound > sharp.base, `${sharp.lowerBound} vs ${sharp.base}`)
+  check('a wallet that only buys losers is not smart', !idx.verdict('DUD').betterThanMarket)
+  check('an ordinary wallet is not smart', !idx.verdict('ORD1').betterThanMarket)
+  check('an unseen wallet is unknown, not bad', (() => {
+    const v = idx.verdict('NEVER_SEEN')
+    return !v.known && !v.betterThanMarket
+  })())
+  check('a short record is not enough to be called smart', (() => {
+    const i2 = new WalletIndex({ maxWallets: 100 })
+    for (let k = 0; k < 500; k++) i2.note('M' + (k % 50), k % 10 === 0, k)
+    for (let k = 0; k < 3; k++) i2.note('LUCKY', true, k)
+    return !i2.verdict('LUCKY').betterThanMarket
+  })())
+
+  const scored = idx.scoreBuyers(['SHARP', 'DUD', 'ORD1', 'NEVER_SEEN'])
+  check('a launch is scored by how many smart wallets are in it',
+    scored.smartBuyers === 1 && scored.knownBuyers === 3, JSON.stringify(scored))
+  check('and the share is over ALL buyers, not just the known ones',
+    near(scored.smartBuyerShare, 0.25, 1e-9), String(scored.smartBuyerShare))
+
+  /**
+   * LEAKAGE is the whole difficulty, exactly as it was for the deployer prior. A wallet
+   * index that counted a launch's own outcome would "discover" that launches bought by
+   * wallets who buy winners tend to win — circular, and it would look like an enormous
+   * edge. The index must be written only at finalize and read only at track.
+   */
+  {
+    const wi = new WalletIndex({ maxWallets: 1000 })
+    const t = new ShadowTracker({ maxTracked: 10, windowMs: 900_000, walletIndex: wi })
+    const c = {
+      mint: 'LEAK', symbol: 'LK', creator: 'D', createdAt: Date.now(), priceSol: 1e-7,
+      buyers: new Set(['W1', 'W2']),
+    }
+    t.track({ candidate: c, verdict: { pass: true, failed: [] }, action: 'bought' })
+    check('tracking a launch credits its buyers with NOTHING yet',
+      wi.byWallet.size === 0, String(wi.byWallet.size))
+    t.onTrade({ mint: 'LEAK', priceSol: 2e-7 }, Date.now() + 1000)
+    const done = t.finalize('LEAK')
+    check('only finalizing does', wi.byWallet.get('W1')?.launches === 1)
+    check('and it credits the outcome that actually happened',
+      wi.byWallet.get('W1').hits === (done.hitFirstRung ? 1 : 0))
+
+    /**
+     * The buyer list must never reach the journal. Sixty addresses at 44 characters is
+     * ~2.6 KB a row, which would roughly triple a file that is already the memory
+     * ceiling — and the derived counts are in `features` anyway.
+     */
+    check('the buyer list is stripped before the row is journalled',
+      done.buyers === undefined, JSON.stringify(done.buyers)?.slice(0, 60))
+    check('but the derived counts are kept', typeof done.features.smartBuyers === 'number')
+  }
+
+  // Bounded: singletons are most of the population and can never clear the minimum.
+  {
+    const small = new WalletIndex({ maxWallets: 50 })
+    for (let i = 0; i < 400; i++) small.note('ONCE' + i, false, i)
+    for (let i = 0; i < 40; i++) for (let k = 0; k < 5; k++) small.note('REPEAT' + i, k === 0, i)
+    small.prune()
+    check('the index stays bounded', small.byWallet.size <= 50, String(small.byWallet.size))
+    check('and keeps the repeat wallets over the singletons',
+      small.byWallet.has('REPEAT0') && !small.byWallet.has('ONCE0'))
+    check('pruning does not move the yardstick',
+      near(small.baseRate(), 40 / (400 + 200), 1e-9), String(small.baseRate()))
+  }
+
+  // Survives a restart, since it is never rebuilt from the journal.
+  {
+    const a = new WalletIndex({ maxWallets: 1000 })
+    for (let i = 0; i < 40; i++) a.note('KEEP', i % 4 === 0, i)
+    a.note('SINGLETON', true, 1)
+    const b = new WalletIndex({ maxWallets: 1000 })
+    b.restore(a.snapshot())
+    check('the index round-trips through a checkpoint',
+      b.verdict('KEEP').launches === 40 && near(b.baseRate(), a.baseRate(), 1e-9))
+    check('and drops singletons from the file rather than storing them',
+      !b.byWallet.has('SINGLETON'))
+  }
+}
+
 // ------------------------------- the losing-streak breaker must fit the strategy
 console.log('\nConsecutive-loss limit')
 {

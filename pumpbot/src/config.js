@@ -229,6 +229,16 @@ export const config = {
     // Minimum samples in a single bucket before that bucket's rate is reported.
     minBucketSamples: num('MIN_BUCKET_SAMPLES', 30),
     /**
+     * Wallet prior — the deployer prior pointed at buyers. See src/wallets.js.
+     *
+     * Buyers are a far larger population than deployers, so the index is bounded and
+     * pruned: singletons are the overwhelming majority and can never reach the minimum,
+     * so they are weight without signal.
+     */
+    walletPrior: bool('WALLET_PRIOR', true),
+    maxWalletsTracked: num('MAX_WALLETS_TRACKED', 60_000),
+    minWalletLaunches: num('MIN_WALLET_LAUNCHES', 12),
+    /**
      * Most recent rows the analysis walks.
      *
      * Raised to 200,000 on a benchmark that was WRONG, and this is the correction.
