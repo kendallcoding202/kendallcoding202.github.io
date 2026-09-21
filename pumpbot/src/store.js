@@ -117,8 +117,17 @@ export function closePosition(mint, reason) {
     else if (realized < 0) s.exploreLosses++
   } else {
     const day = utcDay()
-    s.daily[day] ??= { realizedSol: 0, wins: 0, losses: 0 }
+    s.daily[day] ??= { realizedSol: 0, wins: 0, losses: 0, stakedSol: 0 }
     s.daily[day].realizedSol += realized
+    /**
+     * Capital actually put at risk, accumulated as a counter.
+     *
+     * Without it there is no denominator for "what multiple did this account actually
+     * return", and so no way to check the replay against reality — the report could
+     * claim 0.976x while the account was doing 0.812x and nothing would notice. A
+     * backtest nobody scores is a story.
+     */
+    s.daily[day].stakedSol = (s.daily[day].stakedSol ?? 0) + Math.max(0, p.solSpent ?? 0)
     s.totalRealizedSol += realized
 
     if (realized > 0) {
@@ -187,13 +196,20 @@ export function strategyRecord() {
   const s = getState()
   let wins = 0
   let losses = 0
+  let stakedSol = 0
   for (const day of Object.values(s.daily ?? {})) {
     wins += day.wins ?? 0
     losses += day.losses ?? 0
+    stakedSol += day.stakedSol ?? 0
   }
+  /**
+   * What the account ACTUALLY returned per SOL risked. This is the number every replay
+   * in the learning report is claiming to predict, and until now nothing compared them.
+   */
+  const realizedMultiple = stakedSol > 0 ? 1 + (s.totalRealizedSol ?? 0) / stakedSol : null
   // Trades that closed at exactly break-even increment neither counter, so this is the
   // count of DECIDED trades. It is the denominator a win rate actually wants.
-  return { wins, losses, closed: wins + losses }
+  return { wins, losses, closed: wins + losses, stakedSol, realizedMultiple }
 }
 
 export function exploreRecord() {

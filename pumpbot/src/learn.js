@@ -1,5 +1,6 @@
 import { config } from './config.js'
 import { readAll, readRecent, JOURNAL_VERSION } from './journal.js'
+import { strategyRecord } from './store.js'
 import { wilson } from './stats.js'
 
 /**
@@ -518,6 +519,33 @@ function analyzeRows(rows, onDisk) {
     .map(([id, s]) => ({ check: id, ...s, rate: wilson(s.wouldHaveHit, s.total) }))
     .sort((a, b) => b.wouldHaveHit - a.wouldHaveHit)
 
+  /**
+   * How far the replay is from the account's own result.
+   *
+   * Deliberately compares against the LEDGER, not against another simulation. The two
+   * disagree for reasons a replay cannot see — unfilled rungs, exits on a stale feed,
+   * the time stop, slippage — and the size of the disagreement is the only honest
+   * measure of how much weight the exit proposals below can carry.
+   */
+  const calibrationOf = (sim) => {
+    const record = strategyRecord()
+    if (!sim || record.realizedMultiple === null || record.closed === 0) {
+      return { comparable: false, trades: record.closed, stakedSol: record.stakedSol }
+    }
+    const gap = sim.meanMultiple - record.realizedMultiple
+    return {
+      comparable: true,
+      simulatedMultiple: sim.meanMultiple,
+      realizedMultiple: record.realizedMultiple,
+      gap,
+      trades: record.closed,
+      stakedSol: record.stakedSol,
+      // A replay wrong by more than a few points cannot be used to choose between exit
+      // plans that differ by fractions of one.
+      trustworthy: Math.abs(gap) < 0.03,
+    }
+  }
+
   // Simulated ladder EV, on what we bought and on everything we saw.
   const evOf = (set) => {
     const sims = set.map((r) => simulateLadder(r)).filter((x) => x !== null)
@@ -676,6 +704,20 @@ function analyzeRows(rows, onDisk) {
             : 'no statistically supported difference yet'
         : 'not enough data on both sides yet',
     ev: { bought: evOf(bought), explored: evOf(explored), all: evOf(labelled) },
+    /**
+     * Score the replay against the account. Nothing here was checking whether the
+     * simulation resembles what the bot actually did.
+     *
+     * It does not: the replay reported 0.976x on the launches we bought while the
+     * ledger showed 174 closed trades, 26.19 SOL staked and -4.92 SOL realized, which
+     * is 0.812x. Sixteen points apart, and every exit-plan proposal in this report is
+     * produced by the optimistic side of that gap.
+     *
+     * The likely cause is in the windows: outcomes are observed for 15 minutes while
+     * the bot's time stop is 10 and its stale-price rule exits after 3 minutes of
+     * silence, so the replay banks peaks the strategy had already sold before.
+     */
+    calibration: calibrationOf(evOf(bought)),
     falseNegatives,
     suggestions,
     repeatCreators,
@@ -814,6 +856,27 @@ export function formatReport(a) {
         (Math.abs(best - size) / size > 0.15 ? '  ← worth moving toward' : '  (you are close to it)'))
     }
     L.push('  Fewer, larger rungs cost less. Every rung is a transaction.')
+    L.push('')
+  }
+
+  if (a.calibration?.comparable) {
+    const c = a.calibration
+    L.push('Does the replay match what actually happened?')
+    L.push(`  replay says, on the launches we bought : ${c.simulatedMultiple.toFixed(3)}x`)
+    L.push(`  the account actually returned          : ${c.realizedMultiple.toFixed(3)}x` +
+      `  (${c.trades} closed trades, ${c.stakedSol.toFixed(2)} SOL staked)`)
+    if (c.trustworthy) {
+      L.push(`  → within ${Math.abs(c.gap * 100).toFixed(1)}pp. The exit numbers below can be taken at face value.`)
+    } else {
+      L.push(`  → ${(Math.abs(c.gap) * 100).toFixed(1)}pp apart. The replay is ` +
+        `${c.gap > 0 ? 'OPTIMISTIC' : 'PESSIMISTIC'}, and everything below inherits that.`)
+      L.push('  Exit proposals separated by less than that gap are not decidable from this data.')
+      L.push('  Most likely cause: outcomes are watched for ' +
+        `${config.learning.outcomeWindowMinutes}m while the bot's time stop is ` +
+        `${Math.round(config.exit.timeStopSeconds / 60)}m and it exits after ` +
+        `${config.exit.stalePriceSeconds}s without a price — so the replay banks peaks`)
+      L.push('  the strategy had already sold before, and assumes every rung it touched filled.')
+    }
     L.push('')
   }
 

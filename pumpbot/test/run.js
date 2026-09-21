@@ -792,6 +792,82 @@ console.log('\nLedger')
   check('deployed nets out recovered capital', near(store.deployedSol(), 0), String(store.deployedSol()))
 }
 
+// ------------------------------- is the replay anywhere near reality?
+console.log('\nBacktest calibration')
+{
+  const { analyze, formatReport } = await import('../src/learn.js')
+  store.initStore()
+  const s = store.getState()
+  s.positions = {}; s.closed = []; s.daily = {}; s.totalRealizedSol = 0
+  s.exploreRealizedSol = 0; s.exploreWins = 0; s.exploreLosses = 0
+
+  /**
+   * The account's real numbers from the dashboard: 174 closed, ~26.19 SOL staked,
+   * -4.9187 realized. That is 0.812x, against a replay claiming 0.976x on the same
+   * strategy — and every exit proposal in the report comes from the optimistic side of
+   * that sixteen-point gap. Nothing was comparing them.
+   */
+  const day = new Date().toISOString().slice(0, 10)
+  s.daily[day] = { realizedSol: -4.9187, wins: 35, losses: 139, stakedSol: 26.19 }
+  s.totalRealizedSol = -4.9187
+
+  const rec = store.strategyRecord()
+  check('the ledger knows what it staked', near(rec.stakedSol, 26.19, 1e-9))
+  check('and what multiple that actually returned',
+    near(rec.realizedMultiple, 1 - 4.9187 / 26.19, 1e-9), String(rec.realizedMultiple))
+  check('which matches the dashboard to three places',
+    rec.realizedMultiple.toFixed(3) === '0.812', rec.realizedMultiple.toFixed(3))
+
+  const mkBought = (i, peak) => ({
+    v: JOURNAL_VERSION, mint: 'CAL' + i, creator: 'C', at: i, finalizedAt: Date.now() - 1000,
+    action: 'bought', failedChecks: [], hitFirstRung: peak >= 1.5, peakMultiple: peak,
+    endMultiple: peak >= 1.5 ? 1.5 : 0.9, troughMultiple: 0.9, decisionPriceSol: 1e-7,
+    hasOrdering: true, troughFirst: false, observedSeconds: 900, ticks: 40, features: {},
+  })
+  // Enough winners that the replay lands well above what the ledger actually did.
+  const rows = Array.from({ length: 200 }, (_, i) => mkBought(i, i % 3 === 0 ? 2.2 : 0.9))
+  const a = analyze(rows, rows.length)
+
+  check('the report compares the replay against the ledger', a.calibration?.comparable === true)
+  check('using the account\'s real trade count',
+    a.calibration.trades === 174, String(a.calibration.trades))
+  check('the gap is simulated minus realized',
+    near(a.calibration.gap, a.calibration.simulatedMultiple - a.calibration.realizedMultiple, 1e-9))
+  check('a replay this far from reality is marked untrustworthy',
+    a.calibration.trustworthy === false,
+    `gap ${a.calibration.gap}`)
+
+  const text = formatReport(a)
+  check('and the report says so ABOVE the exit proposals it undermines',
+    text.indexOf('Does the replay match') < text.indexOf('Exit plan, replayed') &&
+    /OPTIMISTIC/.test(text),
+    String(text.indexOf('Does the replay match')))
+
+  /**
+   * A replay that DOES match must not cry wolf, or the warning becomes wallpaper and
+   * stops being read. Derived from the replay's own output rather than guessed, so this
+   * stays a test of the comparison and not of the cost model's current constants.
+   */
+  const closeRows = Array.from({ length: 200 }, (_, i) => mkBought(i, i % 50 === 0 ? 2.2 : 0.97))
+  const staked = 26.19
+  const target = analyze(closeRows, 200).calibration.simulatedMultiple
+  s.daily[day] = { realizedSol: (target - 1) * staked, wins: 60, losses: 114, stakedSol: staked }
+  s.totalRealizedSol = (target - 1) * staked
+  const close = analyze(closeRows, 200)
+  check('a replay that matches the ledger is not flagged',
+    close.calibration.trustworthy === true, `gap ${close.calibration.gap}`)
+  check('and then the report does not warn',
+    !/OPTIMISTIC|PESSIMISTIC/.test(formatReport(close)))
+
+  // With no closed trades there is nothing to calibrate against, and it must say that
+  // rather than inventing a comparison.
+  s.daily = {}; s.totalRealizedSol = 0
+  check('an account that has not traded reports no comparison',
+    analyze(rows, rows.length).calibration.comparable === false)
+
+  s.daily = {}; s.totalRealizedSol = 0; s.closed = []
+}
+
 // ------------------------------- the experiment must not evict the strategy
 console.log('\nClosed-trade retention')
 {

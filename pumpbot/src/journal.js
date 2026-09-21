@@ -557,6 +557,27 @@ export class ShadowTracker {
       // The label everything else is measured against: would this have paid the first rung?
       hitFirstRung: peakMultiple >= 1 + firstRung / 100,
       firstRungPct: firstRung,
+      /**
+       * WHEN the extremes happened, in seconds from the decision.
+       *
+       * The observation window is 15 minutes; the bot's time stop is 10, and its
+       * stale-price rule exits after 3 minutes of silence. So a launch that peaks at
+       * minute twelve is labelled a hit here and is a position the strategy had already
+       * closed. Without these, a replay cannot tell that apart from a peak at minute
+       * two, and it credits the strategy with runs it was never present for.
+       */
+      peakAtSeconds: Math.max(0, Math.round((row.peakAt - row.decidedAt) / 1000)),
+      troughAtSeconds: Math.max(0, Math.round((row.troughAt - row.decidedAt) / 1000)),
+      /**
+       * The same label, restricted to what the live exit rules could actually have
+       * captured. Kept ALONGSIDE hitFirstRung rather than replacing it: 150,000 existing
+       * rows carry the old label, and silently redefining it would make every historical
+       * rate incomparable to every new one. Reporting both is how we find out how large
+       * the difference is.
+       */
+      hitFirstRungInTime:
+        peakMultiple >= 1 + firstRung / 100 &&
+        row.peakAt - row.decidedAt <= config.exit.timeStopSeconds * 1000,
       wentToZero: endMultiple <= 0.1,
       /**
        * Did the low come before the high? This is what lets a replay decide whether a
