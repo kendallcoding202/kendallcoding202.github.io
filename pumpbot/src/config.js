@@ -512,6 +512,12 @@ export const config = {
     /** Go and read the curve from the chain after this much silence. */
     staleRefreshSeconds: num('STALE_REFRESH_SECONDS', 45),
     /**
+     * Ceiling on chain reads per sweep, so a large explore book cannot turn a
+     * five-second tick into a queue of RPC round trips and push exit management late.
+     * Oldest price first; the strategy's positions ahead of the experiment's.
+     */
+    maxCurveReadsPerSweep: num('MAX_CURVE_READS_PER_SWEEP', 6),
+    /**
      * Consecutive FAILED chain reads before a position is dumped for being unpriceable.
      *
      * The genuine can't-price cases are a graduated token whose curve account is gone

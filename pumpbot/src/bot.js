@@ -213,10 +213,32 @@ export class Bot {
    * bad moment, several in a row means the position genuinely cannot be priced (a
    * graduated token's curve account is gone), and only then is exiting right.
    */
-  async #refreshStalePrice(position) {
-    const ageSeconds = (Date.now() - (position.lastPriceAt ?? position.openedAt)) / 1000
-    if (ageSeconds < config.exit.staleRefreshSeconds) return
+  /**
+   * Refresh the stale positions, in PARALLEL and BOUNDED.
+   *
+   * The sweep fires every 5 seconds and iterates every open position — strategy and
+   * explore together, and explore runs on an unlimited bankroll with a dozen or more
+   * open at a time. Awaiting one RPC read per position in sequence meant a dozen
+   * round trips inside a five-second tick: the sweep would run long, the next one would
+   * be skipped by the overlap guard, and exit management would start lagging. A fix for
+   * blind selling that delays the stop-loss is not a fix.
+   *
+   * Oldest price first, so the positions most in need of one get the budget, and the
+   * strategy ahead of the experiment when they are equally stale.
+   */
+  async #refreshStalePrices() {
+    const now = Date.now()
+    const due = openPositions()
+      .filter((p) => p.state === 'open')
+      .map((p) => ({ p, age: (now - (p.lastPriceAt ?? p.openedAt)) / 1000 }))
+      .filter((x) => x.age >= config.exit.staleRefreshSeconds)
+      .sort((a, b) => (a.p.explore === b.p.explore ? b.age - a.age : a.p.explore ? 1 : -1))
+      .slice(0, config.exit.maxCurveReadsPerSweep)
+    if (!due.length) return
+    await Promise.all(due.map((x) => this.#refreshStalePrice(x.p)))
+  }
 
+  async #refreshStalePrice(position) {
     const curve = await this.readCurve(position.mint)
     const price = curve && curve.vTokens > 0 ? curve.vSol / curve.vTokens : null
     if (!(price > 0)) {
@@ -732,10 +754,11 @@ export class Bot {
       if (!getState().positions[row.mint]) this.feed.unwatch(row.mint)
     }
 
+    await this.#refreshStalePrices()
+
     // Positions whose feed has gone quiet still need the time stop and stop-loss run.
     for (const position of openPositions()) {
       if (position.state !== 'open') continue
-      await this.#refreshStalePrice(position)
       await this.#manage(position, position.lastPriceSol, position.lastVSol)
     }
   }

@@ -3806,6 +3806,43 @@ console.log('\nStale price refresh, through the bot')
     store.getState().closed.at(-1)?.closeReason)
   await botB.stop()
 
+  /**
+   * The refresh must not be able to make the sweep late.
+   *
+   * Explore runs on an unlimited bankroll with a dozen or more positions open, and the
+   * sweep fires every five seconds. One awaited RPC read per position, in sequence,
+   * would put a dozen round trips inside that tick — the overlap guard would skip the
+   * next sweep and exit management would start lagging. A fix for blind selling that
+   * delays the stop-loss is not a fix.
+   */
+  store.getState().positions = {}; store.getState().closed = []; store.save()
+  const asked = []
+  const botMany = new Bot({
+    feed: new Quiet(), logFeed: new Quiet(),
+    readCurve: async (mint) => { asked.push(mint); return { vSol: 100, vTokens: 1e9 } },
+  })
+  await botMany.start()
+  clearInterval(botMany.sweepTimer); clearInterval(botMany.balanceTimer); clearInterval(botMany.heartbeatTimer)
+
+  // Two strategy positions buried under twenty explore ones, all equally stale.
+  for (let i = 0; i < 20; i++) {
+    store.addPosition({
+      mint: `EXP${i}`, symbol: `EXP${i}`, state: 'open', openedAt: Date.now() - STALE,
+      entryPriceSol: 1e-7, lastPriceSol: 1e-7, peakPriceSol: 1e-7, lastPriceAt: Date.now() - STALE,
+      tokensBought: 1000, tokensRemaining: 1000, solSpent: 0.15, solRecovered: 0, rungsHit: [],
+      fills: [], pool: 'pump', entryVSol: 100, lastVSol: 100, lastVTokens: 1e9, explore: true,
+    })
+  }
+  openStale('STRAT_A')
+  openStale('STRAT_B')
+
+  await botMany.tick()
+  check('chain reads per sweep are bounded',
+    asked.length <= config.exit.maxCurveReadsPerSweep, `${asked.length} reads`)
+  check('and the strategy is served before the experiment',
+    asked.includes('STRAT_A') && asked.includes('STRAT_B'), JSON.stringify(asked))
+  await botMany.stop()
+
   store.getState().positions = {}; store.getState().closed = []; store.save()
 }
 
