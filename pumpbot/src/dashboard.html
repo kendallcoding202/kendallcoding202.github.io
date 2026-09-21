@@ -725,6 +725,7 @@ function render(d) {
         ? '<code>on</code> <span class="dim">(blocks a deployer whose record is beaten by the ' +
           'market even at its most generous reading, after ' + L.entry.minCreatorLaunches + '+ launches)</span>'
         : '<code>off</code>') + '<br>' +
+    (d.analysis ? memoryLine(d.analysis) + '<br>' : '') +
     'Learning — analysing up to <code>' + num(L.learning.maxRowsAnalyzed) + '</code> rows · shadow slots <code>' +
       L.learning.maxShadowTracked + '</code> · window <code>' +
       L.learning.outcomeWindowMinutes + 'm</code> · suggestions at <code>' +
@@ -770,6 +771,27 @@ function storageLine(s) {
       ' · <span style="color:var(--amber)">no checkpoint yet</span>') +
     (ok ? '' : '<br><span style="color:var(--amber)">If this path is not a mounted volume, ' +
       'every restart starts from nothing.</span>')
+}
+
+/**
+ * Memory, and whether the analysis is managing to run at all.
+ *
+ * The container ran out and took the dashboard with it, and nothing on the page had
+ * said how close it was. A crash leaves no numbers behind, so the high-water mark is
+ * sampled while the process is alive.
+ */
+function memoryLine(a) {
+  const m = a.memory || {}
+  const peak = a.peakRssMb ? ' · peak <code>' + a.peakRssMb + ' MB</code>' : ''
+  const failing = a.failures
+    ? ' <span style="color:var(--amber)">· analysis failing (' + a.failures + ')' +
+      (a.nextAttemptInSeconds ? ', retry in ' + a.nextAttemptInSeconds + 's' : '') + '</span>'
+    : ''
+  const err = a.lastError
+    ? '<br><span style="color:var(--amber)">Analysis error: ' + esc(String(a.lastError)) + '</span>'
+    : ''
+  return 'Memory <code>' + (m.rssMb ?? '?') + ' MB</code> resident · <code>' +
+    (m.heapMb ?? '?') + ' MB</code> heap' + peak + failing + err
 }
 
 /**

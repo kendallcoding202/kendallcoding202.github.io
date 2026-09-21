@@ -251,11 +251,17 @@ export const config = {
      * loop for over a minute every refresh, which force-closed live positions on stale
      * prices. The analysis was corrupting the data it analyses.
      *
-     * 25,000 keeps base rates to about +/-0.4pp and leaves thousands of rows on the keep
-     * side of a useful threshold, which is ample — the deployer-tier result was decisive
-     * on 3,000. Raise it only against these numbers and the container's memory limit.
+     * Set to 10,000, not 25,000, after the container crashed on dc49c89 with the
+     * dashboard going down with it. Those figures are a STANDALONE process; on Railway
+     * the analysis spike lands on top of a bot already holding a creator index built
+     * from 152,000 rows, and the sum is what the container has to survive. 10,000 costs
+     * roughly +/-0.6pp on a base rate instead of +/-0.4pp, which is not a real loss.
+     *
+     * The dashboard now reports process memory, so the next move here can be made
+     * against a measurement from the machine that has to run it rather than from a
+     * benchmark on a different one. That is what went wrong the first time.
      */
-    maxRowsAnalyzed: num('MAX_ROWS_ANALYZED', 25_000),
+    maxRowsAnalyzed: num('MAX_ROWS_ANALYZED', 10_000),
     /**
      * How often the dashboard's cached report is rebuilt. analyse() is synchronous and
      * the feed shares its event loop, so this is a duty cycle, not a freshness setting:

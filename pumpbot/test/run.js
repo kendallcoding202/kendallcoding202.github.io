@@ -1071,6 +1071,62 @@ console.log('\nExit replay vs the real holding window')
     after < 0.015, `${(after * 100).toFixed(1)}pp error`)
 }
 
+// ------------------------------- a failing analysis must not eat the container
+console.log('\nAnalysis worker backoff')
+{
+  const analysis = await import('../src/analysis.js')
+
+  /**
+   * THE SPAWN STORM. If the worker cannot run, cache.at stays 0, so isFresh() is false,
+   * so every dashboard poll — every few seconds — builds ANOTHER Worker, each a fresh
+   * V8 isolate with its own heap. A worker that fails does not degrade the report, it
+   * exhausts the container, and the first thing anyone sees is the dashboard gone.
+   *
+   * Driven through the real module by pointing it at a worker file that does not exist.
+   */
+  const health0 = analysis.analysisHealth()
+  check('health reports memory so a near-miss is visible before the crash',
+    typeof health0.memory?.rssMb === 'number' && health0.memory.rssMb > 0,
+    JSON.stringify(health0.memory))
+
+  // A worker that throws on load — the real failure, driven through the real module.
+  const badWorker = path.join(tmp, 'bad-worker.mjs')
+  fs.writeFileSync(badWorker, 'throw new Error("worker cannot start")\n')
+  process.env.ANALYSIS_WORKER_PATH = badWorker
+  await analysis.stopAnalysis()
+
+  const before = analysis.workerSpawnCount()
+  const first = await analysis.request({ force: true })
+  check('a worker that cannot start is reported as a failure', first.failed === true)
+  check('and the error is kept', Boolean(analysis.analysisHealth().lastError))
+
+  /**
+   * The storm: the dashboard polls every few seconds and each poll used to build
+   * another isolate. Ten polls in a row must now spawn NOTHING.
+   */
+  for (let i = 0; i < 10; i++) analysis.refreshIfStale()
+  await new Promise((r) => setTimeout(r, 50))
+  const spawned = analysis.workerSpawnCount() - before
+  check('repeated polls after a failure do not spawn more workers',
+    spawned <= 1, `${spawned} workers spawned across 10 polls`)
+  check('because the module is backing off',
+    analysis.analysisHealth().nextAttemptInSeconds > 0,
+    String(analysis.analysisHealth().nextAttemptInSeconds))
+  check('and a direct /learn waits out the backoff too',
+    (await analysis.request()).failed === true &&
+    analysis.workerSpawnCount() - before <= 1)
+
+  // Recovery: a working worker clears the streak.
+  delete process.env.ANALYSIS_WORKER_PATH
+  await analysis.stopAnalysis()
+  analysis.__resetBackoffForTests()
+  const good = await analysis.request({ force: true })
+  check('a healthy worker clears the failure state',
+    Boolean(good.report) && analysis.analysisHealth().failures === 0,
+    JSON.stringify({ report: Boolean(good.report), failures: analysis.analysisHealth().failures }))
+  await analysis.stopAnalysis()
+}
+
 // ------------------------------- is the replay anywhere near reality?
 console.log('\nBacktest calibration')
 {
