@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { config } from './config.js'
 import { log } from './log.js'
+import { wilson } from './stats.js'
 
 /**
  * The learning substrate.
@@ -139,6 +140,49 @@ export class CreatorIndex {
     const e = creator ? this.byCreator.get(creator) : null
     if (!e || e.launches === 0) return { launches: 0, hitRate: -1 }
     return { launches: e.launches, hitRate: e.hits / e.launches }
+  }
+
+  /** How often ANY launch we have labelled reached the first rung. The yardstick. */
+  baseRate() {
+    let launches = 0
+    let hits = 0
+    for (const e of this.byCreator.values()) {
+      launches += e.launches
+      hits += e.hits
+    }
+    return launches > 0 ? hits / launches : null
+  }
+
+  /**
+   * Is this deployer demonstrably worse than the market?
+   *
+   * Judged on the UPPER bound of their hit rate, not the point estimate, because the
+   * question is "could this plausibly be an ordinary deployer having a bad run?" Zero
+   * winners in two launches is nothing — the upper bound is 66%. Zero in a hundred is a
+   * different claim entirely: the upper bound is 3.7%, well under a ~10% base rate. The
+   * interval is what separates those; a point estimate calls both of them 0%.
+   *
+   * Deliberately one-sided. A deployer nobody has seen is NOT refused — first-time
+   * deployers are most launches and most winners, so requiring a track record would
+   * reject the market. This only removes the ones that have earned it.
+   */
+  verdict(creator, { minLaunches = 20 } = {}) {
+    const e = creator ? this.byCreator.get(creator) : null
+    const base = this.baseRate()
+    if (!e || e.launches < minLaunches || base === null) {
+      return { known: false, launches: e?.launches ?? 0, hits: e?.hits ?? 0, worseThanMarket: false, base }
+    }
+    const w = wilson(e.hits, e.launches)
+    return {
+      known: true,
+      launches: e.launches,
+      hits: e.hits,
+      hitRate: e.hits / e.launches,
+      upperBound: w.hi,
+      // Even the most generous reading of their record is below the market's.
+      worseThanMarket: w.hi < base,
+      base,
+    }
   }
 }
 

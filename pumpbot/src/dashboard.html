@@ -715,6 +715,11 @@ function render(d) {
       '</code> · mcap <code>' + L.entry.minMarketCapSol + '–' + L.entry.maxMarketCapSol +
       '</code> · dev hold <code>≤' + L.entry.maxDevHoldPct + '%</code> · observe <code>' +
       L.entry.observeSeconds + 's</code><br>' +
+    'Entry — late/early buys <code>≥' + L.entry.minBuyAcceleration + '</code> · deployer record ' +
+      (L.entry.creatorHistory
+        ? '<code>on</code> <span class="dim">(blocks a deployer whose record is beaten by the ' +
+          'market even at its most generous reading, after ' + L.entry.minCreatorLaunches + '+ launches)</span>'
+        : '<code>off</code>') + '<br>' +
     'Learning — shadow slots <code>' + L.learning.maxShadowTracked + '</code> · window <code>' +
       L.learning.outcomeWindowMinutes + 'm</code> · suggestions at <code>' +
       L.learning.minSamplesForSuggestion + '</code> samples · explore bankroll <code>' +

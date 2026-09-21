@@ -166,7 +166,13 @@ const check = (id, pass, detail) => ({ id, pass, detail })
  * Hard entry filter. Every check must pass. There is no soft score here — with real
  * money on a 10-minute horizon, a "probably fine" is a no.
  */
-export function evaluateEntry(candidate) {
+/**
+ * `creatorPrior` is what CreatorIndex.verdict() returned for this deployer, computed
+ * from launches that finalized BEFORE this one existed. Optional: without it the check
+ * abstains rather than guessing, so a fresh install with no history behaves exactly as
+ * it did before.
+ */
+export function evaluateEntry(candidate, { creatorPrior = null } = {}) {
   const e = config.entry
   const checks = []
 
@@ -230,6 +236,28 @@ export function evaluateEntry(candidate) {
       candidate.devSold ? 'DEV IS SELLING' : 'dev has not sold',
     ),
   )
+
+  /**
+   * This deployer's own record, when there is enough of it to mean something.
+   *
+   * One-sided on purpose. An unknown deployer passes — first-timers are most launches
+   * and most winners, so demanding a track record would reject the market itself. This
+   * only removes deployers whose most generous reading is still below the market's own
+   * hit rate: 0-for-111 and 0-for-102 were both in the first real dataset, next to one
+   * running 23% over 126.
+   */
+  if (e.creatorHistory && creatorPrior) {
+    checks.push(
+      check(
+        'creator_history',
+        !creatorPrior.worseThanMarket,
+        creatorPrior.known
+          ? `${creatorPrior.hits}/${creatorPrior.launches} past launches hit ` +
+            `(≤${(creatorPrior.upperBound * 100).toFixed(1)}% vs market ${(creatorPrior.base * 100).toFixed(1)}%)`
+          : `only ${creatorPrior.launches} past launches — not enough to judge`,
+      ),
+    )
+  }
 
   // A price we cannot compute is a position we cannot manage an exit on.
   checks.push(

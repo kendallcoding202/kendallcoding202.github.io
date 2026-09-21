@@ -387,6 +387,19 @@ export const config = {
      * happened, none asked whether it was still happening.
      */
     minBuyAcceleration: num('MIN_BUY_ACCELERATION', 0.5),
+    /**
+     * Refuse a deployer whose own record is demonstrably worse than the market's.
+     *
+     * The first real dataset contained deployers 0-for-111, 0-for-102 and 0-for-71
+     * alongside one at 23% over 126 launches. That is not noise, and the bot was already
+     * recording it and ignoring it.
+     *
+     * The floor below is a second safety on top of the Wilson test: the interval already
+     * refuses to call a short record evidence, but a hard minimum makes the intent
+     * explicit and survives anyone lowering the confidence level.
+     */
+    creatorHistory: bool('CREATOR_HISTORY', true),
+    minCreatorLaunches: num('MIN_CREATOR_LAUNCHES', 20),
     minMarketCapSol: num('MIN_MARKET_CAP_SOL', 25),
     /**
      * The upper bound was BACKWARDS, and the data caught it.

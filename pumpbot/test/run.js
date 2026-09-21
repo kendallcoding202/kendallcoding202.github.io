@@ -20,7 +20,7 @@ const store = await import('../src/store.js')
 const { canOpen } = await import('../src/risk.js')
 const { buy, sell } = await import('../src/exec.js')
 const { wilson, simulateLadder, bestThreshold, analyze } = await import('../src/learn.js')
-const { JOURNAL_VERSION } = await import('../src/journal.js')
+const { JOURNAL_VERSION, CreatorIndex } = await import('../src/journal.js')
 const { buildSnapshot } = await import('../src/dashboard.js')
 
 let passed = 0
@@ -187,6 +187,83 @@ function buildCandidate({ create = {}, buyers = 70, sells = 2, devSells = false,
   const c = buildCandidate({ buyers: 20 })
   check('dev is excluded from the organic buyer count', c.organicBuyers === 20, String(c.organicBuyers))
   check('dev hold percent computed from supply', near(c.devHoldPct, 2), String(c.devHoldPct))
+}
+
+// ------------------------------------------------- deployer track record
+console.log('\nCreator prior')
+{
+  /**
+   * The signal the first real dataset handed us: repeat deployers who have never once
+   * produced a winner, over a hundred launches each, sitting next to one running 23%.
+   * The question this has to answer correctly is not "has this deployer lost?" but
+   * "could an ordinary deployer plausibly have this record by chance?", which is why it
+   * is judged on the interval rather than the point estimate.
+   */
+  const idx = new CreatorIndex()
+  const note = (creator, launches, hits) => {
+    for (let i = 0; i < launches; i++) idx.note({ creator, hitFirstRung: i < hits })
+  }
+  note('MARKET', 400, 60) // the yardstick: 15% of an ordinary deployer's launches hit
+  note('BADDEV', 120, 0) // 0-for-120
+  note('SHORTDEV', 5, 0) // 0-for-5 — nothing at all
+  note('BORDERLINE', 22, 0) // 0-for-22 — bad-looking, not yet evidence
+  note('GOODDEV', 126, 29) // 23%
+
+  const base = idx.baseRate()
+  check('base rate is every labelled launch, not a per-creator average',
+    near(base, 89 / 673, 1e-9), String(base))
+
+  const bad = idx.verdict('BADDEV')
+  check('a deployer 0-for-120 is demonstrably worse than the market',
+    bad.known && bad.worseThanMarket, JSON.stringify(bad))
+  check('and it is the upper bound that says so, not the 0%',
+    bad.upperBound > 0 && bad.upperBound < base, String(bad.upperBound))
+
+  /**
+   * The failure mode a point estimate has: 0-for-5 and 0-for-120 are both "0%", and
+   * treating them alike would blocklist most of the market on five coin flips.
+   */
+  const short = idx.verdict('SHORTDEV')
+  check('a 0-for-5 record is not treated as evidence', !short.known && !short.worseThanMarket)
+  check('a 0-for-22 record still is not — the interval reaches above the base rate',
+    !idx.verdict('BORDERLINE').worseThanMarket,
+    String(idx.verdict('BORDERLINE').upperBound))
+
+  const good = idx.verdict('GOODDEV')
+  check('a profitable deployer is not blocked', good.known && !good.worseThanMarket)
+
+  const unseen = idx.verdict('NOBODY_HAS_SEEN_THIS_ONE')
+  check('an unknown deployer is not blocked', !unseen.known && !unseen.worseThanMarket)
+  check('a missing creator address is not blocked', !idx.verdict(null).worseThanMarket)
+  check('an empty index has no opinion about anyone',
+    new CreatorIndex().baseRate() === null && !new CreatorIndex().verdict('X').worseThanMarket)
+
+  // --- and now the same priors, through the filter ---
+  const fromPrior = (creator) => evaluateEntry(buildCandidate(), { creatorPrior: idx.verdict(creator) })
+
+  const blocked = fromPrior('BADDEV')
+  check('the filter refuses a launch from a demonstrably bad deployer',
+    !blocked.pass && blocked.failed.some((c) => c.id === 'creator_history'),
+    JSON.stringify(blocked.failed?.map((c) => c.id)))
+  check('the rejection says what the record actually was',
+    /0\/120/.test(blocked.failed.find((c) => c.id === 'creator_history')?.detail ?? ''),
+    JSON.stringify(blocked.failed.find((c) => c.id === 'creator_history')))
+
+  check('an otherwise-good launch from a good deployer still passes', fromPrior('GOODDEV').pass,
+    JSON.stringify(fromPrior('GOODDEV').failed?.map((c) => c.id)))
+  check('an unknown deployer still passes', fromPrior('NOBODY').pass)
+  check('a short record still passes', fromPrior('SHORTDEV').pass)
+
+  /**
+   * With no prior supplied the check must not exist at all. A fresh install, or a run
+   * with learning switched off, has no index to ask — refusing everything it cannot look
+   * up would turn "we have no data" into "block the market".
+   */
+  const noPrior = evaluateEntry(buildCandidate())
+  check('with no prior at all the check abstains rather than blocking', noPrior.pass)
+  check('and the check is not even reported',
+    !noPrior.checks?.some((c) => c.id === 'creator_history'),
+    JSON.stringify(noPrior.checks?.map((c) => c.id)))
 }
 
 // ---------------------------------------------------------------- exit ladder
@@ -2872,6 +2949,87 @@ console.log('\nEnd-to-end bot loop')
 
   await bot.stop()
   check('bot stops cleanly', !feed.started)
+}
+
+// ------------------------------- the prior actually reaches the filter
+console.log('\nCreator prior, through the bot')
+{
+  /**
+   * Proving `evaluateEntry` honours a prior proves nothing about whether the bot ever
+   * hands it one — the last three bugs in this file were all a correct function nobody
+   * called. So this drives the real sweep and asserts the deployer's record changed the
+   * decision, with everything else about the two launches identical.
+   */
+  const { EventEmitter } = await import('node:events')
+  const { Bot } = await import('../src/bot.js')
+
+  class FakeFeed extends EventEmitter {
+    constructor() { super(); this.watched = new Set(); this.started = false }
+    start() { this.started = true }
+    async stop() { this.started = false }
+    watch(m) { this.watched.add(m) }
+    unwatch(m) { this.watched.delete(m) }
+  }
+  class FakeLogFeed extends EventEmitter {
+    constructor() { super(); this.started = false }
+    start() { this.started = true }
+    async stop() { this.started = false }
+    feedStats() { return { notifications: 0, decoded: 0, kept: 0, connected: true } }
+  }
+
+  const st0 = store.getState()
+  st0.positions = {}; st0.closed = []; st0.daily = {}; st0.totalRealizedSol = 0
+  st0.consecutiveLosses = 0; st0.blockedCreators = {}; st0.halted = null
+  st0.baseEquitySol = 0; st0.peakRealizedSol = 0
+  store.save()
+
+  const feed = new FakeFeed()
+  const logFeed = new FakeLogFeed()
+  const bot = new Bot({ feed, logFeed })
+  await bot.start()
+  clearInterval(bot.sweepTimer); clearInterval(bot.balanceTimer); clearInterval(bot.heartbeatTimer)
+  // Explore samples rejects, and a sampled reject is still an open position. Off here, so
+  // the only thing that can open one is the filter's own verdict.
+  const exploreWas = config.explore.enabled
+  config.explore.enabled = false
+
+  check('the bot has a creator index to consult', Boolean(bot.shadow?.creatorIndex))
+  for (let i = 0; i < 400; i++) bot.shadow.creatorIndex.note({ creator: 'MARKETDEV', hitFirstRung: i < 60 })
+  for (let i = 0; i < 120; i++) bot.shadow.creatorIndex.note({ creator: 'SERIALDUD', hitFirstRung: false })
+
+  const curve = { vSol: 40, vTokens: 900_000_000 }
+  /** Identical launch, identical trades — the deployer address is the only difference. */
+  const launch = async (mint, creator) => {
+    feed.emit('create', normalizeEvent({
+      txType: 'create', mint, traderPublicKey: creator, name: 'Prior Dog', symbol: 'PRIOR',
+      initialBuy: 20_000_000, solAmount: 0.8,
+      vSolInBondingCurve: curve.vSol, vTokensInBondingCurve: curve.vTokens, marketCapSol: 44,
+    }))
+    bot.candidates.get(mint).createdAt -= (config.entry.observeSeconds + 5) * 1000
+    for (let i = 0; i < config.entry.minUniqueBuyers + 10; i++) {
+      logFeed.emit('trade', normalizeEvent({
+        txType: 'buy', mint, traderPublicKey: `PB${i}`, tokenAmount: 1000, solAmount: 0.05,
+        vSolInBondingCurve: curve.vSol, vTokensInBondingCurve: curve.vTokens, marketCapSol: 44,
+      }))
+    }
+    await bot.tick()
+  }
+
+  await launch('PriorCleanMintAAAAAAAAAAAAAAAAAAAAAAAAAAA', 'FRESHDEV')
+  check('the same launch from an unseen deployer is taken',
+    Boolean(store.getState().positions['PriorCleanMintAAAAAAAAAAAAAAAAAAAAAAAAAAA']),
+    JSON.stringify(bot.statsSnapshot().topRejects))
+
+  const before = bot.statsSnapshot().topRejects?.find((r) => r.id === 'creator_history')?.n ?? 0
+  await launch('PriorDudMintAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', 'SERIALDUD')
+  check('the same launch from a 0-for-120 deployer is refused',
+    !store.getState().positions['PriorDudMintAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'])
+  check('and it is the deployer record that refused it',
+    (bot.statsSnapshot().topRejects?.find((r) => r.id === 'creator_history')?.n ?? 0) === before + 1,
+    JSON.stringify(bot.statsSnapshot().topRejects))
+
+  config.explore.enabled = exploreWas
+  await bot.stop()
 }
 
 fs.rmSync(tmp, { recursive: true, force: true })

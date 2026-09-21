@@ -176,6 +176,24 @@ export class Bot {
     }
   }
 
+  /**
+   * What our own journal says about this deployer, or null if we have no index to ask.
+   *
+   * The index lives on the shadow tracker because that is what maintains it: a launch is
+   * only counted once its outcome window has CLOSED, so a row can never be scored using
+   * its own result. With learning off there is no index and this returns null, which
+   * `evaluateEntry` reads as "no opinion" and skips the check entirely — the filter
+   * behaves exactly as it did before the prior existed rather than silently blocking
+   * every deployer it cannot look up.
+   */
+  #creatorPrior(creator) {
+    return (
+      this.shadow?.creatorIndex?.verdict(creator, {
+        minLaunches: config.entry.minCreatorLaunches,
+      }) ?? null
+    )
+  }
+
   #countReject(verdict) {
     this.stats.screened++
     this.stats.sinceBeat.screened++
@@ -613,7 +631,7 @@ export class Bot {
       }
       if (candidate.ageSeconds < config.entry.observeSeconds) continue
 
-      const verdict = evaluateEntry(candidate)
+      const verdict = evaluateEntry(candidate, { creatorPrior: this.#creatorPrior(candidate.creator) })
       this.candidates.delete(mint)
 
       if (!verdict.pass) {

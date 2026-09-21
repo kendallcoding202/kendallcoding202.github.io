@@ -1,5 +1,6 @@
 import { config } from './config.js'
 import { readAll, JOURNAL_VERSION } from './journal.js'
+import { wilson } from './stats.js'
 
 /**
  * Analysis over the decision journal.
@@ -13,15 +14,7 @@ import { readAll, JOURNAL_VERSION } from './journal.js'
  * edge unless its interval clears the base rate.
  */
 
-/** Wilson score interval — behaves sanely at small n, unlike the normal approximation. */
-export function wilson(successes, n, z = 1.96) {
-  if (n <= 0) return { p: 0, lo: 0, hi: 1, n: 0 }
-  const p = successes / n
-  const denom = 1 + (z * z) / n
-  const centre = p + (z * z) / (2 * n)
-  const margin = z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))
-  return { p, lo: Math.max(0, (centre - margin) / denom), hi: Math.min(1, (centre + margin) / denom), n }
-}
+export { wilson } from './stats.js'
 
 /**
  * Everything one round trip actually costs, as a fraction of the stake.

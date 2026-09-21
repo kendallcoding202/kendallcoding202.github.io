@@ -351,6 +351,12 @@ export function buildSnapshot(walletSol, stats = null) {
         maxMarketCapSol: config.entry.maxMarketCapSol,
         maxDevHoldPct: config.entry.maxDevHoldPct,
         observeSeconds: config.entry.observeSeconds,
+        // The two checks the first real dataset added. Publishing them matters as much
+        // as the older ones: a threshold the page does not show is a threshold nobody
+        // can tell is switched on.
+        minBuyAcceleration: config.entry.minBuyAcceleration,
+        creatorHistory: config.entry.creatorHistory,
+        minCreatorLaunches: config.entry.minCreatorLaunches,
       },
       learning: {
         maxShadowTracked: config.learning.maxShadowTracked,
