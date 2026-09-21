@@ -237,6 +237,15 @@ export const config = {
      */
     maxRowsAnalyzed: num('MAX_ROWS_ANALYZED', 4000),
     /**
+     * How often the dashboard's cached report is rebuilt. analyse() is synchronous and
+     * the feed shares its event loop, so this is a duty cycle, not a freshness setting:
+     * ~2s of work every 30s would freeze the feed 7% of the time for numbers that move
+     * over hours.
+     */
+    refreshSeconds: num('LEARNING_REFRESH_SECONDS', 300),
+    // Permutation trials behind the noise floor. More is a better p95 and linearly slower.
+    nullTrials: num('LEARNING_NULL_TRIALS', 60),
+    /**
      * Auto-applying learned thresholds is OFF and should stay off. Tuning a live
      * strategy on its own recent results is the fastest way to overfit into a
      * drawdown. The analyser proposes; a human decides.
@@ -350,10 +359,52 @@ export const config = {
      * be measured, not defended; the report's threshold suggestions are what should move
      * them next, once there are ~200 labelled samples on both sides.
      */
-    minUniqueBuyers: num('MIN_UNIQUE_BUYERS', 7),
+    /**
+     * Raised from 7 on the first real evidence, and raised a long way.
+     *
+     * Across 4,000 labelled launches the base rate of reaching +50% is 9.9%. At
+     * `organicBuyers >= 85` it is 54.0% [40.4-67.0] — and break-even needs ~31.6%, so
+     * even the low end of that interval clears it. At 7 buyers the filter was entering
+     * on a signal barely distinguishable from noise: the launches it took hit 25.8%
+     * [13.7-43.2], whose lower bound is below break-even.
+     *
+     * Set to 60 rather than the fitted 85. The cut was chosen on the same data that
+     * scores it, so its edge is inflated by construction — the report says as much — and
+     * 85 leaves only 1.25% of launches, which is too few to re-measure quickly. 60 keeps
+     * the effect well clear of the 12.8pp noise floor while producing enough trades to
+     * test the claim out of sample, which is the only test that counts.
+     */
+    minUniqueBuyers: num('MIN_UNIQUE_BUYERS', 60),
     minBuysPerSell: num('MIN_BUY_SELL_RATIO', 1.4),
+    /**
+     * Late-window buys over early-window buys: is this still accelerating?
+     *
+     * The strongest finding in the first real dataset, and the one with the sample to
+     * back it — `>= 0.51` gives 37.8% [34.1-41.7] against 4.8% for everything below, on
+     * n=619. It survived a permutation null that reaches 12.8pp by chance.
+     *
+     * It is also the check the filter never had: every other test asks how much buying
+     * happened, none asked whether it was still happening.
+     */
+    minBuyAcceleration: num('MIN_BUY_ACCELERATION', 0.5),
     minMarketCapSol: num('MIN_MARKET_CAP_SOL', 25),
-    maxMarketCapSol: num('MAX_MARKET_CAP_SOL', 120),
+    /**
+     * The upper bound was BACKWARDS, and the data caught it.
+     *
+     * It rejected 693 launches of which 25.7% [22.6-29.1] would have reached +50% —
+     * nearly three times the 9.9% base rate. It was the single most harmful check in the
+     * filter: the only one whose rejects beat the market by a wide margin.
+     *
+     * The reason is mechanical. Market cap only started updating during the observation
+     * window once it was derived from trade reserves; before that it was frozen at the
+     * deploy value and the check never fired. Now a launch that RUNS during the window
+     * crosses the ceiling and gets refused — so the rule was rejecting exactly the
+     * momentum it should have been buying.
+     *
+     * Raised to 2000 so it still catches something already fully distributed, while no
+     * longer vetoing a launch for the offence of going up.
+     */
+    maxMarketCapSol: num('MAX_MARKET_CAP_SOL', 2000),
     // Dev's share of supply from their own launch buy.
     maxDevHoldPct: num('MAX_DEV_HOLD_PCT', 12),
     // A dev who sells during the observation window is disqualifying, full stop.

@@ -116,13 +116,23 @@ const createEvt = (over = {}) =>
     vTokensInBondingCurve: 980_000_000, marketCapSol: 40, ...over,
   })
 
-function buildCandidate({ create = {}, buyers = 20, sells = 2, devSells = false, mcap = 44 } = {}) {
+/**
+ * `buyers` defaults above MIN_UNIQUE_BUYERS and the buys are weighted to the back of the
+ * observation window so buyAcceleration clears its bar — the two checks the first real
+ * dataset added. A fixture that cannot pass the live filter tests nothing about it.
+ * Pass `fading: true` for the opposite shape.
+ */
+function buildCandidate({ create = {}, buyers = 70, sells = 2, devSells = false, mcap = 44, fading = false } = {}) {
   const c = new Candidate(createEvt(create))
+  const windowMs = config.entry.observeSeconds * 1000
   for (let i = 0; i < buyers; i++) {
-    c.apply(normalizeEvent({
+    const at = c.createdAt + (fading
+      ? (i / Math.max(1, buyers)) * (windowMs / 4)
+      : windowMs * 0.7 + (i / Math.max(1, buyers)) * (windowMs * 0.25))
+    c.apply({ ...normalizeEvent({
       txType: 'buy', mint: 'MINT', traderPublicKey: `B${i}`, tokenAmount: 1000, solAmount: 0.05,
       vSolInBondingCurve: 40, vTokensInBondingCurve: 900_000_000, marketCapSol: mcap,
-    }))
+    }), at })
   }
   for (let i = 0; i < sells; i++) {
     c.apply(normalizeEvent({
@@ -152,13 +162,29 @@ function buildCandidate({ create = {}, buyers = 20, sells = 2, devSells = false,
   const scamName = evaluateEntry(buildCandidate({ create: { name: 'Free AIRDROP claim' } }))
   check('impersonation keywords are rejected', !scamName.pass && scamName.failed.some((c) => c.id === 'naming'))
 
-  const tooBig = evaluateEntry(buildCandidate({ mcap: 900 }))
-  check('an already-run market cap is rejected', !tooBig.pass && tooBig.failed.some((c) => c.id === 'market_cap'))
+  /**
+   * The ceiling was backwards and the data caught it: it rejected 693 launches of which
+   * 25.7% would have reached +50%, against a 9.9% base rate — it was vetoing launches for
+   * the offence of going up, because market cap only began updating mid-window once it
+   * was derived from trade reserves. Raised 120 -> 2000, so it now only catches something
+   * genuinely distributed out.
+   */
+  check('a launch that ran during the window is no longer rejected for it',
+    evaluateEntry(buildCandidate({ mcap: 900 })).pass,
+    JSON.stringify(evaluateEntry(buildCandidate({ mcap: 900 })).failed?.map((c) => c.id)))
+  const tooBig = evaluateEntry(buildCandidate({ mcap: 5000 }))
+  check('a fully distributed market cap is still rejected', !tooBig.pass && tooBig.failed.some((c) => c.id === 'market_cap'))
+
+  // The check the filter never had: is the buying still happening?
+  const fading = evaluateEntry(buildCandidate({ fading: true }))
+  check('a fading launch is rejected', !fading.pass && fading.failed.some((c) => c.id === 'fading'),
+    JSON.stringify(fading.failed?.map((c) => c.id)))
+  check('an accelerating one is not', evaluateEntry(buildCandidate()).pass)
 
   const tooSmall = evaluateEntry(buildCandidate({ mcap: 5 }))
   check('a market cap nobody has bid up is rejected', !tooSmall.pass && tooSmall.failed.some((c) => c.id === 'market_cap'))
 
-  const c = buildCandidate()
+  const c = buildCandidate({ buyers: 20 })
   check('dev is excluded from the organic buyer count', c.organicBuyers === 20, String(c.organicBuyers))
   check('dev hold percent computed from supply', near(c.devHoldPct, 2), String(c.devHoldPct))
 }
@@ -1453,6 +1479,17 @@ console.log('\nDashboard snapshot')
    * rounds of guessing at what the deployment was running.
    */
   check('effective entry thresholds are published', snap.limits.entry.minUniqueBuyers === config.entry.minUniqueBuyers)
+
+  /**
+   * analyse() is synchronous and the feed shares its event loop — ~2s for 4,000 rows
+   * across 22 features. At a 30-second refresh that is ~7% of all time frozen, dropping
+   * trade events for numbers that move over hours. This is a duty cycle, not a freshness
+   * setting.
+   */
+  check('the report is rebuilt on a duty cycle, not every poll',
+    config.learning.refreshSeconds >= 120, String(config.learning.refreshSeconds))
+  check('and the noise floor trial count is tunable rather than buried',
+    config.learning.nullTrials > 0)
   check('effective shadow capacity is published', snap.limits.learning.maxShadowTracked === config.learning.maxShadowTracked)
   check('effective explore bankroll is published', snap.limits.exploreBankrollSol === config.explore.budgetSol)
   check('scaled loss limits are published', snap.limits.maxDrawdownPct === config.risk.maxDrawdownPct)
@@ -1740,11 +1777,18 @@ console.log('\nPump.fun log events')
     check('market cap tracks the curve during observation', c.marketCapSol > 100, String(c.marketCapSol))
     check('and the peak is recorded', c.peakMarketCapSol >= c.marketCapSol)
 
-    // Which means the band can now actually reject something.
+    /**
+     * The band can now see the run-up — which is the point. It no longer REJECTS for it:
+     * that ceiling turned out to be the most harmful check in the filter, refusing 693
+     * launches of which 25.7% would have reached +50% against a 9.9% base rate. What it
+     * still catches is a cap far beyond anything worth entering.
+     */
     const { evaluateEntry } = await import('../src/filter.js')
-    const mcapCheck = evaluateEntry(c).failed?.find((x) => x.id === 'market_cap')
-    check('a run-up token is now rejected on market cap', Boolean(mcapCheck),
+    const runUp = evaluateEntry(c).failed?.some((x) => x.id === 'market_cap')
+    check('a run-up inside the band is no longer rejected for it', !runUp,
       JSON.stringify(evaluateEntry(c).failed?.map((x) => x.id)))
+    check('but the band is being evaluated against a live figure now',
+      c.marketCapSol > 100 && c.marketCapSol <= config.entry.maxMarketCapSol, String(c.marketCapSol))
   }
   const { createHash } = await import('node:crypto')
   const { PublicKey } = await import('@solana/web3.js')
@@ -2558,25 +2602,37 @@ console.log('\nEnd-to-end bot loop')
   check('launch counted in stats', bot.statsSnapshot().creates === 1)
   check('parsing marked healthy', bot.statsSnapshot().parsing === true)
 
-  for (let i = 0; i < 20; i++) logFeed.emit('trade', mkTrade('buy', `BUYER${i}`))
+  /**
+   * Age the candidate BEFORE the buys land, so they fall in the late third of the
+   * observation window and buyAcceleration clears its bar. Emitting them all at t=0 puts
+   * everything in `earlyBuys`, which now reads as a fading launch and is refused.
+   */
+  bot.candidates.get(MINT).createdAt -= (config.entry.observeSeconds + 5) * 1000
+  const E2E_BUYERS = config.entry.minUniqueBuyers + 10
+  for (let i = 0; i < E2E_BUYERS; i++) logFeed.emit('trade', mkTrade('buy', `BUYER${i}`))
   logFeed.emit('trade', mkTrade('sell', 'SELLER0'))
-  check('trade events counted', bot.statsSnapshot().trades === 21)
-  check('trades are attributed to the watched candidate', bot.statsSnapshot().tradesMatched === 21)
+  check('trade events counted', bot.statsSnapshot().trades === E2E_BUYERS + 1)
+  check('trades are attributed to the watched candidate', bot.statsSnapshot().tradesMatched === E2E_BUYERS + 1)
 
   // A trade for something we are not tracking must not count as matched — that counter
   // is the signal that our subscriptions are actually being served.
   logFeed.emit('trade', normalizeEvent({ txType: 'buy', mint: 'UNRELATED', traderPublicKey: 'Z',
     tokenAmount: 1, solAmount: 0.01, vSolInBondingCurve: 30, vTokensInBondingCurve: 1e9 }))
-  check('unrelated trades are not counted as matched', bot.statsSnapshot().tradesMatched === 21)
-  check('but they do count toward total trades', bot.statsSnapshot().trades === 22)
+  check('unrelated trades are not counted as matched', bot.statsSnapshot().tradesMatched === E2E_BUYERS + 1)
+  check('but they do count toward total trades', bot.statsSnapshot().trades === E2E_BUYERS + 2)
 
-  // Not old enough to screen yet.
+  // A separate, fresh launch covers "not old enough to screen yet" — MINT was aged
+  // before its buys landed so that they count as late-window.
+  const YOUNG = 'YoungMintAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+  feed.emit('create', normalizeEvent({ txType: 'create', mint: YOUNG, traderPublicKey: 'DEV',
+    name: 'Young Dog', symbol: 'YNG', initialBuy: 20_000_000, solAmount: 0.8,
+    vSolInBondingCurve: curve.vSol, vTokensInBondingCurve: curve.vTokens, marketCapSol: 44 }))
   await bot.tick()
-  check('does not enter before the observation window', !store.getState().positions[MINT])
-  check('candidate is still being observed', bot.candidates.has(MINT))
+  check('does not enter before the observation window', !store.getState().positions[YOUNG])
+  check('candidate is still being observed', bot.candidates.has(YOUNG))
+  bot.candidates.delete(YOUNG)
 
-  // Age the candidate past OBSERVE_SECONDS.
-  bot.candidates.get(MINT).createdAt -= (config.entry.observeSeconds + 5) * 1000
+  // Already aged past OBSERVE_SECONDS above, so this screens on the next tick.
   await bot.tick()
 
   const pos = store.getState().positions[MINT]
@@ -2672,7 +2728,7 @@ console.log('\nEnd-to-end bot loop')
 
   // Stats survive into the dashboard payload.
   const snap = buildSnapshot(0.5, bot.statsSnapshot())
-  check('pipeline stats reach the dashboard', snap.pipeline?.creates === 1 && snap.pipeline.entered === 1)
+  check('pipeline stats reach the dashboard', snap.pipeline?.creates >= 1 && snap.pipeline.entered === 1, JSON.stringify({creates: snap.pipeline?.creates, entered: snap.pipeline?.entered}))
   check('dashboard payload still serialises', typeof JSON.stringify(snap) === 'string')
 
   /**
@@ -2708,7 +2764,11 @@ console.log('\nEnd-to-end bot loop')
 
     check('it still screens them', bot.statsSnapshot().screened > 0)
     check('it still journals the outcome for learning', bot.shadow.has(HALTMINT))
-    check('but takes no STRATEGY position', !store.getState().positions[HALTMINT])
+    // Explore now runs through a halt, so this mint may legitimately be held as an
+    // EXPERIMENT. What must never appear is a strategy position.
+    const heldWhileHalted = store.getState().positions[HALTMINT]
+    check('but takes no STRATEGY position', !heldWhileHalted || heldWhileHalted.explore === true,
+      JSON.stringify({ explore: heldWhileHalted?.explore }))
 
     /**
      * Explore keeps running through a halt. The halt protects capital; explore risks
@@ -2772,12 +2832,13 @@ console.log('\nEnd-to-end bot loop')
       name: 'Blocked Dog', symbol: 'BLKD', initialBuy: 20_000_000, solAmount: 0.8,
       vSolInBondingCurve: curve.vSol, vTokensInBondingCurve: curve.vTokens, marketCapSol: 44 })
     feed.emit('create', mkC())
-    for (let i = 0; i < 20; i++) {
+    // Age first so the buys land late in the window and the launch actually passes.
+    bot.candidates.get(BLOCKED).createdAt -= (config.entry.observeSeconds + 5) * 1000
+    for (let i = 0; i < config.entry.minUniqueBuyers + 10; i++) {
       logFeed.emit('trade', normalizeEvent({ txType: 'buy', mint: BLOCKED, traderPublicKey: `QB${i}`,
         tokenAmount: 1000, solAmount: 0.05, vSolInBondingCurve: curve.vSol,
         vTokensInBondingCurve: curve.vTokens, marketCapSol: 44 }))
     }
-    bot.candidates.get(BLOCKED).createdAt -= (config.entry.observeSeconds + 5) * 1000
     await bot.tick()
 
     check('the capital gate refused the entry', !store.getState().positions[BLOCKED])

@@ -193,6 +193,19 @@ export function evaluateEntry(candidate) {
     ),
   )
 
+  /**
+   * Is the buying still accelerating? The strongest signal in the first real dataset:
+   * 37.8% [34.1-41.7] above this line against 4.8% below it, on n=619.
+   */
+  const accel = candidate.buyAcceleration
+  checks.push(
+    check(
+      'fading',
+      accel >= e.minBuyAcceleration,
+      `late/early buys ${Number.isFinite(accel) ? accel.toFixed(2) : 'n/a'} (want ≥ ${e.minBuyAcceleration})`,
+    ),
+  )
+
   const mc = candidate.marketCapSol
   checks.push(
     check(

@@ -69,7 +69,15 @@ let learningComputing = false
  */
 function learningSnapshot() {
   if (!config.learning.enabled) return null
-  if (Date.now() - learningCache.at > 30_000 && !learningComputing) {
+  /**
+   * Refreshed every few minutes, not every 30 seconds.
+   *
+   * Moving analyse() off the request path stopped it blocking the DASHBOARD, but it still
+   * blocks the event loop while it runs — measured at ~2s for 4,000 rows across 22
+   * features — and the feed shares that loop. At a 30-second interval that is ~7% of all
+   * time spent frozen, dropping trade events for a report whose numbers move over hours.
+   */
+  if (Date.now() - learningCache.at > config.learning.refreshSeconds * 1000 && !learningComputing) {
     learningComputing = true
     setTimeout(() => {
       try {

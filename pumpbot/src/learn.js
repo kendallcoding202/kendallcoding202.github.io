@@ -423,7 +423,7 @@ export function bestThreshold(rows, feature, { minBucket = config.learning.minBu
  * resulting distribution is what "nothing is there" actually looks like for THIS
  * dataset, rather than an analytic approximation that assumes independent tests.
  */
-export function permutationNull(rows, { trials = 60, seed = 1 } = {}) {
+export function permutationNull(rows, { trials = config.learning.nullTrials, seed = 1 } = {}) {
   const features = numericFeatures(rows)
   const labels = rows.map((r) => r.hitFirstRung)
   // Deterministic PRNG: a report that changes its conclusions when re-run is not a
