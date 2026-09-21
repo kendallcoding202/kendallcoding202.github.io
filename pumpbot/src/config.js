@@ -229,13 +229,32 @@ export const config = {
     // Minimum samples in a single bucket before that bucket's rate is reported.
     minBucketSamples: num('MIN_BUCKET_SAMPLES', 30),
     /**
-     * Most recent rows the analysis walks. The journal is append-only and grows by
-     * thousands of rows an hour, so an uncapped analysis gets slower forever — measured
-     * at 22s for 50,000 rows, synchronous, which freezes the dashboard and the trade
-     * feed together. Capping also keeps the report describing the market as it is now
-     * rather than averaging in a week of different conditions.
+     * Most recent rows the analysis walks.
+     *
+     * This was 4,000, set when bestThreshold() was O(n^2) and 50,000 rows took 22
+     * synchronous seconds. That scan is O(n log n) now, and at 141,000 real rows the cap
+     * turned out to buy NOTHING — measured, min of 9 runs on a journal of that size:
+     *
+     *   readAll() alone   574 ms      analyze() @ 20,000    619 ms
+     *   analyze() @ 4,000 646 ms      analyze() @ 141,090   575 ms
+     *
+     * Flat, because the entire cost is readAll() parsing the whole file, which happens
+     * whatever the cap is. So the cap was discarding 97% of the evidence to save nothing,
+     * and the banner's "4,000 usable rows" was reporting this ceiling as if it were a
+     * measurement.
+     *
+     * It stays a number rather than becoming unbounded, but be clear about what that
+     * does and does not buy: readAll() parses the WHOLE file and analyze() slices
+     * afterwards, so the cap has never bounded memory at all. Measured on a 73 MB
+     * journal: 152 MB of heap held by the parsed rows, 351 MB RSS — at 4,000 and at
+     * 141,090 alike, because the parse happens either way.
+     *
+     * So the real ceiling on this bot is the journal's SIZE, and it is a memory ceiling
+     * rather than the disk one it looks like: the file will OOM a small container long
+     * before it fills a 5 GB volume. Fixing that means streaming the file instead of
+     * materialising it — not raising or lowering this number.
      */
-    maxRowsAnalyzed: num('MAX_ROWS_ANALYZED', 4000),
+    maxRowsAnalyzed: num('MAX_ROWS_ANALYZED', 200_000),
     /**
      * How often the dashboard's cached report is rebuilt. analyse() is synchronous and
      * the feed shares its event loop, so this is a duty cycle, not a freshness setting:

@@ -370,6 +370,9 @@ export function buildSnapshot(walletSol, stats = null) {
         minCreatorLaunches: config.entry.minCreatorLaunches,
       },
       learning: {
+        // Published so "did raising the cap take effect?" is answered by looking rather
+        // than by inferring it from whether the row count moved.
+        maxRowsAnalyzed: config.learning.maxRowsAnalyzed,
         maxShadowTracked: config.learning.maxShadowTracked,
         outcomeWindowMinutes: config.learning.outcomeWindowMinutes,
         minSamplesForSuggestion: config.learning.minSamplesForSuggestion,

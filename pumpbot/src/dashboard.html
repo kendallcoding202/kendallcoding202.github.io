@@ -723,7 +723,8 @@ function render(d) {
         ? '<code>on</code> <span class="dim">(blocks a deployer whose record is beaten by the ' +
           'market even at its most generous reading, after ' + L.entry.minCreatorLaunches + '+ launches)</span>'
         : '<code>off</code>') + '<br>' +
-    'Learning — shadow slots <code>' + L.learning.maxShadowTracked + '</code> · window <code>' +
+    'Learning — analysing up to <code>' + num(L.learning.maxRowsAnalyzed) + '</code> rows · shadow slots <code>' +
+      L.learning.maxShadowTracked + '</code> · window <code>' +
       L.learning.outcomeWindowMinutes + 'm</code> · suggestions at <code>' +
       L.learning.minSamplesForSuggestion + '</code> samples · explore bankroll <code>' +
       fmtSol(L.exploreBankrollSol, 2) + '</code><br>' +
