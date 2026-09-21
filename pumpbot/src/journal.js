@@ -117,6 +117,11 @@ export function readAll() {
 export class CreatorIndex {
   constructor() {
     this.byCreator = new Map() // creator -> { launches, hits }
+    // Invalidated by note(), so summary() rescans only when the data actually moved.
+    // The dashboard polls every few seconds and finalize fires a few times a minute;
+    // without this the page would walk the whole map on every poll for a number that
+    // cannot have changed.
+    this.summaryCache = null
   }
 
   /** Rebuild from history at startup, oldest first, so restarts do not lose the prior. */
@@ -134,6 +139,40 @@ export class CreatorIndex {
     e.launches++
     if (row.hitFirstRung) e.hits++
     this.byCreator.set(row.creator, e)
+    this.summaryCache = null
+  }
+
+  /**
+   * What this index can currently DO, as opposed to how big it is.
+   *
+   * `launches` says how much history survived the last restart; `eligible` says how many
+   * deployers have enough of a record to be judged at all; `blocked` says how many the
+   * rule would actually refuse right now. All three matter because they fail separately:
+   * a wiped journal gives launches 0, a young journal gives eligible 0, and a filter
+   * that is simply not finding bad deployers gives blocked 0. Those are three very
+   * different situations that all look identical from "the prior is enabled".
+   */
+  summary({ minLaunches = 20 } = {}) {
+    if (this.summaryCache?.minLaunches === minLaunches) return this.summaryCache
+    const base = this.baseRate()
+    let launches = 0
+    let eligible = 0
+    let blocked = 0
+    for (const [creator, e] of this.byCreator) {
+      launches += e.launches
+      if (e.launches < minLaunches) continue
+      eligible++
+      if (this.verdict(creator, { minLaunches }).worseThanMarket) blocked++
+    }
+    this.summaryCache = {
+      minLaunches,
+      creators: this.byCreator.size,
+      launches,
+      eligible,
+      blocked,
+      baseRate: base,
+    }
+    return this.summaryCache
   }
 
   priorFor(creator) {

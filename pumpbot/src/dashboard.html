@@ -388,10 +388,13 @@ function render(d) {
         : '<b>' + Math.max(0, c.needed - c.usableRows) + '</b> more before the filter verdict unlocks'
       col.innerHTML = '● COLLECTING · <b>' + c.usableRows + '</b> usable rows' + rate +
         ' · watching <b>' + c.tracking + '</b> tokens' +
-        '<span class="why">' + togo + ' · ' + c.rowsOnDisk + ' rows on disk in total</span>'
+        '<span class="why">' + togo + ' · ' + c.rowsOnDisk + ' rows on disk in total' +
+        (c.storage ? '<br>' + storageLine(c.storage) : '') +
+        (c.creatorPrior ? '<br>' + priorLine(c.creatorPrior) : '') + '</span>'
     } else {
       col.innerHTML = '▲ NOT COLLECTING' +
-        '<span class="why">' + c.reasons.map(esc).join('<br>') + '</span>'
+        '<span class="why">' + c.reasons.map(esc).join('<br>') +
+        (c.storage ? '<br>' + storageLine(c.storage) : '') + '</span>'
     }
   } else col.hidden = true
 
@@ -726,7 +729,8 @@ function render(d) {
       fmtSol(L.exploreBankrollSol, 2) + '</code><br>' +
     '<span class="dim">These are the values this process actually resolved — a Railway ' +
       'variable of the same name overrides the default in code.</span>' +
-    (d.storage ? '<br>' + storageLine(d.storage) : '') +
+    // Storage moved up into the collection banner — it answers "is the evidence safe?",
+    // which belongs beside "are we collecting?", not below the loss limits.
     (d.telegram ? '<br>' + telegramLine(d.telegram) : '')
 }
 
@@ -753,6 +757,27 @@ function storageLine(s) {
       ' · <span style="color:var(--amber)">no checkpoint yet</span>') +
     (ok ? '' : '<br><span style="color:var(--amber)">If this path is not a mounted volume, ' +
       'every restart starts from nothing.</span>')
+}
+
+/**
+ * Whether the deployer prior can act, which is not the same as whether it is enabled.
+ *
+ * Three separate ways for it to do nothing, and they need distinguishing: no index at
+ * all, an index too young for anyone to have a judgeable record, or an index that simply
+ * has not met a bad deployer yet. All three used to read as "deployer record: on".
+ */
+function priorLine(p) {
+  if (!p.enabled) return 'Deployer prior <span style="color:var(--dimmer)">off</span>'
+  if (!p.indexed) return 'Deployer prior <span style="color:var(--amber)">no index</span> — learning is off, so nothing is judged'
+  if (!p.launches) {
+    return 'Deployer prior <span style="color:var(--amber)">idle</span> — index empty, so every deployer passes'
+  }
+  const base = p.baseRate === null ? 'n/a' : (p.baseRate * 100).toFixed(1) + '%'
+  return 'Deployer prior · <code>' + num(p.launches) + '</code> past launches over <code>' +
+    num(p.creators) + '</code> deployers · <code>' + p.eligible + '</code> with ' + p.minLaunches +
+    '+ launches · <b>' + p.blocked + '</b> blocked · refused <b>' + (p.refused || 0) + '</b> this run' +
+    '<br><span style="color:var(--dimmer)">market base rate ' + base +
+    (p.eligible === 0 ? ' · no deployer has a long enough record yet, so none can be blocked' : '') + '</span>'
 }
 
 /**

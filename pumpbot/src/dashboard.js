@@ -189,6 +189,17 @@ function collectionStatus(stats, storage, learning) {
     usablePerHour: perHour,
     // Enough to say anything at all about the filter.
     needed: config.learning.minSamplesForSuggestion,
+    /**
+     * Storage belongs HERE, not in the limits panel where it used to sit.
+     *
+     * Whether DATA_DIR is a mounted volume decides whether months of evidence survive
+     * the next redeploy, which makes it the single most consequential fact on the page —
+     * and it was the second-to-last line of the longest card, below the loss limits.
+     * "Are we collecting?" and "will what we collect still be here tomorrow?" are the
+     * same question, so they belong in the same banner.
+     */
+    storage,
+    creatorPrior: stats?.creatorPrior ?? null,
   }
 }
 

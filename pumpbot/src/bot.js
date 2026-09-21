@@ -121,6 +121,7 @@ export class Bot {
       explored: s.explored,
       watching: this.candidates.size,
       shadowTracked: this.shadow?.size ?? 0,
+      creatorPrior: this.#creatorPriorStats(),
       explore: {
         enabled: config.explore.enabled,
         sampleRate: config.explore.sampleRate,
@@ -186,6 +187,23 @@ export class Bot {
    * behaves exactly as it did before the prior existed rather than silently blocking
    * every deployer it cannot look up.
    */
+  /**
+   * Whether the deployer prior is capable of doing anything, reported rather than
+   * assumed. `refused` is the count of entries it has actually blocked this run — the
+   * difference between a rule that is switched on and a rule that is working.
+   */
+  #creatorPriorStats() {
+    if (!config.entry.creatorHistory) return { enabled: false }
+    const idx = this.shadow?.creatorIndex
+    if (!idx) return { enabled: true, indexed: false }
+    return {
+      enabled: true,
+      indexed: true,
+      ...idx.summary({ minLaunches: config.entry.minCreatorLaunches }),
+      refused: this.stats.rejects.get('creator_history') ?? 0,
+    }
+  }
+
   #creatorPrior(creator) {
     return (
       this.shadow?.creatorIndex?.verdict(creator, {

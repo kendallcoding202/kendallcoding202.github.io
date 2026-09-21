@@ -235,6 +235,38 @@ console.log('\nCreator prior')
   const unseen = idx.verdict('NOBODY_HAS_SEEN_THIS_ONE')
   check('an unknown deployer is not blocked', !unseen.known && !unseen.worseThanMarket)
   check('a missing creator address is not blocked', !idx.verdict(null).worseThanMarket)
+
+  /**
+   * The banner reports these, so a wrong count is a page that lies confidently about
+   * whether the rule can do anything. `eligible` and `blocked` are deliberately separate:
+   * an index too young for anyone to be judged and an index that has met no bad deployer
+   * both give blocked 0, and they are not the same situation.
+   */
+  const sum = idx.summary({ minLaunches: 20 })
+  check('summary counts every deployer', sum.creators === 5, String(sum.creators))
+  check('summary counts every labelled launch', sum.launches === 673, String(sum.launches))
+  check('summary counts who has a judgeable record',
+    sum.eligible === 4, String(sum.eligible)) // all but SHORTDEV's 5
+  check('summary counts who the rule would actually refuse',
+    sum.blocked === 1, String(sum.blocked)) // BADDEV alone
+  check('summary carries the yardstick it judged against', near(sum.baseRate, 89 / 673, 1e-9))
+
+  // Memoized on a hot path — a stale count is worse than a slow one.
+  const cached = idx.summary({ minLaunches: 20 })
+  check('summary is memoized between calls', cached === sum)
+  // Only MARKET's 400 launches clear a 200 bar, so the count must drop 4 -> 1 rather
+  // than being served from the cache keyed at 20.
+  check('a different threshold is not served from that cache',
+    idx.summary({ minLaunches: 200 }).eligible === 1,
+    String(idx.summary({ minLaunches: 200 }).eligible))
+  idx.summary({ minLaunches: 20 })
+  for (let i = 0; i < 40; i++) idx.note({ creator: 'LATECOMER', hitFirstRung: false })
+  check('and recording an outcome invalidates it',
+    idx.summary({ minLaunches: 20 }).creators === 6,
+    String(idx.summary({ minLaunches: 20 }).creators))
+
+  check('an empty index reports nothing to act on',
+    new CreatorIndex().summary().launches === 0 && new CreatorIndex().summary().blocked === 0)
   check('an empty index has no opinion about anyone',
     new CreatorIndex().baseRate() === null && !new CreatorIndex().verdict('X').worseThanMarket)
 
@@ -2807,6 +2839,25 @@ console.log('\nEnd-to-end bot loop')
   const snap = buildSnapshot(0.5, bot.statsSnapshot())
   check('pipeline stats reach the dashboard', snap.pipeline?.creates >= 1 && snap.pipeline.entered === 1, JSON.stringify({creates: snap.pipeline?.creates, entered: snap.pipeline?.entered}))
   check('dashboard payload still serialises', typeof JSON.stringify(snap) === 'string')
+
+  /**
+   * Storage and the deployer prior now ride in the collection banner. They used to be
+   * the second-to-last line of the longest card on the page, which is where you put
+   * something you do not want anyone to read — and storage decides whether a redeploy
+   * costs you months of evidence.
+   */
+  check('the banner carries where data is being written',
+    typeof snap.collection?.storage?.dataDir === 'string' &&
+    typeof snap.collection.storage.writable === 'boolean',
+    JSON.stringify(snap.collection?.storage))
+  check('the banner carries whether the deployer prior can act',
+    snap.collection?.creatorPrior?.enabled === true &&
+    typeof snap.collection.creatorPrior.blocked === 'number' &&
+    typeof snap.collection.creatorPrior.refused === 'number',
+    JSON.stringify(snap.collection?.creatorPrior))
+  check('and it reports the index it is judging from, not just that it is on',
+    typeof snap.collection.creatorPrior.launches === 'number' &&
+    typeof snap.collection.creatorPrior.eligible === 'number')
 
   /**
    * A HALT STOPS TRADING, NOT LEARNING.
