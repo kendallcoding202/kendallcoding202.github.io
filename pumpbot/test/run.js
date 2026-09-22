@@ -858,6 +858,137 @@ console.log('\nRisk gates')
   store.clearHalt()
 }
 
+// ------------------------------- moving the journal without moving the secrets
+console.log('\nJournal export')
+{
+  const journal = await import('../src/journal.js')
+  const { buildExport, buildExportGzip } = await import('../src/export.js')
+  const zlib = await import('node:zlib')
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pumpbot-export-'))
+  const origDataDir = config.dataDir
+  config.dataDir = dir
+
+  /**
+   * A row carrying EVERYTHING we would never want to hand out, alongside the things we
+   * do: addresses, a signature, a wallet list, and — the case that matters most — a
+   * field nobody has thought of yet, standing in for whatever gets added to the journal
+   * next. A denylist cannot catch that one by construction.
+   */
+  const SECRET = 'THIS_MUST_NEVER_LEAVE_THE_BOX'
+  const CREATOR_A = 'CreatorAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+  const CREATOR_B = 'CreatorBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'
+  const mkRow = (action, creator, over = {}) => ({
+    v: JOURNAL_VERSION, action, creator,
+    mint: 'MintAddress1111111111111111111111111111111',
+    symbol: 'TEST', name: 'Test Coin',
+    signature: 'sig' + SECRET,
+    buyers: ['Wallet1111111111111111111111111111111111111'],
+    privateKeyBackup: SECRET, // the field nobody thought of
+    hitFirstRung: false, peakMultiple: 1.4, endMultiple: 0.9, troughMultiple: 0.8,
+    peakAtSeconds: 60, troughAtSeconds: 200, decisionPriceSol: 1e-7,
+    features: { organicBuyers: 42, buyAcceleration: 1.2, devSold: true, creatorSecret: SECRET },
+    ...over,
+  })
+
+  for (let i = 0; i < 5; i++) journal.append(mkRow('bought', CREATOR_A))
+  for (let i = 0; i < 5; i++) journal.append(mkRow('explored', CREATOR_B))
+  for (let i = 0; i < 300; i++) journal.append(mkRow('rejected', CREATOR_A))
+  // Never labelled: no outcome, so it can answer nothing and must not pad the file.
+  journal.append(mkRow('bought', CREATOR_A, { peakMultiple: undefined }))
+
+  const { csv, stats } = buildExport({ maxRejected: 50, salt: 'fixed-salt' })
+
+  check('acted-on rows are kept in full — they are the scarce ones',
+    stats.bought === 5 && stats.explored === 5, JSON.stringify(stats))
+
+  /**
+   * Bought rows are never sampled at any cap. There are hundreds of them against six
+   * figures of everything else, and they are the only rows carrying a real entry
+   * decision — thinning them costs power exactly where the dataset is thinnest.
+   */
+  const squeezed = buildExport({ maxRejected: 5, maxExplored: 2, salt: 'fixed-salt' })
+  check('and a tighter cap still never thins the bought rows',
+    squeezed.stats.rows === 5 + 2 + 5 && squeezed.stats.exploredSampled === 2,
+    JSON.stringify(squeezed.stats))
+  check('and the bulk of rejected rows is sampled down',
+    stats.rejectedSampled === 50 && stats.rejected === 300, JSON.stringify(stats))
+  check('an unlabelled row is left out rather than exported with no outcome',
+    stats.rows === 5 + 5 + 50, `${stats.rows}`)
+
+  /**
+   * THE SAFETY PROPERTY. Not "we removed the fields we thought of" — the export is an
+   * ALLOWLIST, so this asserts the general case: nothing secret, no address, and no
+   * unexpected field survives, including one invented after the allowlist was written.
+   */
+  check('no secret reaches the export', !csv.includes(SECRET), csv.slice(0, 400))
+  check('no raw address reaches it either',
+    !csv.includes(CREATOR_A) && !csv.includes(CREATOR_B) && !csv.includes('MintAddress'),
+    csv.slice(0, 400))
+  check('nor does a signature or a wallet list',
+    !/sig|Wallet1111/.test(csv), csv.slice(0, 400))
+  /**
+   * A base58-shaped run of 32+ characters is what every address and key in this system
+   * looks like. Catching the SHAPE means a future field does not need to be predicted.
+   */
+  check('and nothing address-shaped survives at all',
+    !/[1-9A-HJ-NP-Za-km-z]{32,}/.test(csv), (csv.match(/[1-9A-HJ-NP-Za-km-z]{32,}/) ?? [''])[0])
+
+  const header = csv.split('\n')[0].split(',')
+  check('the feature nobody allowlisted is dropped by type, not by name',
+    !header.includes('f_creatorSecret') && header.includes('f_organicBuyers'), header.join(','))
+  check('a boolean feature still survives as a number',
+    header.includes('f_devSold'), header.join(','))
+
+  /**
+   * Grouping by deployer has to survive or the deployer work cannot be done off-box —
+   * but the id must not be the address, and must not be stable ACROSS exports, or two
+   * files could be joined to undo it.
+   */
+  const rows = csv.trim().split('\n').slice(1).map((l) => l.split(','))
+  const ids = new Set(rows.map((r) => r[0]))
+  check('rows can still be grouped by deployer', ids.size === 2, JSON.stringify([...ids]))
+  const other = buildExport({ maxRejected: 50, salt: 'a-different-salt' })
+  const otherIds = new Set(other.csv.trim().split('\n').slice(1).map((l) => l.split(',')[0]))
+  check('but the deployer id does not survive across exports, so two cannot be joined',
+    [...ids].every((id) => !otherIds.has(id)), JSON.stringify([[...ids], [...otherIds]]))
+
+  const { gz, stats: gzStats } = buildExportGzip({ maxRejected: 50, salt: 'fixed-salt' })
+  check('the gzip round-trips to the same CSV',
+    zlib.gunzipSync(gz).toString('utf8') === csv)
+  check('and numeric CSV compresses enough to actually send',
+    gzStats.bytes < gzStats.rawBytes / 3, `${gzStats.bytes} vs ${gzStats.rawBytes}`)
+
+  /**
+   * The walk is SECONDS of synchronous work, and the trading loop is on the other side
+   * of it — the same shape as the bug that had analyze() freezing the event loop and
+   * force-closing positions on stale prices. It runs on a worker for that reason, so
+   * the worker path is what the dashboard route actually uses and what has to be tested.
+   */
+  const { buildExportInWorker } = await import('../src/export.js')
+  const viaWorker = await buildExportInWorker({ maxRejected: 50, salt: 'fixed-salt' })
+  check('the worker produces byte-identical output to the direct call',
+    Buffer.compare(viaWorker.gz, gz) === 0)
+  check('and reports the same stats', viaWorker.stats.rows === gzStats.rows)
+
+  /**
+   * A reloaded download page must not be able to queue up journal walks. The analysis
+   * path had exactly this bug — a failure left the cache stale and every poll built a
+   * fresh Worker — so a second caller joins the first rather than starting another.
+   */
+  const a = buildExportInWorker({ maxRejected: 50, salt: 'fixed-salt' })
+  const b = buildExportInWorker({ maxRejected: 50, salt: 'fixed-salt' })
+  check('concurrent exports share one worker rather than spawning a queue', a === b)
+  await Promise.all([a, b])
+  const afterSettle = buildExportInWorker({ maxRejected: 50, salt: 'fixed-salt' })
+  check('but the guard clears once it settles, so exports are not one-shot',
+    afterSettle !== a)
+  await afterSettle
+
+  config.dataDir = origDataDir
+  fs.rmSync(dir, { recursive: true, force: true })
+}
+
 // ------------------------------- did the filter pick the top of the spike?
 console.log('\nTop-of-spike detection')
 {

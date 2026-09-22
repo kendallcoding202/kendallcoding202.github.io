@@ -18,6 +18,7 @@ import { positionPnl } from './position.js'
 import { sizingSummary } from './sizing.js'
 import { consecutiveLossLimit } from './risk.js'
 import { refreshIfStale, snapshot as analysisSnapshot, analysisHealth } from './analysis.js'
+import { buildExportInWorker } from './export.js'
 import { deliveryStats } from './notify.js'
 import { log } from './log.js'
 
@@ -505,6 +506,39 @@ export function startDashboard(getContext) {
         'cache-control': 'no-store',
       })
       res.end(body)
+      return
+    }
+
+    /**
+     * The journal, compact and stripped, as a download.
+     *
+     * Sits behind the same token as everything else here — but note what it does and
+     * does not contain: no addresses beyond a salted deployer hash, no wallet lists, no
+     * signatures, and an ALLOWLIST of columns so a field added to the journal later
+     * cannot start riding along in a file that gets shared. See src/export.js.
+     */
+    if (url.pathname === '/api/export') {
+      try {
+        const cap = (name, dflt) =>
+          Math.min(200_000, Math.max(500, Number(url.searchParams.get(name)) || dflt))
+        const { gz, stats } = await buildExportInWorker({
+          maxRejected: cap('maxRejected', 20_000),
+          maxExplored: cap('maxExplored', 20_000),
+        })
+        const stamp = new Date().toISOString().slice(0, 10)
+        res.writeHead(200, {
+          'content-type': 'application/gzip',
+          'content-disposition': `attachment; filename="pumpbot-journal-${stamp}.csv.gz"`,
+          'content-length': gz.length,
+          'x-export-rows': String(stats.rows),
+          'x-export-columns': String(stats.columns),
+          'cache-control': 'no-store',
+        })
+        res.end(gz)
+      } catch (err) {
+        res.writeHead(500, { 'content-type': 'text/plain' })
+        res.end(`export failed: ${err.message}`)
+      }
       return
     }
 

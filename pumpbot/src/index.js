@@ -11,6 +11,7 @@ import { analyze, formatReport } from './learn.js'
 import { readBondingCurve } from './onchain.js'
 import { heldByAnother } from './lock.js'
 import { readRecent } from './journal.js'
+import { buildExportGzip } from './export.js'
 import { normalizeEvent } from './curve.js'
 import { positionPnl } from './position.js'
 import { notify } from './notify.js'
@@ -23,6 +24,7 @@ const commands = {
   positions,
   panic,
   learn,
+  export: doExport,
   record,
   replay,
   adopt,
@@ -349,6 +351,31 @@ function learn() {
     return
   }
   console.log(formatReport(analyze(rows, total)))
+}
+
+/**
+ * Writes the journal out as a compact, stripped CSV so the analysis can happen somewhere
+ * other than the box holding the data.
+ *
+ * What it does NOT contain is the point: no mint or wallet addresses, no signatures, no
+ * keys, and an allowlist of columns so a field added to the journal later cannot start
+ * appearing in a file that gets shared. The deployer survives only as a salted hash, so
+ * rows can still be grouped by who launched them without naming anybody.
+ */
+function doExport() {
+  const out = process.argv[3] || path.join(config.dataDir, `pumpbot-journal-${new Date().toISOString().slice(0, 10)}.csv.gz`)
+  const { gz, stats } = buildExportGzip()
+  if (!stats.rows) {
+    console.log('\n  Journal has no labelled rows yet — nothing to export.\n')
+    return
+  }
+  fs.writeFileSync(out, gz)
+  console.log(`\n  Wrote ${out}`)
+  console.log(`  ${stats.rows} rows x ${stats.columns} columns · ${(stats.bytes / 1e6).toFixed(2)} MB gzipped ` +
+    `(${(stats.rawBytes / 1e6).toFixed(1)} MB raw)`)
+  console.log(`  scanned ${stats.scanned} · bought ${stats.bought} (all kept) · ` +
+    `explored ${stats.explored} -> ${stats.exploredSampled} · rejected ${stats.rejected} -> ${stats.rejectedSampled}`)
+  console.log('  No addresses, keys or signatures — the deployer is a salted hash.\n')
 }
 
 /**
