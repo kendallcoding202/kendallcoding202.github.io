@@ -365,6 +365,35 @@ export function exitSweep(rows, { minSamples = config.learning.minSamplesForSugg
     }
   }
   /**
+   * WOULD A SECOND RUNG BEAT RIDING THE TRAIL DOWN? The sweep could not ask, because
+   * every axis above keeps the ladder's LENGTH fixed and only moves the first rung.
+   *
+   * That was a fair restriction while the first rung sold everything: with no bag left
+   * there was nothing for a second rung to sell, and holding rung count constant is what
+   * keeps the "a touched rung is assumed filled" optimism from favouring longer ladders
+   * for the wrong reason. Selling 40% changed the question. The trailing stop went from
+   * governing nothing to governing 60% of every winner, and at a 50% giveback a coin
+   * that triples hands back the larger part of its run before we are out.
+   *
+   * So this asks the obvious thing: bank some of the middle instead. Each variant adds
+   * exactly ONE rung, all are compared against the same incumbent, and the extra
+   * transaction is charged — the cost model counts a sell per rung, which is the whole
+   * reason a second rung is not free.
+   */
+  for (const atPct of [100, 150, 200, 300]) {
+    if (atPct > firstAt) {
+      variants.push({
+        axis: 'second rung',
+        label: `+${atPct}% → sell ${Math.min(100 - firstSell, 30)}%`,
+        plan: {
+          ...base,
+          ladder: [...base.ladder, { atPct, sellPct: Math.min(100 - firstSell, 30) }]
+            .sort((a, b) => a.atPct - b.atPct),
+        },
+      })
+    }
+  }
+  /**
    * SHOULD WE HOLD LONGER? The exit sweep could not ask until rows carried a price path
    * — every recorded exit price was pinned to the 600s the time stop happens to be, so
    * there was nothing to price a different boundary against.

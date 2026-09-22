@@ -2165,6 +2165,40 @@ console.log('\nLearning')
     hitFirstRung: false, peakMultiple: 1.4, troughMultiple: 0.88, endMultiple: 0.9,
     hasOrdering: true, troughFirst: false,
   }))
+  /**
+   * A population shaped like the live trades that prompted this: coins that TRIPLE and
+   * then round-trip, exiting on "gave back 50% from peak" with a third of the run kept.
+   *
+   * The sweep could not previously ask whether banking some of the middle beats riding
+   * the trail down, because every axis held the ladder's LENGTH fixed. That was right
+   * while the first rung sold everything — there was no bag for a second rung to sell —
+   * and wrong the moment it sold 40%.
+   */
+  const trippedThenDied = Array.from({ length: 400 }, () => ({
+    v: JOURNAL_VERSION, action: 'bought', decisionPriceSol: 1, features: { organicBuyers: 70 },
+    hitFirstRung: true, peakMultiple: 3, troughMultiple: 0.4, endMultiple: 0.4,
+    hasOrdering: true, troughFirst: false,
+  }))
+  const peakSweep = exitSweep(trippedThenDied, { minSamples: 10 })
+  const second = peakSweep.results.filter((r) => r.axis === 'second rung')
+  check('the sweep can price a SECOND rung, not just move the first', second.length > 0,
+    String(peakSweep.comparisons))
+  check('and finds one on coins that triple and hand it back',
+    second.some((r) => r.better), JSON.stringify(second.map((r) => [r.label, r.deltaMean.toFixed(3)])))
+  /**
+   * Every second-rung variant must sit ABOVE the first and must not sell more of the bag
+   * than exists — a ladder selling over 100% is rejected outright by parseLadder, so a
+   * proposal the config could not accept is not a proposal.
+   */
+  const firstAt = config.exit.ladder[0].atPct
+  const firstSell = config.exit.ladder[0].sellPct
+  check('a proposed second rung is one the config would actually accept',
+    second.every((r) => {
+      const at = Number(r.label.match(/\+(\d+)%/)[1])
+      const sell = Number(r.label.match(/sell (\d+)%/)[1])
+      return at > firstAt && firstSell + sell <= 100
+    }), JSON.stringify(second.map((r) => r.label)))
+
   const earlySweep = exitSweep(spikeAndDie, { minSamples: 10 })
   check('the sweep evaluates the current plan', earlySweep.n === 400)
   check('it tries alternatives on every axis', earlySweep.comparisons >= 14, String(earlySweep.comparisons))
