@@ -204,6 +204,29 @@ function buildCandidate({ create = {}, buyers = 70, sells = 2, devSells = false,
     JSON.stringify(thin.failed?.map((c) => c.id)))
 
   /**
+   * THE LAUNCH CURVE, kept because it identifies what KIND of token this is.
+   *
+   * PUMP_TOTAL_SUPPLY is hardcoded at one billion and feeds devHoldPct, market cap and
+   * price. A token deployed under an alternate mode with a different supply makes all
+   * three wrong — and understating market cap by half would place it in precisely the
+   * low-cap band the journal calls profitable. So the launch reserves are recorded,
+   * because a row cannot be back-filled and the question cannot be asked later.
+   */
+  const launched = buildCandidate()
+  check('the launch reserves are captured', launched.launchVTokens === 980_000_000,
+    String(launched.launchVTokens))
+  // Trades move vTokens; the LAUNCH value must not move with them.
+  launched.apply(normalizeEvent({
+    txType: 'buy', mint: 'MINT', traderPublicKey: 'LATE', tokenAmount: 1000, solAmount: 0.05,
+    vSolInBondingCurve: 55, vTokensInBondingCurve: 700_000_000, marketCapSol: 60,
+  }))
+  check('and they do not drift as the curve moves',
+    launched.launchVTokens === 980_000_000 && launched.vTokens === 700_000_000,
+    `${launched.launchVTokens} vs current ${launched.vTokens}`)
+  check('a doubled-supply launch is distinguishable from a standard one',
+    buildCandidate({ create: { vTokensInBondingCurve: 1_960_000_000 } }).launchVTokens === 1_960_000_000)
+
+  /**
    * CONCENTRATION IS AN INVERTED U, which is the opposite of what instinct says.
    *
    * Prompted by a 57x with three holders, one of them on 51% of supply — the profile

@@ -55,6 +55,24 @@ export class Candidate {
     this.marketCapSol = createEvent.marketCapSol
     this.vSol = createEvent.vSol
     this.vTokens = createEvent.vTokens
+    /**
+     * THE CURVE AS IT WAS AT LAUCH, kept because `vTokens` above is overwritten by every
+     * subsequent trade and the launch value is the one that identifies the token type.
+     *
+     * A standard pump.fun launch starts from a fixed virtual token reserve. A token
+     * deployed under an alternate mode — pump.fun's "Mayhem Mode" is reported to mint a
+     * second billion for an AI agent to trade against — would start from a different
+     * one, and that difference is visible in the very first event we receive.
+     *
+     * This matters beyond curiosity because PUMP_TOTAL_SUPPLY is hardcoded at one
+     * billion in three places: devHoldPct divides by it, and market cap and price are
+     * derived through it. If a token's real supply is double, we overstate the dev's
+     * share by 2x and UNDERSTATE its market cap by half — which would place it in
+     * exactly the low-cap band the journal says is the profitable one. Recording the
+     * launch reserves is what lets that be checked instead of argued about.
+     */
+    this.launchVTokens = createEvent.vTokens
+    this.launchVSol = createEvent.vSol
     this.peakMarketCapSol = createEvent.marketCapSol ?? 0
     this.lastEventAt = createEvent.at
   }

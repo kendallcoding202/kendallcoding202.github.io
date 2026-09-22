@@ -431,6 +431,23 @@ export function featuresOf(candidate, creatorIndex = null, walletIndex = null) {
      * scan instead of being counted as a zero that never happened.
      */
     devSoldPct: candidate.devSoldPct === null ? null : round4(candidate.devSoldPct),
+    /**
+     * The curve's reserves AT LAUNCH, which identify what kind of token this is.
+     *
+     * A standard pump.fun deploy starts from a fixed virtual token reserve; a token
+     * created under an alternate mode does not. Reported behaviour for pump.fun's
+     * "Mayhem Mode" includes minting a second billion tokens for an AI agent to trade —
+     * and if that is right, every supply-derived number we compute for such a token is
+     * wrong by a factor of two, because PUMP_TOTAL_SUPPLY is hardcoded at one billion.
+     *
+     * Journalled rather than acted on. Two of the most recent entry findings — that low
+     * market caps pay and that concentrated buying pays — would BOTH be produced as
+     * artifacts if these tokens report at half their true cap and carry a bot generating
+     * volume from one wallet. That is a testable claim, and this is the column that
+     * tests it. Rows cannot be back-filled, so it starts from here.
+     */
+    launchVTokens: candidate.launchVTokens,
+    launchVSol: candidate.launchVSol,
     symbolLength: (candidate.symbol ?? '').length,
     nameLength: (candidate.name ?? '').length,
     /**
