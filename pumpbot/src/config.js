@@ -146,6 +146,27 @@ export const config = {
    */
   paperStartSol: num('PAPER_START_SOL', 50),
 
+  /**
+   * REFILL THE PAPER BOOK RATHER THAN LET IT DIE.
+   *
+   * A paper book that runs out stops trading, and a bot that stops trading stops
+   * learning — which is the only thing this instance is for. The balance is notional; it
+   * cannot buy or lose anything, so there is no argument for letting it be the thing
+   * that ends an experiment.
+   *
+   * HARD-GATED TO PAPER, and the gate is the point rather than a formality. Topping up a
+   * live account is a decision about real money that a program must never make on
+   * someone's behalf, so this refuses outright when PAPER is off — there is no env var
+   * that turns it on for live.
+   *
+   * A top-up also RESTARTS the loss ratchet, because it has to. The breakers measure
+   * drawdown from peak realized P&L, so without that reset the book would be refilled
+   * and then instantly re-halted by a limit still describing losses the refill was meant
+   * to move past. Deciding to continue is what a top-up means.
+   */
+  paperAutoTopUp: bool('PAPER_AUTO_TOP_UP', true),
+  paperTopUpBelowSol: num('PAPER_TOP_UP_BELOW_SOL', 5),
+
   // How often the pipeline summary prints. The first beat always comes early so you
   // get confirmation the feed is alive without waiting a full interval.
   heartbeatSeconds: num('HEARTBEAT_SECONDS', 60),

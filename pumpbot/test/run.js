@@ -1205,6 +1205,71 @@ console.log('\nTop-of-spike detection')
     topOfSpike([{ v: JOURNAL_VERSION, action: 'bought' }]).bought.n === 0)
 }
 
+// ------------------------------- the experiment must not end for lack of pretend money
+console.log('\nPaper top-up')
+{
+  store.initStore()
+  const s = store.getState()
+  s.positions = {}; s.closed = []; s.daily = {}; s.totalRealizedSol = 0
+  s.peakRealizedSol = 0; s.halted = null; s.paperTopUpSol = 0; s.paperTopUps = 0
+  const START = 50
+
+  check('a healthy book is left alone', store.topUpPaper(START) === null)
+
+  // Trade the book down past the floor.
+  s.totalRealizedSol = -47
+  s.peakRealizedSol = 0
+  const before = store.paperWalletSol(START)
+  check('the book really is nearly empty', near(before, 3), String(before))
+
+  const added = store.topUpPaper(START)
+  check('it gets refilled', near(added, 47), String(added))
+  check('back to the starting size', near(store.paperWalletSol(START), START),
+    String(store.paperWalletSol(START)))
+
+  /**
+   * THE ONE THING THAT MUST NEVER HAPPEN. Every statistic in the report — the
+   * calibration line, the multiple on staked capital, the daily figures — is built on
+   * totalRealizedSol meaning "what trading produced". A bot that credits itself with its
+   * own deposits reports a profit it did not make.
+   */
+  check('and realized P&L is untouched, so a refill cannot read as a gain',
+    near(s.totalRealizedSol, -47), String(s.totalRealizedSol))
+  check('the top-up is recorded separately', near(s.paperTopUpSol, 47) && s.paperTopUps === 1)
+
+  /**
+   * The breakers measure drawdown from PEAK realized P&L, so without restarting that
+   * clock the book is refilled and halted again on the next check by a limit still
+   * describing the losses the refill exists to move past.
+   */
+  check('the loss ratchet restarts, or the refill buys nothing',
+    near(s.peakRealizedSol, s.totalRealizedSol), String(s.peakRealizedSol))
+
+  s.totalRealizedSol = -94
+  s.halted = { at: Date.now(), reason: 'total loss limit reached', kind: 'drawdown' }
+  store.topUpPaper(START)
+  check('a refill clears a halt the refill has just made obsolete', !s.halted)
+
+  /** But a halt a human asked for is a decision, not a stale limit. */
+  s.totalRealizedSol = -141
+  s.halted = { at: Date.now(), reason: 'panic button', kind: 'manual' }
+  store.topUpPaper(START)
+  check('a halt someone asked for survives it', s.halted?.kind === 'manual')
+
+  /**
+   * HARD-GATED TO PAPER. Topping up a real account is a decision about real money that a
+   * program must never take on someone's behalf.
+   */
+  const wasPaper = config.paper
+  config.paper = false
+  s.totalRealizedSol = -188
+  check('it refuses outright in live mode', store.topUpPaper(START) === null)
+  config.paper = wasPaper
+
+  s.totalRealizedSol = 0; s.peakRealizedSol = 0; s.paperTopUpSol = 0; s.paperTopUps = 0
+  s.halted = null; store.save()
+}
+
 // ------------------------------- telling a deploy apart from a crash loop
 console.log('\nStartup provenance')
 {

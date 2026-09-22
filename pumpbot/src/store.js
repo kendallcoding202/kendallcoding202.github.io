@@ -31,6 +31,12 @@ const EMPTY = {
    */
   lastStartedAt: 0,
   startCount: 0,
+  /**
+   * Notional money added to the PAPER book, kept apart from realized P&L so a refill can
+   * never be mistaken for a profit. See topUpPaper.
+   */
+  paperTopUpSol: 0,
+  paperTopUps: 0,
   /** Which build is running, and when it first did — see recordStart. */
   buildVersion: '',
   buildFirstSeenAt: 0,
@@ -345,7 +351,48 @@ export function logActivity(kind, text, extra = {}) {
  */
 export function paperWalletSol(startSol) {
   const s = getState()
-  return startSol + (s.totalRealizedSol ?? 0) - deployedSol()
+  return startSol + (s.paperTopUpSol ?? 0) + (s.totalRealizedSol ?? 0) - deployedSol()
+}
+
+/**
+ * Refill the notional paper book so an experiment cannot end by running out of pretend
+ * money. Returns the amount added, or null when nothing was needed.
+ *
+ * REFUSES OUTRIGHT IN LIVE. Topping up a real account is a decision about real money
+ * that a program must never take on someone's behalf, and there is deliberately no flag
+ * that changes that.
+ *
+ * Top-ups are accumulated SEPARATELY from realized P&L. Folding them into
+ * totalRealizedSol would be the one thing that must never happen here: every statistic
+ * in the report — the calibration line, the multiple on staked capital, the daily
+ * figures — is built on that number meaning "what trading produced", and a bot that
+ * credits itself with its own deposits reports a profit it did not make.
+ */
+export function topUpPaper(startSol, { below = config.paperTopUpBelowSol } = {}) {
+  if (!config.paper) return null
+  const s = getState()
+  const balance = paperWalletSol(startSol)
+  if (!(balance < below)) return null
+
+  const amount = startSol - balance
+  s.paperTopUpSol = (s.paperTopUpSol ?? 0) + amount
+  s.paperTopUps = (s.paperTopUps ?? 0) + 1
+  /**
+   * Restart the loss ratchet, because the breakers measure drawdown from PEAK realized
+   * P&L. Without this the book is refilled and then halted again on the next check by a
+   * limit still describing the losses the refill exists to move past — a top-up that
+   * buys nothing. Choosing to continue is what a top-up means, so the drawdown clock
+   * starts again from here.
+   */
+  s.peakRealizedSol = s.totalRealizedSol ?? 0
+  if (s.halted && s.halted.kind !== 'manual') {
+    log.warn(`clearing "${s.halted.reason}" — the paper book was topped up`)
+    s.halted = null
+  }
+  save()
+  log.warn(`paper book topped up by ${amount.toFixed(4)} SOL (top-up #${s.paperTopUps}) — ` +
+    `realized P&L is untouched at ${(s.totalRealizedSol ?? 0).toFixed(4)}`)
+  return amount
 }
 
 /** The experiment's own notional bankroll, tracked the same way and kept apart. */

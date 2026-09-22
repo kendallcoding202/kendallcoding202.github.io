@@ -21,6 +21,7 @@ import {
   logActivity,
   paperWalletSol,
   paperExploreWalletSol,
+  topUpPaper,
   recordStart,
 } from './store.js'
 import { decideExit, newPosition, applySell, markPrice, positionPnl } from './position.js'
@@ -643,6 +644,24 @@ export class Bot {
 
   async #refreshBalance() {
     if (config.paper) {
+      /**
+       * Refill before reading, so a book that has run dry does not spend a minute
+       * unable to trade. A bot that stops trading stops learning, and that is the only
+       * thing this instance exists to do — the balance is notional, so there is no
+       * argument for letting it end the experiment.
+       */
+      if (config.paperAutoTopUp) {
+        const added = topUpPaper(this.paperStartSol)
+        if (added) {
+          this.stats.paperTopUps = (this.stats.paperTopUps ?? 0) + 1
+          logActivity('risk', `paper book topped up by ${sol(added)} — realized P&L unchanged`)
+          await notify(
+            `💧 <b>Paper book topped up</b> by ${sol(added)}\n` +
+              'The experiment keeps running. Realized P&amp;L is untouched, so this cannot ' +
+              'flatter the numbers — only the notional balance moved.',
+          )
+        }
+      }
       // Recomputed rather than trusted, so any drift corrects itself every minute.
       this.walletSol = paperWalletSol(this.paperStartSol)
       syncEquityBasis(this.walletSol)
