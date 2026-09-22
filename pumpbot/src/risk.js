@@ -118,7 +118,28 @@ export function consecutiveLossLimit() {
   const winRate = wins / closed
   // A strategy that has never won gives no rate to reason from; fall back to the floor.
   if (!(winRate > 0) || winRate >= 1) return floor
-  const k = Math.ceil(Math.log(config.risk.streakAlpha) / Math.log(1 - winRate))
+  /**
+   * CORRECTED FOR HOW MANY CHANCES THE RUN HAS HAD, which it was not.
+   *
+   * streakAlpha asks "how unlikely must a losing run be before it counts as evidence
+   * rather than variance", and the old form answered it for ONE look. But every trade is
+   * another opportunity for the run to reach k, so over N trades there are ~N looks —
+   * this is the multiple-comparisons problem the rest of this codebase corrects for
+   * everywhere (criticalZ, the permutation null, the exit sweep) and this one place did
+   * not. At alpha 0.01 the breaker fires on something that happens 1% of the time, which
+   * over thousands of trades means routinely.
+   *
+   * The journal makes it concrete. On 2,430 out-of-sample trades at a 76% loss rate, a
+   * run of 21 occurs twice by chance alone — roughly every 1,215 trades, with nothing
+   * whatsoever having changed. A breaker that fires on ordinary behaviour is not
+   * protecting anything; it is switching the strategy off and calling it caution. That
+   * is the same verdict the fixed limit of 6 got, one level up.
+   *
+   * Dividing alpha by the number of looks is the Bonferroni form: the limit now answers
+   * "unlikely across the whole run", not "unlikely once".
+   */
+  const looks = Math.max(1, closed)
+  const k = Math.ceil(Math.log(config.risk.streakAlpha / looks) / Math.log(1 - winRate))
   return Math.max(floor, k)
 }
 

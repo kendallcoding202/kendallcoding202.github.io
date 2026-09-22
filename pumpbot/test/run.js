@@ -2169,15 +2169,37 @@ console.log('\nConsecutive-loss limit')
   setRecord(35, 139) // the real ledger: 20.1%
   const atRealRate = consecutiveLossLimit()
   check('at a 20% win rate the limit is far above six', atRealRate >= 18, String(atRealRate))
-  check('and matches ln(alpha)/ln(1-w)',
-    atRealRate === Math.ceil(Math.log(config.risk.streakAlpha) / Math.log(1 - 35 / 174)),
+  check('and matches ln(alpha/looks)/ln(1-w)',
+    atRealRate === Math.ceil(Math.log(config.risk.streakAlpha / 174) / Math.log(1 - 35 / 174)),
     String(atRealRate))
 
-  // At a coin flip it lands near the old fixed value — which is the assumption that
-  // number was quietly carrying.
+  /**
+   * CORRECTED FOR HOW MANY CHANCES THE RUN HAS HAD.
+   *
+   * streakAlpha asks how unlikely a losing run must be before it is evidence rather than
+   * variance, and the uncorrected form answered that for ONE look. Every trade is another
+   * opportunity for the run to reach k, so over N trades there are ~N looks — the same
+   * multiple-comparisons problem criticalZ and the permutation null exist to handle, in
+   * the one place nothing was handling it.
+   *
+   * It is not academic. Over 2,430 out-of-sample trades at a 76% loss rate, a run of 21
+   * happens TWICE by chance with nothing having changed, and the live bot hit 22 and
+   * paused. A breaker that fires on ordinary behaviour is not protecting anything.
+   */
+  const uncorrected = Math.ceil(Math.log(config.risk.streakAlpha) / Math.log(1 - 35 / 174))
+  check('correcting for the number of looks raises the bar a long way',
+    atRealRate > uncorrected * 1.5, `${atRealRate} corrected vs ${uncorrected} for a single look`)
+  check('and it keeps rising as more trades give the run more chances', (() => {
+    setRecord(35, 139)
+    const few = consecutiveLossLimit()
+    setRecord(350, 1390) // same 20% rate, ten times the looks
+    return consecutiveLossLimit() > few
+  })())
+
+  // At a coin flip it still lands in a sane place rather than exploding.
   setRecord(87, 87)
-  check('at a 50% win rate it lands near the old fixed six',
-    consecutiveLossLimit() >= 6 && consecutiveLossLimit() <= 8, String(consecutiveLossLimit()))
+  check('at a 50% win rate it stays a small number',
+    consecutiveLossLimit() >= 6 && consecutiveLossLimit() <= 16, String(consecutiveLossLimit()))
 
   // A higher win rate must never loosen it below the configured floor.
   setRecord(170, 4)

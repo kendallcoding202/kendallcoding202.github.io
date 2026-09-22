@@ -127,6 +127,8 @@ export class Bot {
       // Sampled, then refused at the entry gate. The gap between taken and explored.
       exploreBlockedEntries: 0,
       exploreBlockReason: null,
+      // Approved launches the CAPITAL gate turned away, by reason. See #enter.
+      blockedEntries: new Map(),
       uptimeHours() {
         return this.startedAt ? (Date.now() - this.startedAt) / 3_600_000 : 0
       },
@@ -164,6 +166,13 @@ export class Bot {
       parsing: s.firstParsedAt !== null,
       uptimeSeconds: s.startedAt ? Math.round((Date.now() - s.startedAt) / 1000) : 0,
       topRejects: [...s.rejects.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([id, n]) => ({ id, n })),
+      /**
+       * What the capital gate refused, as opposed to what the filter did. These are
+       * launches the strategy WANTED and did not get, which is the only honest answer
+       * to "why are we not trading more".
+       */
+      blockedEntries: [...s.blockedEntries.entries()]
+        .sort((a, b) => b[1] - a[1]).slice(0, 5).map(([reason, n]) => ({ reason, n })),
       feedCost: this.#feedCost(),
     }
   }
@@ -1017,6 +1026,20 @@ export class Bot {
       if (explore) {
         this.stats.exploreBlockedEntries++
         this.stats.exploreBlockReason = blocked
+      } else {
+        /**
+         * WHY an approved launch was not taken, counted by reason.
+         *
+         * "Why are we not trading more?" has been answered by guessing at it more than
+         * once — the concurrency cap, the loss limits and the losing-streak pause all
+         * produce the same silence, and they want completely different responses. The
+         * filter's own rejections were always counted; the CAPITAL gate's were not, so
+         * the one number that says what is actually throttling the strategy did not
+         * exist. Collapse the digits so "already holding 4 positions (max 4)" is one
+         * bucket rather than one per count.
+         */
+        const key = String(blocked).replace(/\d+/g, 'N')
+        this.stats.blockedEntries.set(key, (this.stats.blockedEntries.get(key) ?? 0) + 1)
       }
       /**
        * Journal the DECISION, not the outcome of the capital gate.

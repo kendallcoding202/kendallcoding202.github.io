@@ -634,6 +634,16 @@ function render(d) {
       if (pl.topRejects && pl.topRejects.length) {
         rows.push('Rejected on: ' + pl.topRejects.map((r) => '<code>' + esc(r.id) + ' ×' + r.n + '</code>').join(' · '))
       }
+      /**
+       * Launches the filter APPROVED and the capital gate then refused — the concurrency
+       * cap, a loss limit, the losing-streak pause. All three produce the same silence
+       * and want opposite responses, so "why are we not trading more" was being answered
+       * by guessing. These are trades the strategy wanted and did not get.
+       */
+      if (pl.blockedEntries && pl.blockedEntries.length) {
+        rows.push('<span style="color:var(--amber)">Approved but not taken:</span> ' +
+          pl.blockedEntries.map((b) => '<code>' + esc(b.reason) + ' ×' + b.n + '</code>').join(' · '))
+      }
       if (d.explore && (d.explore.closed || d.explore.open)) {
         rows.push('Explore book — <b>separate bankroll, not the strategy\'s money</b>: <code>' +
           sgn(d.explore.realizedSol, 4) + ' SOL</code> over ' + d.explore.closed + ' closed · ' +
