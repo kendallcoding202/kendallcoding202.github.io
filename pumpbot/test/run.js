@@ -12,7 +12,7 @@ process.env.SUBSCRIBE_BATCH_MS = '120' // keep the suite fast; the real default 
 delete process.env.PRIVATE_KEY
 
 const { config } = await import('../src/config.js')
-const { tierFor, buySolFor, maxDeployedFor, nextTier, sizingSummary } = await import('../src/sizing.js')
+const { tierFor, buySolFor, buySolForCurve, tooSmallToTrade, maxDeployedFor, nextTier, sizingSummary } = await import('../src/sizing.js')
 const { quoteBuy, quoteSell, priceFromReserves, normalizeEvent } = await import('../src/curve.js')
 const { Candidate, evaluateEntry } = await import('../src/filter.js')
 const { decideExit, newPosition, applySell, markPrice, positionPnl } = await import('../src/position.js')
@@ -43,6 +43,34 @@ console.log('\nSizing tiers')
   check('floor tier applies just under 5 SOL', near(buySolFor(4.99), 0.075), String(buySolFor(4.99)))
   check('steps up exactly at 5 SOL', near(buySolFor(5), 0.15), String(buySolFor(5)))
   check('stays up above the step', near(buySolFor(12), 0.15), String(buySolFor(12)))
+
+  /**
+   * SIZE IS ALSO A PROPERTY OF THE COIN, not only of the account.
+   *
+   * A constant-product round trip is price-neutral, so depth is not a fee — what it
+   * costs is fill drag, roughly size over reserves on the way in and again on the way
+   * out. One flat number is therefore a 0.2% cost on a deep curve and 15% on a thin one,
+   * which stopped being hypothetical when the market-cap floor came off: 41% of what the
+   * entry rules now accept holds under 20 SOL.
+   */
+  const rich = 44.5
+  check('a deep curve gets the full tier size',
+    near(buySolForCurve(rich, 500), buySolFor(rich)), String(buySolForCurve(rich, 500)))
+  check('a thin curve gets a position scaled to it',
+    near(buySolForCurve(rich, 5), 5 * config.sizing.maxCurveSharePct / 100),
+    String(buySolForCurve(rich, 5)))
+  check('and the cap only ever REDUCES, never inflates past the tier',
+    buySolForCurve(rich, 1e6) <= buySolFor(rich))
+  /** An unknown depth must not silently size to zero and stop the bot trading. */
+  check('an unreadable curve falls back to the tier rather than to nothing',
+    near(buySolForCurve(rich, null), buySolFor(rich)) && near(buySolForCurve(rich, 0), buySolFor(rich)))
+  /**
+   * Below the fee floor the trade loses by construction, so it is skipped rather than
+   * taken in a size that cannot pay for itself.
+   */
+  check('a curve too thin to size is refused outright',
+    tooSmallToTrade(buySolForCurve(rich, 0.5)), String(buySolForCurve(rich, 0.5)))
+  check('but an ordinary one is not', !tooSmallToTrade(buySolForCurve(rich, 30)))
   check(
     'size steps back DOWN if equity falls',
     near(buySolFor(3), 0.075),

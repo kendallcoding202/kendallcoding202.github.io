@@ -328,6 +328,26 @@ export const config = {
      * of silently capping it.
      */
     maxDeployedSol: num('MAX_DEPLOYED_SOL', 0),
+    /**
+     * Ceiling on a position as a share of the CURVE'S reserves, not just the account's.
+     *
+     * Fill drag is roughly size over reserves, twice — once entering, once exiting — so a
+     * flat position size means wildly different costs depending on the coin: 0.15 SOL is
+     * 0.2% on a 150 SOL curve and 15% on a 2 SOL one. Irrelevant while the market-cap
+     * floor kept us out of thin curves; 41% of what the entry rules now accept sits
+     * below 20 SOL of depth.
+     *
+     * 2% measured best on the journal (1.31 SOL per hundred candidates against 1.17 for
+     * flat sizing), but the number matters less than the shape — it is what stops one
+     * position being a seventh of everything backing the token.
+     */
+    maxCurveSharePct: num('MAX_CURVE_SHARE_PCT', 2),
+    /**
+     * Below this a trade cannot pay its own priority fee, so it is SKIPPED rather than
+     * taken in a size that loses by construction. At 0.0005 SOL a side, 0.02 spends 5% of
+     * the position on fees before the market does anything.
+     */
+    minBuySol: num('MIN_BUY_SOL', 0.02),
     // Never spend the wallet below this — transaction fees must always be payable.
     reserveSol: num('RESERVE_SOL', 0.05),
   },

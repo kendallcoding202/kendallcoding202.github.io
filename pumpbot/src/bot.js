@@ -4,7 +4,7 @@ import { LogFeed } from './logfeed.js'
 import { Candidate, evaluateEntry } from './filter.js'
 import { buy, sell } from './exec.js'
 import { canOpen, riskSummary, rolloverDaily, syncEquityBasis } from './risk.js'
-import { buySolFor, tierFor, sizingSummary } from './sizing.js'
+import { buySolFor, buySolForCurve, tooSmallToTrade, tierFor, sizingSummary } from './sizing.js'
 import { ShadowTracker, CreatorIndex, saveShadow, loadShadow } from './journal.js'
 import { WalletIndex, saveWallets, loadWallets } from './wallets.js'
 import {
@@ -1042,7 +1042,23 @@ export class Bot {
 
     this.busy.add(mint)
     try {
-      const buySol = buySolFor(this.walletSol)
+      /**
+       * Sized to the COIN as well as the account. A thin curve cannot absorb a full-tier
+       * position without the fill drag eating the trade, and since the market-cap floor
+       * came off most of what we buy is thinner than it used to be.
+       */
+      const buySol = buySolForCurve(this.walletSol, candidate.vSol)
+      if (tooSmallToTrade(buySol)) {
+        log.info(`skipping ${candidate.symbol}: curve holds ${candidate.vSol?.toFixed?.(1)} SOL, ` +
+          `so the most we should take is ${sol(buySol)} — below the fee floor`)
+        this.shadow?.track({
+          candidate, verdict,
+          action: verdict?.pass ? 'blocked' : 'rejected',
+          blockedBy: 'curve too thin to size a position',
+        })
+        if (!this.shadow?.has(mint)) this.feed.unwatch(mint)
+        return
+      }
       log.info(
         `${explore ? 'EXPLORING' : 'ENTERING'} ${candidate.symbol} at ${sol(buySol)} — ` +
           `${candidate.organicBuyers} buyers, mc ${candidate.marketCapSol?.toFixed(1)} SOL` +

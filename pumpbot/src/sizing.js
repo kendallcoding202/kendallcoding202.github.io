@@ -20,6 +20,37 @@ export function buySolFor(walletSol) {
   return tierFor(walletSol).buySol
 }
 
+/**
+ * The same size, capped against the DEPTH OF THE CURVE we are buying into.
+ *
+ * Equity tiers answer "how much of the account should be at risk", which is only half
+ * the question. A round trip on a constant product is price-neutral, so depth is not a
+ * fee — what it costs is FILL DRAG: you pay the average price going in and receive the
+ * average coming out, and both are worse than the mid by roughly the size over the
+ * reserves. Flat sizing therefore means the same number is a 0.2% cost on a 150 SOL
+ * curve and a 15% cost on a 2 SOL one.
+ *
+ * That stopped being hypothetical when the market-cap floor came off: 41% of the
+ * launches the entry rules now accept sit below 20 SOL of depth, and the median is 28.
+ * Charging the drag row by row, capping at 2% of depth returns 1.31 SOL per hundred
+ * candidates against 1.17 flat — and, more to the point, it stops the bot putting a
+ * seventh of a thin curve's entire reserves into one position.
+ *
+ * Below `minBuySol` the trade is not worth its priority fee, so it is skipped rather
+ * than taken in a size that cannot pay for itself.
+ */
+export function buySolForCurve(walletSol, vSol) {
+  const tier = buySolFor(walletSol)
+  const share = config.sizing.maxCurveSharePct / 100
+  if (!(share > 0) || !Number.isFinite(vSol) || !(vSol > 0)) return tier
+  return Math.min(tier, vSol * share)
+}
+
+/** Too small to be worth a priority fee — the caller should skip rather than shrink. */
+export function tooSmallToTrade(buySol) {
+  return !(buySol >= config.sizing.minBuySol)
+}
+
 /** Deployment cap follows the active tier unless MAX_DEPLOYED_SOL pins it explicitly. */
 export function maxDeployedFor(walletSol) {
   if (config.sizing.maxDeployedSol > 0) return config.sizing.maxDeployedSol
