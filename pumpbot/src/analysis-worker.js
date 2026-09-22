@@ -43,6 +43,13 @@ function project(a) {
     // Whether the replay resembles the account. Belongs on the page, not only in the
     // Telegram report — it governs how much the exit numbers can be trusted.
     calibration: a.calibration,
+    /**
+     * The wallet prior travels with the analysis rather than being computed per poll.
+     * Ranking wallets is a scan of the whole index, and the dashboard polls every few
+     * seconds against a map of tens of thousands — the same cost that had to be kept
+     * off the event loop in the first place.
+     */
+    wallets: a.wallets,
   }
 }
 

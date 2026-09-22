@@ -264,6 +264,11 @@
     <div class="card"><div class="note" id="learning"></div></div>
   </section>
 
+  <section id="smartmoneysec" hidden>
+    <h2 class="sec">Wallets We Track</h2>
+    <div class="card"><div class="note" id="smartmoney"></div></div>
+  </section>
+
   <section>
     <h2 class="sec">Active Limits</h2>
     <div class="card"><div class="note" id="limits"></div></div>
@@ -749,6 +754,9 @@ function render(d) {
     lrn.innerHTML = rows.join('<br>')
   }
 
+  /* ---- wallets we track ---- */
+  renderWallets(d.learning && d.learning.wallets)
+
   /* ---- limits ---- */
   const L = d.limits
   document.getElementById('limits').innerHTML =
@@ -836,6 +844,51 @@ function memoryLine(a) {
     : ''
   return 'Memory <code>' + (m.rssMb ?? '?') + ' MB</code> resident · <code>' +
     (m.heapMb ?? '?') + ' MB</code> heap' + peak + failing + err
+}
+
+/**
+ * Who we are tracking, and what their record is.
+ *
+ * The one-line summary in the collection banner says how many wallets beat the market;
+ * this says WHICH, so the prior can be inspected instead of taken on faith. It arrives
+ * with the analysis rather than being computed per poll — ranking the index is a scan
+ * of tens of thousands of entries, and the page polls every few seconds.
+ */
+function renderWallets(w) {
+  const sec = document.getElementById('smartmoneysec')
+  if (!w) { sec.hidden = true; return }
+  sec.hidden = false
+  const base = w.baseRate === null ? 'n/a' : (w.baseRate * 100).toFixed(1) + '%'
+  const head = num(w.observations) + ' early buys seen across <b>' + num(w.wallets) +
+    '</b> wallets · <b>' + num(w.eligible) + '</b> have ' + w.minLaunches + '+ · <b>' +
+    num(w.smart) + '</b> beat the market <span class="dim">(base ' + base + ')</span>'
+
+  if (!w.top || !w.top.length) {
+    document.getElementById('smartmoney').innerHTML = head +
+      '<br><span class="dim">No wallet has ' + w.minLaunches + '+ observed buys yet. This index cannot be ' +
+      'rebuilt from the journal — buyer lists are never written there — so it fills only from live ' +
+      'observation and needs a day or two before anyone qualifies.</span>'
+    return
+  }
+
+  const rows = w.top.map((t) =>
+    '<tr><td><code>' + esc(t.wallet.slice(0, 10)) + '…</code></td>' +
+    '<td style="text-align:right">' + t.hits + '/' + t.launches + '</td>' +
+    '<td style="text-align:right">' + (t.hitRate * 100).toFixed(0) + '%</td>' +
+    '<td style="text-align:right">' + (t.lowerBound * 100).toFixed(1) + '%</td>' +
+    '<td>' + (t.betterThanMarket ? '<span style="color:var(--green)">beats the market</span>' : '') + '</td></tr>',
+  ).join('')
+
+  document.getElementById('smartmoney').innerHTML = head +
+    '<table style="width:100%;border-collapse:collapse;margin-top:10px;font-family:var(--mono);font-size:11.5px">' +
+    '<tr style="color:var(--dim)"><th style="text-align:left;font-weight:400">wallet</th>' +
+    '<th style="text-align:right;font-weight:400">hits</th>' +
+    '<th style="text-align:right;font-weight:400">rate</th>' +
+    '<th style="text-align:right;font-weight:400">at least</th>' +
+    '<th></th></tr>' + rows + '</table>' +
+    '<span class="dim">Ranked by the LOWER bound, not the rate — otherwise "3 for 3" tops every list. ' +
+    'A hit means a launch this wallet bought early went on to reach the first rung: it measures ' +
+    'PICK QUALITY, not profit, and does not know when they sold. Nothing in the entry path reads this yet.</span>'
 }
 
 /**
