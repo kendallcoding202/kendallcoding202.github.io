@@ -24,11 +24,18 @@ import { wilson, criticalZ } from './stats.js'
  */
 export { wilson, criticalZ } from './stats.js'
 
-/** The persisted wallet prior, or null when it is off or has nothing yet. */
+/**
+ * The persisted wallet prior. Null ONLY when the feature is off.
+ *
+ * It used to return null while the index was still empty, which hid the panel
+ * completely — so the "this fills from live observation, give it a day" message never
+ * had anywhere to appear, and the feature looked missing rather than waiting. An empty
+ * index is a state worth showing; a disabled one is the only thing worth hiding.
+ */
 function walletSnapshot() {
   if (!config.learning.walletPrior) return null
   const idx = new WalletIndex()
-  if (!idx.restore(loadWallets())) return null
+  idx.restore(loadWallets())
   return { ...idx.summary(), top: idx.topWallets() }
 }
 

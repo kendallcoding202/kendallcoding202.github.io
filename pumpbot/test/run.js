@@ -1381,6 +1381,31 @@ console.log('\nWallet prior')
     })())
   }
 
+  /**
+   * An EMPTY index must still be reported. It used to come back null until wallets had
+   * accumulated, which hid the panel entirely — so the "fills from live observation,
+   * give it a day" message never rendered and the feature looked missing rather than
+   * waiting. A disabled feature is the only thing worth hiding.
+   */
+  {
+    const { analyze } = await import('../src/learn.js')
+    const wasOn = config.learning.walletPrior
+    config.learning.walletPrior = true
+    const rows = Array.from({ length: 40 }, (_, i) => ({
+      v: JOURNAL_VERSION, mint: 'E' + i, creator: 'C', at: i, finalizedAt: Date.now() - 1000,
+      action: 'rejected', failedChecks: ['buyers'], hitFirstRung: i % 8 === 0,
+      peakMultiple: i % 8 === 0 ? 2 : 0.9, endMultiple: 0.9, troughMultiple: 0.7,
+      decisionPriceSol: 1e-7, observedSeconds: 900, ticks: 20, features: {},
+    }))
+    const empty = analyze(rows, rows.length).wallets
+    check('an empty wallet index is still reported, not hidden',
+      empty !== null && empty.wallets === 0 && Array.isArray(empty.top),
+      JSON.stringify(empty))
+    config.learning.walletPrior = false
+    check('only a DISABLED wallet prior reports nothing', analyze(rows, rows.length).wallets === null)
+    config.learning.walletPrior = wasOn
+  }
+
   // The leaderboard and the count must agree. They were computed independently, and the
   // list used the uncorrected interval while the summary used the corrected one — so
   // rows were flagged "beats the market" that the count beside them excluded.
