@@ -158,6 +158,8 @@ function collectionStatus(stats, storage, learning, analysis = null) {
     storage,
     creatorPrior: stats?.creatorPrior ?? null,
     walletPrior: stats?.walletPrior ?? null,
+    // Live, from the bot — unlike the rankings, which ride along with the analysis.
+    smartTape: stats?.smartTape ?? null,
     /**
      * COLLECTING and ANALYSING are different things, and the banner must not conflate
      * them. Journalling is the bot writing rows; the analysis is a separate worker that

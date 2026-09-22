@@ -51,6 +51,9 @@ export class WalletIndex {
      * the base rate already had to avoid.
      */
     this.eligible = 0
+    this.smartCache = null
+    this.smartCacheAt = 0
+    this.smartDirty = true
   }
 
   note(wallet, hit, at = 0) {
@@ -63,6 +66,7 @@ export class WalletIndex {
     this.byWallet.set(wallet, e)
     this.totalLaunches++
     if (hit) this.totalHits++
+    this.smartDirty = true
   }
 
   /** How often ANY launch a tracked wallet bought reached the rung. The yardstick. */
@@ -145,6 +149,7 @@ export class WalletIndex {
       for (const [w] of ordered.slice(0, this.byWallet.size - this.maxWallets)) this.byWallet.delete(w)
     }
     this.#recountEligible()
+    this.smartDirty = true
     return before - this.byWallet.size
   }
 
@@ -177,6 +182,28 @@ export class WalletIndex {
       })
     }
     return out.sort((a, b) => b.lowerBound - a.lowerBound).slice(0, limit)
+  }
+
+  /**
+   * The smart wallets as a SET, for per-trade lookups.
+   *
+   * verdict() is cheap but not free, and the trade feed carries every pump.fun trade —
+   * thousands a minute. Asking it per trade would put a Wilson computation on the hot
+   * path for no reason: the answer only changes when the index does. Rebuilt lazily
+   * when note() has dirtied it, and at most once every few seconds.
+   */
+  smartSet() {
+    const now = Date.now()
+    if (this.smartCache && !this.smartDirty && now - this.smartCacheAt < 5000) return this.smartCache
+    const set = new Set()
+    const min = config.learning.minWalletLaunches
+    for (const [wallet, e] of this.byWallet) {
+      if (e.launches >= min && this.verdict(wallet).betterThanMarket) set.add(wallet)
+    }
+    this.smartCache = set
+    this.smartCacheAt = now
+    this.smartDirty = false
+    return set
   }
 
   #recountEligible() {
@@ -223,6 +250,7 @@ export class WalletIndex {
       this.byWallet.set(w, { launches, hits, lastAt: lastAt ?? 0 })
     }
     this.#recountEligible()
+    this.smartDirty = true
     return this.byWallet.size
   }
 }

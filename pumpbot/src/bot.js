@@ -81,6 +81,7 @@ export class Bot {
     this.shadow = config.learning.enabled
       ? new ShadowTracker({ creatorIndex: CreatorIndex.fromJournal(), walletIndex: this.wallets })
       : null
+    this.smartTape = [] // live tape of trades by wallets with a proven record
     this.walletSol = 0
     this.lastDay = utcDay()
     this.lastTierFloor = null
@@ -142,6 +143,7 @@ export class Bot {
       shadowTracked: this.shadow?.size ?? 0,
       creatorPrior: this.#creatorPriorStats(),
       walletPrior: this.wallets ? this.wallets.summary() : null,
+      smartTape: this.wallets ? [...this.smartTape].reverse().slice(0, 40) : null,
       explore: {
         enabled: config.explore.enabled,
         sampleRate: config.explore.sampleRate,
@@ -274,6 +276,36 @@ export class Bot {
     position.lastVSol = curve.vSol
     position.lastVTokens = curve.vTokens
     position.blindReads = 0
+  }
+
+  /**
+   * A live tape of what the wallets with a proven record are doing.
+   *
+   * The index says WHO is worth watching; this says what they are doing right now. It
+   * is a Set lookup per trade, not a verdict computation — the feed carries every
+   * pump.fun trade and putting statistics on that path would be the same mistake as
+   * running the analysis on the event loop.
+   *
+   * COVERAGE IS PARTIAL, deliberately. The log feed only decodes trades for mints we
+   * are already interested in — candidates, open positions, shadow rows — so this shows
+   * smart-wallet activity on launches inside our pipeline, not everything they do
+   * anywhere. Subscribing to the whole program's trade flow to catch the rest would
+   * cost far more than the feature is worth.
+   */
+  #noteSmartMoney(event, candidate) {
+    if (!this.wallets || !event?.trader) return
+    if (!this.wallets.smartSet().has(event.trader)) return
+    this.smartTape.push({
+      at: event.at ?? Date.now(),
+      wallet: event.trader,
+      mint: event.mint,
+      symbol: candidate?.symbol ?? getState().positions[event.mint]?.symbol ?? null,
+      kind: event.kind === 'sell' ? 'sell' : 'buy',
+      solAmount: Number(event.solAmount) || 0,
+      ageSeconds: candidate ? Math.round(candidate.ageSeconds) : null,
+    })
+    // Display state, bounded hard — this is a tape, not a record.
+    if (this.smartTape.length > 120) this.smartTape = this.smartTape.slice(-120)
   }
 
   #creatorPriorStats() {
@@ -639,6 +671,7 @@ export class Bot {
 
     candidate?.apply(event)
     this.shadow?.onTrade(event)
+    this.#noteSmartMoney(event, candidate)
 
     if (position?.state === 'open') {
       markPrice(position, event.priceSol)

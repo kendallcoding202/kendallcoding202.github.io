@@ -105,6 +105,14 @@
   .log::-webkit-scrollbar { width: 5px; }
   .log::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
   .log div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Collapsible section headings. A button, not a div, so it is keyboard-reachable. */
+  .fold { background: none; border: 0; padding: 0; margin: 0; cursor: pointer;
+    font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit; }
+  .fold::before { content: '▾'; display: inline-block; width: 14px; color: var(--dim);
+    transition: transform .15s ease; }
+  .fold.collapsed::before { transform: rotate(-90deg); }
+  .fold:hover::before { color: var(--text); }
+
   .tag { font-weight: 700; margin-right: 7px; }
   .t-buy { color: var(--cyan); } .t-sell { color: var(--violet); }
   .t-win { color: var(--green); } .t-loss { color: var(--red); }
@@ -249,14 +257,21 @@
     <div class="card" style="padding:0"><div class="scroll" id="openexp"></div></div>
   </section>
 
+  <!--
+    Collapsible, and REMEMBERED per browser. These two tables are the longest things on
+    the page and sit above everything that follows, so a reader who does not want them
+    was scrolling past hundreds of rows on every visit.
+  -->
   <section>
-    <h2 class="sec">Closed Trades · strategy <span class="secnote">real trades, counted in P&amp;L</span></h2>
-    <div class="card" style="padding:0"><div class="scroll" id="closed"></div></div>
+    <h2 class="sec"><button class="fold" data-fold="closed">Closed Trades · strategy</button>
+      <span class="secnote">real trades, counted in P&amp;L</span></h2>
+    <div class="card" style="padding:0" id="closedwrap"><div class="scroll" id="closed"></div></div>
   </section>
 
   <section id="closedexpsec" hidden>
-    <h2 class="sec">Closed Trades · explore <span class="secnote">experiment only, separate bankroll</span></h2>
-    <div class="card" style="padding:0"><div class="scroll" id="closedexp"></div></div>
+    <h2 class="sec"><button class="fold" data-fold="closedexp">Closed Trades · explore</button>
+      <span class="secnote">experiment only, separate bankroll</span></h2>
+    <div class="card" style="padding:0" id="closedexpwrap"><div class="scroll" id="closedexp"></div></div>
   </section>
 
   <section>
@@ -755,7 +770,7 @@ function render(d) {
   }
 
   /* ---- wallets we track ---- */
-  renderWallets(d.learning && d.learning.wallets)
+  renderWallets(d.learning && d.learning.wallets, d.collection && d.collection.smartTape)
 
   /* ---- limits ---- */
   const L = d.limits
@@ -854,10 +869,31 @@ function memoryLine(a) {
  * with the analysis rather than being computed per poll — ranking the index is a scan
  * of tens of thousands of entries, and the page polls every few seconds.
  */
-function renderWallets(w) {
+function renderWallets(w, tape) {
   const sec = document.getElementById('smartmoneysec')
   if (!w) { sec.hidden = true; return }
   sec.hidden = false
+
+  /**
+   * What they are doing RIGHT NOW, as opposed to what their record is.
+   *
+   * Partial by design: the feed only decodes trades for mints already in our pipeline,
+   * so this is smart-wallet activity on launches we are watching, not everything they
+   * do anywhere. Saying so beats implying a completeness we do not have.
+   */
+  const tapeHtml = !tape || !tape.length
+    ? '<span class="dim">No trades from tracked wallets yet — this fills once wallets qualify ' +
+      'and then trade a launch we are watching.</span>'
+    : tape.map((t) =>
+        '<div><span class="dim">' + new Date(t.at).toLocaleTimeString([], { hour12: false }) + '</span> ' +
+        '<span class="tag ' + (t.kind === 'sell' ? 't-sell' : 't-buy') + '">' + t.kind.toUpperCase() + '</span>' +
+        '<code>' + esc(String(t.wallet).slice(0, 8)) + '…</code> ' +
+        (t.symbol ? '<b>' + esc(t.symbol) + '</b>' : '<code>' + esc(String(t.mint).slice(0, 8)) + '…</code>') +
+        ' ' + fmtSol(t.solAmount, 3) +
+        (t.ageSeconds !== null && t.ageSeconds !== undefined
+          ? ' <span class="dim">· ' + t.ageSeconds + 's into the launch</span>' : '') +
+        '</div>',
+      ).join('')
   const base = w.baseRate === null ? 'n/a' : (w.baseRate * 100).toFixed(1) + '%'
   const head = num(w.observations) + ' early buys seen across <b>' + num(w.wallets) +
     '</b> wallets · <b>' + num(w.eligible) + '</b> have ' + w.minLaunches + '+ · <b>' +
@@ -867,7 +903,9 @@ function renderWallets(w) {
     document.getElementById('smartmoney').innerHTML = head +
       '<br><span class="dim">No wallet has ' + w.minLaunches + '+ observed buys yet. This index cannot be ' +
       'rebuilt from the journal — buyer lists are never written there — so it fills only from live ' +
-      'observation and needs a day or two before anyone qualifies.</span>'
+      'observation and needs a day or two before anyone qualifies.</span>' +
+      '<div style="margin-top:12px"><div class="label">Live trades by tracked wallets</div>' +
+      '<div class="log" style="max-height:150px">' + tapeHtml + '</div></div>'
     return
   }
 
@@ -888,7 +926,10 @@ function renderWallets(w) {
     '<th></th></tr>' + rows + '</table>' +
     '<span class="dim">Ranked by the LOWER bound, not the rate — otherwise "3 for 3" tops every list. ' +
     'A hit means a launch this wallet bought early went on to reach the first rung: it measures ' +
-    'PICK QUALITY, not profit, and does not know when they sold. Nothing in the entry path reads this yet.</span>'
+    'PICK QUALITY, not profit, and does not know when they sold. Nothing in the entry path reads this yet.</span>' +
+    '<div style="margin-top:14px"><div class="label">Live trades by tracked wallets</div>' +
+    '<div class="log" style="max-height:170px">' + tapeHtml + '</div>' +
+    '<span class="dim">Only covers launches already in our pipeline — not everything these wallets do.</span></div>'
 }
 
 /**
@@ -943,6 +984,37 @@ function priorLine(p) {
  * one of them. So it is captured once on the unlock screen, stored locally, and stripped
  * from the visible URL the moment the page loads — while still being sent on each poll.
  */
+/**
+ * Collapsible sections, remembered per browser.
+ *
+ * localStorage is per-viewer and can throw in a private window or with site data
+ * blocked, so every access is guarded and the page renders correctly without it — a
+ * forgotten preference is a nuisance, a broken dashboard is not.
+ */
+function foldKey(id) { return 'pumpbot.fold.' + id }
+function applyFold(btn, collapsed) {
+  const wrap = document.getElementById(btn.dataset.fold + 'wrap')
+  btn.classList.toggle('collapsed', collapsed)
+  if (wrap) wrap.hidden = collapsed
+  btn.setAttribute('aria-expanded', String(!collapsed))
+}
+document.addEventListener('click', function (e) {
+  const btn = e.target.closest && e.target.closest('.fold')
+  if (!btn) return
+  const collapsed = !btn.classList.contains('collapsed')
+  applyFold(btn, collapsed)
+  try { localStorage.setItem(foldKey(btn.dataset.fold), collapsed ? '1' : '0') } catch (err) {}
+})
+;(function restoreFolds() {
+  for (const btn of document.querySelectorAll('.fold')) {
+    let saved = null
+    try { saved = localStorage.getItem(foldKey(btn.dataset.fold)) } catch (err) {}
+    // Closed trades start FOLDED: they are the longest tables on the page and sit above
+    // everything after them, so the default should not be a wall of rows.
+    applyFold(btn, saved === null ? true : saved === '1')
+  }
+})()
+
 var TOKEN_KEY = 'pumpbot.token'
 var authToken = ''
 ;(function captureToken() {
