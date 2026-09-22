@@ -1297,6 +1297,22 @@ console.log('\nJournal export')
      */
     const never = rows.find((c) => c[header.indexOf('trailExit10')] === '')
     check('a trail level that never triggered exports empty, not zero', Boolean(never))
+
+    /**
+     * AND "never triggered" MUST BE DISTINGUISHABLE FROM "this row is too old".
+     *
+     * Both render as an empty cell. The journal version was not bumped when the arrays
+     * were added, so nothing else separates them — and counting pre-feature rows as
+     * "the trail never fired" is precisely the bias that would wreck the measurement
+     * these columns exist for.
+     */
+    const hasTrail = header.indexOf('hasTrailData')
+    check('the export says whether a row could carry trail data at all', hasTrail >= 0)
+    check('a seeded row is marked as carrying it', seeded[hasTrail] === '1', seeded[hasTrail])
+    check('and a row written before the feature is marked as NOT carrying it',
+      never[hasTrail] === '0', never[hasTrail])
+    check('so the two empty cells are told apart by a column, not by a guess',
+      seeded[header.indexOf('trailExit50')] !== '' && never[header.indexOf('trailExit50')] === '')
   }
 
   config.dataDir = origDataDir

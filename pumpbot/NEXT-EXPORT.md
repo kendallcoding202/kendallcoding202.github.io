@@ -36,7 +36,19 @@ Everything about exits is downstream of this, including question 2.
 
 **Columns:** `trailExit10, trailExit15, trailExit20, trailExit25, trailExit35, trailExit50`
 — each is the multiple a trail at that level *actually exited at*, stamped at tick time as
-the path happened. Empty means that level never triggered.
+the path happened.
+
+⚠️ **Filter on `hasTrailData == 1` first.** An empty `trailExit50` means either "that level
+never triggered" or "this row predates the feature", and both render as an empty cell.
+The recording started **2026-09-22 ~21:47 UTC** (checkpoints at ~22:15), and
+`JOURNAL_VERSION` was deliberately NOT bumped — doing so would have made the analyser
+discard all ~193k rows already on disk. So the version cannot separate them and
+`hasTrailData` / `hasPathData` exist to. Skipping that filter counts every pre-feature row
+as "the trail never fired", which makes the stop look rarer and shallower than it is —
+biasing the exact number this question turns on. Roughly 1,200 rows/hour are being
+labelled, so an export taken a full day later should hold ~25,000 usable rows; the gap
+measurement does not require a row to pass the entry filter, since it is a property of the
+price path, so it is well powered.
 
 **Why it could not be answered before:** a trail cannot be evaluated from peak/trough/end.
 The replay hands the simulator the peak and then applies the trail to it, which is

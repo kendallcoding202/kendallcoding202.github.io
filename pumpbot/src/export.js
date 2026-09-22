@@ -67,6 +67,24 @@ const OUTCOME_COLUMNS = [
  * column cannot be misread if the levels are ever reordered or extended.
  */
 const arrayColumns = () => [
+  /**
+   * WHETHER THIS ROW COULD CARRY THE DATA AT ALL, which is not the same question as
+   * whether it does — and conflating the two would bias the one measurement these
+   * columns exist for.
+   *
+   * An empty `trailExit50` means either "a 50% trail never triggered on this path" or
+   * "this row was written before the feature existed". Both render as an empty cell.
+   * JOURNAL_VERSION was not bumped when the arrays were added (bumping it now would make
+   * the analyser discard every one of the ~193k rows already on disk), so the row's
+   * version cannot tell them apart either.
+   *
+   * Left ambiguous, every pre-feature row would count as "the trail never fired" and the
+   * trailing stop would look far rarer and far shallower than it is. Rows written by the
+   * new code always carry the array — all-null if nothing triggered — so its PRESENCE is
+   * the signal. Filter on this before computing anything about trails or fill windows.
+   */
+  ['hasTrailData', (row) => Array.isArray(row.trailExits)],
+  ['hasPathData', (row) => Array.isArray(row.pathPrices)],
   ...TRAIL_LEVELS.map((lvl, i) => [`trailExit${lvl}`, (row) => row.trailExits?.[i]]),
   ...PATH_CHECKPOINTS.map((sec, i) => [`priceAt${sec}s`, (row) => row.pathPrices?.[i]]),
 ]
