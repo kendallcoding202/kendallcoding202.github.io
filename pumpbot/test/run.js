@@ -1173,6 +1173,7 @@ console.log('\nJournal export')
   check('an unlabelled row is left out rather than exported with no outcome',
     stats.rows === 5 + 5 + 50, `${stats.rows}`)
 
+
   /**
    * THE SAFETY PROPERTY. Not "we removed the fields we thought of" — the export is an
    * ALLOWLIST, so this asserts the general case: nothing secret, no address, and no
@@ -1241,6 +1242,62 @@ console.log('\nJournal export')
   check('but the guard clears once it settles, so exports are not one-shot',
     afterSettle !== a)
   await afterSettle
+
+  /**
+   * Runs LAST in this section on purpose: it appends to the journal, and the gzip and
+   * worker checks above compare against a CSV captured before that. Seeding the fixture
+   * earlier made them disagree — the export was correct and the test had moved the file
+   * under it.
+   */
+  /**
+   * THE TWO ARRAY COLUMNS MUST SURVIVE THE TRIP, and this is the assertion that says so.
+   *
+   * `trailExits` and `pathPrices` were journalled correctly and then silently dropped:
+   * the outcome allowlist holds scalars and `featureValue` accepts only finite numbers
+   * and booleans, so an array matched neither path. Nothing failed — the export simply
+   * arrived without the two columns the analysis was waiting on, looking complete.
+   *
+   * That is the failure mode worth a test. An absent column is invisible until someone
+   * goes looking for it a day later, which is exactly what nearly happened here.
+   */
+  {
+    const { TRAIL_LEVELS, PATH_CHECKPOINTS } = await import('../src/journal.js')
+    journal.append(mkRow('bought', CREATOR_A, {
+      // Distinct values per slot, so a column cannot pass by matching its neighbour.
+      trailExits: TRAIL_LEVELS.map((lvl) => lvl / 100),
+      pathPrices: PATH_CHECKPOINTS.map((sec) => sec * 1e-9),
+    }))
+    const withPath = buildExport({ maxRejected: 5, salt: 'fixed-salt' })
+    const header = withPath.csv.split('\n')[0].split(',')
+
+    for (const lvl of TRAIL_LEVELS) {
+      check(`the export carries where a ${lvl}% trail actually exited`,
+        header.includes(`trailExit${lvl}`), header.join(','))
+    }
+    check('and the price at each early checkpoint, which is what a fill window needs',
+      PATH_CHECKPOINTS.every((sec) => header.includes(`priceAt${sec}s`)), header.join(','))
+
+    /**
+     * Named by LEVEL, not by index — so the column cannot be misread if the levels are
+     * ever reordered or extended. Check the VALUES land in the right columns, since a
+     * header that is right while the cells are shifted is worse than no column at all.
+     */
+    const rows = withPath.csv.trim().split('\n').slice(1).map((l) => l.split(','))
+    const seeded = rows.find((c) => c[header.indexOf('trailExit10')] === '0.1')
+    check('a trail level lands in its own column, not its neighbour\'s',
+      seeded && TRAIL_LEVELS.every((lvl) => seeded[header.indexOf(`trailExit${lvl}`)] === String(lvl / 100)),
+      seeded ? TRAIL_LEVELS.map((l) => seeded[header.indexOf(`trailExit${l}`)]).join(',') : 'row not found')
+    check('and so does a checkpoint price',
+      seeded && PATH_CHECKPOINTS.every((sec) => Number(seeded[header.indexOf(`priceAt${sec}s`)]) === sec * 1e-9))
+
+    /**
+     * A level that never triggered is null, and must export as EMPTY rather than as a
+     * number. A 0 here would read as "the trail exited at zero" — a total loss — which
+     * is the opposite of "this coin never gave back that much".
+     */
+    const never = rows.find((c) => c[header.indexOf('trailExit10')] === '')
+    check('a trail level that never triggered exports empty, not zero', Boolean(never))
+  }
 
   config.dataDir = origDataDir
   fs.rmSync(dir, { recursive: true, force: true })

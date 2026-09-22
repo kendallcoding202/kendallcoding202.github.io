@@ -1,7 +1,7 @@
 import crypto from 'node:crypto'
 import zlib from 'node:zlib'
 import { Worker } from 'node:worker_threads'
-import { streamRows } from './journal.js'
+import { streamRows, TRAIL_LEVELS, PATH_CHECKPOINTS } from './journal.js'
 
 /**
  * A portable, compact, SECRET-FREE slice of the journal.
@@ -46,6 +46,29 @@ const OUTCOME_COLUMNS = [
   'decisionPriceSol',
   'fillPriceSol',
   'finalizedAt',
+]
+
+/**
+ * THE TWO ARRAYS ON THE ROW, flattened into one column each.
+ *
+ * `trailExits[i]` is where a trailing stop at TRAIL_LEVELS[i] would ACTUALLY have exited,
+ * stamped at tick time as the path happened. `pathPrices[i]` is the price standing at
+ * PATH_CHECKPOINTS[i] seconds. They are the only columns that can answer the two
+ * questions currently blocking every exit decision — where a trail really fills, and
+ * whether a fill was reachable in the first few seconds — and neither can be reconstructed
+ * from peak/trough/end, which is the whole reason they were added.
+ *
+ * They were being dropped. The allowlist above holds scalars, `featureValue` takes only
+ * finite numbers and booleans, and an array satisfies neither — so both were journalled
+ * faithfully and then silently discarded on the way out. The export would have arrived
+ * looking complete, with the two columns the analysis was waiting for simply absent.
+ *
+ * Named by their LEVEL rather than their index (trailExit25, not trailExits_3) so a
+ * column cannot be misread if the levels are ever reordered or extended.
+ */
+const arrayColumns = () => [
+  ...TRAIL_LEVELS.map((lvl, i) => [`trailExit${lvl}`, (row) => row.trailExits?.[i]]),
+  ...PATH_CHECKPOINTS.map((sec, i) => [`priceAt${sec}s`, (row) => row.pathPrices?.[i]]),
 ]
 
 /**
@@ -151,13 +174,22 @@ export function buildExport({
   stats.rejectedSampled = rejected.length
 
   const features = [...featureKeys].sort()
-  const header = ['creatorId', ...OUTCOME_COLUMNS, ...features.map((f) => `f_${f}`)]
+  const arrays = arrayColumns()
+  const header = [
+    'creatorId',
+    ...OUTCOME_COLUMNS,
+    ...arrays.map(([name]) => name),
+    ...features.map((f) => `f_${f}`),
+  ]
   const lines = [header.join(',')]
 
   for (const row of [...bought, ...explored, ...rejected]) {
     const cells = [
       csvCell(creatorId(row.creator)),
       ...OUTCOME_COLUMNS.map((c) => csvCell(row[c])),
+      // featureValue, not csvCell directly: it is what rejects anything that is not a
+      // finite number, so a malformed array element cannot become a bogus price.
+      ...arrays.map(([, read]) => csvCell(featureValue(read(row)))),
       ...features.map((f) => csvCell(featureValue(row.features?.[f]))),
     ]
     lines.push(cells.join(','))
