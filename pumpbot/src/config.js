@@ -489,8 +489,21 @@ export const config = {
     maxMarketCapSol: num('MAX_MARKET_CAP_SOL', 2000),
     // Dev's share of supply from their own launch buy.
     maxDevHoldPct: num('MAX_DEV_HOLD_PCT', 12),
-    // A dev who sells during the observation window is disqualifying, full stop.
+    // Master switch for the dev-selling check. The threshold below is what it tests.
     rejectIfDevSold: bool('REJECT_IF_DEV_SOLD', true),
+    /**
+     * How much of their own bag the dev may sell during the window before we walk away.
+     *
+     * Was effectively 0 — any sale at all disqualified — and at 0 the check rejected
+     * launches at 14.9% against a 15.7% base rate. That is the signature of a check that
+     * discriminates nothing: it cost entries and bought no accuracy.
+     *
+     * 50% keeps the pattern the check exists for (a dev unloading the bag into the first
+     * buyers) and drops the part with no evidence behind it (a dev trimming). The number
+     * itself is a guard rather than a finding; devSoldPct is journalled from this build
+     * on so the threshold scan can say where the cut actually belongs.
+     */
+    maxDevSoldPct: num('MAX_DEV_SOLD_PCT', 50),
     // Symbols/names containing these are almost always impersonation scams.
     bannedWords: str('BANNED_WORDS', 'airdrop,claim,presale,official,giveaway')
       .split(',')
@@ -501,25 +514,36 @@ export const config = {
   exit: {
     /**
      * Rungs are percentages of the ORIGINAL token amount, evaluated against the entry
-     * price. The first rung recovers the full stake: selling 67% at +50% returns
-     * ~1.0x cost, so everything after it is house money.
+     * price.
+     *
+     * NOTE what changed with the 40% first sell: the first rung NO LONGER recovers the
+     * stake. Selling 67% at +50% returned ~1.0x, so everything after it was house money;
+     * selling 40% returns 0.6x, and the balance rides on the trailing stop. The sweep
+     * says that trade is worth making on these paths — but "initials are out at the
+     * rung" is no longer true, and no rule below should be read as if it were.
      */
     /**
-     * One sell, all out, at +50%.
+     * Sell 40% at +50% and let the rest run under the trailing stop.
      *
-     * The four-rung ladder cost 16% of a winner — five transactions, each paying a fee,
-     * a priority fee and slippage — against 5.3% for a single exit. Scaling out reads as
-     * prudent but on a bonding curve it is the expensive choice, and it raised the hit
-     * rate needed to break even rather than lowering it.
+     * This reverses the all-out exit, and it reverses it on the test that exit was
+     * written with. The four-rung ladder really did cost 16% of a winner against 5.3%
+     * for a single sell, so collapsing to one sell was right against FOUR. Against two
+     * it is not: the sweep replayed both over the same recorded paths, paired per coin,
+     * and selling 40% came out +0.033x ahead with the interval clear of zero after
+     * correcting for every alternative tried.
      *
-     * What this gives up is the moon bag: a coin that runs 10x now pays 1.5x, not more.
-     * That is the trade, and it is the right way round only if big runners are rare
-     * enough that their rarity does not pay for the fees on everything else. The exit
-     * sweep measures exactly that against the recorded paths, so this is a hypothesis
-     * with a test attached rather than a preference.
+     * So the moon bag pays for itself after all. One extra transaction is one extra fee;
+     * what it buys is the 60% still held when a coin that reached +50% keeps going, and
+     * on these paths that is worth more than the fee. The earlier conclusion was not
+     * wrong about fees, it was wrong to treat "fewer sells" as monotonically better.
+     *
+     * Note which way the remaining bias runs: rows without peak/trough ordering assume
+     * any dip could have trailed us out, which prices the held remainder pessimistically.
+     * The measured edge is if anything understated, and it firms up as ordering coverage
+     * climbs toward 100%.
      */
     ladder: parseLadder(
-      str('LADDER', '50:100'),
+      str('LADDER', '50:40'),
     ),
     /**
      * Tightened from 30%. Every loser used to cost 34% of stake, which at any realistic
@@ -532,8 +556,21 @@ export const config = {
      * to that edge, so the sweep needs watching once there are labelled rows either side.
      */
     stopLossPct: num('STOP_LOSS_PCT', 15),
-    // Exit anything that has not reached the first rung within this many seconds.
-    timeStopSeconds: num('TIME_STOP_SECONDS', 600),
+    /**
+     * Exit anything that has not reached the first rung within this many seconds.
+     *
+     * Raised 600 -> 900 on the paired sweep (+0.007x, interval clear of zero after
+     * correction). Small, but it is the same point you made in plain language: a coin
+     * that has not moved is not a coin that has gone wrong, and selling on the clock
+     * realises a loss the price never asked for.
+     *
+     * 900 is the ceiling, not a step on the way to more. The journal observes outcomes
+     * for OUTCOME_WINDOW_MINUTES (15), so beyond this there is no recorded path to price
+     * a longer hold against — a variant past the window would inherit the incumbent's
+     * numbers and read as a tie rather than as no evidence. Holding longer than 15m is
+     * testable only by widening the observation window first.
+     */
+    timeStopSeconds: num('TIME_STOP_SECONDS', 900),
     // Give back at most this much of the peak once the first rung is hit.
     trailingDrawdownPct: num('TRAILING_DRAWDOWN_PCT', 50),
     // Abandon-ship if the curve drains — the pump.fun analogue of an LP pull.

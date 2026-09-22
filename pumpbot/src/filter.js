@@ -44,6 +44,12 @@ export class Candidate {
     this.devSold = false
     this.devTokens = createEvent.initialBuyTokens ?? 0
     this.devBuySol = createEvent.initialBuySol ?? 0
+    /**
+     * The bag the dev started with, kept separately from the running balance so "how
+     * much of it did they sell" is answerable. Without it the only question we can ask
+     * is the binary one, and the binary one measurably discriminates nothing.
+     */
+    this.initialDevTokens = createEvent.initialBuyTokens ?? 0
 
     this.priceSol = createEvent.priceSol
     this.marketCapSol = createEvent.marketCapSol
@@ -106,6 +112,19 @@ export class Candidate {
 
   get devHoldPct() {
     return (this.devTokens / PUMP_TOTAL_SUPPLY) * 100
+  }
+
+  /**
+   * How much of their OWN bag the dev has sold during the window, 0-100.
+   *
+   * Null when they started with nothing, because then there is no bag to take a
+   * percentage of and any answer would be invented. Clamped at zero because a dev who
+   * buys MORE during the window has sold a negative fraction of nothing.
+   */
+  get devSoldPct() {
+    if (!(this.initialDevTokens > 0)) return null
+    const sold = 1 - this.devTokens / this.initialDevTokens
+    return Math.min(100, Math.max(0, sold * 100))
   }
 
   /** Buyers who are not the dev — the number that actually matters. */
@@ -245,11 +264,33 @@ export function evaluateEntry(candidate, { creatorPrior = null } = {}) {
     ),
   )
 
+  /**
+   * Graduated from a boolean, because as a boolean it was measurably doing nothing.
+   *
+   * Over the labelled journal it rejected launches at 14.9% against a 15.7% base rate.
+   * Indistinguishable, at a sample size where half a point would show — so it was not
+   * selecting, it was shrinking the sample and costing entries for free. Same verdict
+   * the buy/sell ratio got at 1.4, and the same remedy: keep the degenerate guard, drop
+   * the unevidenced part.
+   *
+   * The degenerate case is a dev DUMPING, and "sold any at all" is not that. A dev
+   * trimming a few percent of their own buy is ordinary; a dev unloading half the bag
+   * into the first buyers is the exit-scam pattern this check was written for.
+   *
+   * `devSoldPct` is journalled from here on so the threshold scan can rule on where the
+   * cut belongs. It cannot back-fill, so today's 50% is a guard, not a finding — the
+   * only claim being made is that it is a better guard than the boolean, which the
+   * boolean's own numbers establish.
+   */
+  const soldPct = candidate.devSoldPct
+  const dumping = e.rejectIfDevSold && soldPct !== null && soldPct >= e.maxDevSoldPct
   checks.push(
     check(
-      'dev_not_selling',
-      !(e.rejectIfDevSold && candidate.devSold),
-      candidate.devSold ? 'DEV IS SELLING' : 'dev has not sold',
+      'dev_not_dumping',
+      !dumping,
+      soldPct === null
+        ? 'dev started with no bag to sell'
+        : `dev has sold ${soldPct.toFixed(0)}% of their bag (want < ${e.maxDevSoldPct}%)`,
     ),
   )
 

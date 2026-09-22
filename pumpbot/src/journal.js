@@ -404,6 +404,15 @@ export function featuresOf(candidate, creatorIndex = null, walletIndex = null) {
     devHoldPct: Number(candidate.devHoldPct?.toFixed?.(2) ?? candidate.devHoldPct),
     devBuySol: candidate.devBuySol,
     devSold: candidate.devSold,
+    /**
+     * HOW MUCH of their own bag the dev sold, not just whether they sold.
+     *
+     * The boolean above rejected at the base rate — it could not separate a dev trimming
+     * from a dev dumping, so it averaged the two into noise. Null when the dev started
+     * with no bag; numericFeatures() picks up numbers only, so those rows drop out of the
+     * scan instead of being counted as a zero that never happened.
+     */
+    devSoldPct: candidate.devSoldPct === null ? null : round4(candidate.devSoldPct),
     symbolLength: (candidate.symbol ?? '').length,
     nameLength: (candidate.name ?? '').length,
     /**

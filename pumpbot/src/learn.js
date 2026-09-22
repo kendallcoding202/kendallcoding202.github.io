@@ -1019,7 +1019,8 @@ export function formatReport(a) {
       L.push(`  cheapest size would be     ${best.toFixed(4)} SOL` +
         (Math.abs(best - size) / size > 0.15 ? '  ← worth moving toward' : '  (you are close to it)'))
     }
-    L.push('  Fewer, larger rungs cost less. Every rung is a transaction.')
+    L.push('  Every rung is a transaction — but cheaper is not the same as better.')
+    L.push('  The sweep below prices the extra sell against what holding a bag earns.')
     L.push('')
   }
 

@@ -122,7 +122,7 @@ const createEvt = (over = {}) =>
  * dataset added. A fixture that cannot pass the live filter tests nothing about it.
  * Pass `fading: true` for the opposite shape.
  */
-function buildCandidate({ create = {}, buyers = 70, sells = 2, devSells = false, mcap = 44, fading = false } = {}) {
+function buildCandidate({ create = {}, buyers = 70, sells = 2, devSells = false, devSellTokens = 500, mcap = 44, fading = false } = {}) {
   const c = new Candidate(createEvt(create))
   const windowMs = config.entry.observeSeconds * 1000
   for (let i = 0; i < buyers; i++) {
@@ -136,7 +136,8 @@ function buildCandidate({ create = {}, buyers = 70, sells = 2, devSells = false,
   }
   for (let i = 0; i < sells; i++) {
     c.apply(normalizeEvent({
-      txType: 'sell', mint: 'MINT', traderPublicKey: devSells ? 'DEV' : `S${i}`, tokenAmount: 500,
+      txType: 'sell', mint: 'MINT', traderPublicKey: devSells ? 'DEV' : `S${i}`,
+      tokenAmount: devSells ? devSellTokens : 500,
       solAmount: 0.02, vSolInBondingCurve: 40, vTokensInBondingCurve: 900_000_000, marketCapSol: mcap,
     }))
   }
@@ -163,8 +164,36 @@ function buildCandidate({ create = {}, buyers = 70, sells = 2, devSells = false,
     evaluateEntry(buildCandidate({ buyers: 70, sells: 60 })).pass,
     JSON.stringify(evaluateEntry(buildCandidate({ buyers: 70, sells: 60 })).failed?.map((c) => c.id)))
 
-  const devDump = evaluateEntry(buildCandidate({ devSells: true, sells: 1 }))
-  check('dev selling is disqualifying', !devDump.pass && devDump.failed.some((c) => c.id === 'dev_not_selling'))
+  /**
+   * The dev check is now about SIZE, not the fact of a sale.
+   *
+   * As a boolean it rejected at 14.9% against a 15.7% base rate — it could not tell a
+   * dev trimming from a dev dumping, so it averaged the two into noise and cost entries
+   * for nothing. The fixture dev starts with 20,000,000 tokens, so these two cases are
+   * the same event at two sizes.
+   */
+  const devTrim = evaluateEntry(buildCandidate({ devSells: true, sells: 1, devSellTokens: 1_000_000 }))
+  check('a dev trimming 5% of their own bag is not disqualifying', devTrim.pass,
+    JSON.stringify(devTrim.failed?.map((c) => c.id)))
+
+  const devDump = evaluateEntry(buildCandidate({ devSells: true, sells: 1, devSellTokens: 14_000_000 }))
+  check('but a dev unloading 70% of it is',
+    !devDump.pass && devDump.failed.some((c) => c.id === 'dev_not_dumping'))
+
+  /** The boundary itself, from both sides, so the threshold is the thing under test. */
+  const justUnder = buildCandidate({ devSells: true, sells: 1, devSellTokens: 9_800_000 })
+  const justOver = buildCandidate({ devSells: true, sells: 1, devSellTokens: 10_200_000 })
+  check('the cut sits at the configured percentage, not at "sold anything"',
+    evaluateEntry(justUnder).pass && !evaluateEntry(justOver).pass)
+  check('and the share sold is recorded as a number, not a flag',
+    Math.round(justUnder.devSoldPct) === 49 && Math.round(justOver.devSoldPct) === 51)
+
+  /**
+   * A dev who never bought has no bag, so there is no percentage to take. Inventing one
+   * would put a fabricated zero into the feature the scan is about to rule on.
+   */
+  const noBag = buildCandidate({ create: { initialBuy: 0 } })
+  check('a dev who started with no bag has no share-sold to report', noBag.devSoldPct === null)
 
   const whaleDev = evaluateEntry(buildCandidate({ create: { initialBuy: 400_000_000 } }))
   check('dev holding too much supply is rejected', !whaleDev.pass && whaleDev.failed.some((c) => c.id === 'dev_hold'))
@@ -406,9 +435,14 @@ const mkPosition = (over = {}) => ({
     config.exit.ladder = realLadder
   }
 
-  // The shipped default takes the whole position at the first rung.
-  check('the default exit is a single all-out sell',
-    config.exit.ladder.length === 1 && config.exit.ladder[0].sellPct === 100,
+  /**
+   * The shipped default takes PART of the position at the first rung and leaves the rest
+   * to the trailing stop. One rung, not four — the fee argument against the four-rung
+   * ladder still holds — but the paired sweep put selling 40% ahead of selling the lot,
+   * so the moon bag pays for its own extra transaction.
+   */
+  check('the default exit banks part of the position and lets the rest run',
+    config.exit.ladder.length === 1 && config.exit.ladder[0].sellPct < 100,
     JSON.stringify(config.exit.ladder))
 
   const already = decideExit(mkPosition({ rungsHit: [50] }), { priceSol: 1.6e-7, vSol: 34 })
@@ -417,11 +451,44 @@ const mkPosition = (over = {}) => ({
   const stop = decideExit(mkPosition(), { priceSol: 0.6e-7, vSol: 22 })
   check('stop-loss exits everything', stop.sellAll && stop.reasons[0].includes('stop-loss'))
 
-  const old = decideExit(mkPosition({ openedAt: Date.now() - 700_000, lastPriceAt: Date.now() }), { priceSol: 1.1e-7, vSol: 31 })
+  // Past the time stop, which is derived rather than pinned so it survives the next move.
+  const pastStop = () => Date.now() - (config.exit.timeStopSeconds + 100) * 1000
+  const old = decideExit(mkPosition({ openedAt: pastStop(), lastPriceAt: Date.now() }), { priceSol: 1.1e-7, vSol: 31 })
   check('time stop fires on a position that never ran', old.sellAll && old.reasons[0].includes('time stop'))
 
+  const notYet = decideExit(
+    mkPosition({ openedAt: Date.now() - (config.exit.timeStopSeconds - 100) * 1000, lastPriceAt: Date.now() }),
+    { priceSol: 1.1e-7, vSol: 31 },
+  )
+  check('and not before it is due', notYet.sellTokens === 0, JSON.stringify(notYet.reasons))
+
+  /**
+   * A LITERAL 700s, deliberately, because deriving it from config makes the test move
+   * with the setting and catch nothing — which is what the first version of it did.
+   *
+   * 700 sits between the old ten-minute stop and the shipped fifteen. A quiet position
+   * at that age used to be sold; it is not any more, and that is the change. Selling on
+   * the clock realises a loss the price never asked for: the coin is flat, not broken.
+   */
+  const quietAtElevenMinutes = decideExit(
+    mkPosition({ openedAt: Date.now() - 700_000, lastPriceAt: Date.now() }),
+    { priceSol: 1.1e-7, vSol: 31 },
+  )
+  check('a flat position at 700s is no longer sold on the clock',
+    quietAtElevenMinutes.sellTokens === 0, JSON.stringify(quietAtElevenMinutes.reasons))
+
+  /**
+   * The ceiling, and the reason for it. The journal observes outcomes for
+   * OUTCOME_WINDOW_MINUTES, so a time stop past that has no recorded path to be priced
+   * against — the sweep would quietly score it as a tie with the incumbent rather than
+   * as having no evidence. Raising one without the other is the mistake this catches.
+   */
+  check('the time stop stays inside the window the journal actually observes',
+    config.exit.timeStopSeconds <= config.learning.outcomeWindowMinutes * 60,
+    `${config.exit.timeStopSeconds}s vs ${config.learning.outcomeWindowMinutes * 60}s observed`)
+
   const oldButRunning = decideExit(
-    mkPosition({ openedAt: Date.now() - 700_000, lastPriceAt: Date.now(), rungsHit: [50], peakPriceSol: 1.6e-7 }),
+    mkPosition({ openedAt: pastStop(), lastPriceAt: Date.now(), rungsHit: [50], peakPriceSol: 1.6e-7 }),
     { priceSol: 1.55e-7, vSol: 34 },
   )
   check('time stop does NOT fire once a rung is hit', oldButRunning.sellTokens === 0)
@@ -827,8 +894,8 @@ console.log('\nExit replay vs the real holding window')
 {
   const { simulateLadder } = await import('../src/learn.js')
   const { ShadowTracker } = await import('../src/journal.js')
-  const TIME_STOP = config.exit.timeStopSeconds // 600
-  const STALE = config.exit.stalePriceSeconds // 180
+  const TIME_STOP = config.exit.timeStopSeconds
+  const STALE = config.exit.stalePriceSeconds
 
   const row = (over = {}) => ({
     v: JOURNAL_VERSION, peakMultiple: 2, endMultiple: 1.1, troughMultiple: 0.95,
@@ -845,9 +912,16 @@ console.log('\nExit replay vs the real holding window')
    * when the bot had already sold it at the rung, for a profit. Only the FIRST crossing
    * decides whether the ladder ran.
    */
-  const earlyRungLatePeak = simulateLadder(row({ firstRungAtSeconds: 120, peakAtSeconds: 700 }))
+  /**
+   * Asserted against the counterfactual rather than a fixed number. The old `> 1.2` was
+   * really pinning the all-out ladder's return, so changing the exit plan broke a test
+   * about peak ordering — which is not what it was there to watch.
+   */
+  const earlyRungLatePeak = simulateLadder(row({ firstRungAtSeconds: 120, peakAtSeconds: TIME_STOP + 100 }))
+  const rungOutOfReach = simulateLadder(row({ firstRungAtSeconds: TIME_STOP + 100, peakAtSeconds: TIME_STOP + 100 }))
   check('a rung that fired early still counts when the PEAK came after the time stop',
-    earlyRungLatePeak > 1.2, String(earlyRungLatePeak))
+    earlyRungLatePeak > rungOutOfReach && earlyRungLatePeak > 1,
+    `${earlyRungLatePeak} vs ${rungOutOfReach}`)
 
   // The rung itself out of reach: sold by the clock, at the price then standing.
   const lateRung = simulateLadder(row({ firstRungAtSeconds: TIME_STOP + 100, timeStopMultiple: 0.98 }))
@@ -879,7 +953,8 @@ console.log('\nExit replay vs the real holding window')
   const rungFirst = simulateLadder(row({
     troughMultiple: 0.5, troughAtSeconds: 300, firstRungAtSeconds: 60,
   }))
-  check('but a rung before the dip is not undone by it', rungFirst > 1.2, String(rungFirst))
+  check('but a rung before the dip is not undone by it',
+    rungFirst > stoppedFirst && rungFirst > 1, `${rungFirst} vs ${stoppedFirst}`)
 
   /**
    * 150,000 rows predate these fields. They must keep the old behaviour rather than
@@ -889,7 +964,14 @@ console.log('\nExit replay vs the real holding window')
     v: JOURNAL_VERSION, peakMultiple: 2, endMultiple: 1.1, troughMultiple: 0.95,
     hasOrdering: true, troughFirst: false,
   })
-  check('rows without the timing replay exactly as before', legacy > 1.2, String(legacy))
+  /**
+   * "Exactly as before" is now stated as an identity rather than a magic number: a row
+   * with no timing must replay the same as one whose rung and dip both land inside the
+   * holding window, because on that row the window changes nothing.
+   */
+  const timedEquivalent = simulateLadder(row({ firstRungAtSeconds: 120, troughAtSeconds: 400 }))
+  check('rows without the timing replay exactly as before',
+    near(legacy, timedEquivalent) && legacy > 1, `${legacy} vs ${timedEquivalent}`)
 
   /**
    * AND THE TRACKER HAS TO PRODUCE THE FIELDS. Testing simulateLadder against
@@ -1051,10 +1133,21 @@ console.log('\nExit replay vs the real holding window')
  */
 {
   const { simulateLadder } = await import('../src/learn.js')
-  const TIME_STOP = config.exit.timeStopSeconds
+  /**
+   * A time stop that actually BINDS inside the 15-minute observation window, pinned here
+   * rather than read from config.
+   *
+   * This block asks whether modelling the holding window beats ignoring it. If the stop
+   * sits at the window's own edge — which the shipped 900s now does — there is nothing
+   * left to model, the two replays converge, and the comparison is decided by noise. The
+   * question is about the mechanism, not about today's setting, so the setting that makes
+   * the mechanism visible is the one to test at.
+   */
+  const TIME_STOP = 600
   const STALE = config.exit.stalePriceSeconds
   const RUNG = 1 + (config.exit.ladder[0]?.atPct ?? 50) / 100
   const STOP = 1 - config.exit.stopLossPct / 100
+  const PLAN = { timeStopSeconds: TIME_STOP }
 
   let seed = 11
   const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648
@@ -1076,16 +1169,41 @@ console.log('\nExit replay vs the real holding window')
     paths.push(path.length ? path : [{ t: 5, m: 1 }])
   }
 
+  /**
+   * Walks the path under the LIVE exit rules, in decideExit's own order of precedence.
+   *
+   * It used to return RUNG the moment the first rung was touched, which silently assumed
+   * an all-out exit. That was true of the old plan and is not true of this one — the
+   * first rung now banks part of the bag and leaves the rest to the trailing stop, so a
+   * "truth" that closes the whole position at +50% is not the truth any more. Getting
+   * this wrong does not fail loudly; it just quietly re-scores the replay against the
+   * wrong target.
+   */
   const truth = (path) => {
+    const firstSell = Math.min(1, (config.exit.ladder[0]?.sellPct ?? 100) / 100)
+    const trail = config.exit.trailingDrawdownPct / 100
     let last = { t: 0, m: 1 }
+    let held = 1 // fraction of the bag still open
+    let banked = 0 // multiples already realised at a rung
+    let hitRung = false
+    let peak = 1
+    const closeAt = (m) => banked + held * m
+
     for (const p of path) {
-      if (p.t - last.t >= STALE) return last.m
-      if (p.t > TIME_STOP) return last.m
-      if (p.m <= STOP) return STOP
-      if (p.m >= RUNG) return RUNG
+      if (config.exit.sellOnStalePrice && p.t - last.t >= STALE) return closeAt(last.m)
+      peak = Math.max(peak, p.m)
+      if (p.m <= STOP) return closeAt(STOP) // 2. stop-loss, from ENTRY, rung or no rung
+      if (!hitRung && p.t > TIME_STOP) return closeAt(last.m) // 3. only before a rung
+      if (hitRung && p.m <= peak * (1 - trail)) return closeAt(peak * (1 - trail)) // 4.
+      if (!hitRung && p.m >= RUNG) { // 5. the ladder itself
+        banked += firstSell * RUNG
+        held -= firstSell
+        hitRung = true
+        if (held <= 0) return banked
+      }
       last = p
     }
-    return last.m
+    return closeAt(last.m)
   }
 
   const rowFrom = (path, withTiming) => {
@@ -1117,10 +1235,10 @@ console.log('\nExit replay vs the real holding window')
   const costDrag = 1 - mean(paths.map((p) => simulateLadder({
     ...rowFrom(p, true), peakMultiple: 1, endMultiple: 1, troughMultiple: 1,
     firstRungAtSeconds: null, staleExitAtSeconds: null, staleExitMultiple: 1, timeStopMultiple: 1,
-  })))
+  }, PLAN)))
   const actual = mean(paths.map(truth)) * (1 - costDrag)
-  const before = Math.abs(mean(paths.map((p) => simulateLadder(rowFrom(p, false)))) - actual)
-  const after = Math.abs(mean(paths.map((p) => simulateLadder(rowFrom(p, true)))) - actual)
+  const before = Math.abs(mean(paths.map((p) => simulateLadder(rowFrom(p, false), PLAN))) - actual)
+  const after = Math.abs(mean(paths.map((p) => simulateLadder(rowFrom(p, true), PLAN))) - actual)
 
   check('replaying the real holding window is closer to the truth than ignoring it',
     after < before, `${(after * 100).toFixed(1)}pp vs ${(before * 100).toFixed(1)}pp`)
@@ -1792,22 +1910,35 @@ console.log('\nLearning')
   const flat = simulateLadder({ peakMultiple: 1.1, endMultiple: 0.95, troughMultiple: 0.9 })
   check('a flat coin exits near break-even', flat > 0.85 && flat < 1.0, String(flat))
 
-  // Touched the rung, then round-tripped to zero: initials are out, the bag is caught
-  // by the trailing stop. This is the case the ladder exists for.
+  /**
+   * Touched the rung, then round-tripped to zero — the worst case for the moon bag.
+   *
+   * THE FIRST RUNG NO LONGER RECOVERS THE STAKE. Selling 67% at +50% returned ~1.0x, so
+   * anything after it was house money; selling 40% returns 0.6x, and the rest of the
+   * stake depends on the trailing stop catching the fall at half the peak. That is the
+   * cost side of the change the sweep says is worth making, and it should be stated
+   * rather than left for a surprised reading of a live trade.
+   *
+   * Even so, a coin that went to +50% and then to zero comes back near flat, while one
+   * that stalled just short of the rung takes the full stop-loss.
+   */
   const roundTrip = simulateLadder({ peakMultiple: 1.5, endMultiple: 0.01, troughMultiple: 0.01 })
-  check('rung hit then collapse still beats break-even', roundTrip > 1.0, String(roundTrip))
+  const justShort = simulateLadder({ peakMultiple: 1.4, endMultiple: 0.01, troughMultiple: 0.01 })
+  check('a rung hit then a total collapse comes back near flat', roundTrip > 0.95, String(roundTrip))
+  check('but the stake is NOT fully recovered at the first rung any more',
+    roundTrip < 1.0 && 0.4 * 1.5 < 1.0, String(roundTrip))
   check(
-    'recovering initials is what makes that survivable',
-    roundTrip > simulateLadder({ peakMultiple: 1.4, endMultiple: 0.01, troughMultiple: 0.01 }),
-    'a coin that stops just short of the rung does far worse',
+    'banking part of it is still what makes the collapse survivable',
+    roundTrip > justShort * 1.1, `${roundTrip} vs ${justShort} when it stalls just short`,
   )
 
-  // Held to the end at the rung price, no drawdown — the bag keeps its value.
-  // One rung fires, the remainder is closed at the window price: two sells.
-  // One rung, all out: a single sell.
+  /**
+   * Held to the end at the rung price with no drawdown. Two sells now, not one: the rung
+   * takes 40% and the remainder is closed at the window price.
+   */
   const held = simulateLadder({ peakMultiple: 1.5, endMultiple: 1.5, troughMultiple: 1.2 })
   check('a bag still up at window close is valued there, net of costs',
-    near(held, netOf(1.5, 1), 1e-9), `${held} vs ${netOf(1.5, 1)}`)
+    near(held, netOf(1.5, 2), 1e-9), `${held} vs ${netOf(1.5, 2)}`)
 
   // A feature that genuinely separates outcomes should be found...
   const signal = []
@@ -3929,9 +4060,8 @@ console.log('\nEnd-to-end bot loop')
   check('position is shadow-tracked for learning', bot.shadow.has(MINT))
 
   /**
-   * Price doubles. With the shipped single all-out rung this closes the whole position
-   * in one sell — the four-rung ladder that would have left a moon bag here cost 16% of
-   * a winner against 5.3%, which is why it is gone.
+   * Price doubles. The rung banks PART of the bag and the position stays open — the
+   * whole shape of the shipped exit, end to end, rather than in the simulator.
    */
   const beforeTokens = pos.tokensRemaining
   logFeed.emit('trade', mkTrade('buy', 'WHALE', 2))
@@ -3939,18 +4069,36 @@ console.log('\nEnd-to-end bot loop')
   await bot.tick()
 
   const after = store.getState().positions[MINT]
-  check('the rung fired on the price move', !after || after.tokensRemaining < beforeTokens)
-  check('a single all-out rung closes the position outright', !after, JSON.stringify(after?.tokensRemaining))
+  check('the rung fired on the price move', after && after.tokensRemaining < beforeTokens,
+    JSON.stringify(after?.tokensRemaining))
+  check('and it sold only its share, leaving the rest to run',
+    after && near(after.tokensRemaining, beforeTokens * (1 - config.exit.ladder[0].sellPct / 100), 1e-6),
+    `${after?.tokensRemaining} of ${beforeTokens}`)
+  check('the rung is recorded', after?.rungsHit.includes(config.exit.ladder[0].atPct),
+    String(after?.rungsHit))
+  check('the position is still open with a bag', after?.state === 'open' && after.tokensRemaining > 0)
+
+  /**
+   * The bag gives back half its peak, so the trailing stop takes it. This is the case
+   * the change is FOR: 40% banked at the double plus 60% out at break-even beats having
+   * sold the lot at the rung, and it is why the sweep put this plan ahead.
+   */
+  logFeed.emit('trade', mkTrade('sell', 'FADER', 1))
+  await new Promise((r) => setImmediate(r))
+  await bot.tick()
+  check('the trailing stop closes the remainder', !store.getState().positions[MINT])
 
   const closed = store.getState().closed.at(-1)
   check('closed trade was booked', closed?.mint === MINT, JSON.stringify(closed?.symbol))
   check('the winner books a profit', closed && closed.realizedSol > 0, String(closed?.realizedSol))
-  check('initials were recovered', closed && closed.solRecovered >= closed.solSpent,
+  check('initials were recovered across BOTH sells, not at the rung alone',
+    closed && closed.solRecovered >= closed.solSpent,
     `${closed?.solRecovered} vs ${closed?.solSpent}`)
-  check('the rung is recorded', closed && closed.rungsHit.includes(config.exit.ladder[0].atPct),
-    String(closed?.rungsHit))
+  check('which took two sells, and the cost model has to see both',
+    closed && closed.fills.filter((f) => f.side === 'sell').length === 2,
+    String(closed?.fills.filter((f) => f.side === 'sell').length))
 
-  // A later collapse has nothing left to sell, which is the point of exiting whole.
+  // A later collapse has nothing left to sell, now that the remainder is out too.
   logFeed.emit('trade', mkTrade('sell', 'RUGGER', 0.2))
   await new Promise((r) => setImmediate(r))
   await bot.tick()

@@ -150,11 +150,12 @@ const DUST_TOKENS = 1e-6
 export function applySell(position, fill, reasons) {
   const left = Math.max(0, position.tokensRemaining - fill.tokensSold)
   /**
-   * Snap dust to zero. Selling 100% of a bag leaves a floating-point residue — measured
-   * at 4.7e-10 tokens — which is not sellable but is still greater than zero, so the
-   * position stayed open, kept being managed, and eventually exited again on the stale
-   * price or time stop. That second exit is a real priority fee paid on nothing, and it
-   * matters now that the default exit sells the whole position at one rung.
+   * Snap dust to zero. Selling the last of a bag leaves a floating-point residue —
+   * measured at 4.7e-10 tokens — which is not sellable but is still greater than zero,
+   * so the position stayed open, kept being managed, and eventually exited again on the
+   * time stop. That second exit is a real priority fee paid on nothing. It applies to
+   * whichever sell empties the position, which with a partial first rung is usually the
+   * trailing stop rather than the rung.
    */
   position.tokensRemaining = left < DUST_TOKENS ? 0 : left
   position.solRecovered += fill.solReceived
