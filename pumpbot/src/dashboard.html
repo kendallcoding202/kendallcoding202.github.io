@@ -403,7 +403,8 @@ function render(d) {
         '<br>Journalling is unaffected — launches are still being written to disk.' +
         (c.analysisError ? '<br>Last error: ' + esc(String(c.analysisError)) : '') +
         (c.storage ? '<br>' + storageLine(c.storage) : '') +
-        (c.creatorPrior ? '<br>' + priorLine(c.creatorPrior) : '') + '</span>'
+        (c.creatorPrior ? '<br>' + priorLine(c.creatorPrior) : '') +
+        (c.walletPrior ? '<br>' + walletLine(c.walletPrior) : '') + '</span>'
     } else if (c.collecting) {
       // "in the last hour", not "about N/hr" — it is a count over a real window, and
       // the vaguer phrasing is what let an impossible extrapolation look plausible.
@@ -415,7 +416,8 @@ function render(d) {
         ' · watching <b>' + c.tracking + '</b> tokens' +
         '<span class="why">' + togo + ' · ' + c.rowsOnDisk + ' rows on disk in total' +
         (c.storage ? '<br>' + storageLine(c.storage) : '') +
-        (c.creatorPrior ? '<br>' + priorLine(c.creatorPrior) : '') + '</span>'
+        (c.creatorPrior ? '<br>' + priorLine(c.creatorPrior) : '') +
+        (c.walletPrior ? '<br>' + walletLine(c.walletPrior) : '') + '</span>'
     } else {
       col.innerHTML = '▲ NOT COLLECTING' +
         '<span class="why">' + c.reasons.map(esc).join('<br>') +
@@ -834,6 +836,29 @@ function memoryLine(a) {
     : ''
   return 'Memory <code>' + (m.rssMb ?? '?') + ' MB</code> resident · <code>' +
     (m.heapMb ?? '?') + ' MB</code> heap' + peak + failing + err
+}
+
+/**
+ * The wallet prior, and honestly about how far along it is.
+ *
+ * It cannot be rebuilt from the journal — the buyer lists are deliberately never
+ * written there — so it starts empty and fills only from live observation. For the
+ * first day or two "0 smart wallets" is the correct reading of a working system, not a
+ * fault, and the line says which of those it is.
+ */
+function walletLine(w) {
+  if (!w) return ''
+  if (!w.observations) {
+    return 'Wallet prior <span class="dim">empty — it fills from live observation only, ' +
+      'so it needs a day or so before any wallet has a record</span>'
+  }
+  const base = w.baseRate === null ? 'n/a' : (w.baseRate * 100).toFixed(1) + '%'
+  return 'Wallet prior · <code>' + num(w.observations) + '</code> buys seen over <code>' +
+    num(w.wallets) + '</code> wallets · <code>' + num(w.eligible) + '</code> with ' +
+    w.minLaunches + '+ · <b>' + num(w.smart) + '</b> beating the market' +
+    '<br><span style="color:var(--dimmer)">their base rate ' + base +
+    (w.eligible === 0 ? ' · no wallet has a long enough record yet' : '') +
+    ' · nothing in the entry path reads this yet</span>'
 }
 
 /**
