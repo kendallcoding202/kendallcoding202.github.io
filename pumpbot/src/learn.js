@@ -171,6 +171,7 @@ export function simulateLadder(
     // The replay has to model the rule the bot actually runs. It is a switch rather than
     // a deletion so the sweep can price the old behaviour against the same coins.
     sellOnStalePrice = config.exit.sellOnStalePrice,
+    stopFillGapShare = config.exit.stopFillGapShare,
     positionSol = livePositionSol(),
   } = {},
 ) {
@@ -180,7 +181,27 @@ export function simulateLadder(
   if (!(peak > 0)) return null
 
   const firstTarget = 1 + (ladder[0]?.atPct ?? 50) / 100
-  const stopMultiple = Math.max(0, 1 - stopLossPct / 100)
+  const stopTrigger = Math.max(0, 1 - stopLossPct / 100)
+  /**
+   * WHERE A STOP ACTUALLY FILLS, which this used to assume was exactly at its trigger.
+   *
+   * On these tokens the price does not walk down through the stop, it jumps past it: the
+   * live tape shows a -15% stop producing exits at -19% through -51%, and among rows the
+   * entry rules accept, the ones that touch the stop have a mean trough of 0.231x. They
+   * do not dip, they crater — so assuming the trigger price was booking the best possible
+   * fill on the worst trades in the book, and doing it on ~69% of them.
+   *
+   * The fill is modelled as landing part of the way from the trigger down to the trough,
+   * which is the shape the observed exits imply. The trough is a genuine lower bound, so
+   * this interpolates between "no gap" and "sold at the very bottom" rather than inventing
+   * a number outside what the path did.
+   */
+  const stopFill = (t) => {
+    const share = Math.min(1, Math.max(0, stopFillGapShare))
+    if (!Number.isFinite(t) || !(share > 0)) return stopTrigger
+    return Math.max(0, stopTrigger - (stopTrigger - Math.max(0, t)) * share)
+  }
+  const stopMultiple = stopTrigger
   const net = (gross, sells) => {
     const c = tradingCost({ sells, positionSol })
     return Math.max(0, gross * (1 - c.proportional) - c.priority)
@@ -209,7 +230,7 @@ export function simulateLadder(
         : Infinity
 
     // Whichever rule fires FIRST is the one that closed the position.
-    if (stoppedAt < Math.min(rungAt, deadline)) return net(stopMultiple, 1)
+    if (stoppedAt < Math.min(rungAt, deadline)) return net(stopFill(trough), 1)
 
     if (rungAt > deadline) {
       /**
@@ -228,7 +249,7 @@ export function simulateLadder(
 
   // Never reached the first rung: the stop-loss or the time stop got us out. One sell.
   if (peak < firstTarget) {
-    const exit = Number.isFinite(trough) && trough <= stopMultiple ? stopMultiple : Math.max(end, 0)
+    const exit = Number.isFinite(trough) && trough <= stopMultiple ? stopFill(trough) : Math.max(end, 0)
     return net(exit, 1)
   }
 
@@ -245,7 +266,7 @@ export function simulateLadder(
    * is why the sweep reports how many rows actually carry ordering.
    */
   if (row.hasOrdering && row.troughFirst && Number.isFinite(trough) && trough <= stopMultiple) {
-    return net(stopMultiple, 1)
+    return net(stopFill(trough), 1)
   }
 
   let tokensLeft = 1 // fraction of the original bag

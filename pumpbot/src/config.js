@@ -340,8 +340,32 @@ export const config = {
      * halt permanently on an ordinary drawdown. The percentage limits below are the ones
      * that scale; whichever triggers first wins.
      */
-    dailyLossLimitSol: num('DAILY_LOSS_LIMIT_SOL', 0.2),
-    totalLossLimitSol: num('TOTAL_LOSS_LIMIT_SOL', 0.35),
+    /**
+     * RAISED, because at 0.2 and 0.35 these were not circuit breakers — they were an
+     * off switch for any strategy with this return shape.
+     *
+     * One trade at 0.15 SOL has a standard deviation of 0.347 SOL. A daily limit of 0.2
+     * is smaller than the noise on a SINGLE trade. Simulating 400-trade runs of a
+     * strategy with a real +17.6% edge against the old numbers:
+     *
+     *   total limit 0.35 SOL -> halts 44% of profitable runs, median at trade 20
+     *   daily limit 0.20 SOL -> stops trading on 52% of days
+     *
+     * That is not caution, it is a guarantee of never finding out. The cause is
+     * structural rather than a bug: the edge lives in rare large winners, so equity
+     * wanders deep before the tail arrives — median worst drawdown over 100 trades is
+     * 0.61 SOL, already past the old halt.
+     *
+     * At 1.0 and 3.0 the same simulation halts ~0% of days and ~1% of runs, which is
+     * what a breaker should do: catch something genuinely broken, not ordinary variance.
+     *
+     * THESE ARE STILL SIZED FOR THE PAPER BOOK AND ITS 0.15 SOL POSITIONS. A live
+     * account trades the floor tier at 0.075, halving the per-trade deviation, and a
+     * small live account would want them lower in absolute terms — the percentage
+     * limits below are what scale, and whichever binds first still wins.
+     */
+    dailyLossLimitSol: num('DAILY_LOSS_LIMIT_SOL', 1.0),
+    totalLossLimitSol: num('TOTAL_LOSS_LIMIT_SOL', 3.0),
     /**
      * The same limits as a share of the account's high-water mark, which is what keeps
      * them meaningful at every size. Defaults are chosen to match the absolute numbers
@@ -732,6 +756,26 @@ export const config = {
      * same coins and say what the old rule cost.
      */
     sellOnStalePrice: bool('SELL_ON_STALE_PRICE', false),
+    /**
+     * HOW BADLY A STOP GAPS, used by the replay so it stops assuming stops fill at their
+     * trigger price.
+     *
+     * The live tape settled this: a -15% stop produced realized exits of -19%, -21%,
+     * -25%, -29%, -33%, -49%, -51%. The price does not walk down through the trigger, it
+     * jumps past it — one trade takes the token from above the stop to far below, and
+     * the next thing we see is the other side.
+     *
+     * The journal says why it is that large here: among rows the entry rules now accept,
+     * 69% touch the stop, and their mean TROUGH is 0.231x. These tokens do not dip, they
+     * crater, so the distance between trigger and floor is enormous and where in that gap
+     * the fill lands matters more than the trigger itself.
+     *
+     * 0.25 means "the fill lands a quarter of the way from the trigger down to the
+     * trough", which is what the observed exits imply. It costs about 4 points of
+     * modelled EV (1.155x -> 1.116x) and that is the point: the replay was quietly
+     * booking the best possible fill on the worst trades in the book.
+     */
+    stopFillGapShare: num('STOP_FILL_GAP_SHARE', 0.25),
   },
 }
 

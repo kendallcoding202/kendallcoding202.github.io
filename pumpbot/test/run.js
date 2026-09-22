@@ -758,21 +758,36 @@ console.log('\nRisk gates')
   anchor(0.5)
   check('base equity is anchored from the first reading', near(s.baseEquitySol, 0.5), String(s.baseEquitySol))
 
-  s.daily[today] = { realizedSol: -0.19, wins: 0, losses: 5 }
+  /**
+   * Derived from config rather than pinned, because these numbers had to MOVE: at 0.2
+   * and 0.35 they were smaller than the noise on a single trade and halted 44% of
+   * profitable runs. A test that hardcodes them turns the next necessary change into a
+   * failure to be silenced.
+   */
+  const dayLimit = config.risk.dailyLossLimitSol
+  s.daily[today] = { realizedSol: -(dayLimit - 0.01), wins: 0, losses: 5 }
   check('just inside the daily limit still trades', canOpen({ mint: 'N3a', creator: 'C', walletSol: 0.5 }) === null,
     String(canOpen({ mint: 'N3a', creator: 'C', walletSol: 0.5 })))
-  s.daily[today] = { realizedSol: -0.2, wins: 0, losses: 5 }
+  s.daily[today] = { realizedSol: -dayLimit, wins: 0, losses: 5 }
   check('the daily loss limit stops trading', canOpen({ mint: 'N3', creator: 'C', walletSol: 0.5 })?.includes('daily loss'))
+  /**
+   * The limit has to be big enough to survive ordinary variance, or it is an off switch.
+   * One position at the paper tier has a standard deviation of about 0.35 SOL.
+   */
+  check('and the limit is larger than the noise on a single trade',
+    dayLimit > 0.35, `${dayLimit} SOL against ~0.35 SOL of per-trade deviation`)
 
   s.daily = {}
   // Wallet and realized P&L must agree: losing 0.35 from a 0.5 SOL start leaves 0.15.
   // `observed = wallet + deployed - realized` is invariant under trading precisely
   // because of that, which is what makes it a deposit detector rather than a loss
   // detector — so an inconsistent fixture reads as a top-up and re-anchors the limits.
-  s.totalRealizedSol = -0.35
-  const blocked = canOpen({ mint: 'N4', creator: 'C', walletSol: 0.15 })
+  const totalLimit = config.risk.totalLossLimitSol
+  s.totalRealizedSol = -totalLimit
+  const blocked = canOpen({ mint: 'N4', creator: 'C', walletSol: 0.5 - totalLimit })
   check('the total loss limit halts the bot', blocked === 'total loss limit reached' && Boolean(s.halted), String(blocked))
-  check('a halt blocks everything after it', canOpen({ mint: 'N5', creator: 'C', walletSol: 0.15 })?.startsWith('halted'))
+  check('a halt blocks everything after it',
+    canOpen({ mint: 'N5', creator: 'C', walletSol: 0.5 - totalLimit })?.startsWith('halted'))
   store.clearHalt()
 
   /**
@@ -1553,6 +1568,7 @@ console.log('\nExit replay vs the real holding window')
    * wrong target.
    */
   const truth = (path) => {
+    const pathTrough = Math.min(1, ...path.map((p) => p.m))
     const firstSell = Math.min(1, (config.exit.ladder[0]?.sellPct ?? 100) / 100)
     const trail = config.exit.trailingDrawdownPct / 100
     let last = { t: 0, m: 1 }
@@ -1565,7 +1581,17 @@ console.log('\nExit replay vs the real holding window')
     for (const p of path) {
       if (config.exit.sellOnStalePrice && p.t - last.t >= STALE) return closeAt(last.m)
       peak = Math.max(peak, p.m)
-      if (p.m <= STOP) return closeAt(STOP) // 2. stop-loss, from ENTRY, rung or no rung
+      /**
+       * 2. Stop-loss, from ENTRY, rung or no rung — and it GAPS past its trigger.
+       *
+       * Anchored on the path's eventual TROUGH, exactly as simulateLadder does, and that
+       * is deliberate rather than sloppy. A journal row carries peak/trough/end and no
+       * ticks, so the trough is the only anchor the replay can ever have. Scoring the
+       * replay against a truth that used tick-level information it does not possess would
+       * measure the approximation, not the thing this harness exists to test — whether
+       * modelling the HOLDING WINDOW beats ignoring it.
+       */
+      if (p.m <= STOP) return closeAt(Math.max(0, STOP - (STOP - pathTrough) * config.exit.stopFillGapShare))
       if (!hitRung && p.t > TIME_STOP) return closeAt(last.m) // 3. only before a rung
       if (hitRung && p.m <= peak * (1 - trail)) return closeAt(peak * (1 - trail)) // 4.
       if (!hitRung && p.m >= RUNG) { // 5. the ladder itself
@@ -2254,11 +2280,23 @@ console.log('\nLearning')
   // Never reached the first rung and dumped: the stop-loss caps the damage at -30%,
   // then one buy and one sell are paid for.
   const stopKeeps = 1 - config.exit.stopLossPct / 100
-  const dud = simulateLadder({ peakMultiple: 1.1, endMultiple: 0.05, troughMultiple: 0.05 })
-  check('a coin that dies is capped by the stop-loss, net of one round trip',
-    near(dud, netOf(stopKeeps, 1), 1e-9), `${dud} vs ${netOf(stopKeeps, 1)}`)
+  /**
+   * THE STOP IS NOT A FLOOR, because it gaps. This used to assert the fill landed exactly
+   * at the trigger, which was the replay's most flattering assumption applied to the
+   * worst trades in the book — and on this population it is applied to ~69% of them.
+   */
+  const dying = { peakMultiple: 1.1, endMultiple: 0.05, troughMultiple: 0.05 }
+  const dud = simulateLadder(dying)
+  const atTrigger = simulateLadder(dying, { stopFillGapShare: 0 })
+  check('a coin that dies fills BELOW the stop, not at it',
+    dud < atTrigger, `${dud} gapped vs ${atTrigger} at the trigger`)
+  check('and with no gap assumed it is exactly the trigger price, net of a round trip',
+    near(atTrigger, netOf(stopKeeps, 1), 1e-9), `${atTrigger} vs ${netOf(stopKeeps, 1)}`)
+  check('the gap lands between the trigger and the trough, never beyond either',
+    dud > netOf(dying.troughMultiple, 1) && dud < netOf(stopKeeps, 1),
+    `${dud} between ${netOf(dying.troughMultiple, 1)} and ${netOf(stopKeeps, 1)}`)
   check('and that is meaningfully worse than the old flat-fee model claimed',
-    dud < stopKeeps * 0.97 - 0.01, `${dud} vs old ${stopKeeps * 0.97}`)
+    atTrigger < stopKeeps * 0.97 - 0.01, `${atTrigger} vs old ${stopKeeps * 0.97}`)
 
   // A fixed priority fee per transaction hurts a smaller position more.
   /**
@@ -2369,8 +2407,14 @@ console.log('\nLearning')
    * How thin that protection has become, stated as a number so shrinking the rung again
    * has to face it: the margin over never reaching the rung at all.
    */
-  check('and the protection it buys on a round trip is now slim',
-    roundTrip / justShort < 1.1,
+  /**
+   * Reaching the rung is worth more than it looks here BECAUSE the stop gaps: a coin that
+   * never gets there eats the gapped fill, not the trigger price. That is the honest
+   * shape of it — the rung is not protection, it is the difference between banking
+   * something and being carried to whatever the crash left.
+   */
+  check('reaching the rung matters more once the stop is allowed to gap',
+    roundTrip / justShort > 1.1,
     `${((roundTrip / justShort - 1) * 100).toFixed(1)}% better than never hitting the rung`)
 
   /**
@@ -2518,8 +2562,9 @@ console.log('\nLearning')
   const dippedThenRan = { peakMultiple: 3, troughMultiple: 0.5, endMultiple: 2.5, hasOrdering: true, troughFirst: true }
   const ranThenDied = { peakMultiple: 3, troughMultiple: 0.5, endMultiple: 0.5, hasOrdering: true, troughFirst: false }
   const stoppedOut = simulateLadder(dippedThenRan, { stopLossPct: 30 })
-  check('a dip before the run stops us out of it', near(stoppedOut, netOf(0.7, 1), 1e-9),
-    `${stoppedOut} vs ${netOf(0.7, 1)}`)
+  check('a dip before the run stops us out of it',
+    near(stoppedOut, netOf(0.7 - (0.7 - dippedThenRan.troughMultiple) * config.exit.stopFillGapShare, 1), 1e-9),
+    `${stoppedOut} vs ${netOf(0.7, 1)} at the trigger`)
   check('the same path in the other order still rides the ladder',
     simulateLadder(ranThenDied, { stopLossPct: 30 }) > 1, String(simulateLadder(ranThenDied, { stopLossPct: 30 })))
   check('a stop too deep to trigger does not fire',
