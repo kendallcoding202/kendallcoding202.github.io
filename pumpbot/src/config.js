@@ -375,9 +375,36 @@ export const config = {
 
   exec: {
     priorityFeeSol: num('PRIORITY_FEE_SOL', 0.0005),
+    /**
+     * TOLERANCES SENT TO THE TRADE API — the worst fill we will ACCEPT, not the fill we
+     * expect. See latencySlipPct for the expectation; they are deliberately separate now.
+     *
+     * Conflating them was a real and expensive mistake. The paper fills charged half of
+     * each tolerance as their cost, which made a round trip 21.4% before the market did
+     * anything at all, and made WIDENING a safety limit look like a worse strategy.
+     * Exits must clear even in a falling market, so the sell tolerance is generous on
+     * purpose, and that generosity was being billed as a loss on every trade.
+     */
     buySlippagePct: num('BUY_SLIPPAGE_PCT', 12),
-    // Exits must clear even in a falling market; being stuck in is the worse failure.
     sellSlippagePct: num('SELL_SLIPPAGE_PCT', 25),
+    /**
+     * What the price is expected to move AGAINST US between deciding and filling, per
+     * side. This is the honest unknown in the cost model and the one number that both
+     * the paper fills and the replay's cost model now read, so the account and the
+     * report can no longer disagree about what a trade costs.
+     *
+     * NOT price impact, which is a different thing counted separately: the paper fills
+     * get impact exactly from the constant-product curve, and priceImpactPct below is
+     * the replay's estimate of the same quantity. This is purely latency — other trades
+     * landing between our decision and ours.
+     *
+     * 2% per side is deliberately conservative for what we do. A 0.075 SOL buy against a
+     * curve holding ~40 SOL moves the price about 0.19%, and we are not racing anybody:
+     * the strategy watches for 30 seconds before entering precisely so it does not have
+     * to win a latency fight. Raise it if live fills say otherwise — and they, not this
+     * comment, are what should settle it.
+     */
+    latencySlipPct: num('LATENCY_SLIP_PCT', 2),
     // pump.fun protocol fee plus the trade API's cut, used for paper fills and PnL.
     feePct: num('FEE_PCT', 1.5),
     /**
@@ -385,6 +412,9 @@ export const config = {
      * below. Buying into a bonding curve moves the price against you; so does selling.
      * An estimate, but leaving it at zero is not a neutral choice — it is a claim that
      * trading is free, and that claim always flatters the strategy.
+     *
+     * Used by the REPLAY only. The paper executor does not need an estimate: it prices
+     * fills through the real curve, which charges impact exactly.
      */
     priceImpactPct: num('PRICE_IMPACT_PCT', 0.5),
     // The position size the impact figure above was estimated for.

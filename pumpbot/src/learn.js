@@ -57,15 +57,30 @@ function walletSnapshot() {
  * Costed at the LIVE position size by default, since the question this report exists to
  * answer is whether to fund a live wallet — not how paper did at a paper size.
  */
+/**
+ * What a round trip costs, and it must agree with what the PAPER EXECUTOR actually
+ * charges — they used to disagree by 16pp, which is the whole of the calibration gap the
+ * report has been flagging. The replay said 5.3% and the account charged 21.4%, so every
+ * exit proposal was being scored in an economy the account did not live in.
+ *
+ * Three components, each counted once:
+ *  - fee, per side
+ *  - price impact, proportional to size (the executor gets this exactly from the curve;
+ *    here it is an estimate that scales off the reference size)
+ *  - latency slip, per side, the SAME number the executor uses
+ * plus the priority fee, which is fixed per transaction and so is the only part that
+ * makes an extra sell genuinely more expensive.
+ */
 function tradingCost({ sells, positionSol }) {
   const sideFee = config.exec.feePct / 100
   const impact = (config.exec.priceImpactPct / 100) * (positionSol / config.exec.impactReferenceSol)
+  const slip = config.exec.latencySlipPct / 100
   const sides = 1 + sells // one buy, plus however many times we sold
   const priority = (config.exec.priorityFeeSol * sides) / positionSol
   return {
-    proportional: (sideFee + impact) * sides,
+    proportional: (sideFee + impact + slip) * sides,
     priority,
-    total: (sideFee + impact) * sides + priority,
+    total: (sideFee + impact + slip) * sides + priority,
   }
 }
 

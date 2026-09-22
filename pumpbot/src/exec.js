@@ -286,16 +286,28 @@ async function finishSell(mint, fill, signature) {
 }
 
 // --- Paper fills -------------------------------------------------------------------
-// Modelled on the same constant-product curve as the real thing, minus fees, minus a
-// slippage haircut standing in for the traders who get there before us. Optimistic
-// paper fills are worse than useless, so this errs pessimistic.
-
+/**
+ * Modelled on the same constant-product curve as the real thing — so PRICE IMPACT is
+ * exact, not estimated — minus fees, minus a latency haircut for the trades that land
+ * between our decision and ours.
+ *
+ * That haircut used to be half the API SLIPPAGE TOLERANCE: 6% on the buy and 12.5% on
+ * the sell, stacked on top of the curve's own impact, for a 21.4% round trip before the
+ * market moved at all. A tolerance is the worst fill we will accept, not the fill we
+ * expect, and billing it as a cost meant a wider safety margin scored as a worse
+ * strategy. It also put the paper account 16pp away from the replay, which is the
+ * calibration gap the report kept reporting and nobody could place.
+ *
+ * Optimistic paper fills are worse than useless, so the number that replaced it is
+ * still conservative — but it is now the SAME number the replay charges, and the two
+ * can no longer tell different stories about the same trade.
+ */
 function paperBuy({ mint, solAmount, curve }) {
   const q = quoteBuy({ vSol: curve?.vSol, vTokens: curve?.vTokens, solIn: solAmount })
   if (!q) return { ok: false, error: 'no curve state for paper fill' }
 
   const feeMultiplier = 1 - config.exec.feePct / 100
-  const slipMultiplier = 1 - config.exec.buySlippagePct / 200 // assume half the tolerance is used
+  const slipMultiplier = 1 - config.exec.latencySlipPct / 100
   const tokensReceived = q.tokensOut * feeMultiplier * slipMultiplier
   const solSpent = solAmount + config.exec.priorityFeeSol
 
@@ -315,7 +327,7 @@ function paperSell({ mint, tokenAmount, curve }) {
   if (!q) return { ok: false, error: 'no curve state for paper fill' }
 
   const feeMultiplier = 1 - config.exec.feePct / 100
-  const slipMultiplier = 1 - config.exec.sellSlippagePct / 200
+  const slipMultiplier = 1 - config.exec.latencySlipPct / 100
   const solReceived = q.solOut * feeMultiplier * slipMultiplier - config.exec.priorityFeeSol
 
   log.info(`[paper] SELL ${mint}: ${tokenAmount.toFixed(0)} tokens for ${sol(solReceived)}`)

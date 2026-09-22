@@ -19,7 +19,7 @@ const { decideExit, newPosition, applySell, markPrice, positionPnl } = await imp
 const store = await import('../src/store.js')
 const { canOpen } = await import('../src/risk.js')
 const { buy, sell } = await import('../src/exec.js')
-const { wilson, simulateLadder, bestThreshold, analyze } = await import('../src/learn.js')
+const { wilson, simulateLadder, bestThreshold, analyze, roundTripCost } = await import('../src/learn.js')
 const { JOURNAL_VERSION, CreatorIndex } = await import('../src/journal.js')
 const { buildSnapshot } = await import('../src/dashboard.js')
 
@@ -1862,11 +1862,17 @@ console.log('\nLearning')
   check('costs are charged at the size a live account trades, not the top tier',
     POS === 0.075 && config.sizing.tiers[0].buySol === 0.15,
     JSON.stringify(config.sizing.tiers))
-  const costFor = (sells) => {
-    const side = config.exec.feePct / 100 + (config.exec.priceImpactPct / 100) * (POS / config.exec.impactReferenceSol)
-    const sides = 1 + sells
-    return { proportional: side * sides, priority: (config.exec.priorityFeeSol * sides) / POS }
-  }
+  /**
+   * The REAL cost model, not a copy of it.
+   *
+   * This helper used to retype the formula, which meant these checks verified that my
+   * transcription matched itself — they broke the moment a genuine cost component was
+   * added, having never once objected to the 16pp gap between the replay and the
+   * account that was sitting underneath them the whole time. What they are here to
+   * assert is how simulateLadder APPLIES the cost, so the cost itself comes from the
+   * thing that defines it.
+   */
+  const costFor = (sells) => roundTripCost({ sells, positionSol: POS })
   const netOf = (gross, sells) => {
     const c = costFor(sells)
     return gross * (1 - c.proportional) - c.priority
@@ -1889,6 +1895,60 @@ console.log('\nLearning')
    * assuming either cost alone gets the direction wrong — I assumed it myself here, and
    * the test caught it.
    */
+  /**
+   * THE REPLAY AND THE ACCOUNT MUST AGREE ABOUT WHAT A TRADE COSTS.
+   *
+   * They did not, and the disagreement was 16pp: the replay charged 5.3% for a round
+   * trip while the paper executor charged 21.4%, because the executor billed half of
+   * each API SLIPPAGE TOLERANCE as an expected cost — on top of the curve's own exact
+   * price impact. That gap is the entire calibration discrepancy the report kept
+   * printing, and while it stood, every exit proposal was scored in an economy the
+   * account did not live in. At 21.4% break-even needs 65% of trades to reach +50%;
+   * at 5.3% it needs 31.7%. The same strategy is a clear winner or a dead loss
+   * depending only on which file you believe.
+   *
+   * Measured the only way that cannot lie: buy and immediately sell on an UNCHANGED
+   * curve, so every lamport of the difference is cost and nothing is a price move.
+   */
+  {
+    const { quoteBuy, quoteSell } = await import('../src/curve.js')
+    const vSol = 40, vTokens = 900_000_000, size = 0.075
+    const fee = 1 - config.exec.feePct / 100
+    const slip = 1 - config.exec.latencySlipPct / 100
+
+    const b = quoteBuy({ vSol, vTokens, solIn: size })
+    const tokens = b.tokensOut * fee * slip
+    const spent = size + config.exec.priorityFeeSol
+    const s = quoteSell({ vSol: vSol + size, vTokens: vTokens - b.tokensOut, tokensIn: tokens })
+    const back = s.solOut * fee * slip - config.exec.priorityFeeSol
+
+    const executorCost = (spent - back) / spent
+    const replayCost = roundTripCost({ sells: 1, positionSol: size }).total
+    check('the replay and the paper account agree on the cost of a round trip',
+      Math.abs(executorCost - replayCost) < 0.03,
+      `executor ${(executorCost * 100).toFixed(1)}% vs replay ${(replayCost * 100).toFixed(1)}%`)
+    /**
+     * Direction matters as well as size: the replay being the PESSIMISTIC one is safe,
+     * because it means a plan the report endorses will not disappoint the account. The
+     * reverse would flatter every proposal.
+     */
+    check('and where they differ, the replay is the cautious one',
+      replayCost >= executorCost,
+      `executor ${(executorCost * 100).toFixed(1)}% vs replay ${(replayCost * 100).toFixed(1)}%`)
+
+    /**
+     * The tolerances are SAFETY LIMITS, not predictions. Widening the sell tolerance so
+     * exits clear in a falling market must not make the backtest worse — that was the
+     * logical error underneath the whole gap.
+     */
+    const before = roundTripCost({ sells: 1, positionSol: size }).total
+    const widened = config.exec.sellSlippagePct
+    config.exec.sellSlippagePct = 90
+    check('widening the slippage TOLERANCE does not change what a trade is scored at',
+      near(roundTripCost({ sells: 1, positionSol: size }).total, before, 1e-12))
+    config.exec.sellSlippagePct = widened
+  }
+
   const path = { peakMultiple: 1.1, endMultiple: 0.05, troughMultiple: 0.05 }
   const tiny = simulateLadder(path, { positionSol: 0.01 })
   const mid = simulateLadder(path, { positionSol: 0.0866 })
@@ -1924,7 +1984,9 @@ console.log('\nLearning')
    */
   const roundTrip = simulateLadder({ peakMultiple: 1.5, endMultiple: 0.01, troughMultiple: 0.01 })
   const justShort = simulateLadder({ peakMultiple: 1.4, endMultiple: 0.01, troughMultiple: 0.01 })
-  check('a rung hit then a total collapse comes back near flat', roundTrip > 0.95, String(roundTrip))
+  // 0.90, not the 0.967 this read before the cost model was made honest. Charging the
+  // latency slip the paper account had been charging all along costs ~6pp here.
+  check('a rung hit then a total collapse comes back near flat', roundTrip > 0.9, String(roundTrip))
   check('but the stake is NOT fully recovered at the first rung any more',
     roundTrip < 1.0 && 0.4 * 1.5 < 1.0, String(roundTrip))
   check(
@@ -2086,11 +2148,21 @@ console.log('\nLearning')
   check('rows without ordering keep the old optimistic reading',
     simulateLadder({ ...dippedThenRan, hasOrdering: false }, { stopLossPct: 30 }) > 1)
 
-  // A population where taking profit EARLIER is genuinely better: everything spikes a
-  // little and round-trips to nothing.
+  /**
+   * A population where taking profit EARLIER is genuinely better: everything tops out
+   * just short of the current rung and settles back below water.
+   *
+   * The old fixture round-tripped to 0.05, which made an earlier rung win only because
+   * the all-out ladder turned it into a FULL exit before the collapse. Under a partial
+   * rung the 60% remainder rides that collapse down to the trailing stop, and the extra
+   * sell costs more than the early 40% saves — so the fixture quietly stopped testing
+   * what it claimed once the exit plan changed. The path now settles somewhere the
+   * remainder survives, which is what makes banking part of it early a real improvement
+   * rather than an artefact of selling everything.
+   */
   const spikeAndDie = Array.from({ length: 400 }, () => ({
     v: JOURNAL_VERSION, action: 'bought', decisionPriceSol: 1, features: { organicBuyers: 10 },
-    hitFirstRung: false, peakMultiple: 1.3, troughMultiple: 0.05, endMultiple: 0.05,
+    hitFirstRung: false, peakMultiple: 1.4, troughMultiple: 0.88, endMultiple: 0.9,
     hasOrdering: true, troughFirst: false,
   }))
   const earlySweep = exitSweep(spikeAndDie, { minSamples: 10 })
