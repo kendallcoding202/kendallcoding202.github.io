@@ -127,7 +127,20 @@ export function closePosition(mint, reason) {
      * claim 0.976x while the account was doing 0.812x and nothing would notice. A
      * backtest nobody scores is a story.
      */
+    /**
+     * Stake, P&L and COUNT accumulated together, as a matched set.
+     *
+     * Only stakedSol was added here, and totalRealizedSol was divided by it — a total
+     * running since the account opened over a denominator that started days later. 174
+     * historical trades had no recorded stake, so the ratio was ~5 trades of stake
+     * against 179 trades of losses and the report printed "the account actually
+     * returned -5.726x", which a long-only book cannot do.
+     *
+     * Three fields that only ever move together cannot drift apart.
+     */
     s.daily[day].stakedSol = (s.daily[day].stakedSol ?? 0) + Math.max(0, p.solSpent ?? 0)
+    s.daily[day].realizedOnStakedSol = (s.daily[day].realizedOnStakedSol ?? 0) + realized
+    s.daily[day].stakedTrades = (s.daily[day].stakedTrades ?? 0) + 1
     s.totalRealizedSol += realized
 
     if (realized > 0) {
@@ -197,19 +210,25 @@ export function strategyRecord() {
   let wins = 0
   let losses = 0
   let stakedSol = 0
+  let realizedOnStaked = 0
+  let stakedTrades = 0
   for (const day of Object.values(s.daily ?? {})) {
     wins += day.wins ?? 0
     losses += day.losses ?? 0
     stakedSol += day.stakedSol ?? 0
+    realizedOnStaked += day.realizedOnStakedSol ?? 0
+    stakedTrades += day.stakedTrades ?? 0
   }
   /**
-   * What the account ACTUALLY returned per SOL risked. This is the number every replay
-   * in the learning report is claiming to predict, and until now nothing compared them.
+   * What the account ACTUALLY returned per SOL risked — over the trades whose stake we
+   * recorded, NOT over all time. totalRealizedSol covers trades from before this
+   * counter existed, and dividing it by a denominator that started later is how the
+   * report came to claim -5.726x on a long-only book.
    */
-  const realizedMultiple = stakedSol > 0 ? 1 + (s.totalRealizedSol ?? 0) / stakedSol : null
+  const realizedMultiple = stakedSol > 0 ? 1 + realizedOnStaked / stakedSol : null
   // Trades that closed at exactly break-even increment neither counter, so this is the
   // count of DECIDED trades. It is the denominator a win rate actually wants.
-  return { wins, losses, closed: wins + losses, stakedSol, realizedMultiple }
+  return { wins, losses, closed: wins + losses, stakedSol, stakedTrades, realizedOnStaked, realizedMultiple }
 }
 
 export function exploreRecord() {

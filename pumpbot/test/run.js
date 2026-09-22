@@ -1203,6 +1203,60 @@ console.log('\nBacktest calibration')
   s.daily[day] = { realizedSol: -4.9187, wins: 35, losses: 139, stakedSol: 26.19 }
   s.totalRealizedSol = -4.9187
 
+  /**
+   * THE MISMATCH: realized P&L running since the account opened, divided by a stake
+   * counter that started days later. 174 historical trades had no recorded stake, so
+   * the ratio was ~5 trades of stake against 179 trades of losses and the report
+   * printed "-5.726x", which a long-only book cannot do.
+   */
+  {
+    const s2 = store.getState()
+    s2.daily = {}
+    s2.totalRealizedSol = -5.04
+    // An old day: P&L recorded, stake never was.
+    s2.daily['2026-09-20'] = { realizedSol: -4.9187, wins: 35, losses: 139 }
+    // A new day: all three together.
+    s2.daily['2026-09-21'] = {
+      realizedSol: -0.12, wins: 2, losses: 3,
+      stakedSol: 0.75, realizedOnStakedSol: -0.12, stakedTrades: 5,
+    }
+    const mixed = store.strategyRecord()
+    check('the multiple is computed only over trades whose stake we have',
+      near(mixed.realizedMultiple, 1 - 0.12 / 0.75, 1e-9), String(mixed.realizedMultiple))
+    check('which is never below zero for a long-only book', mixed.realizedMultiple > 0)
+    check('and the trade count matches that same set, not every trade ever closed',
+      mixed.stakedTrades === 5 && mixed.closed === 179,
+      JSON.stringify({ staked: mixed.stakedTrades, closed: mixed.closed }))
+
+    // An impossible ratio must be refused, not rendered.
+    s2.daily['2026-09-21'] = {
+      realizedSol: -5.04, wins: 2, losses: 3,
+      stakedSol: 0.75, realizedOnStakedSol: -5.04, stakedTrades: 5,
+    }
+    const bad = analyze(
+      Array.from({ length: 60 }, (_, i) => ({
+        v: JOURNAL_VERSION, mint: 'X' + i, creator: 'C', at: i, finalizedAt: Date.now() - 1000,
+        action: 'bought', failedChecks: [], hitFirstRung: i % 3 === 0,
+        peakMultiple: i % 3 === 0 ? 2 : 0.9, endMultiple: 0.9, troughMultiple: 0.9,
+        decisionPriceSol: 1e-7, observedSeconds: 900, ticks: 20, features: {},
+      })),
+      60,
+    )
+    check('an impossible realized multiple is refused rather than printed',
+      bad.calibration.comparable === false && bad.calibration.inconsistent === true,
+      JSON.stringify(bad.calibration))
+    check('and the report says the figures disagree instead of showing the number',
+      /ledger figures disagree/.test(formatReport(bad)) && !/-5\.7/.test(formatReport(bad)))
+    s2.daily = {}
+    s2.totalRealizedSol = 0
+  }
+
+  const day2 = new Date().toISOString().slice(0, 10)
+  s.daily[day2] = {
+    realizedSol: -4.9187, wins: 35, losses: 139,
+    stakedSol: 26.19, realizedOnStakedSol: -4.9187, stakedTrades: 174,
+  }
+  s.totalRealizedSol = -4.9187
   const rec = store.strategyRecord()
   check('the ledger knows what it staked', near(rec.stakedSol, 26.19, 1e-9))
   check('and what multiple that actually returned',
@@ -1243,7 +1297,12 @@ console.log('\nBacktest calibration')
   const closeRows = Array.from({ length: 200 }, (_, i) => mkBought(i, i % 50 === 0 ? 2.2 : 0.97))
   const staked = 26.19
   const target = analyze(closeRows, 200).calibration.simulatedMultiple
-  s.daily[day] = { realizedSol: (target - 1) * staked, wins: 60, losses: 114, stakedSol: staked }
+  // Stake, P&L and count as a matched set — the calibration is computed over exactly
+  // the trades whose stake was recorded, so a fixture missing them has nothing to compare.
+  s.daily[day] = {
+    realizedSol: (target - 1) * staked, wins: 60, losses: 114,
+    stakedSol: staked, realizedOnStakedSol: (target - 1) * staked, stakedTrades: 174,
+  }
   s.totalRealizedSol = (target - 1) * staked
   const close = analyze(closeRows, 200)
   check('a replay that matches the ledger is not flagged',

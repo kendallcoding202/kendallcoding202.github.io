@@ -646,8 +646,24 @@ function analyzeRows(rows, onDisk) {
    */
   const calibrationOf = (sim) => {
     const record = strategyRecord()
-    if (!sim || record.realizedMultiple === null || record.closed === 0) {
-      return { comparable: false, trades: record.closed, stakedSol: record.stakedSol }
+    /**
+     * Counted over the trades whose STAKE we have, not over every trade ever closed.
+     * Those are different sets — the stake counter started later — and mixing them
+     * produced "-5.726x over 179 closed trades, 0.75 SOL staked", which is 5 trades of
+     * stake against 179 trades of losses.
+     *
+     * A long-only book cannot return less than zero, so that result is refused outright
+     * rather than printed. An impossible number reaching the page means the inputs
+     * disagree, and saying so is worth more than rendering it.
+     */
+    const impossible = record.realizedMultiple !== null && record.realizedMultiple < 0
+    if (!sim || record.realizedMultiple === null || record.stakedTrades === 0 || impossible) {
+      return {
+        comparable: false,
+        trades: record.stakedTrades,
+        stakedSol: record.stakedSol,
+        inconsistent: impossible,
+      }
     }
     const gap = sim.meanMultiple - record.realizedMultiple
     return {
@@ -655,7 +671,7 @@ function analyzeRows(rows, onDisk) {
       simulatedMultiple: sim.meanMultiple,
       realizedMultiple: record.realizedMultiple,
       gap,
-      trades: record.closed,
+      trades: record.stakedTrades,
       stakedSol: record.stakedSol,
       // A replay wrong by more than a few points cannot be used to choose between exit
       // plans that differ by fractions of one.
@@ -997,6 +1013,15 @@ export function formatReport(a) {
         (Math.abs(best - size) / size > 0.15 ? '  ← worth moving toward' : '  (you are close to it)'))
     }
     L.push('  Fewer, larger rungs cost less. Every rung is a transaction.')
+    L.push('')
+  }
+
+  if (a.calibration && !a.calibration.comparable && a.calibration.inconsistent) {
+    L.push('Does the replay match what actually happened?')
+    L.push('  CANNOT SAY — the ledger figures disagree with each other.')
+    L.push('  Realized P&L and recorded stake cover different sets of trades, which makes')
+    L.push('  the ratio meaningless (a long-only book cannot return below zero). This')
+    L.push('  corrects itself as trades close with both recorded together.')
     L.push('')
   }
 
