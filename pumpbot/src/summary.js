@@ -86,6 +86,15 @@ export function exploreText() {
     `  P&L <b>${sol(realized + unrealized)}</b> · realized ${sol(realized)} · open ${sol(unrealized)}`,
     `  ${book.wins}W/${book.losses}L over ${closed} closed · ${open.length} open` +
       (closed ? ` · ${sol(realized / closed)} avg` : ''),
+    /**
+     * The multiple, which is the figure the replay predicts and therefore the only one it
+     * can be scored against. SOL per trade above needs a position size to mean anything,
+     * and explore is depth-sized so it does not have one.
+     */
+    ...(book.realizedMultiple === null
+      ? []
+      : [`  <b>${book.realizedMultiple.toFixed(3)}x</b> per SOL staked — ${sol(book.realizedOnStaked)} on ` +
+         `${sol(book.stakedSol)} over ${book.stakedTrades} trades`]),
     capped
       ? `  Bankroll ${sol(config.explore.budgetSol + realized - exploreDeployedSol())} left of ${sol(config.explore.budgetSol)}`
       : `  Bankroll unlimited (paper only) · ${sol(exploreDeployedSol())} deployed now`,

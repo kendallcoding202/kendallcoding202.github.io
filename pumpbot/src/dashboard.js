@@ -360,6 +360,15 @@ export function buildSnapshot(walletSol, stats = null) {
       open: explorePositions().length,
       // All of them, not the retained slice — this is the average's denominator.
       closed: exploreBook.closed,
+      /**
+       * What the rejected arm ACTUALLY returned per SOL staked, measured rather than
+       * assumed. Explore is sized by curve depth, so there is no single position size to
+       * divide by — and this is the largest sample the bot has for scoring the replay.
+       */
+      stakedSol: exploreBook.stakedSol,
+      stakedTrades: exploreBook.stakedTrades,
+      realizedOnStakedSol: exploreBook.realizedOnStaked,
+      realizedMultiple: exploreBook.realizedMultiple,
       // The experiment's separate bankroll, so it is obvious at a glance that none of
       // this is coming out of the strategy's money. null means unlimited — the panel
       // shows what has been spent instead of what is left, which is the useful number

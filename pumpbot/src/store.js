@@ -15,6 +15,24 @@ const EMPTY = {
   exploreRealizedSol: 0,
   exploreWins: 0,
   exploreLosses: 0,
+  /**
+   * The explore book's DENOMINATOR — the same matched set the strategy book keeps.
+   *
+   * Explore is by far the largest sample this bot produces: tens of thousands of real
+   * closed trades against the strategy's few hundred, and the only direct measurement of
+   * what the REJECTED arm actually returns. It is therefore the one place the replay can
+   * be scored against reality — but only with a stake to divide by.
+   *
+   * Without it the panel could only report SOL per trade, and turning that into a
+   * multiple meant assuming a position size. That assumption is wrong by construction
+   * here: explore is sized by buySolForCurve, so it varies with the wallet's tier AND is
+   * capped at a share of each curve's depth. Assuming 0.15 where the real average is
+   * 0.09 turns 0.80x into 0.67x, which is the difference between "the replay is a little
+   * optimistic" and "the replay is not describing this book at all".
+   */
+  exploreStakedSol: 0,
+  exploreRealizedOnStakedSol: 0,
+  exploreStakedTrades: 0,
   // Drawdown circuit breaker state. Persisted so a restart cannot silently reset the
   // ratchet and hand the bot a fresh allowance. baseEquitySol anchors the account size
   // once; peakRealizedSol is the high-water mark realized P&L has ever reached.
@@ -251,6 +269,11 @@ export function closePosition(mint, reason) {
     // Booked apart from the strategy: an experiment that loses money on purpose must
     // not halt the thing it is trying to measure.
     s.exploreRealizedSol += realized
+    // Stake, P&L on that stake, and count move together or not at all — the same three
+    // fields the strategy book keeps, for the same reason. See exploreStakedSol.
+    s.exploreStakedSol = (s.exploreStakedSol ?? 0) + Math.max(0, p.solSpent ?? 0)
+    s.exploreRealizedOnStakedSol = (s.exploreRealizedOnStakedSol ?? 0) + realized
+    s.exploreStakedTrades = (s.exploreStakedTrades ?? 0) + 1
     if (realized > 0) s.exploreWins++
     else if (realized < 0) s.exploreLosses++
   } else {
@@ -380,7 +403,25 @@ export function exploreRecord() {
   const s = getState()
   const wins = s.exploreWins ?? 0
   const losses = s.exploreLosses ?? 0
-  return { wins, losses, closed: wins + losses, realizedSol: s.exploreRealizedSol ?? 0 }
+  const stakedSol = s.exploreStakedSol ?? 0
+  const stakedTrades = s.exploreStakedTrades ?? 0
+  const realizedOnStaked = s.exploreRealizedOnStakedSol ?? 0
+  return {
+    wins,
+    losses,
+    closed: wins + losses,
+    realizedSol: s.exploreRealizedSol ?? 0,
+    stakedSol,
+    stakedTrades,
+    realizedOnStaked,
+    /**
+     * Scored over the trades whose stake was recorded, NOT over all time — the counters
+     * above start when they were added, while exploreRealizedSol has been running since
+     * the book opened. Dividing the older total by the newer denominator is exactly the
+     * mistake that once had the strategy report claiming -5.726x on a long-only book.
+     */
+    realizedMultiple: stakedSol > 0 ? 1 + realizedOnStaked / stakedSol : null,
+  }
 }
 
 /**

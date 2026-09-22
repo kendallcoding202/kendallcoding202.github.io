@@ -521,6 +521,20 @@ function render(d) {
    * out of a runner leaves this flat while NET P&L jumps, and two P&L numbers that
    * disagree by several SOL with no explanation teach you to distrust both.
    */
+  /**
+   * "All time" counts the COUNTER, not the drawn points.
+   *
+   * This read `d.history.length`, which is the retained list — so the card above said 276
+   * closed while the line under the chart said "all time … over 102", four inches apart,
+   * describing the same book. Both were right and the label was wrong: 174 strategy
+   * trades were evicted by the old shared 500-row cap before trimming became per-book,
+   * and they are not recoverable. The chart can only draw what survived; the P&L figure
+   * beside it covers all of them. Say which is which rather than letting the shorter
+   * number pass itself off as the account.
+   */
+  const charted = d.history ? d.history.length : 0
+  const allTime = ' — all time ' + sgn(d.pnl.realizedTotalSol, 4) + ' over ' + d.pnl.tradesClosed +
+    (charted < d.pnl.tradesClosed ? ' (' + charted + ' charted)' : '')
   const banked = d.bankedOnOpenSol > 0.0001
     ? ' <span style="color:var(--amber)">· ' + sgn(d.bankedOnOpenSol, 4) +
       ' banked from open positions, counted here only when they close</span>'
@@ -529,15 +543,15 @@ function render(d) {
     const mult = b.multiple === null ? '' : ' · ' + b.multiple.toFixed(3) + 'x staked'
     cm.innerHTML = '<b>BUILD ' + esc(b.version) + '</b> · ' + b.closed + ' CLOSED · ' +
       b.wins + 'W/' + b.losses + 'L · ' + sgn(b.realizedSol, 4) + mult +
-      '<span style="color:var(--dimmer)"> — all time ' + sgn(d.pnl.realizedTotalSol, 4) +
-      ' over ' + (d.history ? d.history.length : 0) + '</span>' + banked
+      '<span style="color:var(--dimmer)">' + allTime + '</span>' + banked
   } else if (b) {
     cm.innerHTML = '<b>BUILD ' + esc(b.version) + '</b> · no closed trades yet' +
-      '<span style="color:var(--dimmer)"> — all time ' + sgn(d.pnl.realizedTotalSol, 4) +
-      ' over ' + (d.history ? d.history.length : 0) + '</span>' + banked
+      '<span style="color:var(--dimmer)">' + allTime + '</span>' + banked
   } else {
-    cm.textContent = d.history && d.history.length
-      ? d.history.length + ' CLOSED · REALIZED ' + sgn(d.pnl.realizedTotalSol, 4) : ''
+    cm.textContent = d.pnl.tradesClosed
+      ? d.pnl.tradesClosed + ' CLOSED · REALIZED ' + sgn(d.pnl.realizedTotalSol, 4) +
+        (charted < d.pnl.tradesClosed ? ' · ' + charted + ' charted' : '')
+      : ''
   }
 
   /* ---- activity log ---- */
@@ -751,9 +765,25 @@ function render(d) {
         : card('Bankroll Left', e.bankrollLeftSol.toFixed(3),
             'of ' + e.bankrollSol.toFixed(2) + ' · ' + e.deployedSol.toFixed(3) + ' deployed'),
       card('Explore Record', e.wins + 'W / ' + e.losses + 'L',
-        e.closed + ' closed · ' + e.open + ' open'),
-      card('Avg Per Trade', e.closed ? sgn(e.realizedSol / e.closed, 4) : '—',
-        'realized, per closed explore trade'),
+        e.closed + ' closed · ' + e.open + ' open' +
+          (e.closed ? ' · ' + sgn(e.realizedSol / e.closed, 4) + '/trade' : '')),
+      /**
+       * PER SOL STAKED, not per trade — a multiple is what the replay predicts, so it is
+       * what the replay has to be scored against.
+       *
+       * SOL per trade cannot be compared to anything without a position size, and explore
+       * has no single one: it is sized by curve depth, so the stake varies trade by trade.
+       * Turning the average into a multiple by assuming a size is how a 0.67x book gets
+       * reported as 0.80x. The staked counter is the denominator; until it has filled up
+       * this says so instead of guessing.
+       */
+      card('Per SOL Staked',
+        e.realizedMultiple === null ? '—' : e.realizedMultiple.toFixed(3) + 'x',
+        e.realizedMultiple === null
+          ? 'no stake recorded yet'
+          : sgn(e.realizedOnStakedSol, 3) + ' on ' + e.stakedSol.toFixed(2) +
+            ' staked over ' + e.stakedTrades + ' trades',
+        cls(e.realizedMultiple === null ? 0 : e.realizedMultiple - 1)),
     ].join('')
     document.getElementById('explorenote').innerHTML =
       'These are trades the filter <b>rejected</b> and the bot took anyway, on paper, to find out ' +

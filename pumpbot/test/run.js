@@ -2794,6 +2794,98 @@ console.log('\nClosed-trade retention')
   check('the P&L curve ends at the account\'s actual realized total',
     lastPoint && near(lastPoint.sol, s.totalRealizedSol, 1e-9),
     `${lastPoint?.sol} vs ${s.totalRealizedSol}`)
+
+  /**
+   * THE EXPLORE BOOK'S DENOMINATOR.
+   *
+   * Explore is the largest sample this bot produces and the only direct measurement of
+   * what the REJECTED arm returns, so it is where the replay gets scored. Scoring needs
+   * a multiple, and a multiple needs a stake — which the book did not record. Reading
+   * one off the SOL-per-trade average means assuming a position size, and explore is
+   * sized by buySolForCurve: it varies with the wallet tier AND is capped at a share of
+   * each curve's depth, so there is no single size to assume.
+   *
+   * Here the stakes are deliberately unequal. A count-weighted average of the per-trade
+   * multiples and the true capital-weighted multiple give different answers, so a test
+   * on equal stakes would pass against the wrong arithmetic.
+   */
+  s.positions = {}; s.closed = []; s.daily = {}; s.totalRealizedSol = 0
+  s.exploreRealizedSol = 0; s.exploreWins = 0; s.exploreLosses = 0
+  s.exploreStakedSol = 0; s.exploreRealizedOnStakedSol = 0; s.exploreStakedTrades = 0
+
+  closeOne('EXP_BIG', { explore: true, spent: 0.15, recovered: 0.12 })   // -0.03 on 0.15
+  closeOne('EXP_SMALL', { explore: true, spent: 0.02, recovered: 0.03 }) // +0.01 on 0.02
+
+  const staked = store.exploreRecord()
+  check('the explore book records the stake it actually put up',
+    near(staked.stakedSol, 0.17, 1e-9) && staked.stakedTrades === 2, JSON.stringify(staked))
+  check('and returns a CAPITAL-weighted multiple, not a per-trade average',
+    near(staked.realizedMultiple, 1 + -0.02 / 0.17, 1e-9), String(staked.realizedMultiple))
+  /**
+   * The mistake this rules out: averaging each trade's own multiple. That gives
+   * (0.80 + 1.50)/2 = 1.15x — a profitable book — on trades that lost 0.02 SOL of the
+   * 0.17 actually staked. A small winner cannot outvote a large loser.
+   */
+  check('so a book that lost money can never report a multiple above 1',
+    staked.realizedMultiple < 1 && staked.realizedOnStaked < 0,
+    `${staked.realizedMultiple}x on ${staked.realizedOnStaked} SOL`)
+
+  const withStake = buildSnapshot(45, null)
+  check('and the dashboard carries the measured multiple through',
+    near(withStake.explore.realizedMultiple, staked.realizedMultiple, 1e-9) &&
+      near(withStake.explore.stakedSol, 0.17, 1e-9),
+    JSON.stringify(withStake.explore))
+
+  /**
+   * Before any stake is recorded the panel must say so rather than divide by zero and
+   * print a multiple of 1.000x, which would read as a break-even book.
+   */
+  s.exploreStakedSol = 0; s.exploreRealizedOnStakedSol = 0; s.exploreStakedTrades = 0
+  check('with no stake recorded it abstains instead of inventing a multiple',
+    store.exploreRecord().realizedMultiple === null)
+}
+
+/**
+ * "All time" must count the COUNTER, not the drawn points.
+ *
+ * The card read 276 closed while the caption under the chart read "all time … over 102",
+ * four inches apart, describing the same book. The trades are genuinely gone — evicted
+ * by the old shared 500-row cap before trimming became per-book — so the chart cannot
+ * draw them. That makes the label the bug, not the data: the shorter number was passing
+ * itself off as the account's whole history.
+ */
+{
+  store.initStore()
+  const s = store.getState()
+  s.positions = {}; s.closed = []; s.daily = {}; s.totalRealizedSol = 0
+  s.exploreRealizedSol = 0; s.exploreWins = 0; s.exploreLosses = 0
+
+  const close = (mint, recovered) => {
+    store.addPosition({ mint, symbol: mint, state: 'open', openedAt: Date.now(),
+      solSpent: 0.15, solRecovered: recovered, tokensRemaining: 0, rungsHit: [], explore: false })
+    store.closePosition(mint, 'test')
+  }
+  for (let i = 0; i < 5; i++) close(`KEPT${i}`, 0.16)
+
+  // Trades that closed before the retained window: counted, not retained. This is the
+  // real account's state, where 174 rows were evicted and only the counters remember.
+  s.closed = s.closed.slice(-2)
+
+  const snap = buildSnapshot(45, null)
+  check('all-time count comes from the counter, not the retained list',
+    snap.pnl.tradesClosed === 5, String(snap.pnl.tradesClosed))
+  check('while the chart reports only what it can actually draw',
+    snap.pnl.tradesCharted === 2 && snap.history.length === 2,
+    `${snap.pnl.tradesCharted} charted, ${snap.history.length} points`)
+  check('and the two are allowed to disagree, so long as the page has both',
+    snap.pnl.tradesCharted < snap.pnl.tradesClosed)
+  /**
+   * The curve still has to END at the headline figure — it starts from what was realized
+   * before the oldest surviving trade, so eviction shortens the line without moving it.
+   */
+  const last = snap.history[snap.history.length - 1]
+  check('an evicted history does not move where the curve ends',
+    near(last.sol, s.totalRealizedSol, 1e-9), `${last.sol} vs ${s.totalRealizedSol}`)
 }
 
 // ---------------------------------------------------------------- paper fills
