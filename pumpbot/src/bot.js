@@ -22,6 +22,8 @@ import {
   paperWalletSol,
   paperExploreWalletSol,
   topUpPaper,
+  recordProbeOrder,
+  probeLedger,
   recordStart,
 } from './store.js'
 import { decideExit, newPosition, applySell, markPrice, positionPnl } from './position.js'
@@ -202,6 +204,8 @@ export class Bot {
         .sort((a, b) => b[1] - a[1]).slice(0, 5).map(([reason, n]) => ({ reason, n })),
       feedCost: this.#feedCost(),
       offCurve: oracleHealth(),
+      /** The fill probe's results — the one thing paper cannot measure. See config.probe. */
+      probe: config.probe.enabled ? { ...probeLedger(), ...config.probe } : null,
     }
   }
 
@@ -1185,6 +1189,24 @@ export class Bot {
         curve: { vSol: candidate.vSol, vTokens: candidate.vTokens },
         pool: candidate.pool,
       })
+
+      /**
+       * THE PROBE'S WHOLE PURPOSE: what happened to the order.
+       *
+       * `quoted` is the price the decision was made at. The ratio against what we
+       * actually paid is the number paper cannot produce, because a paper fill is a
+       * model of exactly this. A failure records WHY — "did not land" and "landed 30%
+       * worse" are different problems with different fixes.
+       */
+      const quoted = candidate.vTokens > 0 ? candidate.vSol / candidate.vTokens : null
+      if (config.probe.enabled) {
+        recordProbeOrder({
+          ok: Boolean(fill.ok),
+          solSpent: fill.ok ? (fill.solSpent ?? buySol) : 0,
+          fillRatio: fill.ok && quoted > 0 && fill.avgPriceSol > 0 ? fill.avgPriceSol / quoted : null,
+          reason: fill.ok ? null : fill.error,
+        })
+      }
 
       if (!fill.ok) {
         log.warn(`entry failed for ${candidate.symbol}: ${fill.error}`)

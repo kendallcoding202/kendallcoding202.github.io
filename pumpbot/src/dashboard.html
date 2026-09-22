@@ -426,7 +426,8 @@ function render(d) {
         (c.creatorPrior ? '<br>' + priorLine(c.creatorPrior) : '') +
         (c.walletPrior ? '<br>' + walletLine(c.walletPrior) : '') +
         (c.offCurve ? '<br>' + oracleLine(c.offCurve) : '') +
-        (c.mayhem ? '<br>' + mayhemLine(c.mayhem) : '') + '</span>'
+        (c.mayhem ? '<br>' + mayhemLine(c.mayhem) : '') +
+        (c.probe ? '<br>' + probeLine(c.probe) : '') + '</span>'
     } else if (c.collecting) {
       // "in the last hour", not "about N/hr" — it is a count over a real window, and
       // the vaguer phrasing is what let an impossible extrapolation look plausible.
@@ -441,7 +442,8 @@ function render(d) {
         (c.creatorPrior ? '<br>' + priorLine(c.creatorPrior) : '') +
         (c.walletPrior ? '<br>' + walletLine(c.walletPrior) : '') +
         (c.offCurve ? '<br>' + oracleLine(c.offCurve) : '') +
-        (c.mayhem ? '<br>' + mayhemLine(c.mayhem) : '') + '</span>'
+        (c.mayhem ? '<br>' + mayhemLine(c.mayhem) : '') +
+        (c.probe ? '<br>' + probeLine(c.probe) : '') + '</span>'
     } else {
       col.innerHTML = '▲ NOT COLLECTING' +
         '<span class="why">' + c.reasons.map(esc).join('<br>') +
@@ -1045,6 +1047,35 @@ function walletLine(w) {
  * lives inside this population or outside it. This is the live read on its size; the
  * journal answers the outcome question once enough flagged rows have finalized.
  */
+/**
+ * The fill probe — a LIVE run whose only purpose is measuring whether orders execute.
+ *
+ * Paper cannot answer this: paperBuy and paperSell are models of exactly the thing in
+ * question. The gap between orders SENT and positions OPENED is what is being paid for,
+ * and the fill ratio is what it buys.
+ */
+function probeLine(p) {
+  const left = Math.max(0, p.maxTrades - p.trades)
+  const landed = p.attempts ? (p.trades / p.attempts) * 100 : null
+  const ratios = p.fillRatios || []
+  const avg = ratios.length ? ratios.reduce((s, v) => s + v, 0) / ratios.length : null
+  const worst = ratios.length ? Math.max(...ratios) : null
+  return '<b style="color:var(--amber)">FILL PROBE</b> · <code>' + p.attempts + '</code> orders sent · ' +
+    '<code>' + p.trades + '</code> landed' +
+    (landed !== null ? ' (<code>' + landed.toFixed(0) + '%</code>)' : '') +
+    ' · <code>' + p.committedSol.toFixed(3) + '</code> of ' + p.maxTotalSol + ' SOL' +
+    (left > 0 ? ' · ' + left + ' trades left' : ' · <b>complete</b>') +
+    (avg !== null
+      ? '<br><span class="dim">paid on average <code>' + avg.toFixed(3) + 'x</code> the quoted price' +
+        (worst !== null ? ', worst <code>' + worst.toFixed(3) + 'x</code>' : '') +
+        ' — above 1.00 means we filled worse than we decided at.</span>'
+      : '<br><span class="dim">no fills yet.</span>') +
+    (p.failures
+      ? '<br><span style="color:var(--red)">' + p.failures + ' orders did NOT land: ' +
+        Object.entries(p.reasons || {}).map(([r, n]) => esc(r) + ' x' + n).join(' · ') + '</span>'
+      : '')
+}
+
 function mayhemLine(m) {
   if (!m.screened) return 'Mayhem agent <span class="dim">nothing screened yet</span>'
   const pct = (v) => v === null ? '—' : (v * 100).toFixed(0) + '%'

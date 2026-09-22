@@ -8,6 +8,7 @@ import {
   strategyRecord,
   halt,
   clearHalt,
+  probeLedger,
 } from './store.js'
 import { buySolFor, maxDeployedFor, sizingSummary } from './sizing.js'
 import { log, sol } from './log.js'
@@ -207,6 +208,21 @@ export function canOpen({ mint, creator, walletSol }) {
   const maxDeployed = maxDeployedFor(walletSol)
 
   const open = strategyPositions()
+  /**
+   * THE PROBE'S OWN LIMITS, checked at the gate every buy passes through rather than
+   * trusted from config. A measurement run has to stop on its own — it is not a strategy
+   * and must never quietly become one because somebody left a flag set.
+   */
+  if (config.probe.enabled) {
+    const p = probeLedger()
+    if (p.trades >= config.probe.maxTrades) {
+      return `fill probe complete — ${p.trades} trades placed (cap ${config.probe.maxTrades})`
+    }
+    if (p.committedSol >= config.probe.maxTotalSol) {
+      return `fill probe complete — ${p.committedSol.toFixed(3)} SOL committed (cap ${config.probe.maxTotalSol})`
+    }
+  }
+
   if (open.length >= sizing.maxConcurrentPositions) {
     return `already holding ${open.length} positions (max ${sizing.maxConcurrentPositions})`
   }

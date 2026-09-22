@@ -40,6 +40,18 @@ const EMPTY = {
   /** Which build is running, and when it first did — see recordStart. */
   buildVersion: '',
   buildFirstSeenAt: 0,
+  /**
+   * THE FILL PROBE'S LEDGER, persisted so a restart cannot hand it a fresh allowance.
+   *
+   * The probe spends real money to answer the one question paper structurally cannot —
+   * whether orders actually execute. Keeping its counters only in memory would mean
+   * every redeploy silently restarted the run, which is how a 50-trade measurement
+   * becomes an open-ended live strategy nobody decided to start.
+   *
+   * `attempts` counts orders SENT, `trades` counts positions actually opened, and the
+   * gap between them is the answer we are paying for.
+   */
+  probe: { attempts: 0, trades: 0, failures: 0, committedSol: 0, reasons: {}, fillRatios: [] },
 }
 
 let state = null
@@ -120,6 +132,48 @@ export function recordStart(now = Date.now()) {
     buildFirstSeenAt: s.buildFirstSeenAt,
     buildChanged: s.buildFirstSeenAt === now,
   }
+}
+
+/** The probe's counters, defaulted so an older state file reads cleanly. */
+export function probeLedger() {
+  const s = getState()
+  const p = s.probe ?? {}
+  return {
+    attempts: p.attempts ?? 0,
+    trades: p.trades ?? 0,
+    failures: p.failures ?? 0,
+    committedSol: p.committedSol ?? 0,
+    reasons: p.reasons ?? {},
+    fillRatios: p.fillRatios ?? [],
+  }
+}
+
+/**
+ * Record one probe order and what became of it.
+ *
+ * `fillRatio` is the price we actually got over the price we expected when we decided —
+ * the number the whole exercise exists to produce. A failure records WHY, because "the
+ * order did not land" and "it landed 30% worse" are different problems with different
+ * fixes, and the reason string is the only thing that tells them apart.
+ */
+export function recordProbeOrder({ ok, solSpent = 0, fillRatio = null, reason = null }) {
+  const s = getState()
+  if (!s.probe) s.probe = { attempts: 0, trades: 0, failures: 0, committedSol: 0, reasons: {}, fillRatios: [] }
+  const p = s.probe
+  p.attempts = (p.attempts ?? 0) + 1
+  if (ok) {
+    p.trades = (p.trades ?? 0) + 1
+    p.committedSol = (p.committedSol ?? 0) + solSpent
+    if (Number.isFinite(fillRatio)) {
+      p.fillRatios = [...(p.fillRatios ?? []), Number(fillRatio.toFixed(4))].slice(-200)
+    }
+  } else {
+    p.failures = (p.failures ?? 0) + 1
+    const key = String(reason ?? 'unknown').replace(/\d+/g, 'N').slice(0, 120)
+    p.reasons = { ...(p.reasons ?? {}), [key]: ((p.reasons ?? {})[key] ?? 0) + 1 }
+  }
+  save()
+  return probeLedger()
 }
 
 /**

@@ -17,6 +17,15 @@ export function tierFor(walletSol) {
 }
 
 export function buySolFor(walletSol) {
+  /**
+   * THE PROBE'S SIZE OVERRIDES THE TIER IN BOTH DIRECTIONS.
+   *
+   * A measurement run must not scale with the account — the whole point is that it stays
+   * absurdly small while the real rules decide WHICH trades to place. Taking the minimum
+   * of the two would let a tiny account quietly probe at its tier size; taking the
+   * probe's figure outright means the cap is the cap.
+   */
+  if (config.probe.enabled) return config.probe.positionSol
   return tierFor(walletSol).buySol
 }
 

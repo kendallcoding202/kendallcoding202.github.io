@@ -200,6 +200,37 @@ export const config = {
   paperAutoTopUp: bool('PAPER_AUTO_TOP_UP', true),
   paperTopUpBelowSol: num('PAPER_TOP_UP_BELOW_SOL', 5),
 
+  /**
+   * FILL PROBE — a live run whose only purpose is MEASUREMENT, not profit.
+   *
+   * Paper cannot answer whether an order actually executes, and not because it has not
+   * been asked: paperBuy and paperSell are models of exactly that, so validating a fill
+   * model against simulated fills is circular. No amount of paper trading closes it and
+   * no public dataset does either, because nobody publishes what YOUR transaction would
+   * have filled at.
+   *
+   * It matters more than it sounds. A live buy reverts if the price moves past its
+   * slippage tolerance before it lands, which means live fills the slow movers and
+   * misses the fast ones — and the fast ones carry the whole edge. If that is happening,
+   * the measured edge does not shrink, it INVERTS.
+   *
+   * So: real chain, real orders, deliberately absurd size. Every cap below only ever
+   * makes the bot MORE restrictive than it would otherwise be, and they are enforced at
+   * the point of order placement rather than trusted from config. The probe cannot
+   * become a live strategy by accident — it stops entering once it has its sample.
+   *
+   * REQUIRES PAPER=0 to spend anything. On its own it changes nothing.
+   */
+  probe: {
+    enabled: bool('PROBE', false),
+    /** Hard per-position size, overriding the equity tier in both directions. */
+    positionSol: num('PROBE_POSITION_SOL', 0.01),
+    /** Stop opening new positions after this many, so the run is self-limiting. */
+    maxTrades: num('PROBE_MAX_TRADES', 50),
+    /** And stop regardless once this much has been committed, cumulatively. */
+    maxTotalSol: num('PROBE_MAX_TOTAL_SOL', 0.6),
+  },
+
   // How often the pipeline summary prints. The first beat always comes early so you
   // get confirmation the feed is alive without waiting a full interval.
   heartbeatSeconds: num('HEARTBEAT_SECONDS', 60),

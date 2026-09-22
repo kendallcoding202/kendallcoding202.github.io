@@ -1333,6 +1333,78 @@ console.log('\nTop-of-spike detection')
     topOfSpike([{ v: JOURNAL_VERSION, action: 'bought' }]).bought.n === 0)
 }
 
+// ------------------------------- the fill probe, which spends REAL money
+console.log('\nFill probe guards')
+{
+  store.initStore()
+  const st = store.getState()
+  st.probe = { attempts: 0, trades: 0, failures: 0, committedSol: 0, reasons: {}, fillRatios: [] }
+  const wasProbe = config.probe.enabled
+  const wasPaper = config.paper
+
+  /**
+   * THE PROBE EXISTS TO ANSWER WHAT PAPER STRUCTURALLY CANNOT — whether an order
+   * executes — and it spends real money doing it. So every guard here is asserted from
+   * the outside: a measurement run must stop on its own, and must never quietly become
+   * a live strategy because a flag was left set.
+   */
+  check('off by default — it cannot start by accident', wasProbe === false)
+
+  config.probe.enabled = true
+  /**
+   * Size overrides the tier in BOTH directions. Taking the minimum would let a small
+   * account quietly probe at its tier size; the cap has to be the cap.
+   */
+  check('the probe size replaces the equity tier entirely',
+    buySolFor(50) === config.probe.positionSol && buySolFor(0.2) === config.probe.positionSol,
+    `${buySolFor(50)} / ${buySolFor(0.2)}`)
+  check('and it is far smaller than any real tier',
+    config.probe.positionSol < config.sizing.tiers.at(-1).buySol / 5,
+    `${config.probe.positionSol} vs ${config.sizing.tiers.at(-1).buySol}`)
+
+  // Ledger arithmetic: attempts count orders SENT, trades count positions OPENED, and
+  // the gap between them is the answer being paid for.
+  store.recordProbeOrder({ ok: true, solSpent: 0.01, fillRatio: 1.04 })
+  store.recordProbeOrder({ ok: false, reason: 'transaction failed on chain: 0x1771' })
+  store.recordProbeOrder({ ok: false, reason: 'transaction failed on chain: 0x1771' })
+  const led = store.probeLedger()
+  check('orders sent and positions opened are counted separately',
+    led.attempts === 3 && led.trades === 1 && led.failures === 2, JSON.stringify(led))
+  check('failures keep their reason, since a revert and a bad fill differ',
+    Object.values(led.reasons)[0] === 2, JSON.stringify(led.reasons))
+  check('and the fill ratio is what the exercise is for', led.fillRatios[0] === 1.04)
+
+  /** The trade cap stops it, at the gate every buy passes through. */
+  st.probe.trades = config.probe.maxTrades
+  st.positions = {}; st.halted = null; st.daily = {}; st.totalRealizedSol = 0
+  const stopped = canOpen({ mint: 'P1', creator: 'C', walletSol: 5 })
+  check('it stops entering once it has its sample',
+    typeof stopped === 'string' && /probe complete/.test(stopped), String(stopped))
+
+  /** And the spend cap stops it independently, so neither alone is load-bearing. */
+  st.probe.trades = 0
+  st.probe.committedSol = config.probe.maxTotalSol
+  const capped = canOpen({ mint: 'P2', creator: 'C', walletSol: 5 })
+  check('and stops on total committed even if the trade count has not been reached',
+    typeof capped === 'string' && /probe complete/.test(capped), String(capped))
+
+  /**
+   * PERSISTED, because counters held only in memory mean every redeploy silently
+   * restarts the run — which is how a 50-trade measurement becomes an open-ended live
+   * strategy nobody decided to start.
+   */
+  store.save()
+  const reloaded = store.initStore()
+  check('the ledger survives a restart, so a redeploy is not a fresh allowance',
+    reloaded.probe.committedSol === config.probe.maxTotalSol, JSON.stringify(reloaded.probe))
+
+  config.probe.enabled = wasProbe
+  config.paper = wasPaper
+  const s2 = store.getState()
+  s2.probe = { attempts: 0, trades: 0, failures: 0, committedSol: 0, reasons: {}, fillRatios: [] }
+  s2.positions = {}; store.save()
+}
+
 // ------------------------------- could a LIVE buy actually have landed?
 console.log('\nFill feasibility')
 {
