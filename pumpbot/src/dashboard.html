@@ -640,6 +640,21 @@ function render(d) {
        * and want opposite responses, so "why are we not trading more" was being answered
        * by guessing. These are trades the strategy wanted and did not get.
        */
+      /**
+       * The off-curve oracle proving itself. It cannot price a graduated position until
+       * it has agreed with live curve prices enough times, so this is the one place that
+       * says whether the feature is actually doing anything yet.
+       */
+      const oc = pl.offCurve
+      if (oc && oc.enabled) {
+        const rate = oc.agreementRate === null ? '—' : (oc.agreementRate * 100).toFixed(0) + '%'
+        rows.push('Post-graduation pricing: ' + (oc.trusted
+          ? '<span class="pos">TRUSTED</span> — graduated bags keep running'
+          : '<span style="color:var(--amber)">proving itself</span> · ' + oc.agreements + '/' +
+            oc.needed + ' agreements needed') +
+          ' <span style="color:var(--dimmer)">(' + oc.checks + ' checks against live curves, ' +
+          rate + ' agree' + (oc.lastError ? ' · last error ' + esc(String(oc.lastError)) : '') + ')</span>')
+      }
       if (pl.blockedEntries && pl.blockedEntries.length) {
         rows.push('<span style="color:var(--amber)">Approved but not taken:</span> ' +
           pl.blockedEntries.map((b) => '<code>' + esc(b.reason) + ' ×' + b.n + '</code>').join(' · '))

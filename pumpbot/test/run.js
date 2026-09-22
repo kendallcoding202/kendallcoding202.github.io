@@ -1205,6 +1205,78 @@ console.log('\nTop-of-spike detection')
     topOfSpike([{ v: JOURNAL_VERSION, action: 'bought' }]).bought.n === 0)
 }
 
+// ------------------------------- seeing a position after its curve closes
+console.log('\nOff-curve pricing')
+{
+  const oc = await import('../src/offcurve.js')
+  const MINT = 'GradMint111111111111111111111111111111111'
+  const SOL_USD = 200
+
+  let reply = null
+  const origFetch = globalThis.fetch
+  globalThis.fetch = async () => reply === null
+    ? { ok: false, status: 503 }
+    : { ok: true, status: 200, json: async () => reply }
+
+  const pair = (over = {}) => ({
+    dexId: 'pumpswap', baseToken: { address: MINT },
+    liquidity: { usd: 50_000 }, priceNative: '0.0000004', priceUsd: '0.00008', ...over,
+  })
+
+  oc.__resetOracleForTests()
+  reply = { pairs: [pair()] }
+  const got = await oc.offCurvePrice(MINT, SOL_USD)
+  check('a well-formed quote is read', near(got?.priceSol, 4e-7, 1e-12), JSON.stringify(got))
+  check('and both readings of it agreed', got?.crossChecked === true)
+
+  /**
+   * TWO INDEPENDENT READINGS, REQUIRED TO AGREE. priceNative is the SOL price directly;
+   * priceUsd/solUsd derives the same number through a different field. The shape of this
+   * response could not be verified while the parser was written, and a price parser that
+   * is quietly wrong does not fail loudly — it invents a number and closes positions with
+   * it. So disagreement returns nothing rather than picking a winner.
+   */
+  reply = { pairs: [pair({ priceUsd: '0.08' })] } // 1000x apart
+  check('two readings that disagree are refused outright',
+    (await oc.offCurvePrice(MINT, SOL_USD)) === null)
+
+  reply = { pairs: [pair({ baseToken: { address: 'SomeOtherToken1111111111111111111111111' } })] }
+  check('a quote for a DIFFERENT token is not used',
+    (await oc.offCurvePrice(MINT, SOL_USD)) === null)
+
+  reply = { pairs: [] }
+  check('no pairs means no price', (await oc.offCurvePrice(MINT, SOL_USD)) === null)
+  reply = null
+  check('and a failing endpoint is survivable', (await oc.offCurvePrice(MINT, SOL_USD)) === null)
+  reply = { pairs: [pair({ liquidity: { usd: 0 } })] }
+  check('an empty pool is ignored', (await oc.offCurvePrice(MINT, SOL_USD)) === null)
+
+  /**
+   * THE TRUST GATE, which is the entire safety property of this feature.
+   *
+   * Nothing here could be checked against the real endpoint, so the oracle does not get
+   * believed on assertion — it has to agree with prices we already know exactly, from
+   * curve reserves, before it is allowed to price anything we cannot see.
+   */
+  oc.__resetOracleForTests()
+  check('an unproven oracle may not price anything', !oc.oracleTrusted())
+  for (let i = 0; i < config.exit.oracleMinAgreements; i++) oc.noteOracleCheck(MINT, 1e-7, 1.02e-7)
+  check('agreeing with the curve enough times earns it', oc.oracleTrusted())
+
+  oc.__resetOracleForTests()
+  for (let i = 0; i < config.exit.oracleMinAgreements; i++) oc.noteOracleCheck(MINT, 1e-7, 1.02e-7)
+  // A source that is right sometimes and wrong often is not a source.
+  for (let i = 0; i < 40; i++) oc.noteOracleCheck(MINT, 1e-7, 9e-7)
+  check('but being right occasionally among many misses does not', !oc.oracleTrusted())
+  const h = oc.oracleHealth()
+  check('and the misses are kept with their RATIO, which names the bug',
+    h.recentDisagreements.length > 0 && h.recentDisagreements[0].ratio === 9,
+    JSON.stringify(h.recentDisagreements[0]))
+
+  oc.__resetOracleForTests()
+  globalThis.fetch = origFetch
+}
+
 // ------------------------------- the experiment must not end for lack of pretend money
 console.log('\nPaper top-up')
 {
@@ -5239,6 +5311,46 @@ console.log('\nStale price refresh, through the bot')
   check('and it marks the position at the final curve price, not the last feed tick',
     near(gradClose?.lastPriceSol, 3e-7, 1e-12), String(gradClose?.lastPriceSol))
   await botGrad.stop()
+
+  /**
+   * ...UNLESS WE CAN STILL SEE IT. Graduation is the moment the bag has run furthest, so
+   * closing here truncates exactly the tail the strategy is paid for. Once the off-curve
+   * oracle has earned trust against live curve prices, the position keeps being managed
+   * on the new venue instead of being closed for want of a number.
+   */
+  const oc2 = await import('../src/offcurve.js')
+  oc2.__resetOracleForTests()
+  for (let i = 0; i < config.exit.oracleMinAgreements; i++) oc2.noteOracleCheck('M', 1e-7, 1.01e-7)
+  const origFetch2 = globalThis.fetch
+  globalThis.fetch = async () => ({
+    ok: true, status: 200,
+    json: async () => ({ pairs: [{
+      dexId: 'pumpswap', baseToken: { address: 'RUNNERMINT' },
+      liquidity: { usd: 90_000 }, priceNative: '0.0000003', priceUsd: '0.00006',
+    }] }),
+  })
+  store.getState().positions = {}; store.save()
+  const botRun = new Bot({
+    feed: new Quiet(), logFeed: new Quiet(),
+    readCurve: async () => ({ curve: null, gone: true }),
+  })
+  botRun.solPriceUsd = 200
+  await botRun.start()
+  clearInterval(botRun.sweepTimer); clearInterval(botRun.balanceTimer); clearInterval(botRun.heartbeatTimer)
+  openStale('RUNNERMINT')
+  await botRun.tick()
+  const runner = store.getState().positions.RUNNERMINT
+  check('a graduated position we can still price is NOT dumped', Boolean(runner),
+    JSON.stringify(store.getState().closed.at(-1)?.closeReason))
+  check('it is marked as trading off-curve', runner?.offCurve === true && runner?.venue === 'pumpswap')
+  check('and it is repriced from the new venue, not the dead curve',
+    near(runner?.lastPriceSol, 3e-7, 1e-12), String(runner?.lastPriceSol))
+  check('the blind-read streak is cleared, since it is visible again',
+    runner?.blindReads === 0 && runner?.curveGone === false)
+  await botRun.stop()
+  globalThis.fetch = origFetch2
+  oc2.__resetOracleForTests()
+  store.getState().positions = {}; store.save()
 
   /**
    * The refresh must not be able to make the sweep late.

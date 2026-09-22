@@ -752,6 +752,14 @@ export const config = {
      * opinion about when to sell. Set to 0 to disable.
      */
     maxHoldSeconds: num('MAX_HOLD_SECONDS', 1800),
+    /**
+     * The same ceiling for a position that GRADUATED and is still being quoted by a real
+     * venue. Longer because the backstop exists for a token nobody is trading, and this
+     * is the opposite of one: the trailing stop is live again, and filling the curve is
+     * what graduation means, so every position that gets here is a bag that ran. Still
+     * bounded — a flat quote is as unmanageable as no quote.
+     */
+    offCurveMaxHoldSeconds: num('OFF_CURVE_MAX_HOLD_SECONDS', 14_400),
     // Give back at most this much of the peak once the first rung is hit.
     trailingDrawdownPct: num('TRAILING_DRAWDOWN_PCT', 50),
     // Abandon-ship if the curve drains — the pump.fun analogue of an LP pull.
@@ -817,6 +825,28 @@ export const config = {
      * booking the best possible fill on the worst trades in the book.
      */
     stopFillGapShare: num('STOP_FILL_GAP_SHARE', 0.25),
+    /**
+     * KEEP PRICING A POSITION AFTER ITS CURVE CLOSES.
+     *
+     * Graduation is our best outcome by construction and the moment we go blind, so the
+     * bag gets dumped at the final curve price. With the edge living almost entirely in
+     * the top 1% of outcomes, that is the one place the strategy systematically truncates
+     * exactly the tail it is paid for.
+     *
+     * The source has to EARN its place — see src/offcurve.js. It is compared against the
+     * curve price while a token is still ON the curve, where we know the answer exactly,
+     * and only prices a graduated position once it has agreed enough times. Until then a
+     * graduated position exits the way it does today, so switching this on cannot make
+     * anything worse than it already is.
+     */
+    offCurvePricing: bool('OFF_CURVE_PRICING', true),
+    priceApiUrl: str('PRICE_API_URL', 'https://api.dexscreener.com/latest/dex/tokens'),
+    priceApiTimeoutMs: num('PRICE_API_TIMEOUT_MS', 6000),
+    /** How close to the curve price counts as agreement, and how many are needed. */
+    oracleTolerancePct: num('ORACLE_TOLERANCE_PCT', 15),
+    oracleMinAgreements: num('ORACLE_MIN_AGREEMENTS', 8),
+    /** How often to spend a check validating the oracle against a live curve. */
+    oracleCheckSeconds: num('ORACLE_CHECK_SECONDS', 120),
   },
 }
 

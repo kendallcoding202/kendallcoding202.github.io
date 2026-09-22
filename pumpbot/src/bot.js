@@ -31,6 +31,7 @@ import { summaryText, summaryBaseline } from './summary.js'
 import { acquire as acquireLock, release as releaseLock } from './lock.js'
 import { stopAnalysis } from './analysis.js'
 import { readCurveState } from './onchain.js'
+import { offCurvePrice, noteOracleCheck, oracleTrusted, oracleHealth } from './offcurve.js'
 import { log, sol, esc, utcDay } from './log.js'
 
 /**
@@ -93,6 +94,10 @@ export class Bot {
     this.walletSol = 0
     this.lastDay = utcDay()
     this.lastTierFloor = null
+    // Spacing for the oracle validation probes — see #refreshStalePrice.
+    this.lastOracleCheckAt = 0
+    // Set by the dashboard's SOL/USD refresh; only used to cross-check an oracle price.
+    this.solPriceUsd = 0
     this.busy = new Set() // mints with an in-flight order, preventing double-sends
     // A sweep awaits network calls, so a 5s interval can start one while the previous
     // is still mid-entry. Overlapping sweeps each read the same pre-buy state, so
@@ -175,6 +180,7 @@ export class Bot {
       blockedEntries: [...s.blockedEntries.entries()]
         .sort((a, b) => b[1] - a[1]).slice(0, 5).map(([reason, n]) => ({ reason, n })),
       feedCost: this.#feedCost(),
+      offCurve: oracleHealth(),
     }
   }
 
@@ -287,6 +293,30 @@ export class Bot {
      * where we can see it.
      */
     if (gone) {
+      /**
+       * CAN WE STILL SEE IT? Graduation is the moment the bag has run furthest, so
+       * dumping it here truncates exactly the tail the strategy is paid for. If the
+       * off-curve oracle has EARNED trust against live curve prices, the position keeps
+       * being managed on the new venue instead of being closed for lack of a number.
+       */
+      const offCurve = oracleTrusted() ? await offCurvePrice(position.mint, this.solPriceUsd) : null
+      if (offCurve?.priceSol > 0) {
+        const patch = {
+          curveGone: false,
+          offCurve: true,
+          venue: offCurve.venue,
+          lastPriceSol: offCurve.priceSol,
+          lastPriceAt: Date.now(),
+          blindReads: 0,
+          lastBlindReadAt: 0,
+        }
+        updatePosition(position.mint, patch)
+        Object.assign(position, patch)
+        markPrice(position, offCurve.priceSol)
+        log.info(`${position.symbol}: graduated to ${offCurve.venue} — still priced, still managed`)
+        return
+      }
+
       const patch = { curveGone: true }
       if (price > 0) {
         patch.lastPriceSol = price
@@ -345,6 +375,26 @@ export class Bot {
     position.lastVTokens = curve.vTokens
     position.blindReads = 0
     position.lastBlindReadAt = 0
+
+    /**
+     * PROVE THE ORACLE AGAINST GROUND TRUTH WE ALREADY HOLD.
+     *
+     * The off-curve price source could not be verified while it was written — the shape
+     * of a response nobody can fetch is a guess, and a price parser that is quietly
+     * wrong does not fail loudly, it invents a number and closes positions with it.
+     *
+     * But a token still ON its curve has a price we know exactly. So every so often,
+     * ask the oracle for a token we can already price and compare. Agreement means it is
+     * reading the right field of the right object for the right token, which is all
+     * three ways this goes wrong. It runs in production against live data because that
+     * is the only place it can run at all.
+     */
+    if (config.exit.offCurvePricing && !oracleTrusted() &&
+        Date.now() - this.lastOracleCheckAt >= config.exit.oracleCheckSeconds * 1000) {
+      this.lastOracleCheckAt = Date.now()
+      const probe = await offCurvePrice(position.mint, this.solPriceUsd)
+      if (probe?.priceSol > 0) noteOracleCheck(position.mint, price, probe.priceSol)
+    }
   }
 
   /**

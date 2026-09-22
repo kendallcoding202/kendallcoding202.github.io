@@ -132,7 +132,21 @@ export function decideExit(position, { priceSol, vSol, now = Date.now() }) {
    * set well beyond the window rather than at the measured elbow: it is a backstop
    * against holding a corpse, not a claim about the right time to sell.
    */
-  if (config.exit.maxHoldSeconds > 0 && ageSeconds >= config.exit.maxHoldSeconds) {
+  /**
+   * A GRADUATED, STILL-PRICED position gets a longer leash, because the backstop above
+   * exists for a corpse and this is the opposite of one.
+   *
+   * The max hold is there because a token that stops trading holds its last price
+   * forever, so no price rule can ever fire. That reasoning does not apply once a real
+   * venue is quoting the position: the trailing stop is live again and will take it on a
+   * giveback. And these are the positions worth being patient with — filling the curve
+   * is what graduation IS, so every one of them is a bag that ran. Still bounded, since
+   * a flat quote is as unmanageable as no quote.
+   */
+  const holdLimit = position.offCurve
+    ? Math.max(config.exit.maxHoldSeconds, config.exit.offCurveMaxHoldSeconds)
+    : config.exit.maxHoldSeconds
+  if (holdLimit > 0 && ageSeconds >= holdLimit) {
     return exitAll(`held ${Math.round(ageSeconds / 60)}m — max hold reached, releasing the slot`)
   }
 
