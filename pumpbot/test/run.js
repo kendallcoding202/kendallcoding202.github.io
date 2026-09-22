@@ -4814,7 +4814,7 @@ console.log('\nStale price refresh, through the bot')
   let reads = 0
   const botA = new Bot({
     feed: new Quiet(), logFeed: new Quiet(),
-    readCurve: async () => { reads++; return { vSol: 100, vTokens: 1e9 } },
+    readCurve: async () => { reads++; return { curve: { vSol: 100, vTokens: 1e9 }, gone: false } },
   })
   await botA.start()
   clearInterval(botA.sweepTimer); clearInterval(botA.balanceTimer); clearInterval(botA.heartbeatTimer)
@@ -4835,7 +4835,7 @@ console.log('\nStale price refresh, through the bot')
   const botFall = new Bot({
     feed: new Quiet(), logFeed: new Quiet(),
     // Same curve, collapsed: 100 -> 20 SOL of reserves is -80% on the price.
-    readCurve: async () => ({ vSol: 20, vTokens: 1e9 }),
+    readCurve: async () => ({ curve: { vSol: 20, vTokens: 1e9 }, gone: false }),
   })
   await botFall.start()
   clearInterval(botFall.sweepTimer); clearInterval(botFall.balanceTimer); clearInterval(botFall.heartbeatTimer)
@@ -4855,7 +4855,7 @@ console.log('\nStale price refresh, through the bot')
   store.getState().positions = {}; store.save()
   const botB = new Bot({
     feed: new Quiet(), logFeed: new Quiet(),
-    readCurve: async () => null,
+    readCurve: async () => ({ curve: null, gone: false, error: 'rpc timeout' }),
   })
   await botB.start()
   clearInterval(botB.sweepTimer); clearInterval(botB.balanceTimer); clearInterval(botB.heartbeatTimer)
@@ -4897,6 +4897,40 @@ console.log('\nStale price refresh, through the bot')
   await botB.stop()
 
   /**
+   * A GRADUATED token is not a failed read, and the two were the same event.
+   *
+   * Its curve account is closed — or flagged complete — permanently, so there is nothing
+   * to be patient about, and waiting out three spaced retries to conclude it announced
+   * our best trades as "cannot price this position". Filling the bonding curve is what
+   * graduation IS, so every position reaching here ran far enough to complete it.
+   */
+  store.getState().positions = {}; store.save()
+  const botGrad = new Bot({
+    feed: new Quiet(), logFeed: new Quiet(),
+    // Curve complete and account gone, priced at 3x the fixture's entry.
+    readCurve: async () => ({ curve: { vSol: 300, vTokens: 1e9, complete: true }, gone: true }),
+  })
+  await botGrad.start()
+  clearInterval(botGrad.sweepTimer); clearInterval(botGrad.balanceTimer); clearInterval(botGrad.heartbeatTimer)
+  openStale('GRADMINT')
+  await botGrad.tick()
+  check('a graduated position closes on the FIRST read, not after three strikes',
+    !store.getState().positions.GRADMINT)
+  const gradClose = store.getState().closed.at(-1)
+  check('and says it graduated rather than reporting a failure',
+    /graduated/.test(gradClose?.closeReason ?? ''), gradClose?.closeReason)
+  check('so a win is not announced as a malfunction',
+    !/cannot price/.test(gradClose?.closeReason ?? ''), gradClose?.closeReason)
+  /**
+   * The FINAL curve price is real — it is what the position was worth at the moment it
+   * stopped trading where we can see it — so the exit is marked there rather than at
+   * whatever the feed last happened to say.
+   */
+  check('and it marks the position at the final curve price, not the last feed tick',
+    near(gradClose?.lastPriceSol, 3e-7, 1e-12), String(gradClose?.lastPriceSol))
+  await botGrad.stop()
+
+  /**
    * The refresh must not be able to make the sweep late.
    *
    * Explore runs on an unlimited bankroll with a dozen or more positions open, and the
@@ -4909,7 +4943,7 @@ console.log('\nStale price refresh, through the bot')
   const asked = []
   const botMany = new Bot({
     feed: new Quiet(), logFeed: new Quiet(),
-    readCurve: async (mint) => { asked.push(mint); return { vSol: 100, vTokens: 1e9 } },
+    readCurve: async (mint) => { asked.push(mint); return { curve: { vSol: 100, vTokens: 1e9 }, gone: false } },
   })
   await botMany.start()
   clearInterval(botMany.sweepTimer); clearInterval(botMany.balanceTimer); clearInterval(botMany.heartbeatTimer)

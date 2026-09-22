@@ -70,19 +70,41 @@ export function decodeBondingCurve(data) {
   }
 }
 
-/** Current curve state for a mint, or null if it cannot be read or decoded. */
-export async function readBondingCurve(mint) {
+/**
+ * Curve state AND why it could not be read, which are different questions that were
+ * being collapsed into the same `null`.
+ *
+ * A graduated token and an RPC that will not answer both produced "no price", so the bot
+ * treated them identically: count three failures, then exit blind. But one of them is
+ * PERMANENT and known — the curve account is closed, it is never coming back, and the
+ * last curve price is the final one — while the other is a transient wobble where
+ * patience is exactly right. Conflating them meant an RPC hiccup looked like a
+ * graduation, and, more visibly, every graduation was announced as a failure on what
+ * are consistently our best trades.
+ *
+ * `complete` is the curve's own flag for having filled. A complete curve still EXISTS,
+ * so it prices fine — but it no longer trades here, which makes it terminal all the same.
+ */
+export async function readCurveState(mint) {
   try {
     const info = await getConnection().getAccountInfo(bondingCurveAddress(mint), 'confirmed')
     if (!info?.data) {
       log.debug(`no bonding curve account for ${mint} (graduated, or not a pump.fun token)`)
-      return null
+      return { curve: null, gone: true, error: null }
     }
     const decoded = decodeBondingCurve(info.data)
-    if (!decoded) log.warn(`bonding curve for ${mint} did not decode plausibly — not pricing it`)
-    return decoded
+    if (!decoded) {
+      log.warn(`bonding curve for ${mint} did not decode plausibly — not pricing it`)
+      return { curve: null, gone: false, error: 'did not decode plausibly' }
+    }
+    return { curve: decoded, gone: Boolean(decoded.complete), error: null }
   } catch (err) {
     log.warn(`bonding curve read failed for ${mint}: ${err.message}`)
-    return null
+    return { curve: null, gone: false, error: err.message }
   }
+}
+
+/** Current curve state for a mint, or null if it cannot be read or decoded. */
+export async function readBondingCurve(mint) {
+  return (await readCurveState(mint)).curve
 }

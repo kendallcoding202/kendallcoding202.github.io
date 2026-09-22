@@ -832,10 +832,26 @@ function storageLine(s) {
     ? (s.journalBytes / 1024).toFixed(0) + ' KB'
     : s.journalBytes + ' B'
   const ok = s.writable && s.journalBytes > 0
+  /**
+   * The download has to be a LINK ON THE PAGE, not a URL to type.
+   *
+   * Every request here carries the token, but the page strips it from the address bar on
+   * load — deliberately, so a shared screenshot does not leak it. That makes "edit your
+   * URL to /api/export" advice that cannot be followed: the token is not there to copy,
+   * and on a phone the query string is not even visible. The page knows the token, so
+   * the page builds the link.
+   */
+  const q = (typeof authToken === 'string' && authToken) ? '?token=' + encodeURIComponent(authToken) : ''
+  const download = s.journalBytes > 0
+    ? ' · <a href="/api/export' + q + '" download style="color:var(--accent)">download journal</a>' +
+      '<br><span style="color:var(--dimmer)">A compact CSV for analysis elsewhere — no addresses, ' +
+      'keys or signatures, and the deployer only as a salted hash.</span>'
+    : ''
   return 'Storage <code>' + esc(s.dataDir) + '</code> · journal <code>' + kb + '</code>' +
     (s.writable ? '' : ' <b style="color:var(--red)">NOT WRITABLE</b>') +
     (s.pendingCheckpoint ? ' · pending observations checkpointed' :
       ' · <span style="color:var(--amber)">no checkpoint yet</span>') +
+    download +
     (ok ? '' : '<br><span style="color:var(--amber)">If this path is not a mounted volume, ' +
       'every restart starts from nothing.</span>')
 }

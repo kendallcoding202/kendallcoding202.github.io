@@ -29,7 +29,7 @@ import { notifyEntry, notifySell, notifyClose, notifyHalt, notifyStartup, notify
 import { summaryText, summaryBaseline } from './summary.js'
 import { acquire as acquireLock, release as releaseLock } from './lock.js'
 import { stopAnalysis } from './analysis.js'
-import { readBondingCurve } from './onchain.js'
+import { readCurveState } from './onchain.js'
 import { log, sol, esc, utcDay } from './log.js'
 
 /**
@@ -45,7 +45,7 @@ export class Bot {
    * and `readCurve` for the same reason — the stale-price refresh is an RPC call, and a
    * test that has to reach the chain to check an exit rule is a test nobody trusts.
    */
-  constructor({ feed, logFeed, readCurve = readBondingCurve } = {}) {
+  constructor({ feed, logFeed, readCurve = readCurveState } = {}) {
     this.readCurve = readCurve
     this.feed = feed ?? new Feed()
     this.usingRpcTrades = config.feed.tradeSource === 'rpc'
@@ -260,8 +260,36 @@ export class Bot {
   }
 
   async #refreshStalePrice(position) {
-    const curve = await this.readCurve(position.mint)
+    const { curve, gone } = await this.readCurve(position.mint)
     const price = curve && curve.vTokens > 0 ? curve.vSol / curve.vTokens : null
+
+    /**
+     * THE CURVE IS CLOSED, and that is a fact rather than a failure.
+     *
+     * A graduated token's curve account is gone — or flagged complete — and it is never
+     * coming back. Waiting out three spaced retries to conclude that is both slow and
+     * misleading: it announces our best trades, the ones that ran far enough to fill the
+     * curve, as "cannot price this position", which reads like something broke.
+     *
+     * Recorded rather than acted on here, so the exit still goes through the one place
+     * that decides exits. The price, if we got one, is the FINAL curve price and is
+     * worth keeping — it is what the position is worth at the moment it stopped trading
+     * where we can see it.
+     */
+    if (gone) {
+      const patch = { curveGone: true }
+      if (price > 0) {
+        patch.lastPriceSol = price
+        patch.lastPriceAt = Date.now()
+        patch.lastVSol = curve.vSol
+        patch.lastVTokens = curve.vTokens
+      }
+      updatePosition(position.mint, patch)
+      Object.assign(position, patch)
+      log.info(`${position.symbol}: bonding curve closed — graduated, exiting at the last curve price`)
+      return
+    }
+
     if (!(price > 0)) {
       /**
        * SPACED IN TIME, not counted per sweep.

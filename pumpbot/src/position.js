@@ -51,6 +51,27 @@ export function decideExit(position, { priceSol, vSol, now = Date.now() }) {
    * those reads have failed repeatedly and there is genuinely no price to reason from.
    */
   const priceAgeSeconds = (now - (position.lastPriceAt ?? position.openedAt)) / 1000
+
+  /**
+   * The curve is CLOSED — graduated. Said separately from a failed read because they are
+   * not the same event and should not read the same.
+   *
+   * This fires on our best trades by construction: filling the bonding curve is what
+   * graduation IS, so a position that gets here ran far enough to complete it. Reporting
+   * that as "cannot price this position" makes a +127% exit look like a malfunction.
+   *
+   * Exiting is still right — we cannot see the new venue's price, so we cannot manage
+   * the position there — but the reason should say what happened.
+   */
+  if (position.curveGone) {
+    return {
+      sellTokens: position.tokensRemaining,
+      sellAll: true,
+      reasons: ['graduated — bonding curve closed, exiting at the final curve price'],
+      rungs: [],
+    }
+  }
+
   if ((position.blindReads ?? 0) >= config.exit.blindExitAfterReads) {
     return {
       sellTokens: position.tokensRemaining,
