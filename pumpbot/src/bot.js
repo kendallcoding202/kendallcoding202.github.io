@@ -262,9 +262,29 @@ export class Bot {
     const curve = await this.readCurve(position.mint)
     const price = curve && curve.vTokens > 0 ? curve.vSol / curve.vTokens : null
     if (!(price > 0)) {
+      /**
+       * SPACED IN TIME, not counted per sweep.
+       *
+       * A failed read does not touch lastPriceAt, so the position stays "due" on the
+       * very next sweep — which meant three failures took FIFTEEN SECONDS, not three
+       * genuine attempts spread over minutes. A brief RPC wobble would therefore close
+       * every open position at once, on the last price seen, for the offence of the
+       * endpoint being slow. That is the stale-price rule's mistake with a shorter fuse:
+       * no information converted into a realized loss.
+       *
+       * The counter is meant to distinguish "one bad moment" from "this genuinely cannot
+       * be priced", and only elapsed time can tell those apart. One strike per refresh
+       * interval, so reaching the limit means the reads have been failing for
+       * blindExitAfterReads x staleRefreshSeconds of real time.
+       */
+      const now = Date.now()
+      const lastTry = position.lastBlindReadAt ?? 0
+      if (now - lastTry < config.exit.staleRefreshSeconds * 1000) return
+
       const blindReads = (position.blindReads ?? 0) + 1
-      updatePosition(position.mint, { blindReads })
+      updatePosition(position.mint, { blindReads, lastBlindReadAt: now })
       position.blindReads = blindReads
+      position.lastBlindReadAt = now
       log.debug(`curve read failed for ${position.symbol} (${blindReads} in a row)`)
       return
     }
@@ -274,14 +294,18 @@ export class Bot {
       lastPriceAt: Date.now(),
       lastVSol: curve.vSol,
       lastVTokens: curve.vTokens,
-      // A good read clears the streak — the test is CONSECUTIVE failures.
+      // A good read clears the streak — the test is CONSECUTIVE failures. The timestamp
+      // goes with it, so the next failure starts a fresh interval rather than inheriting
+      // an old one and counting twice in quick succession.
       blindReads: 0,
+      lastBlindReadAt: 0,
     })
     position.lastPriceSol = price
     position.lastPriceAt = Date.now()
     position.lastVSol = curve.vSol
     position.lastVTokens = curve.vTokens
     position.blindReads = 0
+    position.lastBlindReadAt = 0
   }
 
   /**
@@ -676,8 +700,10 @@ export class Bot {
       await notify(
         `🎓 <b>${esc(position.symbol)} graduated</b> → <code>${esc(to)}</code>\n` +
           'Bonding curve closed; exits now route to the new venue.\n' +
-          'Note: post-graduation price data needs a funded API key, so this position ' +
-          'may go quiet and exit on the stale-price rule.',
+          'We cannot price it from here — the curve account is gone and the log feed ' +
+          'only decodes pump.fun trades — so the bag will close at the last curve ' +
+          'price once the reads fail. That is the graduation price, which is a good ' +
+          'one; it just means no upside past this point.',
       )
     }
   }

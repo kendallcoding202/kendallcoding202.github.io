@@ -4474,7 +4474,31 @@ console.log('\nStale price refresh, through the bot')
   await botB.tick()
   check('one failed read does not close the position', Boolean(store.getState().positions.DEADMINT))
   check('but it is counted', store.getState().positions.DEADMINT.blindReads === 1)
-  for (let i = 0; i < config.exit.blindExitAfterReads; i++) await botB.tick()
+
+  /**
+   * THE STRIKES ARE SPACED IN TIME, and this is the assertion that says so.
+   *
+   * A failed read does not refresh lastPriceAt, so the position stays due on the very
+   * next sweep — five seconds later. Counting per sweep therefore reached the limit in
+   * fifteen seconds, and a brief RPC wobble would have closed every open position at
+   * once on its last known price. That is the stale-price rule's mistake wearing a
+   * different hat: no information turned into a realized loss.
+   */
+  await botB.tick()
+  await botB.tick()
+  check('a burst of sweeps is still ONE strike — an RPC wobble is not a dead token',
+    store.getState().positions.DEADMINT?.blindReads === 1,
+    String(store.getState().positions.DEADMINT?.blindReads))
+
+  /** Only elapsed time earns the next strike. */
+  const ageOutBlindRead = (mint) => {
+    const p = store.getState().positions[mint]
+    if (p) p.lastBlindReadAt -= (config.exit.staleRefreshSeconds + 1) * 1000
+  }
+  for (let i = 0; i < config.exit.blindExitAfterReads; i++) {
+    ageOutBlindRead('DEADMINT')
+    await botB.tick()
+  }
   check('a position that truly cannot be priced is eventually closed',
     !store.getState().positions.DEADMINT,
     JSON.stringify(store.getState().positions.DEADMINT))
