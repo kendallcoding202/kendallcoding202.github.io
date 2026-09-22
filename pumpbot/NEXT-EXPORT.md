@@ -146,9 +146,30 @@ the coin. Corroborating signal already in the data: coins peaking 10x+ end at a 
   warn holders may be unable to sell once the agent is a net seller.
 - Edge only in the **non**-Mayhem arm → add `mayhem` as an entry filter.
 
-Note the dashboard currently reads "Mayhem agent — nothing screened yet", so this may have
-too few rows to answer. **If n < 30 in either arm, report that and do not split anything on
-it** — an underpowered split that happens to look clean is how a spurious rule ships.
+⚠️ **`f_mayhem` DOES NOT MEAN "this is a Mayhem coin".** It means the published agent
+wallet was seen trading during our 30-second observation window — `filter.js` only
+accumulates `agentBuys/agentSells` while a candidate is being observed, and the candidate
+is dropped once it is decided. A Mayhem coin whose agent happens to stay quiet for those
+30 seconds is labelled `mayhem = false`. The dashboard's "nothing screened yet" counter is
+narrower still: `mayhemScreened` increments only on strategy entries, never on explore.
+
+Kendall reports buying Mayhem coins while that counter read zero, so the false-negative
+rate is not hypothetical — it may be most of them. **The `mayhem = false` arm is therefore
+contaminated, and a null result means nothing.** A clean split needs a structural label, so
+test that first:
+
+- **`f_launchVTokens` / `f_launchVSol`** are read straight off the create event. The docs
+  say Mayhem mints 1,000,000,000 *additional* tokens (2B total) while "starting market cap
+  and the initial amount of liquidity is exactly the same", so if that extra supply touches
+  the curve's virtual reserves at all, launch reserves should come out **bimodal** — and
+  the mode a coin sits in is a label that does not depend on catching the agent live.
+- If it is bimodal, label by that and use `f_mayhem` only to check the two agree.
+- If it is unimodal, the extra supply is held off-curve, there is no structural tell, and
+  **Q4 cannot be answered from this data at all.** Say so rather than splitting on a
+  label known to be wrong.
+
+**If n < 30 in either arm, report that and do not split anything on it** — an underpowered
+split that happens to look clean is how a spurious rule ships.
 
 ---
 
