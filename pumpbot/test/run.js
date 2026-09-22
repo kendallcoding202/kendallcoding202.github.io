@@ -232,6 +232,8 @@ function buildCandidate({ create = {}, buyers = 70, sells = 2, devSells = false,
    */
   check('a net SELLER is visible as one', withAgent.agentNetSol < 0, String(withAgent.agentNetSol))
   check('and an untouched coin is not flagged', buildCandidate().mayhem === false)
+  check('the agent buy share is measured against total buy volume',
+    withAgent.agentBuyShare > 0 && withAgent.agentBuyShare < 1, String(withAgent.agentBuyShare))
   /**
    * Concentration is measured on ORGANIC volume, so a coin flip from one wallet cannot
    * manufacture the very signal the filter now selects on.
@@ -1331,6 +1333,42 @@ console.log('\nTop-of-spike detection')
     topOfSpike([{ v: JOURNAL_VERSION, action: 'bought' }]).bought.n === 0)
 }
 
+// ------------------------------- could a LIVE buy actually have landed?
+console.log('\nFill feasibility')
+{
+  const { fillFeasibility } = await import('../src/learn.js')
+  /**
+   * Every profitability figure assumes the entry filled. Paper fills always do; a live
+   * buy reverts if the price moves past its slippage tolerance before it lands. That is
+   * not a uniform tax but a SELECTION — live would fill the slow movers and miss the
+   * fast ones, and the fast ones carry the edge.
+   */
+  const row = (at5, peak) => ({
+    v: JOURNAL_VERSION, pathCheckpoints: [2, 5, 10, 30], pathMultiples: [1.0, at5, at5, at5],
+    peakMultiple: peak, endMultiple: 1, troughMultiple: 0.9,
+  })
+  // Winners run away before we land; losers sit still and fill fine.
+  const biased = fillFeasibility([
+    ...Array.from({ length: 50 }, () => row(1.9, 3.0)),   // winners, gone by +90%
+    ...Array.from({ length: 50 }, () => row(1.01, 1.1)),  // losers, barely moved
+  ], { landingSeconds: 5, tolerancePct: 12 })
+  check('a runaway winner is counted as a buy that would NOT have landed',
+    near(biased.missedShare, 0.5, 1e-9), String(biased.missedShare))
+  check('and the winners specifically are the ones missed',
+    biased.missedWinnerShare === 1, String(biased.missedWinnerShare))
+
+  const calm = fillFeasibility(
+    Array.from({ length: 50 }, () => row(1.02, 3.0)), { landingSeconds: 5, tolerancePct: 12 })
+  check('a market that has not moved fills fine', calm.missedShare === 0)
+
+  check('rows with no early path are excluded rather than assumed fillable',
+    fillFeasibility([{ v: JOURNAL_VERSION, peakMultiple: 2 }]).n === 0)
+  /** The checkpoints have to be fine enough to see a fill window at all. */
+  const { PATH_CHECKPOINTS } = await import('../src/journal.js')
+  check('the path is sampled inside the window a real fill would take',
+    PATH_CHECKPOINTS[0] <= 5, JSON.stringify(PATH_CHECKPOINTS.slice(0, 4)))
+}
+
 // ------------------------------- a trailing stop can only be judged at tick time
 console.log('\nTrailing exits, decided live')
 {
@@ -1652,6 +1690,33 @@ console.log('\nStartup provenance')
   check('while all time still shows the losses the new rules inherited',
     allTime.closed === 4 && allTime.realizedSol < sinceBuild.realizedSol,
     `${allTime.realizedSol} all time vs ${sinceBuild.realizedSol} this build`)
+
+  /**
+   * TWO P&L NUMBERS THAT DISAGREE NEED A THIRD TO RECONCILE THEM.
+   *
+   * totalRealizedSol only moves when a position CLOSES, so a rung that banks several SOL
+   * out of a runner leaves the realized curve flat while NET P&L — which counts
+   * solRecovered — jumps. Both are right, they answer different questions, and a page
+   * showing both without saying which is which teaches you to distrust both.
+   */
+  st.positions = {}
+  st.closed = []   // the reconciliation is about OPEN positions; start from none closed
+  store.addPosition({
+    mint: 'RUNNER', symbol: 'RUN', state: 'open', openedAt: Date.now(),
+    entryPriceSol: 1e-7, tokensBought: 1e6, tokensRemaining: 8e5,
+    solSpent: 0.15, solRecovered: 3.2, rungsHit: [50], peakPriceSol: 5e-6,
+    lastPriceSol: 5e-6, fills: [],
+  })
+  const before = st.totalRealizedSol
+  check('a partial sell does NOT move realized P&L — it is not a closed trade',
+    st.totalRealizedSol === before && store.recordSince(0).closed === 0,
+    `${st.totalRealizedSol}`)
+  const bankedOpen = store.strategyPositions()
+    .filter((p) => p.state === 'open')
+    .reduce((sum, p) => sum + (p.solRecovered ?? 0), 0)
+  check('but the SOL it banked is still visible, so the gap is explainable',
+    near(bankedOpen, 3.2), String(bankedOpen))
+  st.positions = {}
 
   st.closed = []
   st.lastStartedAt = 0
@@ -5068,6 +5133,17 @@ console.log('\nEnd-to-end bot loop')
 
   const closed = store.getState().closed.at(-1)
   check('closed trade was booked', closed?.mint === MINT, JSON.stringify(closed?.symbol))
+  /**
+   * EVERY MODEL HERE ASSUMES A SALE CLEARS NEAR THE MARK, and pump.fun's own docs say
+   * that need not hold: once the Mayhem agent's extra billion is in circulation, holders
+   * "cannot sell their tokens into the bonding curve due to the lack of liquidity". A
+   * bag we cannot exit is the one failure the paper book reports as a clean win, because
+   * paperSell always quotes a number. So the fill quality is recorded on every exit.
+   */
+  check('the exit records how well it actually filled against the mark',
+    Number.isFinite(closed?.worstExitRatio), String(closed?.worstExitRatio))
+  check('and a normal fill lands near the mark rather than far below it',
+    closed.worstExitRatio > 0.5 && closed.worstExitRatio <= 1.2, String(closed.worstExitRatio))
   check('the winner books a profit', closed && closed.realizedSol > 0, String(closed?.realizedSol))
   check('initials were recovered across BOTH sells, not at the rung alone',
     closed && closed.solRecovered >= closed.solSpent,

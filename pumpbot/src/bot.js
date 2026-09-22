@@ -135,6 +135,16 @@ export class Bot {
       exploreBlockReason: null,
       // Approved launches the CAPITAL gate turned away, by reason. See #enter.
       blockedEntries: new Map(),
+      /**
+       * How much of what we see is pump.fun's random-walk agent.
+       *
+       * The agent trades opted-in coins with equal buy/sell probabilities for 24 hours —
+       * zero expected drift by design. The two newest entry rules select for exactly
+       * what that produces, so "is our edge inside this population or outside it" is the
+       * open question, and this is the live read on how big the population even is.
+       */
+      mayhemScreened: 0,
+      mayhemEntered: 0,
       uptimeHours() {
         return this.startedAt ? (Date.now() - this.startedAt) / 3_600_000 : 0
       },
@@ -177,6 +187,17 @@ export class Bot {
        * launches the strategy WANTED and did not get, which is the only honest answer
        * to "why are we not trading more".
        */
+      /**
+       * The Mayhem split, live. Until the journal carries enough flagged rows to compare
+       * outcomes, this at least answers how much of what we trade is a coin the house is
+       * running a random walk on.
+       */
+      mayhem: {
+        screened: s.mayhemScreened,
+        entered: s.mayhemEntered,
+        screenedShare: s.screened > 0 ? s.mayhemScreened / s.screened : null,
+        enteredShare: s.entered > 0 ? s.mayhemEntered / s.entered : null,
+      },
       blockedEntries: [...s.blockedEntries.entries()]
         .sort((a, b) => b[1] - a[1]).slice(0, 5).map(([reason, n]) => ({ reason, n })),
       feedCost: this.#feedCost(),
@@ -952,6 +973,7 @@ export class Bot {
 
       this.stats.screened++
       this.stats.sinceBeat.screened++
+      if (candidate.mayhem) this.stats.mayhemScreened++
 
       await this.#enter(candidate, verdict)
     }
@@ -1205,6 +1227,7 @@ export class Bot {
       else {
         this.stats.entered++
         this.stats.sinceBeat.entered++
+        if (candidate.mayhem) this.stats.mayhemEntered++
       }
       this.shadow?.track({
         candidate, verdict,

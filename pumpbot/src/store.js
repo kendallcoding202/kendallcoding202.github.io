@@ -239,6 +239,13 @@ export function closePosition(mint, reason) {
   p.state = 'closed'
   p.closedAt = Date.now()
   p.closeReason = reason
+  /**
+   * How well the exits actually filled, relative to what the position was marked at.
+   * Kept on the closed record because a bag that could not be sold is the one failure
+   * the paper book would otherwise report as a clean win — paperSell always quotes a
+   * number, whether or not a real sale would have cleared.
+   */
+  if (Number.isFinite(p.worstExitRatio)) p.worstExitRatio = Number(p.worstExitRatio.toFixed(4))
   p.realizedSol = realized
 
   s.closed.push(p)

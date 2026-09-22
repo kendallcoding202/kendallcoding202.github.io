@@ -425,7 +425,8 @@ function render(d) {
         (c.storage ? '<br>' + storageLine(c.storage) : '') +
         (c.creatorPrior ? '<br>' + priorLine(c.creatorPrior) : '') +
         (c.walletPrior ? '<br>' + walletLine(c.walletPrior) : '') +
-        (c.offCurve ? '<br>' + oracleLine(c.offCurve) : '') + '</span>'
+        (c.offCurve ? '<br>' + oracleLine(c.offCurve) : '') +
+        (c.mayhem ? '<br>' + mayhemLine(c.mayhem) : '') + '</span>'
     } else if (c.collecting) {
       // "in the last hour", not "about N/hr" — it is a count over a real window, and
       // the vaguer phrasing is what let an impossible extrapolation look plausible.
@@ -439,7 +440,8 @@ function render(d) {
         (c.storage ? '<br>' + storageLine(c.storage) : '') +
         (c.creatorPrior ? '<br>' + priorLine(c.creatorPrior) : '') +
         (c.walletPrior ? '<br>' + walletLine(c.walletPrior) : '') +
-        (c.offCurve ? '<br>' + oracleLine(c.offCurve) : '') + '</span>'
+        (c.offCurve ? '<br>' + oracleLine(c.offCurve) : '') +
+        (c.mayhem ? '<br>' + mayhemLine(c.mayhem) : '') + '</span>'
     } else {
       col.innerHTML = '▲ NOT COLLECTING' +
         '<span class="why">' + c.reasons.map(esc).join('<br>') +
@@ -512,16 +514,25 @@ function render(d) {
    */
   const cm = document.getElementById('chartmeta')
   const b = d.build
+  /**
+   * The realized curve only moves when a position CLOSES. A rung that banks several SOL
+   * out of a runner leaves this flat while NET P&L jumps, and two P&L numbers that
+   * disagree by several SOL with no explanation teach you to distrust both.
+   */
+  const banked = d.bankedOnOpenSol > 0.0001
+    ? ' <span style="color:var(--amber)">· ' + sgn(d.bankedOnOpenSol, 4) +
+      ' banked from open positions, counted here only when they close</span>'
+    : ''
   if (b && b.closed > 0) {
     const mult = b.multiple === null ? '' : ' · ' + b.multiple.toFixed(3) + 'x staked'
     cm.innerHTML = '<b>BUILD ' + esc(b.version) + '</b> · ' + b.closed + ' CLOSED · ' +
       b.wins + 'W/' + b.losses + 'L · ' + sgn(b.realizedSol, 4) + mult +
       '<span style="color:var(--dimmer)"> — all time ' + sgn(d.pnl.realizedTotalSol, 4) +
-      ' over ' + (d.history ? d.history.length : 0) + '</span>'
+      ' over ' + (d.history ? d.history.length : 0) + '</span>' + banked
   } else if (b) {
     cm.innerHTML = '<b>BUILD ' + esc(b.version) + '</b> · no closed trades yet' +
       '<span style="color:var(--dimmer)"> — all time ' + sgn(d.pnl.realizedTotalSol, 4) +
-      ' over ' + (d.history ? d.history.length : 0) + '</span>'
+      ' over ' + (d.history ? d.history.length : 0) + '</span>' + banked
   } else {
     cm.textContent = d.history && d.history.length
       ? d.history.length + ' CLOSED · REALIZED ' + sgn(d.pnl.realizedTotalSol, 4) : ''
@@ -1025,6 +1036,24 @@ function walletLine(w) {
  * be verified before shipping, so whether it works at all is an open question that a
  * number answers and a paragraph buries. Once it is trusted this goes quiet.
  */
+/**
+ * How much of what we trade is a coin pump.fun is running a random walk on.
+ *
+ * Its agent buys and sells with EQUAL probabilities for a coin's first 24 hours — zero
+ * expected drift, stated outright as not intended to be profitable. The two newest entry
+ * rules select for exactly what that produces, so the open question is whether the edge
+ * lives inside this population or outside it. This is the live read on its size; the
+ * journal answers the outcome question once enough flagged rows have finalized.
+ */
+function mayhemLine(m) {
+  if (!m.screened) return 'Mayhem agent <span class="dim">nothing screened yet</span>'
+  const pct = (v) => v === null ? '—' : (v * 100).toFixed(0) + '%'
+  return 'Mayhem agent seen in <code>' + pct(m.screenedShare) + '</code> of screened launches' +
+    (m.entered ? ' · <code>' + pct(m.enteredShare) + '</code> of the ones we BOUGHT' : '') +
+    '<br><span class="dim">It trades with equal buy/sell odds for 24h — variance, not demand. ' +
+    'Whether our edge is inside or outside this group is the open question.</span>'
+}
+
 function oracleLine(o) {
   if (!o.enabled) return 'Post-graduation pricing <span style="color:var(--dimmer)">off</span>'
   if (o.trusted) {

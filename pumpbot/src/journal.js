@@ -52,7 +52,20 @@ export const CREATOR_TIER = { poor: 0, unknown: 1, ordinary: 2, proven: 3 }
  * Coarse on purpose. A full tick history would multiply the journal's size by a hundred,
  * and the journal is already the binding memory constraint on this bot.
  */
-export const PATH_CHECKPOINTS = [30, 60, 120, 180, 300, 450, 600, 900]
+/**
+ * The first three of these are about WHETHER WE COULD HAVE BOUGHT AT ALL.
+ *
+ * Paper fills always clear. A live buy does not: it carries a slippage tolerance, and if
+ * the price moves more than that between quoting and landing — one to three seconds —
+ * the transaction reverts and we get nothing. Which means live would fill the SLOW
+ * movers and miss the fast ones, and the fast ones are where the entire measured edge
+ * lives. That is a selection bias with no counterpart in the paper book, so every
+ * profitability number here quietly assumes it away.
+ *
+ * Nothing recorded so far has the resolution to check it: the finest checkpoint was
+ * thirty seconds. 2, 5 and 10 cover the window a real fill would actually take.
+ */
+export const PATH_CHECKPOINTS = [2, 5, 10, 30, 60, 120, 180, 300, 450, 600, 900]
 
 /**
  * Trailing-stop levels evaluated LIVE, as ticks arrive.

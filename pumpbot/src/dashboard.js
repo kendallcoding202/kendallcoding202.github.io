@@ -166,6 +166,8 @@ function collectionStatus(stats, storage, learning, analysis = null) {
      * before shipping.
      */
     offCurve: stats?.offCurve ?? null,
+    /** How much of what we trade is a coin pump.fun is running a random walk on. */
+    mayhem: stats?.mayhem ?? null,
     // Live, from the bot — unlike the rankings, which ride along with the analysis.
     smartTape: stats?.smartTape ?? null,
     /**
@@ -271,6 +273,19 @@ export function buildSnapshot(walletSol, stats = null) {
   let running = (state.totalRealizedSol ?? 0) - retainedSum
   const history = retained.map((p) => ({ at: p.closedAt, sol: (running += p.realizedSol) }))
 
+  /**
+   * SOL ALREADY BANKED OUT OF POSITIONS THAT ARE STILL OPEN.
+   *
+   * totalRealizedSol only moves when a position CLOSES, so a rung that sold 3 SOL out of
+   * a runner leaves the realized curve flat while NET P&L — which counts solRecovered —
+   * jumps. Two P&L numbers on one page, disagreeing by several SOL, with nothing saying
+   * why. Both are correct and they answer different questions; the page has to say which
+   * is which, or it teaches you to distrust both.
+   */
+  const bankedOnOpen = strategyPositions()
+    .filter((p) => p.state === 'open')
+    .reduce((sum, p) => sum + (p.solRecovered ?? 0), 0)
+
   const nextTierSol = sizingSummary(walletSol).nextTier?.atSol ?? null
 
   /**
@@ -301,6 +316,8 @@ export function buildSnapshot(walletSol, stats = null) {
     },
     /** How the rules RUNNING RIGHT NOW are doing, apart from the book they inherited. */
     build,
+    /** Banked from rungs on positions that have not closed yet — see above. */
+    bankedOnOpenSol: bankedOnOpen,
     pnl: {
       realizedTotalSol: state.totalRealizedSol,
       realizedTodaySol: today.realizedSol,

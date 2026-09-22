@@ -578,6 +578,52 @@ export function topOfSpike(rows, { minBucket = config.learning.minBucketSamples 
   return { bought, explored, rejected, control, comparable, selectsForTops, cleared, byAcceleration, minBucket }
 }
 
+/**
+ * COULD WE ACTUALLY HAVE BOUGHT THIS?
+ *
+ * Every profitability figure in this report assumes the entry filled. Paper fills always
+ * do. A live buy carries a slippage tolerance, and if the price moves more than that
+ * between quoting and landing — one to three seconds — the transaction reverts and we
+ * get nothing at all.
+ *
+ * That is not a uniform tax, it is a SELECTION: live would fill the slow movers and miss
+ * the fast ones, and the fast ones are where the measured edge lives. A strategy whose
+ * returns come from the top 1% of outcomes cannot afford to systematically miss the
+ * fastest 1% of entries.
+ *
+ * Measured against the early path checkpoints, which exist for this. A row is counted as
+ * unfillable when the price had already moved beyond the buy tolerance by the time a
+ * real transaction would have landed.
+ */
+export function fillFeasibility(rows, { landingSeconds = 5, tolerancePct = config.exec.buySlippagePct } = {}) {
+  const tol = 1 + tolerancePct / 100
+  const usable = rows.filter((r) => Array.isArray(r.pathCheckpoints) && Array.isArray(r.pathMultiples))
+  let withData = 0, missed = 0, missedWinners = 0, winners = 0
+  for (const r of usable) {
+    const i = r.pathCheckpoints.findIndex((t) => t >= landingSeconds)
+    const m = i >= 0 ? r.pathMultiples[i] : null
+    if (!(m > 0)) continue
+    withData++
+    const isWinner = r.peakMultiple >= 1.5
+    if (isWinner) winners++
+    // Moved UP through the tolerance before we landed: the buy reverts.
+    if (m > tol) {
+      missed++
+      if (isWinner) missedWinners++
+    }
+  }
+  return {
+    landingSeconds,
+    tolerancePct,
+    n: withData,
+    coverage: usable.length ? withData / usable.length : 0,
+    missedShare: withData ? missed / withData : null,
+    // The number that matters: are we missing the winners specifically?
+    missedWinnerShare: winners ? missedWinners / winners : null,
+    winners,
+  }
+}
+
 function numericFeatures(rows) {
   const keys = new Set()
   for (const r of rows) {
@@ -1023,6 +1069,8 @@ function analyzeRows(rows, onDisk) {
     wallets: walletSnapshot(),
     creatorTiers,
     topBuying,
+    /** Whether a live buy would actually have landed — see fillFeasibility. */
+    fills: fillFeasibility(labelled),
     tiersMeasured,
     nullDist,
     // Would a different exit have done better on these same coins? The entry filter is
@@ -1327,6 +1375,26 @@ export function formatReport(a) {
     L.push('  If the gap vanishes there, proven deployers just draw faster crowds and')
     L.push('  there is only one signal — in which case use the crowd, it has more samples.')
     L.push('  Nothing in the entry path reads this yet. It is here to be measured.')
+    L.push('')
+  }
+
+  if (a.fills && a.fills.n > 0) {
+    const f = a.fills
+    L.push('Could a LIVE buy actually have landed?')
+    L.push(`  Paper fills always clear. A real one reverts if the price moves past the`)
+    L.push(`  ${f.tolerancePct}% slippage tolerance before it lands, so this asks how often it would`)
+    L.push(`  have, using the price ${f.landingSeconds}s after the decision.`)
+    L.push('')
+    L.push(`  would have MISSED: ${((f.missedShare ?? 0) * 100).toFixed(1)}% of all entries · ` +
+      `${((f.missedWinnerShare ?? 0) * 100).toFixed(1)}% of the WINNERS`)
+    L.push(`  measured on ${f.n} rows carrying an early price path`)
+    if ((f.missedWinnerShare ?? 0) > (f.missedShare ?? 0) * 1.2) {
+      L.push('')
+      L.push('  ⚠ The winners are missed MORE OFTEN than average. That is a selection')
+      L.push('  bias with no counterpart in the paper book: live would fill the slow')
+      L.push('  movers and skip the fast ones, and the fast ones carry the edge. Every')
+      L.push('  profitability figure above quietly assumes this away.')
+    }
     L.push('')
   }
 

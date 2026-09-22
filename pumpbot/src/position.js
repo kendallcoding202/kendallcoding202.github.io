@@ -205,8 +205,26 @@ export function newPosition({ mint, symbol, creator, fill, curve, pool }) {
  */
 const DUST_TOKENS = 1e-6
 
-/** Folds a completed sell back into the position. */
+/**
+ * Folds a completed sell back into the position, and RECORDS WHAT THE EXIT ACTUALLY GOT
+ * against what the position was marked at.
+ *
+ * Every model here assumes a sale clears at something like the last price. pump.fun's
+ * own Mayhem docs say that need not hold: once the agent's extra billion tokens are in
+ * circulation, "there may be some holders who cannot sell their tokens into the bonding
+ * curve due to the lack of liquidity". A bag we cannot exit is the one failure the paper
+ * book would otherwise report as a clean win, because paperSell always quotes a number.
+ *
+ * So measure it. Expected is tokens x the mark; got is what came back. The ratio is the
+ * only early warning that the exits are not real, and it costs two fields.
+ */
 export function applySell(position, fill, reasons) {
+  const expected = fill.tokensSold * (position.lastPriceSol || 0)
+  if (expected > 0) {
+    const ratio = fill.solReceived / expected
+    position.worstExitRatio = Math.min(position.worstExitRatio ?? Infinity, ratio)
+    position.lastExitRatio = Number(ratio.toFixed(4))
+  }
   const left = Math.max(0, position.tokensRemaining - fill.tokensSold)
   /**
    * Snap dust to zero. Selling the last of a bag leaves a floating-point residue —
