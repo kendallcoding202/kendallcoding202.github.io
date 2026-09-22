@@ -160,6 +160,12 @@ function collectionStatus(stats, storage, learning, analysis = null) {
     storage,
     creatorPrior: stats?.creatorPrior ?? null,
     walletPrior: stats?.walletPrior ?? null,
+    /**
+     * Sits with the priors rather than in the pipeline note: while it is unproven it is
+     * the most uncertain thing running, since its response format could not be verified
+     * before shipping.
+     */
+    offCurve: stats?.offCurve ?? null,
     // Live, from the bot — unlike the rankings, which ride along with the analysis.
     smartTape: stats?.smartTape ?? null,
     /**

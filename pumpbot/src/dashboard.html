@@ -424,7 +424,8 @@ function render(d) {
         (c.analysisError ? '<br>Last error: ' + esc(String(c.analysisError)) : '') +
         (c.storage ? '<br>' + storageLine(c.storage) : '') +
         (c.creatorPrior ? '<br>' + priorLine(c.creatorPrior) : '') +
-        (c.walletPrior ? '<br>' + walletLine(c.walletPrior) : '') + '</span>'
+        (c.walletPrior ? '<br>' + walletLine(c.walletPrior) : '') +
+        (c.offCurve ? '<br>' + oracleLine(c.offCurve) : '') + '</span>'
     } else if (c.collecting) {
       // "in the last hour", not "about N/hr" — it is a count over a real window, and
       // the vaguer phrasing is what let an impossible extrapolation look plausible.
@@ -437,10 +438,12 @@ function render(d) {
         '<span class="why">' + togo + ' · ' + c.rowsOnDisk + ' rows on disk in total' +
         (c.storage ? '<br>' + storageLine(c.storage) : '') +
         (c.creatorPrior ? '<br>' + priorLine(c.creatorPrior) : '') +
-        (c.walletPrior ? '<br>' + walletLine(c.walletPrior) : '') + '</span>'
+        (c.walletPrior ? '<br>' + walletLine(c.walletPrior) : '') +
+        (c.offCurve ? '<br>' + oracleLine(c.offCurve) : '') + '</span>'
     } else {
       col.innerHTML = '▲ NOT COLLECTING' +
         '<span class="why">' + c.reasons.map(esc).join('<br>') +
+        (c.offCurve ? '<br>' + oracleLine(c.offCurve) : '') +
         (c.storage ? '<br>' + storageLine(c.storage) : '') + '</span>'
     }
   } else col.hidden = true
@@ -640,21 +643,6 @@ function render(d) {
        * and want opposite responses, so "why are we not trading more" was being answered
        * by guessing. These are trades the strategy wanted and did not get.
        */
-      /**
-       * The off-curve oracle proving itself. It cannot price a graduated position until
-       * it has agreed with live curve prices enough times, so this is the one place that
-       * says whether the feature is actually doing anything yet.
-       */
-      const oc = pl.offCurve
-      if (oc && oc.enabled) {
-        const rate = oc.agreementRate === null ? '—' : (oc.agreementRate * 100).toFixed(0) + '%'
-        rows.push('Post-graduation pricing: ' + (oc.trusted
-          ? '<span class="pos">TRUSTED</span> — graduated bags keep running'
-          : '<span style="color:var(--amber)">proving itself</span> · ' + oc.agreements + '/' +
-            oc.needed + ' agreements needed') +
-          ' <span style="color:var(--dimmer)">(' + oc.checks + ' checks against live curves, ' +
-          rate + ' agree' + (oc.lastError ? ' · last error ' + esc(String(oc.lastError)) : '') + ')</span>')
-      }
       if (pl.blockedEntries && pl.blockedEntries.length) {
         rows.push('<span style="color:var(--amber)">Approved but not taken:</span> ' +
           pl.blockedEntries.map((b) => '<code>' + esc(b.reason) + ' ×' + b.n + '</code>').join(' · '))
@@ -1029,6 +1017,37 @@ function walletLine(w) {
  * all, an index too young for anyone to have a judgeable record, or an index that simply
  * has not met a bad deployer yet. All three used to read as "deployer record: on".
  */
+/**
+ * The post-graduation price oracle, proving itself.
+ *
+ * It sits in the collecting banner rather than in the pipeline note because while it is
+ * unproven it is the single most uncertain thing running: the response format could not
+ * be verified before shipping, so whether it works at all is an open question that a
+ * number answers and a paragraph buries. Once it is trusted this goes quiet.
+ */
+function oracleLine(o) {
+  if (!o.enabled) return 'Post-graduation pricing <span style="color:var(--dimmer)">off</span>'
+  if (o.trusted) {
+    return 'Post-graduation pricing <span class="pos">TRUSTED</span> ' +
+      '<span class="dim">— graduated bags keep running instead of being sold at the curve price ' +
+      '(' + o.agreements + '/' + o.checks + ' agreed)</span>'
+  }
+  if (!o.checks) {
+    return 'Post-graduation pricing <span style="color:var(--amber)">unproven</span> ' +
+      '<span class="dim">— no checks yet. It compares itself against live curve prices, so it ' +
+      'needs open positions to test against.</span>' +
+      (o.lastError ? '<br><span class="dim">last error: <code>' + esc(String(o.lastError)) + '</code></span>' : '')
+  }
+  const rate = (o.agreementRate * 100).toFixed(0)
+  const bad = o.checks >= 8 && o.agreementRate < 0.3
+  return 'Post-graduation pricing <span style="color:var(--amber)">proving itself</span> ' +
+    '<code>' + o.agreements + '/' + o.needed + '</code> agreements ' +
+    '<span class="dim">(' + o.checks + ' checks against curves we can already price, ' + rate + '% agree)</span>' +
+    (bad ? '<br><span style="color:var(--red)">Agreement is low — the price format is probably being ' +
+      'read wrong. Until it clears the bar it prices nothing, so this costs only the feature.</span>' : '') +
+    (o.lastError ? '<br><span class="dim">last error: <code>' + esc(String(o.lastError)) + '</code></span>' : '')
+}
+
 function priorLine(p) {
   if (!p.enabled) return 'Deployer prior <span style="color:var(--dimmer)">off</span>'
   if (!p.indexed) return 'Deployer prior <span style="color:var(--amber)">no index</span> — learning is off, so nothing is judged'
