@@ -256,6 +256,23 @@ export function evaluateEntry(candidate, { creatorPrior = null } = {}) {
     check('market_cap_ceiling', priced && mc <= e.maxMarketCapSol, `${shown} SOL (want ≤ ${e.maxMarketCapSol})`),
   )
 
+  /**
+   * Concentration, as an inverted U rather than a ceiling — see minTopBuyerShare.
+   *
+   * Below the floor there is nobody with conviction and the launch goes nowhere (0.942x
+   * out of sample). Above the ceiling there is nobody but the whale, and nobody to sell
+   * to (0.949x). In between is where the runners are.
+   */
+  const topShare = candidate.topBuyerShare
+  checks.push(
+    check(
+      'buyer_concentration',
+      topShare >= e.minTopBuyerShare && topShare < e.maxTopBuyerShare,
+      `top buyer is ${(topShare * 100).toFixed(0)}% of volume ` +
+        `(want ${(e.minTopBuyerShare * 100).toFixed(0)}-${(e.maxTopBuyerShare * 100).toFixed(0)}%)`,
+    ),
+  )
+
   checks.push(
     check(
       'dev_hold',

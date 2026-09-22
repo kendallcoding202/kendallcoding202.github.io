@@ -150,15 +150,26 @@ const createEvt = (over = {}) =>
  * dataset added. A fixture that cannot pass the live filter tests nothing about it.
  * Pass `fading: true` for the opposite shape.
  */
-function buildCandidate({ create = {}, buyers = 70, sells = 2, devSells = false, devSellTokens = 500, mcap = 44, fading = false } = {}) {
+/**
+ * `topShare` exists because the filter now cares HOW CONCENTRATED the buying is, and a
+ * fixture of seventy identical 0.05 SOL buys has a top-buyer share of 1.4% — a shape the
+ * journal says is the worst band there is (0.942x). A fixture that cannot pass the live
+ * filter tests nothing about it, so the default is a launch with one buyer of conviction,
+ * which is what we now actually buy.
+ */
+function buildCandidate({ create = {}, buyers = 70, sells = 2, devSells = false, devSellTokens = 500, mcap = 44, fading = false, topShare = 0.6 } = {}) {
   const c = new Candidate(createEvt(create))
   const windowMs = config.entry.observeSeconds * 1000
   for (let i = 0; i < buyers; i++) {
     const at = c.createdAt + (fading
       ? (i / Math.max(1, buyers)) * (windowMs / 4)
       : windowMs * 0.7 + (i / Math.max(1, buyers)) * (windowMs * 0.25))
+    // One buyer takes `topShare` of the volume; the rest split the remainder evenly.
+    const rest = 0.05
+    const lead = topShare > 0 && buyers > 1 ? (topShare * (buyers - 1) * rest) / (1 - topShare) : rest
     c.apply({ ...normalizeEvent({
-      txType: 'buy', mint: 'MINT', traderPublicKey: `B${i}`, tokenAmount: 1000, solAmount: 0.05,
+      txType: 'buy', mint: 'MINT', traderPublicKey: `B${i}`, tokenAmount: 1000,
+      solAmount: i === 0 ? lead : rest,
       vSolInBondingCurve: 40, vTokensInBondingCurve: 900_000_000, marketCapSol: mcap,
     }), at })
   }
@@ -191,6 +202,28 @@ function buildCandidate({ create = {}, buyers = 70, sells = 2, devSells = false,
   check('a handful of buyers is no longer disqualifying on its own',
     !thin.failed.some((c) => c.id === 'buyers'),
     JSON.stringify(thin.failed?.map((c) => c.id)))
+
+  /**
+   * CONCENTRATION IS AN INVERTED U, which is the opposite of what instinct says.
+   *
+   * Prompted by a 57x with three holders, one of them on 51% of supply — the profile
+   * that reads like a scam. Out of sample: 0-30% share returns 0.942x, 50-70% returns
+   * 1.318x, and 90%+ falls back to 0.949x. A launch needs someone with conviction to
+   * move it; past a point there is nobody there but the whale and nobody to sell to.
+   */
+  const evenly = evaluateEntry(buildCandidate({ buyers: 70, topShare: 0 }))
+  check('a crowd of identical small buyers is refused — nobody is driving it',
+    !evenly.pass && evenly.failed.some((c) => c.id === 'buyer_concentration'),
+    JSON.stringify(evenly.failed?.map((c) => c.id)))
+
+  const whaleOnly = evaluateEntry(buildCandidate({ buyers: 70, topShare: 0.97 }))
+  check('and so is one wallet being essentially the whole book',
+    !whaleOnly.pass && whaleOnly.failed.some((c) => c.id === 'buyer_concentration'),
+    JSON.stringify(whaleOnly.failed?.map((c) => c.id)))
+
+  check('but a leader plus a crowd passes, which is what the runners look like',
+    !evaluateEntry(buildCandidate({ buyers: 70, topShare: 0.6 }))
+      .failed.some((c) => c.id === 'buyer_concentration'))
 
   /** But the thing that replaced it has to actually bite. */
   const fadingOut = evaluateEntry(buildCandidate({ buyers: 70, fading: true }))
@@ -527,14 +560,33 @@ const mkPosition = (over = {}) => ({
   }
 
   /**
-   * The shipped default takes PART of the position at the first rung and leaves the rest
-   * to the trailing stop. One rung, not four — the fee argument against the four-rung
-   * ladder still holds — but the paired sweep put selling 40% ahead of selling the lot,
-   * so the moon bag pays for its own extra transaction.
+   * The shipped default takes PART of the position at the first rung, leaves most of it
+   * running, and has a second rung far up for the rare enormous outcome.
+   *
+   * The first rung deliberately does NOT recover the stake — that was the old 67% design,
+   * and the paired replay preferred holding more. The high rung is there for a different
+   * reason: on mean EV it looks like a cost, but it cuts per-trade volatility by 38% and
+   * RAISES the median day, which is the day actually lived through. It has to sit high
+   * enough to touch only the extremes; at +400% it fires often enough to cut runners off
+   * and the median day gets worse than having no second rung at all.
    */
-  check('the default exit banks part of the position and lets the rest run',
-    config.exit.ladder.length === 1 && config.exit.ladder[0].sellPct < 100,
-    JSON.stringify(config.exit.ladder))
+  const rungs = config.exit.ladder
+  check('the first rung banks part of the position and lets the rest run',
+    rungs[0].sellPct < 100 && rungs[0].atPct <= 50, JSON.stringify(rungs))
+  check('there is a second rung, far above the first',
+    rungs.length === 2 && rungs[1].atPct >= 500, JSON.stringify(rungs))
+  check('and the two together never sell more of the bag than exists',
+    rungs.reduce((s, r) => s + r.sellPct, 0) <= 100, JSON.stringify(rungs))
+  /**
+   * The point Kendall made that changed this: at a 20% first rung, a position that has
+   * run enormously has still not recovered its stake, so a collapse books a LOSS on a
+   * winner. The high rung is what puts the stake back.
+   */
+  const bankedAtHighRung = rungs.reduce((s, r) => s + (r.sellPct / 100) * (1 + r.atPct / 100), 0)
+  check('clearing the high rung puts the stake back — no longer a loss if it then dies',
+    bankedAtHighRung > 1, `${bankedAtHighRung.toFixed(2)}x of stake banked by then`)
+  check('but the first rung ALONE does not, which is the deliberate part',
+    (rungs[0].sellPct / 100) * (1 + rungs[0].atPct / 100) < 1)
 
   const already = decideExit(mkPosition({ rungsHit: [50] }), { priceSol: 1.6e-7, vSol: 34 })
   check('a rung never fires twice', already.sellTokens === 0)
@@ -4822,8 +4874,8 @@ console.log('\nEnd-to-end bot loop')
     initialBuy: 20_000_000, solAmount: 0.8,
     vSolInBondingCurve: curve.vSol, vTokensInBondingCurve: curve.vTokens, marketCapSol: 44,
   })
-  const mkTrade = (kind, trader, mult = 1) => normalizeEvent({
-    txType: kind, mint: MINT, traderPublicKey: trader, tokenAmount: 1000, solAmount: 0.05,
+  const mkTrade = (kind, trader, mult = 1, solAmount = 0.05) => normalizeEvent({
+    txType: kind, mint: MINT, traderPublicKey: trader, tokenAmount: 1000, solAmount,
     vSolInBondingCurve: curve.vSol * mult, vTokensInBondingCurve: curve.vTokens, marketCapSol: 44 * mult,
   })
 
@@ -4866,8 +4918,15 @@ console.log('\nEnd-to-end bot loop')
    * everything in `earlyBuys`, which now reads as a fading launch and is refused.
    */
   bot.candidates.get(MINT).createdAt -= (config.entry.observeSeconds + 5) * 1000
-  const E2E_BUYERS = config.entry.minUniqueBuyers + 10
-  for (let i = 0; i < E2E_BUYERS; i++) logFeed.emit('trade', mkTrade('buy', `BUYER${i}`))
+  const E2E_BUYERS = Math.max(6, config.entry.minUniqueBuyers + 10)
+  /**
+   * One buyer of conviction plus a handful of others — the shape the concentration rule
+   * now requires, and the shape the journal says the runners actually have. A crowd of
+   * identical small buyers sits in the worst band there is.
+   */
+  for (let i = 0; i < E2E_BUYERS; i++) {
+    logFeed.emit('trade', mkTrade('buy', `BUYER${i}`, 1, i === 0 ? 0.6 : 0.05))
+  }
   logFeed.emit('trade', mkTrade('sell', 'SELLER0'))
   check('trade events counted', bot.statsSnapshot().trades === E2E_BUYERS + 1)
   check('trades are attributed to the watched candidate', bot.statsSnapshot().tradesMatched === E2E_BUYERS + 1)
@@ -5196,8 +5255,9 @@ console.log('\nEnd-to-end bot loop')
     // Age first so the buys land late in the window and the launch actually passes.
     bot.candidates.get(BLOCKED).createdAt -= (config.entry.observeSeconds + 5) * 1000
     for (let i = 0; i < config.entry.minUniqueBuyers + 10; i++) {
+      // One buyer of conviction, as the concentration rule now requires.
       logFeed.emit('trade', normalizeEvent({ txType: 'buy', mint: BLOCKED, traderPublicKey: `QB${i}`,
-        tokenAmount: 1000, solAmount: 0.05, vSolInBondingCurve: curve.vSol,
+        tokenAmount: 1000, solAmount: i === 0 ? 0.6 : 0.05, vSolInBondingCurve: curve.vSol,
         vTokensInBondingCurve: curve.vTokens, marketCapSol: 44 }))
     }
     await bot.tick()
@@ -5523,7 +5583,8 @@ console.log('\nCreator prior, through the bot')
     bot.candidates.get(mint).createdAt -= (config.entry.observeSeconds + 5) * 1000
     for (let i = 0; i < config.entry.minUniqueBuyers + 10; i++) {
       logFeed.emit('trade', normalizeEvent({
-        txType: 'buy', mint, traderPublicKey: `PB${i}`, tokenAmount: 1000, solAmount: 0.05,
+        txType: 'buy', mint, traderPublicKey: `PB${i}`, tokenAmount: 1000,
+        solAmount: i === 0 ? 0.6 : 0.05,
         vSolInBondingCurve: curve.vSol, vTokensInBondingCurve: curve.vTokens, marketCapSol: 44,
       }))
     }

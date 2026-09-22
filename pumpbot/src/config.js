@@ -643,6 +643,37 @@ export const config = {
      * longer vetoing a launch for the offence of going up.
      */
     maxMarketCapSol: num('MAX_MARKET_CAP_SOL', 2000),
+    /**
+     * HOW CONCENTRATED THE BUYING IS — and the answer is not the one instinct gives.
+     *
+     * Prompted by looking at a 57x on pump.fun and finding THREE HOLDERS, one of them
+     * sitting on 51% of the supply. That reads like a scam to avoid. The journal says
+     * the opposite: concentration is where the money is, up to a point.
+     *
+     * Out of sample, by the largest buyer's share of buy volume in the window:
+     *
+     *     0-30%   0.942x   n=627    hit 24.7%
+     *    30-50%   1.057x   n=624    hit 45.2%
+     *    50-70%   1.318x   n=845    hit 49.8%
+     *    70-90%   1.107x   n=283    hit 45.2%
+     *    90-100%  0.949x   n= 51    hit 15.7%
+     *
+     * An inverted U, and it makes sense: a launch needs somebody with conviction to move
+     * it, so a crowd of tiny equal buyers goes nowhere — but at 90%+ there is nobody
+     * there except the whale, and nobody to sell to. The trades that ran 10x or more
+     * average 0.572 top-buyer share against 0.449 for everything else, and SIX organic
+     * buyers against eleven. The big runners are concentrated, thinly-held tokens.
+     *
+     * Found on the first half of the journal and confirmed on the second (1.265x against
+     * 1.122x with no filter, n=1128), and it survives BOTH bounds on the contaminated
+     * remainder term — which is the check that matters, since the big runners are where
+     * the trailing-stop bias bites hardest.
+     *
+     * This is buy VOLUME share during our observation window, not the on-chain holder
+     * table. Related, not identical.
+     */
+    minTopBuyerShare: num('MIN_TOP_BUYER_SHARE', 0.5),
+    maxTopBuyerShare: num('MAX_TOP_BUYER_SHARE', 0.9),
     // Dev's share of supply from their own launch buy.
     maxDevHoldPct: num('MAX_DEV_HOLD_PCT', 12),
     // Master switch for the dev-selling check. The threshold below is what it tests.
@@ -707,9 +738,28 @@ export const config = {
      * exit should be clipping it — but every loosening scores worse: a -40% stop gives
      * 1.030, a 65% trailing giveback 1.010, both together 0.960. The tail is reached by
      * HOLDING MORE, not by risking more on each position.
+     *
+     * A SECOND RUNG AT +900%, added on evidence that is about SHAPE rather than mean.
+     *
+     * On expected value alone a second rung looks like a cost — 1.122x becomes 1.077x —
+     * and that was the answer for a while. But mean EV is exactly the number the
+     * trailing-stop bias inflates for plans that hold more, and it is also not what a
+     * steady return feels like. The distribution says something different:
+     *
+     *            EV     per-trade sd   median day   days in profit
+     *   +50->20        1.122   0.349 SOL      0.14 SOL      56%
+     *   +50->20,+900   1.077   0.217 SOL      0.19 SOL      58%
+     *
+     * Volatility falls by 38% and the MEDIAN day rises. The mean is dragged around by a
+     * handful of enormous outcomes; the median is the day you actually live through, and
+     * banking part of a 10x improves it.
+     *
+     * +900% specifically, not lower. At +400% the rung fires on far more trades and cuts
+     * them off early — median day 0.08, worse than no second rung at all. At +900% it
+     * touches 2% of trades, and those 2% ARE the variance.
      */
     ladder: parseLadder(
-      str('LADDER', '50:20'),
+      str('LADDER', '50:20,900:40'),
     ),
     /**
      * Tightened from 30%. Every loser used to cost 34% of stake, which at any realistic
