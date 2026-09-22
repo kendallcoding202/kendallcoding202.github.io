@@ -858,6 +858,93 @@ console.log('\nRisk gates')
   store.clearHalt()
 }
 
+// ------------------------------- did the filter pick the top of the spike?
+console.log('\nTop-of-spike detection')
+{
+  const { topOfSpike } = await import('../src/learn.js')
+
+  /**
+   * peakAtSeconds === 0 means the market never traded above our decision price for the
+   * whole window — the best price available was the one we took.
+   */
+  const row = (action, toppedAtEntry, accel = 1, hit = false) => ({
+    v: JOURNAL_VERSION, action, hitFirstRung: hit,
+    peakAtSeconds: toppedAtEntry ? 0 : 120,
+    peakMultiple: toppedAtEntry ? 1 : 1.8, endMultiple: 1, troughMultiple: 0.8,
+    features: { buyAcceleration: accel },
+  })
+  const many = (n, ...args) => Array.from({ length: n }, () => row(...args))
+
+  /**
+   * THE CONTROL IS WHAT MAKES THIS MEAN ANYTHING. Meme coins top out early on their own,
+   * so a high share among bought rows proves nothing without rows we did not buy —
+   * measured the same way, from the same decision moment.
+   */
+  const neutral = topOfSpike([
+    ...many(100, 'bought', true), ...many(100, 'bought', false),
+    ...many(100, 'explored', true), ...many(100, 'explored', false),
+  ])
+  check('an equal rate either side is NOT called a finding', !neutral.selectsForTops)
+  check('and the report says the intervals overlap rather than staying silent',
+    neutral.comparable && !neutral.cleared)
+
+  // Now the filter really is picking tops: 80% of bought rows vs 20% of explored.
+  const guilty = topOfSpike([
+    ...many(160, 'bought', true), ...many(40, 'bought', false),
+    ...many(40, 'explored', true), ...many(160, 'explored', false),
+  ])
+  check('a filter that really does select tops is caught', guilty.selectsForTops)
+  check('and it is compared against rows we DID buy where they exist',
+    guilty.control.which === 'explored')
+
+  // The other direction has to be reportable too, or the test only proves alarm.
+  const clean = topOfSpike([
+    ...many(40, 'bought', true), ...many(160, 'bought', false),
+    ...many(160, 'explored', true), ...many(40, 'explored', false),
+  ])
+  check('entry timing that BEATS the control is reported as such',
+    clean.cleared && !clean.selectsForTops)
+
+  /**
+   * Explore rows were bought too, at the same moment in the same way, differing only in
+   * the filter having said no — so they isolate the FILTER. Rejected rows were never
+   * entered at all, and are the fallback when explore is thin.
+   */
+  const thinExplore = topOfSpike([
+    ...many(100, 'bought', true), ...many(100, 'bought', false),
+    ...many(5, 'explored', true),
+    ...many(100, 'rejected', true), ...many(100, 'rejected', false),
+  ])
+  check('with too little explore data it falls back to rejected rows',
+    thinExplore.control.which === 'rejected' && thinExplore.comparable)
+
+  const noControl = topOfSpike([...many(100, 'bought', true)])
+  check('and with no control at all it refuses to judge',
+    !noControl.comparable && !noControl.selectsForTops && !noControl.cleared)
+
+  // The proposed mechanism, testable on its own: harder acceleration, more tops.
+  const mech = topOfSpike([
+    ...many(40, 'bought', true, 3), ...many(10, 'bought', false, 3),
+    ...many(10, 'bought', true, 0.2), ...many(40, 'bought', false, 0.2),
+    ...many(100, 'explored', false, 1),
+  ])
+  const fast = mech.byAcceleration.find((b) => b.label === '2.0+')
+  const slow = mech.byAcceleration.find((b) => b.label === 'acceleration < 0.5')
+  check('the acceleration cross can show the mechanism directly',
+    fast && slow && fast.rate.p > slow.rate.p, JSON.stringify([slow?.rate.p, fast?.rate.p]))
+
+  // Buying the top is only a problem if it does not recover — so both are measured.
+  const recovery = topOfSpike([
+    ...many(60, 'bought', true, 1, true), ...many(40, 'bought', true, 1, false),
+    ...many(100, 'explored', false),
+  ])
+  check('whether a top still reached the rung is measured, not assumed',
+    near(recovery.bought.hitWhenTopped.p, 0.6, 1e-9), String(recovery.bought.hitWhenTopped.p))
+
+  check('rows with no peak timing are left out rather than counted as zero',
+    topOfSpike([{ v: JOURNAL_VERSION, action: 'bought' }]).bought.n === 0)
+}
+
 // ------------------------------- telling a deploy apart from a crash loop
 console.log('\nStartup provenance')
 {

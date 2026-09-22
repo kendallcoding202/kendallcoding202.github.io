@@ -473,6 +473,80 @@ export function exitSweep(rows, { minSamples = config.learning.minSamplesForSugg
   }
 }
 
+/**
+ * ARE WE BUYING THE TOP OF A MICRO-SPIKE?
+ *
+ * `peakAt` is seeded to the decision moment and only moves on a STRICTLY higher price,
+ * so `peakAtSeconds === 0` says something exact: across the entire outcome window, the
+ * market never traded above where it stood when we decided. We bought the high.
+ *
+ * The suspicion is mechanical rather than vague. The filter requires buying to be
+ * ACCELERATING, so it fires hardest right after a burst of buys — and the price we then
+ * quote against is the post-burst one. If that burst was somebody about to sell into the
+ * interest they just created, being the most eager buyer in the window is precisely how
+ * you end up as their exit. Live trades stopped out one second after entry are what
+ * this is here to confirm or dismiss.
+ *
+ * THE CONTROL IS THE WHOLE POINT. Plenty of meme coins top out immediately no matter who
+ * is watching, so the raw share means nothing on its own — it has to be compared against
+ * rows we did NOT buy, which carry the same measurement from the same decision moment.
+ * If bought and rejected top out at the same rate, coins do this and our timing is
+ * incidental. Only a gap is evidence about the filter.
+ *
+ * Deliberately conservative: two Wilson intervals, and a verdict only when they do not
+ * overlap. A difference smaller than that is not worth rewriting an entry rule over.
+ */
+export function topOfSpike(rows, { minBucket = config.learning.minBucketSamples } = {}) {
+  const timed = rows.filter((r) => Number.isFinite(r.peakAtSeconds))
+  const share = (subset) => {
+    const topped = subset.filter((r) => r.peakAtSeconds === 0)
+    return {
+      n: subset.length,
+      topped: topped.length,
+      rate: wilson(topped.length, subset.length),
+      // Did buying the high still work out? A top that recovers is a different problem
+      // from a top that does not.
+      hitWhenTopped: wilson(topped.filter((r) => r.hitFirstRung).length, topped.length),
+      hitOtherwise: (() => {
+        const rest = subset.filter((r) => r.peakAtSeconds > 0)
+        return wilson(rest.filter((r) => r.hitFirstRung).length, rest.length)
+      })(),
+    }
+  }
+
+  const bought = share(timed.filter((r) => r.action === 'bought'))
+  const explored = share(timed.filter((r) => r.action === 'explored'))
+  const rejected = share(timed.filter((r) => r.action === 'rejected'))
+
+  /**
+   * Explore is the cleaner comparison where it has the samples: those rows were bought
+   * too, at the same moment in the same way, and differ only in the filter having said
+   * no — so a gap between bought and explored isolates the FILTER rather than the act
+   * of buying. Rejected rows were never entered, so they also carry no entry timing at
+   * all; they are the fallback when explore is thin.
+   */
+  const control = explored.n >= minBucket ? { ...explored, which: 'explored' } : { ...rejected, which: 'rejected' }
+  const comparable = bought.n >= minBucket && control.n >= minBucket
+  const selectsForTops = comparable && bought.rate.lo > control.rate.hi
+  const cleared = comparable && bought.rate.hi < control.rate.lo
+
+  // The proposed mechanism, tested directly: does harder acceleration top out more?
+  const byAcceleration = [
+    { label: 'acceleration < 0.5', test: (v) => v < 0.5 },
+    { label: '0.5 - 1.0', test: (v) => v >= 0.5 && v < 1 },
+    { label: '1.0 - 2.0', test: (v) => v >= 1 && v < 2 },
+    { label: '2.0+', test: (v) => v >= 2 },
+  ].map((b) => {
+    const subset = timed.filter((r) => {
+      const v = r.features?.buyAcceleration
+      return typeof v === 'number' && Number.isFinite(v) && b.test(v)
+    })
+    return { label: b.label, n: subset.length, rate: wilson(subset.filter((r) => r.peakAtSeconds === 0).length, subset.length) }
+  }).filter((b) => b.n >= minBucket)
+
+  return { bought, explored, rejected, control, comparable, selectsForTops, cleared, byAcceleration, minBucket }
+}
+
 function numericFeatures(rows) {
   const keys = new Set()
   for (const r of rows) {
@@ -846,6 +920,7 @@ function analyzeRows(rows, onDisk) {
     }
   })
   const tiersMeasured = creatorTiers.some((t) => t.n > 0)
+  const topBuying = topOfSpike(labelled)
 
   return {
     generatedAt: Date.now(),
@@ -916,6 +991,7 @@ function analyzeRows(rows, onDisk) {
      */
     wallets: walletSnapshot(),
     creatorTiers,
+    topBuying,
     tiersMeasured,
     nullDist,
     // Would a different exit have done better on these same coins? The entry filter is
@@ -1200,8 +1276,10 @@ export function formatReport(a) {
     L.push('')
   }
 
+  // A rate and its interval, the way every other verdict in this report is stated.
+  const band = (w) => (w?.n ? `${(w.p * 100).toFixed(1)}% [${(w.lo * 100).toFixed(1)}-${(w.hi * 100).toFixed(1)}]` : '—')
+
   if (a.tiersMeasured) {
-    const band = (w) => (w.n ? `${(w.p * 100).toFixed(1)}% [${(w.lo * 100).toFixed(1)}-${(w.hi * 100).toFixed(1)}]` : '—')
     L.push('Deployer standing vs the crowd — are these two signals or one?')
     L.push('  tier       overall                n         quiet crowd      fast crowd')
     for (const t of a.creatorTiers) {
@@ -1218,6 +1296,51 @@ export function formatReport(a) {
     L.push('  If the gap vanishes there, proven deployers just draw faster crowds and')
     L.push('  there is only one signal — in which case use the crowd, it has more samples.')
     L.push('  Nothing in the entry path reads this yet. It is here to be measured.')
+    L.push('')
+  }
+
+  if (a.topBuying) {
+    const t = a.topBuying
+    L.push('Are we buying the top of the spike?')
+    L.push('  A row "tops at entry" when the market NEVER traded above our decision price')
+    L.push('  for the rest of the window. The best price available was the one we took.')
+    L.push('')
+    const line = (name, b) =>
+      `  ${name.padEnd(10)} ${band(b.rate).padEnd(24)} n=${b.n}`
+    L.push(line('bought', t.bought))
+    if (t.explored.n) L.push(line('explored', t.explored))
+    if (t.rejected.n) L.push(line('rejected', t.rejected))
+    L.push('')
+
+    if (!t.comparable) {
+      L.push(`  Not comparable yet — needs ${t.minBucket} rows on both sides.`)
+    } else if (t.selectsForTops) {
+      L.push(`  ⚠ THE FILTER SELECTS FOR TOPS. Bought rows top at entry more often than`)
+      L.push(`  ${t.control.which} ones, with the intervals clear of each other. The launches`)
+      L.push('  it likes best are disproportionately the ones already done going up.')
+      L.push('  Suspect the acceleration rule: it fires hardest just after a burst of buys,')
+      L.push('  which is exactly when a seller has the most interest to sell into.')
+    } else if (t.cleared) {
+      L.push(`  Bought rows top at entry LESS often than ${t.control.which} ones. The entry`)
+      L.push('  timing is doing something right, and the instant stop-outs are ordinary variance.')
+    } else {
+      L.push(`  No separation from ${t.control.which} rows — the intervals overlap.`)
+      L.push('  Coins top out early whether we buy them or not, so the one-second stop-outs')
+      L.push('  are the market doing this, not our timing picking it out.')
+    }
+    L.push('')
+    L.push(`  When we DID top at entry, it still reached the rung ${band(t.bought.hitWhenTopped)}`)
+    L.push(`  against ${band(t.bought.hitOtherwise)} when it did not.`)
+
+    if (t.byAcceleration.length > 1) {
+      L.push('')
+      L.push('  Tops at entry, by how hard the buying was accelerating:')
+      for (const b of t.byAcceleration) {
+        L.push(`    ${b.label.padEnd(20)} ${band(b.rate).padEnd(24)} n=${b.n}`)
+      }
+      L.push('  Rising down this column is the mechanism: the more the crowd was')
+      L.push('  accelerating, the more often we bought the high.')
+    }
     L.push('')
   }
 
