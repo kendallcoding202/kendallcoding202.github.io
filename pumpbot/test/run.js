@@ -858,6 +858,71 @@ console.log('\nRisk gates')
   store.clearHalt()
 }
 
+// ------------------------------- telling a deploy apart from a crash loop
+console.log('\nStartup provenance')
+{
+  const { notifyStartup } = await import('../src/notify.js')
+  store.initStore()
+  const s = store.getState()
+  s.lastStartedAt = 0
+  s.startCount = 0
+
+  const first = store.recordStart(1_000_000)
+  check('the first start on a state file has nothing to compare to', first.sinceSeconds === null)
+  check('and it is counted', first.startCount === 1)
+
+  /**
+   * TWO STARTS MINUTES APART ARE AMBIGUOUS FROM INSIDE THE PROCESS — a redeploy and a
+   * crash loop produce the identical event. The gap is the only thing that separates
+   * them, so it has to survive the restart, which means it has to be persisted.
+   */
+  const quick = store.recordStart(1_000_000 + 120_000)
+  check('a restart knows how long the last run lasted', quick.sinceSeconds === 120)
+  check('and the count keeps climbing across restarts', quick.startCount === 2)
+
+  const reloaded = store.initStore()
+  check('the previous start survives a reload — otherwise every start looks like the first',
+    reloaded.startCount === 2 && reloaded.lastStartedAt === 1_000_000 + 120_000)
+
+  const later = store.recordStart(1_000_000 + 120_000 + 4 * 3600_000)
+  check('a normal restart is not flagged', later.sinceSeconds === 4 * 3600)
+
+  /**
+   * The message itself has to carry BOTH facts, because either alone is ambiguous: the
+   * same build twice in two minutes is something dying, a different build twice in two
+   * minutes is just a deploy.
+   */
+  const messages = []
+  const origFetch = globalThis.fetch
+  const origToken = config.telegram.token
+  const origChat = config.telegram.chatId
+  globalThis.fetch = async (url, init) => {
+    messages.push(JSON.parse(init.body).text)
+    return { ok: true, json: async () => ({ ok: true }) }
+  }
+  config.telegram.token = 'test-token'
+  config.telegram.chatId = 'test-chat'
+  const summary = { sizing: { buySol: 0.15, maxConcurrent: 4, maxDeployedSol: 0.6, nextTier: null }, openPositions: 0 }
+  // Drive the REAL alert for both cases rather than rebuilding its text here — a test
+  // that reassembles the message proves only that two copies of it agree.
+  await notifyStartup('B94sSomethingLong7JMM', 44.5, summary, quick)
+  const quickText = messages.at(-1) ?? ''
+  await notifyStartup('B94sSomethingLong7JMM', 44.5, summary, later)
+  const calmText = messages.at(-1) ?? ''
+  config.telegram.token = origToken
+  config.telegram.chatId = origChat
+  globalThis.fetch = origFetch
+
+  check('the alert names the build that came up', quickText.includes(config.version), quickText)
+  check('and warns when a restart was suspiciously quick', /Quick restart/.test(quickText), quickText)
+  check('but a long-running process is not accused of crash-looping',
+    !/Quick restart/.test(calmText) && /4\.0h/.test(calmText), calmText)
+
+  s.lastStartedAt = 0
+  s.startCount = 0
+  store.save()
+}
+
 // ---------------------------------------------------------------- store ledger
 console.log('\nLedger')
 {

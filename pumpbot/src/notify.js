@@ -241,11 +241,36 @@ export const notifyHalt = (reason, summary) =>
     ].join('\n'),
   )
 
-export const notifyStartup = (pubkey, balanceSol, summary) => {
+/**
+ * A startup alert that cannot say WHY it is starting is noise.
+ *
+ * A deploy and a crash loop send the identical message, so two of these arriving minutes
+ * apart reads as "is the bot resetting?" when it is usually just a redeploy. Two facts
+ * settle it and neither was here: WHICH BUILD came up, and HOW LONG since the last
+ * start. A different build two minutes apart is a deploy; the same build two minutes
+ * apart is something dying.
+ */
+const RAPID_RESTART_SECONDS = 300
+
+const startLine = (start) => {
+  if (!start || start.sinceSeconds === null) return 'First start on this state file.'
+  const ago = start.sinceSeconds < 90
+    ? `${start.sinceSeconds}s`
+    : start.sinceSeconds < 5400
+      ? `${Math.round(start.sinceSeconds / 60)}m`
+      : `${(start.sinceSeconds / 3600).toFixed(1)}h`
+  const line = `Start #${start.startCount} · ${ago} since the last one`
+  return start.sinceSeconds <= RAPID_RESTART_SECONDS
+    ? `${line}\n⚠️ Quick restart. If you did not just deploy, something is killing the process.`
+    : line
+}
+
+export const notifyStartup = (pubkey, balanceSol, summary, start = null) => {
   const s = summary.sizing
   return notify(
     [
       `🤖 <b>pumpbot started</b> — ${config.paper ? 'PAPER' : '<b>LIVE</b>'}`,
+      `Build <code>${esc(config.version)}</code> · ${startLine(start)}`,
       `Wallet <code>${esc(shortAddr(pubkey))}</code> · ${sol(balanceSol)}`,
       `Size <b>${sol(s.buySol)}</b>/trade · max ${s.maxConcurrent} open · cap ${sol(s.maxDeployedSol)}`,
       s.nextTier

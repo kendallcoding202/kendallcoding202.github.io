@@ -21,6 +21,7 @@ import {
   logActivity,
   paperWalletSol,
   paperExploreWalletSol,
+  recordStart,
 } from './store.js'
 import { decideExit, newPosition, applySell, markPrice, positionPnl } from './position.js'
 import { getPublicKey, getSolBalance, getAllTokenBalances } from './wallet.js'
@@ -477,7 +478,12 @@ export class Bot {
           ? ` · next ${sol(summary.sizing.nextTier.buySol)}/trade at ${sol(summary.sizing.nextTier.atSol)}`
           : ''),
     )
-    await notifyStartup(pubkey, this.walletSol, summary)
+    const start = recordStart()
+    log.info(
+      `start #${start.startCount} of build ${config.version}` +
+        (start.sinceSeconds === null ? ' (first on this state)' : ` · ${start.sinceSeconds}s since the last`),
+    )
+    await notifyStartup(pubkey, this.walletSol, summary, start)
 
     for (const p of openPositions()) {
       this.feed.watch(p.mint)

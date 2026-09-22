@@ -23,6 +23,14 @@ const EMPTY = {
   blockedCreators: {}, // creator -> { at, reason }
   halted: null, // { at, reason } — set by a circuit breaker
   activity: [], // rolling event feed for the dashboard, newest last
+  /**
+   * When the process last came up, and how many times it has. Persisted for one reason:
+   * a startup alert that cannot say WHY it is starting is unreadable. A deploy and a
+   * crash loop produce the identical message, so the only way to tell them apart is to
+   * remember the previous start and report the gap.
+   */
+  lastStartedAt: 0,
+  startCount: 0,
 }
 
 let state = null
@@ -62,6 +70,24 @@ function migrateHalt(s) {
 export function getState() {
   if (!state) initStore()
   return state
+}
+
+/**
+ * Stamp this start and report what the PREVIOUS one looked like.
+ *
+ * Returns the gap to the last start, which is the only thing that distinguishes a
+ * deploy from a crash loop — the two are otherwise the same event from inside the
+ * process. Reads before it writes, so the value returned describes the run that just
+ * ended rather than this one.
+ */
+export function recordStart(now = Date.now()) {
+  const s = getState()
+  const previousAt = s.lastStartedAt || 0
+  const sinceSeconds = previousAt ? Math.round((now - previousAt) / 1000) : null
+  s.lastStartedAt = now
+  s.startCount = (s.startCount ?? 0) + 1
+  save()
+  return { previousAt, sinceSeconds, startCount: s.startCount }
 }
 
 /** Write via a temp file + rename so a crash mid-write cannot corrupt the ledger. */
