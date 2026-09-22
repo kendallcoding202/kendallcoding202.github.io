@@ -1296,6 +1296,40 @@ console.log('\nWallet prior')
     return !i2.verdict('LUCKY').betterThanMarket
   })())
 
+  /**
+   * MULTIPLE COMPARISONS. "Beats the market" at a plain 95% interval passes by chance
+   * for ~2.5% of wallets, and it is asked of every eligible wallet in the index —
+   * thousands of them. Uncorrected, smartBuyers would be mostly counting noise.
+   *
+   * Driven by building an index where EVERY wallet is drawn from the same distribution,
+   * so every "smart" wallet found is by construction a false positive.
+   */
+  {
+    const nullIdx = new WalletIndex({ maxWallets: 20_000 })
+    let s2 = 99
+    const r2 = () => (s2 = (s2 * 1103515245 + 12345) % 2147483648) / 2147483648
+    // 1,200 identical wallets, 20 buys each, all at the same true 12% rate.
+    for (let w = 0; w < 1200; w++) for (let k = 0; k < 20; k++) nullIdx.note('N' + w, r2() < 0.12, k)
+    const falsePositives = nullIdx.summary().smart
+    check('a corrected index finds almost no "smart" wallets in pure noise',
+      falsePositives <= 5, `${falsePositives} of ${nullIdx.summary().eligible} eligible`)
+    check('and the eligible count it corrects by is maintained, not scanned',
+      nullIdx.eligible === 1200, String(nullIdx.eligible))
+    check('which survives a checkpoint round trip', (() => {
+      const back = new WalletIndex({ maxWallets: 20_000 })
+      back.restore(nullIdx.snapshot())
+      return back.eligible === 1200
+    })())
+  }
+
+  // The leaderboard and the count must agree. They were computed independently, and the
+  // list used the uncorrected interval while the summary used the corrected one — so
+  // rows were flagged "beats the market" that the count beside them excluded.
+  check('the leaderboard agrees with the summary count', (() => {
+    const flagged = idx.topWallets({ limit: 1000 }).filter((t) => t.betterThanMarket).length
+    return flagged === idx.summary().smart
+  })(), `${idx.topWallets({ limit: 1000 }).filter((t) => t.betterThanMarket).length} vs ${idx.summary().smart}`)
+
   const scored = idx.scoreBuyers(['SHARP', 'DUD', 'ORD1', 'NEVER_SEEN'])
   check('a launch is scored by how many smart wallets are in it',
     scored.smartBuyers === 1 && scored.knownBuyers === 3, JSON.stringify(scored))

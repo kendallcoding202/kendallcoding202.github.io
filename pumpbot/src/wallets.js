@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { config } from './config.js'
 import { log } from './log.js'
-import { wilson } from './stats.js'
+import { wilson, criticalZ } from './stats.js'
 
 /**
  * What the WALLETS buying a launch have done before.
@@ -44,12 +44,20 @@ export class WalletIndex {
      */
     this.totalLaunches = 0
     this.totalHits = 0
+    /**
+     * How many wallets are currently judgeable. Maintained incrementally because the
+     * multiple-comparison correction needs it on every verdict — which is once per
+     * buyer, sixty times a launch. Counting it by scanning would be the same mistake
+     * the base rate already had to avoid.
+     */
+    this.eligible = 0
   }
 
   note(wallet, hit, at = 0) {
     if (!wallet) return
     const e = this.byWallet.get(wallet) ?? { launches: 0, hits: 0, lastAt: 0 }
     e.launches++
+    if (e.launches === config.learning.minWalletLaunches) this.eligible++
     if (hit) e.hits++
     e.lastAt = at || e.lastAt
     this.byWallet.set(wallet, e)
@@ -75,7 +83,20 @@ export class WalletIndex {
     if (!e || e.launches < minLaunches || base === null) {
       return { known: false, launches: e?.launches ?? 0, betterThanMarket: false, base }
     }
-    const w = wilson(e.hits, e.launches)
+    /**
+     * CORRECTED FOR HOW MANY WALLETS WE ARE ASKING ABOUT.
+     *
+     * At a plain 95% interval this test passes by chance for about 2.5% of wallets, and
+     * it is applied to every eligible wallet in the index — thousands of them. That
+     * would put hundreds of ordinary wallets in the "beats the market" count, and
+     * smartBuyers would be mostly counting noise. The creator prior has the same
+     * exposure over ~1,000 deployers; here it is an order of magnitude worse.
+     *
+     * So widen the interval with the number of comparisons, exactly as the exit sweep
+     * does. A wallet has to clear a bar that accounts for how many wallets were looked
+     * at before calling any of them remarkable.
+     */
+    const w = wilson(e.hits, e.launches, criticalZ(Math.max(1, this.eligible)))
     return {
       known: true,
       launches: e.launches,
@@ -123,22 +144,59 @@ export class WalletIndex {
       const ordered = [...this.byWallet.entries()].sort((a, b) => a[1].lastAt - b[1].lastAt)
       for (const [w] of ordered.slice(0, this.byWallet.size - this.maxWallets)) this.byWallet.delete(w)
     }
+    this.#recountEligible()
     return before - this.byWallet.size
   }
 
+  /**
+   * The wallets with the strongest demonstrated records, so the prior can be inspected
+   * rather than taken on faith.
+   *
+   * Ranked by the LOWER bound, not the raw hit rate. Sorting by rate puts "3 for 3" at
+   * the top of every list, which is the thing this index exists not to be fooled by —
+   * the ordering should answer "who has proved the most", not "who is on a streak".
+   */
+  topWallets({ limit = 12, minLaunches = config.learning.minWalletLaunches } = {}) {
+    const out = []
+    for (const [wallet, e] of this.byWallet) {
+      if (e.launches < minLaunches) continue
+      /**
+       * Through verdict(), so the list and the count cannot disagree. Computing the
+       * interval here independently used the uncorrected z and flagged rows as beating
+       * the market that the summary — corrected — did not count. Two numbers on the
+       * same screen, derived from the same data, contradicting each other.
+       */
+      const v = this.verdict(wallet, { minLaunches })
+      out.push({
+        wallet,
+        launches: e.launches,
+        hits: e.hits,
+        hitRate: e.hits / e.launches,
+        lowerBound: v.lowerBound,
+        betterThanMarket: v.betterThanMarket,
+      })
+    }
+    return out.sort((a, b) => b.lowerBound - a.lowerBound).slice(0, limit)
+  }
+
+  #recountEligible() {
+    const min = config.learning.minWalletLaunches
+    let n = 0
+    for (const e of this.byWallet.values()) if (e.launches >= min) n++
+    this.eligible = n
+  }
+
   summary() {
-    let eligible = 0
     let smart = 0
     const min = config.learning.minWalletLaunches
     for (const [wallet, e] of this.byWallet) {
       if (e.launches < min) continue
-      eligible++
       if (this.verdict(wallet).betterThanMarket) smart++
     }
     return {
       wallets: this.byWallet.size,
       observations: this.totalLaunches,
-      eligible,
+      eligible: this.eligible,
       smart,
       baseRate: this.baseRate(),
       minLaunches: min,
@@ -164,6 +222,7 @@ export class WalletIndex {
     for (const [w, launches, hits, lastAt] of snap.rows ?? []) {
       this.byWallet.set(w, { launches, hits, lastAt: lastAt ?? 0 })
     }
+    this.#recountEligible()
     return this.byWallet.size
   }
 }

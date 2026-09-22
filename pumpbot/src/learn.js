@@ -1,7 +1,9 @@
 import { config } from './config.js'
 import { readAll, readRecent, JOURNAL_VERSION } from './journal.js'
 import { strategyRecord } from './store.js'
-import { wilson } from './stats.js'
+import { WalletIndex, loadWallets } from './wallets.js'
+
+import { wilson, criticalZ } from './stats.js'
 
 /**
  * Analysis over the decision journal.
@@ -15,7 +17,20 @@ import { wilson } from './stats.js'
  * edge unless its interval clears the base rate.
  */
 
-export { wilson } from './stats.js'
+/**
+ * Re-exported so this module's surface is unchanged by the move to stats.js. They live
+ * there now because wallets.js needs the same correction, and importing learn.js from
+ * it would be a cycle — learn.js reads the wallet index.
+ */
+export { wilson, criticalZ } from './stats.js'
+
+/** The persisted wallet prior, or null when it is off or has nothing yet. */
+function walletSnapshot() {
+  if (!config.learning.walletPrior) return null
+  const idx = new WalletIndex()
+  if (!idx.restore(loadWallets())) return null
+  return { ...idx.summary(), top: idx.topWallets() }
+}
 
 /**
  * Everything one round trip actually costs, as a fraction of the stake.
@@ -246,37 +261,6 @@ export function simulateLadder(
   }
 
   return net(recovered, sells)
-}
-
-/**
- * Inverse normal CDF (Acklam's rational approximation, ~1e-9 absolute error).
- *
- * Needed because a sweep tests many alternatives against the same data, and at the usual
- * 1.96 the best of sixteen coin flips looks like a discovery. The critical value has to
- * move with the number of comparisons.
- */
-function probit(p) {
-  const a = [-3.969683028665376e1, 2.209460984245205e2, -2.759285104469687e2, 1.383577518672690e2, -3.066479806614716e1, 2.506628277459239]
-  const b = [-5.447609879822406e1, 1.615858368580409e2, -1.556989798598866e2, 6.680131188771972e1, -1.328068155288572e1]
-  const c = [-7.784894002430293e-3, -3.223964580411365e-1, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783]
-  const d = [7.784695709041462e-3, 3.224671290700398e-1, 2.445134137142996, 3.754408661907416]
-  const pl = 0.02425
-  if (p <= 0 || p >= 1) return p <= 0 ? -Infinity : Infinity
-  if (p < pl) {
-    const q = Math.sqrt(-2 * Math.log(p))
-    return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
-      ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1)
-  }
-  if (p > 1 - pl) return -probit(1 - p)
-  const q = p - 0.5
-  const r = q * q
-  return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q /
-    (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1)
-}
-
-/** Two-sided critical value at 5%, Bonferroni-corrected for k comparisons. */
-export function criticalZ(k, alpha = 0.05) {
-  return probit(1 - alpha / (2 * Math.max(1, k)))
 }
 
 /**
@@ -855,6 +839,15 @@ function analyzeRows(rows, onDisk) {
     falseNegatives,
     suggestions,
     repeatCreators,
+    /**
+     * The wallet prior, read from ITS OWN FILE rather than from the journal.
+     *
+     * It is built from buyer lists that are deliberately never journalled, so the
+     * analysis — which runs in a worker with no access to the bot's memory — reaches it
+     * the same way a restart does: through the checkpoint. Up to thirty seconds stale,
+     * which is nothing against a number that moves over days.
+     */
+    wallets: walletSnapshot(),
     creatorTiers,
     tiersMeasured,
     nullDist,
@@ -1101,6 +1094,32 @@ export function formatReport(a) {
     for (const c of a.repeatCreators) {
       L.push(`  ${c.creator.slice(0, 8)}… ${String(c.launches).padStart(3)} launches · ${(c.rate * 100).toFixed(0)}% hit rate`)
     }
+    L.push('')
+  }
+
+  if (a.wallets) {
+    const w = a.wallets
+    const base = w.baseRate === null ? 'n/a' : (w.baseRate * 100).toFixed(1) + '%'
+    L.push('Wallets we are tracking — who buys the launches that run:')
+    L.push(`  ${w.observations} early buys seen across ${w.wallets} wallets · ` +
+      `${w.eligible} have ${w.minLaunches}+ · ${w.smart} beat the market (base ${base})`)
+    if (w.top.length) {
+      L.push('  Strongest records, ranked by the LOWER bound so a short streak cannot top the list:')
+      for (const t of w.top) {
+        L.push(
+          `    ${t.wallet.slice(0, 8)}…  ${String(t.hits).padStart(4)}/${String(t.launches).padEnd(5)} ` +
+            `${(t.hitRate * 100).toFixed(0).padStart(3)}% · at least ${(t.lowerBound * 100).toFixed(1)}%` +
+            (t.betterThanMarket ? '  ← beats the market' : ''),
+        )
+      }
+    } else {
+      L.push(`  No wallet has ${w.minLaunches}+ observed buys yet. This index cannot be rebuilt`)
+      L.push('  from the journal — buyer lists are never written there — so it fills only from')
+      L.push('  live observation and needs a day or two before anyone qualifies.')
+    }
+    L.push('  A "hit" means a launch this wallet bought early went on to reach the first rung.')
+    L.push('  It measures PICK QUALITY, not profit: it does not know when they sold.')
+    L.push('  Nothing in the entry path reads this yet.')
     L.push('')
   }
 
