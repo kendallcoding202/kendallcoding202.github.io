@@ -41,6 +41,23 @@ export class Candidate {
     this.lateBuys = 0 // buys in the last third — the two give a velocity ratio
     this.flippers = new Set() // wallets that bought and then sold inside the window
 
+    /**
+     * THE MAYHEM AGENT, identified by the wallet pump.fun publishes.
+     *
+     * It trades an opted-in coin "with equal probabilities in a random walk" for the
+     * coin's first 24 hours. Zero expected drift, by design and by their own statement
+     * that it is "not intended to be a profitable Agent" — so its activity is variance
+     * rather than demand, and variance is what our entry rules have been selecting for.
+     *
+     * Counted separately from organic buying in BOTH directions, because a net seller
+     * is the dangerous case: the docs warn that once its extra billion tokens are in
+     * circulation, holders may be unable to sell into the curve at all.
+     */
+    this.agentBuys = 0
+    this.agentSells = 0
+    this.agentBuySol = 0
+    this.agentSellSol = 0
+
     this.devSold = false
     this.devTokens = createEvent.initialBuyTokens ?? 0
     this.devBuySol = createEvent.initialBuySol ?? 0
@@ -88,6 +105,11 @@ export class Candidate {
     if (Number.isFinite(event.vTokens)) this.vTokens = event.vTokens
 
     const isDev = event.trader && event.trader === this.creator
+    const isAgent = Boolean(event.trader) && event.trader === config.mayhem.agentWallet
+    if (isAgent) {
+      if (event.kind === 'buy') { this.agentBuys++; this.agentBuySol += event.solAmount }
+      else if (event.kind === 'sell') { this.agentSells++; this.agentSellSol += event.solAmount }
+    }
 
     const ageMs = event.at - this.createdAt
     const windowMs = Math.max(1, config.entry.observeSeconds * 1000)
@@ -97,7 +119,13 @@ export class Candidate {
       this.buyVolumeSol += event.solAmount
       if (event.trader) {
         this.buyers.add(event.trader)
-        if (!isDev) {
+        /**
+         * The agent is not an organic buyer and must not be counted as one. Left in, it
+         * inflates the buyer count and the concentration measure with a wallet that is
+         * running a coin flip — which is precisely the contamination worth measuring
+         * rather than absorbing.
+         */
+        if (!isDev && !isAgent) {
           this.buyerVolume.set(event.trader, (this.buyerVolume.get(event.trader) ?? 0) + event.solAmount)
           if (this.firstBuyAt === null) this.firstBuyAt = ageMs
         }
@@ -145,11 +173,36 @@ export class Candidate {
     return Math.min(100, Math.max(0, sold * 100))
   }
 
-  /** Buyers who are not the dev — the number that actually matters. */
+  /** Buyers who are neither the dev nor the Mayhem agent — the number that matters. */
   get organicBuyers() {
     const set = new Set(this.buyers)
     set.delete(this.creator)
+    set.delete(config.mayhem.agentWallet)
     return set.size
+  }
+
+  /** Did pump.fun's random-walk agent trade this coin at all? */
+  get mayhem() {
+    return this.agentBuys + this.agentSells > 0
+  }
+
+  /**
+   * The agent's NET flow in SOL. Positive means it has been a net buyer so far.
+   *
+   * The sign matters more than the size: the docs warn that a net SELLER puts its extra
+   * billion tokens into circulation, after which "there may be some holders who cannot
+   * sell their tokens into the bonding curve due to the lack of liquidity". Our paper
+   * fills assume a sale always clears, so that scenario is invisible to every model we
+   * have.
+   */
+  get agentNetSol() {
+    return this.agentBuySol - this.agentSellSol
+  }
+
+  /** How much of the window's buy volume was the agent rather than a person. */
+  get agentBuyShare() {
+    const total = this.buyVolumeSol
+    return total > 0 ? this.agentBuySol / total : 0
   }
 
   /**
@@ -164,6 +217,25 @@ export class Candidate {
     if (!this.buyerVolume.size || !(this.buyVolumeSol > 0)) return 0
     const largest = Math.max(...this.buyerVolume.values())
     return largest / this.buyVolumeSol
+  }
+
+  /**
+   * The same question with the denominator cleaned up too.
+   *
+   * topBuyerShare divides by ALL buy volume, which includes the dev's opening buy and —
+   * since it was written before any of this was known — the Mayhem agent's coin flips.
+   * The numerator already excludes both, so a coin the agent trades heavily has its
+   * concentration DILUTED by a wallet that is not a buyer in any meaningful sense.
+   *
+   * Added alongside rather than folded into the original on purpose. The live threshold
+   * was fitted against the old definition on rows that carry it, and silently changing
+   * what a column means halfway through a dataset makes every comparison across that
+   * boundary quietly wrong. Both are journalled; the scan can say which one predicts.
+   */
+  get organicTopBuyerShare() {
+    const total = [...this.buyerVolume.values()].reduce((sum, v) => sum + v, 0)
+    if (!(total > 0)) return 0
+    return Math.max(...this.buyerVolume.values()) / total
   }
 
   /** Same question, less sensitive to one outlier. */

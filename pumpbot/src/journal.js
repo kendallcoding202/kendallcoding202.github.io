@@ -448,6 +448,26 @@ export function featuresOf(candidate, creatorIndex = null, walletIndex = null) {
      */
     launchVTokens: candidate.launchVTokens,
     launchVSol: candidate.launchVSol,
+    /**
+     * MAYHEM MODE, from the agent wallet pump.fun publishes — so what would otherwise be
+     * an invisible confound is a measured column.
+     *
+     * The agent trades an opted-in coin with EQUAL BUY/SELL PROBABILITIES in a random
+     * walk for 24 hours. Zero expected drift, stated outright as "not intended to be a
+     * profitable Agent". Its activity is variance, not demand — and the two newest entry
+     * rules, buying acceleration and concentrated buy volume, are both things a random
+     * walk from one wallet produces by construction.
+     *
+     * So the question is whether the edge lives inside this population or outside it,
+     * and these columns are what answer it. The net flow carries the risk the models
+     * cannot see: a net-selling agent puts its extra billion into circulation, after
+     * which the docs warn holders may be unable to sell into the curve at all.
+     */
+    mayhem: candidate.mayhem,
+    agentBuys: candidate.agentBuys,
+    agentSells: candidate.agentSells,
+    agentNetSol: round4(candidate.agentNetSol),
+    agentBuyShare: round4(candidate.agentBuyShare),
     symbolLength: (candidate.symbol ?? '').length,
     nameLength: (candidate.name ?? '').length,
     /**
@@ -457,6 +477,13 @@ export function featuresOf(candidate, creatorIndex = null, walletIndex = null) {
      * is the scan's job; recording it is the precondition for asking.
      */
     topBuyerShare: round4(candidate.topBuyerShare),
+    /**
+     * Concentration with the dev and the Mayhem agent out of the DENOMINATOR as well as
+     * the numerator. Recorded next to the original rather than replacing it: the live
+     * threshold was fitted on the old definition, and redefining a column mid-dataset
+     * makes every comparison across that boundary silently wrong.
+     */
+    organicTopBuyerShare: round4(candidate.organicTopBuyerShare),
     top3BuyerShare: round4(candidate.top3BuyerShare),
     buysPerBuyer: round4(candidate.buysPerBuyer),
     buyAcceleration: round4(candidate.buyAcceleration),

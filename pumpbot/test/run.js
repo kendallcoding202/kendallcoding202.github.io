@@ -204,6 +204,57 @@ function buildCandidate({ create = {}, buyers = 70, sells = 2, devSells = false,
     JSON.stringify(thin.failed?.map((c) => c.id)))
 
   /**
+   * THE MAYHEM AGENT, identified by the wallet pump.fun publishes.
+   *
+   * It trades opted-in coins with EQUAL buy/sell probabilities in a random walk for 24
+   * hours — zero expected drift, stated outright as "not intended to be a profitable
+   * Agent". Counting it as an organic buyer would inflate both the buyer count and the
+   * concentration measure with a wallet running a coin flip, which is exactly the
+   * contamination worth measuring rather than absorbing.
+   */
+  const AGENT = config.mayhem.agentWallet
+  const withAgent = buildCandidate({ buyers: 8 })
+  const agentTrade = (kind, sol) => withAgent.apply(normalizeEvent({
+    txType: kind, mint: 'MINT', traderPublicKey: AGENT, tokenAmount: 5000, solAmount: sol,
+    vSolInBondingCurve: 40, vTokensInBondingCurve: 900_000_000, marketCapSol: 44,
+  }))
+  const organicBefore = withAgent.organicBuyers
+  agentTrade('buy', 2.0)
+  agentTrade('sell', 3.0)
+  check('the agent is detected from its published wallet', withAgent.mayhem === true)
+  check('and is NOT counted as an organic buyer',
+    withAgent.organicBuyers === organicBefore, `${withAgent.organicBuyers} vs ${organicBefore}`)
+  check('its buys and sells are tracked separately',
+    withAgent.agentBuys === 1 && withAgent.agentSells === 1)
+  /**
+   * The SIGN is the part that matters: a net-selling agent puts its extra billion into
+   * circulation, after which the docs warn holders may be unable to sell into the curve.
+   */
+  check('a net SELLER is visible as one', withAgent.agentNetSol < 0, String(withAgent.agentNetSol))
+  check('and an untouched coin is not flagged', buildCandidate().mayhem === false)
+  /**
+   * Concentration is measured on ORGANIC volume, so a coin flip from one wallet cannot
+   * manufacture the very signal the filter now selects on.
+   */
+  const plain = buildCandidate({ buyers: 8 })
+  check('the agent DILUTES the original concentration measure, which divides by all volume',
+    withAgent.topBuyerShare < plain.topBuyerShare - 1e-9,
+    `${withAgent.topBuyerShare} vs ${plain.topBuyerShare}`)
+  check('but the organic measure is untouched by it',
+    Math.abs(withAgent.organicTopBuyerShare - plain.organicTopBuyerShare) < 1e-9,
+    `${withAgent.organicTopBuyerShare} vs ${plain.organicTopBuyerShare}`)
+  /**
+   * The original keeps its exact historical meaning — largest organic buyer over ALL buy
+   * volume — because the live threshold was fitted against that definition. Redefining a
+   * column halfway through a dataset breaks every comparison crossing the boundary, so
+   * both are journalled and the scan decides which one predicts.
+   */
+  const largestOrganic = Math.max(...withAgent.buyerVolume.values())
+  check('and the original still divides by ALL buy volume, as it did when fitted',
+    near(withAgent.topBuyerShare, largestOrganic / withAgent.buyVolumeSol, 1e-12),
+    `${withAgent.topBuyerShare} vs ${largestOrganic / withAgent.buyVolumeSol}`)
+
+  /**
    * THE LAUNCH CURVE, kept because it identifies what KIND of token this is.
    *
    * PUMP_TOTAL_SUPPLY is hardcoded at one billion and feeds devHoldPct, market cap and

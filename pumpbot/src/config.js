@@ -53,6 +53,39 @@ export const config = {
   privateKey: str('PRIVATE_KEY'),
   rpcUrl: str('RPC_URL', 'https://api.mainnet-beta.solana.com'),
   pumpProgramId: str('PUMP_PROGRAM_ID', '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P'),
+
+  /**
+   * MAYHEM MODE, which pump.fun publishes the agent's wallet for — so a thing that would
+   * otherwise be an invisible confound is a certainty we can measure.
+   *
+   * An opt-in setting at coin creation. An autonomous agent mints a second billion
+   * tokens and trades the coin "by buying and selling with EQUAL PROBABILITIES IN A
+   * RANDOM WALK within the first 24 hours", then burns whatever it did not sell. The
+   * docs are explicit that it is "not intended to be a profitable Agent".
+   *
+   * Equal probabilities means ZERO EXPECTED DRIFT. The feature injects variance, not
+   * direction — and variance is exactly what our entry rules have been selecting for.
+   * Acceleration in the first 30 seconds and one wallet taking most of the volume are
+   * both things an agent doing a random walk produces by construction, which makes the
+   * two newest edges suspect until the population is split.
+   *
+   * Two specific hazards the docs name, neither of which our models know about:
+   *
+   *  - If the agent is a net seller it puts its extra billion into circulation, and
+   *    "there may be some holders who cannot sell their tokens into the bonding curve
+   *    due to the lack of liquidity". Our paper fills assume a sale always clears.
+   *  - The agent pays no protocol fees. We do. It is not a symmetric counterparty.
+   *
+   * Recorded, never acted on directly: the question is whether our edge lives inside
+   * this population or outside it, and that is measured, not assumed.
+   */
+  mayhem: {
+    agentWallet: str('MAYHEM_AGENT_WALLET', 'BwWK17cbHxwWBKZkUYvzxLcNQ1YVyaFezduWbtm2de6s'),
+    programId: str('MAYHEM_PROGRAM_ID', 'MAyhSmzXzV1pTf7LsNkrNwkWKTo4ougAJ1PPg47MD4e'),
+    feeRecipient: str('MAYHEM_FEE_RECIPIENT', 'GesfTA3X2arioaHp8bbKdjG9vJtskViWACZoYvxp4twS'),
+    // The agent only trades a coin's first 24 hours.
+    agentWindowHours: num('MAYHEM_AGENT_WINDOW_HOURS', 24),
+  },
   wsFeedUrl: str('FEED_URL', 'wss://pumpportal.fun/api/data'),
   /**
    * PumpPortal API key. WITHOUT IT THE BOT CANNOT TRADE.
