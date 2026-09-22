@@ -1487,6 +1487,20 @@ console.log('\nClosed-trade retention')
   check('the dashboard reports the strategy trades it actually made',
     snap.pnl.tradesClosed === 2 && snap.pnl.wins === 1 && snap.pnl.losses === 1,
     JSON.stringify(snap.pnl))
+
+  /**
+   * And the closed-trade LIST must show them too. The ledger's trim was fixed to keep
+   * each book separately, and then the dashboard re-introduced the same bug one layer
+   * up: it sliced the newest 100 of the COMBINED list before the page split it, and
+   * with explore outnumbering the strategy ~150:1 that slice was always all explore.
+   * The trades existed in the ledger and in the counters; the panel meant to show them
+   * was reading a list they could never survive.
+   */
+  check('and the closed-trade list still contains them',
+    snap.closed.filter((c) => !c.explore).length === 2,
+    `${snap.closed.filter((c) => !c.explore).length} strategy rows of ${snap.closed.length}`)
+  check('without starving the explore side either',
+    snap.closed.filter((c) => c.explore).length > 0)
   check('a losing account never shows an empty trade history',
     !(snap.pnl.netSol !== 0 && snap.pnl.tradesClosed === 0))
   check('the explore average uses the full count',

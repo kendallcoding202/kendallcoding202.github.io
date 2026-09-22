@@ -210,7 +210,22 @@ export function buildSnapshot(walletSol, stats = null) {
   const markValueSol = positions.filter((p) => !p.explore).reduce((s, p) => s + p.markValueSol, 0)
   const unrealizedSol = positions.filter((p) => !p.explore).reduce((s, p) => s + p.totalSol, 0)
 
-  const closed = [...state.closed].reverse().slice(0, 100).map((p) => ({
+  /**
+   * Newest first, capped PER BOOK — the same lesson as the ledger's own trim, missed
+   * one layer up.
+   *
+   * This was `[...state.closed].reverse().slice(0, 100)` on the COMBINED list, and the
+   * page then split the result into strategy and explore. Explore closes outnumber the
+   * strategy's roughly 150 to 1, so the newest hundred entries were all explore and the
+   * strategy's table filtered a list its rows had already been pushed out of. The
+   * trades existed, in the ledger and in the counters; the panel showing them was
+   * reading a slice they could never survive.
+   */
+  const newestPerBook = (wantExplore, limit) =>
+    [...state.closed].reverse().filter((p) => Boolean(p.explore) === wantExplore).slice(0, limit)
+  const closed = [...newestPerBook(false, 100), ...newestPerBook(true, 100)]
+    .sort((a, b) => (b.closedAt ?? 0) - (a.closedAt ?? 0))
+    .map((p) => ({
     mint: p.mint,
     symbol: p.symbol,
     openedAt: p.openedAt,
