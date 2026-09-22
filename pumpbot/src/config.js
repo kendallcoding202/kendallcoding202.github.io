@@ -459,7 +459,28 @@ export const config = {
      * the effect well clear of the 12.8pp noise floor while producing enough trades to
      * test the claim out of sample, which is the only test that counts.
      */
-    minUniqueBuyers: num('MIN_UNIQUE_BUYERS', 60),
+    /**
+     * OFF, after 40,223 journalled rows said it was the most expensive rule we had.
+     *
+     * Raised to 60 on the strongest hit-rate evidence in the first dataset, and hit rate
+     * turned out to be the wrong target. Replaying the live exit plan out of sample:
+     *
+     *    acceleration >= 0.5                1.080x  [1.045-1.103]  n=4430
+     *    acceleration >= 0.5 AND buyers>=60 0.973x  [0.933-1.022]  n= 368
+     *
+     * Adding this check turns a profitable population into a losing one and throws away
+     * 92% of the opportunities (107/day against 1290/day). Inside the accelerating rows
+     * the buyer count carries no signal at all — 0-5 buyers returns 1.024, 5-10 returns
+     * 1.277, 100+ returns 0.942. Not a gradient, just noise.
+     *
+     * It reads as a paradox only if hit rate is the objective: the check really does
+     * lift it from 12% to 46%. It lifts it by removing the tail, and the tail is where
+     * the entire expectation lives — drop the top 1% of outcomes and the edge is gone.
+     *
+     * Kept as a threshold at 0 rather than deleted: it is one env var from coming back
+     * if the next out-of-sample slice disagrees.
+     */
+    minUniqueBuyers: num('MIN_UNIQUE_BUYERS', 0),
     /**
      * Lowered 1.4 -> 1.0 because at 1.4 this check was measurably doing nothing.
      *
@@ -485,7 +506,27 @@ export const config = {
      * It is also the check the filter never had: every other test asks how much buying
      * happened, none asked whether it was still happening.
      */
-    minBuyAcceleration: num('MIN_BUY_ACCELERATION', 0.5),
+    /**
+     * THE EDGE, and now the only entry rule doing real work. Raised 0.5 -> 1.0.
+     *
+     * It is the one feature with a clean monotonic relationship to money rather than to
+     * hit rate, out of sample, replaying the live exit plan:
+     *
+     *    accel 0-0.25   0.909x   n=14788      accel 1-2    1.113x   n=1985
+     *    accel 0.25-0.5 0.938x   n=  894      accel 2-4    1.062x   n= 905
+     *    accel 0.5-1    0.997x   n= 1315      accel 4+     1.338x   n= 225
+     *
+     * 1.0 is where it crosses break-even, which is why the bar moves there: everything
+     * below is paying to find out. It holds on the honest subset too — the 17% of rows
+     * carrying real exit timing, where the replay applies the actual holding window
+     * instead of banking peaks we would have sold before, still give 1.066 [1.013-1.122].
+     *
+     * Note the getter's quirk, which these numbers already include: with no early buys
+     * it returns the late-buy COUNT rather than a ratio, so a launch with one late buy
+     * and none before it reads as 1.0. Measured, not hypothetical — the exported feature
+     * came from the same getter.
+     */
+    minBuyAcceleration: num('MIN_BUY_ACCELERATION', 1.0),
     /**
      * Refuse a deployer whose own record is demonstrably worse than the market's.
      *
@@ -499,7 +540,27 @@ export const config = {
      */
     creatorHistory: bool('CREATOR_HISTORY', true),
     minCreatorLaunches: num('MIN_CREATOR_LAUNCHES', 20),
-    minMarketCapSol: num('MIN_MARKET_CAP_SOL', 25),
+    /**
+     * OFF — backwards, exactly as the CEILING turned out to be, and for a similar reason.
+     *
+     * It was there to skip curves too thin to trade. What it actually removed:
+     *
+     *    cap  0-10   1.096x   n= 3627   hit 36.5%
+     *    cap 10-20   1.114x   n= 2240   hit 35.9%
+     *    cap 25-30   0.917x   n=20689   hit  2.6%   <- half the dataset, and kept
+     *
+     * A gradient rather than a cliff at our threshold, and pointing the wrong way. The
+     * 25-30 band is the default ~28 SOL launch state — "fresh curve, nothing has
+     * happened yet" — and it hits at 2.6%. We were keeping the inert half of the market
+     * and discarding the half that had already moved.
+     *
+     * THE ONE FINDING HELD LOOSEST. simulateLadder charges a flat cost model that does
+     * not know curve depth, so these rows are priced too kindly by the replay; the paper
+     * executor prices fills through the real curve and will charge them more. If thin
+     * curves really are untradeable, the paper book is where it will show up first —
+     * which is the argument for finding out in paper rather than reasoning about it.
+     */
+    minMarketCapSol: num('MIN_MARKET_CAP_SOL', 0),
     /**
      * The upper bound was BACKWARDS, and the data caught it.
      *
@@ -571,9 +632,19 @@ export const config = {
      * any dip could have trailed us out, which prices the held remainder pessimistically.
      * The measured edge is if anything understated, and it firms up as ordering coverage
      * climbs toward 100%.
+     *
+     * 40% -> 20% on the full journal. Out of sample, over the rows the entry rules now
+     * accept, selling 20% at the rung returns 1.117 [1.071-1.150] against 1.080 for 40%.
+     * Same direction as the move from 100%, for the same reason: the expectation lives
+     * in the bag, so the less of it sold at the first rung the better.
+     *
+     * The opposite idea was tested and is WRONG. If the edge is in the tail, a tighter
+     * exit should be clipping it — but every loosening scores worse: a -40% stop gives
+     * 1.030, a 65% trailing giveback 1.010, both together 0.960. The tail is reached by
+     * HOLDING MORE, not by risking more on each position.
      */
     ladder: parseLadder(
-      str('LADDER', '50:40'),
+      str('LADDER', '50:20'),
     ),
     /**
      * Tightened from 30%. Every loser used to cost 34% of stake, which at any realistic
@@ -601,6 +672,21 @@ export const config = {
      * testable only by widening the observation window first.
      */
     timeStopSeconds: num('TIME_STOP_SECONDS', 900),
+    /**
+     * Absolute ceiling on how long ANY position stays open, rung or no rung.
+     *
+     * A bag that had hit a rung had no time-based exit at all, on the reasoning that it
+     * was riding recovered capital. At a 20% first rung it is riding 80% of real money
+     * instead, and a token that stops trading holds its last price forever — so no
+     * price-based rule can ever fire and the position never closes. That is what "the
+     * open positions stopped updating" looks like from the outside.
+     *
+     * 30 minutes is deliberately twice the observation window. The journal cannot see
+     * past 15 minutes, so anything tighter would be tuned on evidence that does not
+     * exist; this is a backstop against holding a dead token in a scarce slot, not an
+     * opinion about when to sell. Set to 0 to disable.
+     */
+    maxHoldSeconds: num('MAX_HOLD_SECONDS', 1800),
     // Give back at most this much of the peak once the first rung is hit.
     trailingDrawdownPct: num('TRAILING_DRAWDOWN_PCT', 50),
     // Abandon-ship if the curve drains — the pump.fun analogue of an LP pull.

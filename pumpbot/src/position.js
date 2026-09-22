@@ -106,10 +106,34 @@ export function decideExit(position, { priceSol, vSol, now = Date.now() }) {
   const firstRung = config.exit.ladder[0]?.atPct ?? Infinity
   const hitAnyRung = position.rungsHit.length > 0
 
-  // 3. Time stop — only for positions that never got going. Once a rung is hit we are
-  //    riding recovered capital and there is no reason to force an exit on the clock.
+  // 3. Time stop — for positions that never got going.
   if (!hitAnyRung && ageSeconds >= config.exit.timeStopSeconds) {
     return exitAll(`time stop at ${Math.round(ageSeconds)}s, never reached +${firstRung}%`)
+  }
+
+  /**
+   * 3b. A HARD CEILING ON HOLDING, which a bag that has hit a rung previously had none of.
+   *
+   * The old reasoning was "once a rung is hit we are riding recovered capital, so there
+   * is no reason to force an exit on the clock". That was true when the first rung sold
+   * 67-100% and the stake really was out. At a 20% rung it recovers 0.30x, so what is
+   * actually riding is 80% of real money — and the exemption outlived the premise.
+   *
+   * The failure it leaves is not theoretical. On a bonding curve the price moves ONLY on
+   * a trade, so a token that stops trading holds its last price forever: the trailing
+   * stop never sees a giveback, the stop-loss never sees a fall, and with no time stop
+   * the position is open indefinitely. It stops appearing to update because nothing is
+   * updating. Meanwhile it holds one of a small number of position slots, which now costs
+   * real opportunity — the entry rules admit hundreds of candidates a day.
+   *
+   * On what we can measure, 95% of peaks arrive within ten minutes of the decision and
+   * the late ones are no larger (3.65x against 3.53x). THAT EVIDENCE IS BOUNDED BY THE
+   * 15-MINUTE OBSERVATION WINDOW and says nothing about an hour, which is why this is
+   * set well beyond the window rather than at the measured elbow: it is a backstop
+   * against holding a corpse, not a claim about the right time to sell.
+   */
+  if (config.exit.maxHoldSeconds > 0 && ageSeconds >= config.exit.maxHoldSeconds) {
+    return exitAll(`held ${Math.round(ageSeconds / 60)}m — max hold reached, releasing the slot`)
   }
 
   // 4. Trailing stop on the moon bag, so a round trip from +400% to +20% is not a thing

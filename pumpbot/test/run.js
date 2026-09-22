@@ -148,8 +148,59 @@ function buildCandidate({ create = {}, buyers = 70, sells = 2, devSells = false,
   const good = evaluateEntry(buildCandidate())
   check('a healthy launch passes', good.pass, good.reason)
 
+  /**
+   * BUYER COUNT NO LONGER GATES ANYTHING, and that is the finding, not an oversight.
+   *
+   * Over 40,223 journalled rows, replaying the live exit plan out of sample, requiring
+   * 60 buyers turned a population worth 1.080x into one worth 0.973x while discarding
+   * 92% of the opportunities. It lifts the hit rate from 12% to 46% by removing the
+   * tail, and the tail is the entire expectation.
+   *
+   * A launch with four buyers that is still ACCELERATING is now takeable. What makes it
+   * takeable is the acceleration, which is why the fixture keeps that and drops the rest.
+   */
   const thin = evaluateEntry(buildCandidate({ buyers: 4 }))
-  check('too few organic buyers is rejected', !thin.pass && thin.failed.some((c) => c.id === 'buyers'))
+  check('a handful of buyers is no longer disqualifying on its own',
+    !thin.failed.some((c) => c.id === 'buyers'),
+    JSON.stringify(thin.failed?.map((c) => c.id)))
+
+  /** But the thing that replaced it has to actually bite. */
+  const fadingOut = evaluateEntry(buildCandidate({ buyers: 70, fading: true }))
+  check('a launch whose buying has stalled is refused',
+    !fadingOut.pass && fadingOut.failed.some((c) => c.id === 'fading'),
+    JSON.stringify(fadingOut.failed?.map((c) => c.id)))
+
+  /**
+   * THE THRESHOLD ITSELF, pinned — because it is now the only rule carrying the edge and
+   * nothing was defending its value. Changing 1.0 back to 0.5 broke no test at all.
+   *
+   * A candidate built to accelerate at exactly 0.75 has to be REFUSED. That is the band
+   * the journal says is break-even at best (accel 0.5-1 returns 0.997x out of sample
+   * against 1.113x for 1-2), so it is the band the move from 0.5 to 1.0 exists to
+   * exclude, and the one a future loosening has to argue with.
+   */
+  const atRatio = (early, late) => {
+    const c = new Candidate(createEvt())
+    const windowMs = config.entry.observeSeconds * 1000
+    const buy = (at, i) => c.apply({ ...normalizeEvent({
+      txType: 'buy', mint: 'MINT', traderPublicKey: `R${i}`, tokenAmount: 1000, solAmount: 0.05,
+      vSolInBondingCurve: 40, vTokensInBondingCurve: 900_000_000, marketCapSol: 44,
+    }), at })
+    for (let i = 0; i < early; i++) buy(c.createdAt + windowMs * 0.1, i)
+    for (let i = 0; i < late; i++) buy(c.createdAt + windowMs * 0.9, 100 + i)
+    c.createdAt -= windowMs + 5000
+    return c
+  }
+  const lukewarm = atRatio(4, 3) // 0.75
+  check('the fixture really does accelerate at 0.75',
+    near(lukewarm.buyAcceleration, 0.75, 1e-9), String(lukewarm.buyAcceleration))
+  check('a launch accelerating at 0.75 is refused — that band is break-even at best',
+    evaluateEntry(lukewarm).failed.some((c) => c.id === 'fading'),
+    JSON.stringify(evaluateEntry(lukewarm).failed?.map((c) => c.id)))
+  const warm = atRatio(3, 6) // 2.0
+  check('but one accelerating at 2.0 clears it',
+    !evaluateEntry(warm).failed.some((c) => c.id === 'fading'),
+    JSON.stringify(evaluateEntry(warm).failed?.map((c) => c.id)))
 
   /**
    * More sells than buys. The bar was 1.4x, which over 71,979 rejected launches threw
@@ -222,17 +273,29 @@ function buildCandidate({ create = {}, buyers = 70, sells = 2, devSells = false,
   check('an accelerating one is not', evaluateEntry(buildCandidate()).pass)
 
   /**
-   * Floor and ceiling report SEPARATELY now. As one `market_cap` line the report said
-   * it rejected 30,450 launches at a 27.7% hit rate, which reads as the filter binning
-   * its best material — while the scan showed the damage was all on the floor side
-   * (`marketCapSol < 3.2` at 41.6%), a population too thin to trade rather than an
-   * opportunity. One id cannot carry two opposite verdicts.
+   * Floor and ceiling report SEPARATELY, which is what let the floor be judged at all —
+   * as one `market_cap` line the two opposite verdicts cancelled into noise.
+   *
+   * THE FLOOR IS NOW OFF, having turned out backwards in the same way the ceiling did:
+   *
+   *    cap  0-10   1.096x  n= 3627  hit 36.5%
+   *    cap 25-30   0.917x  n=20689  hit  2.6%   <- half the journal, and it was KEPT
+   *
+   * The 25-30 band is the default ~28 SOL launch state: fresh curve, nothing has
+   * happened. The floor was keeping the inert half of the market and discarding the
+   * half that had already moved.
    */
   const tooSmall = evaluateEntry(buildCandidate({ mcap: 5 }))
-  check('a market cap nobody has bid up is rejected by the FLOOR',
-    !tooSmall.pass && tooSmall.failed.some((c) => c.id === 'market_cap_floor'))
-  check('and the ceiling does not also claim that rejection',
+  check('a small market cap is no longer refused for being small',
+    !tooSmall.failed.some((c) => c.id === 'market_cap_floor'),
+    JSON.stringify(tooSmall.failed?.map((c) => c.id)))
+  check('and the ceiling still does not claim rejections that are not its own',
     !tooSmall.failed.some((c) => c.id === 'market_cap_ceiling'))
+  /** The ceiling is still a real rule, and still has to fire on its own side. */
+  const huge = evaluateEntry(buildCandidate({ mcap: config.entry.maxMarketCapSol + 500 }))
+  check('the ceiling itself still bites',
+    !huge.pass && huge.failed.some((c) => c.id === 'market_cap_ceiling'),
+    JSON.stringify(huge.failed?.map((c) => c.id)))
   check('a too-large cap is not blamed on the floor',
     !evaluateEntry(buildCandidate({ mcap: 5000 })).failed.some((c) => c.id === 'market_cap_floor'))
   check('an unpriceable market cap fails both, not neither',
@@ -492,6 +555,29 @@ const mkPosition = (over = {}) => ({
     { priceSol: 1.55e-7, vSol: 34 },
   )
   check('time stop does NOT fire once a rung is hit', oldButRunning.sellTokens === 0)
+
+  /**
+   * BUT THE EXEMPTION IS NOT UNBOUNDED, and it used to be.
+   *
+   * A bag that hit a rung had no time-based exit at all. On a bonding curve the price
+   * moves only on a trade, so a token that stops trading holds its last price forever:
+   * the trailing stop never sees a giveback, the stop-loss never sees a fall, and the
+   * position stays open indefinitely while holding a scarce slot. From outside it looks
+   * like the open positions have stopped updating, because they have.
+   */
+  const forever = decideExit(
+    mkPosition({
+      openedAt: Date.now() - (config.exit.maxHoldSeconds + 60) * 1000,
+      lastPriceAt: Date.now(), rungsHit: [50], peakPriceSol: 1.6e-7,
+    }),
+    { priceSol: 1.55e-7, vSol: 34 },
+  )
+  check('a bag nobody is trading is eventually released rather than held forever',
+    forever.sellAll && /max hold/.test(forever.reasons[0]), JSON.stringify(forever.reasons))
+  /** And the ceiling has to sit beyond the window the outcome data can actually see. */
+  check('the max hold is well past the window the journal can measure',
+    config.exit.maxHoldSeconds > config.learning.outcomeWindowMinutes * 60,
+    `${config.exit.maxHoldSeconds}s vs ${config.learning.outcomeWindowMinutes * 60}s observed`)
 
   const drawdown = decideExit(
     mkPosition({ rungsHit: [50, 100], peakPriceSol: 4e-7 }),
@@ -1202,9 +1288,12 @@ console.log('\nExit replay vs the real holding window')
    */
   const earlyRungLatePeak = simulateLadder(row({ firstRungAtSeconds: 120, peakAtSeconds: TIME_STOP + 100 }))
   const rungOutOfReach = simulateLadder(row({ firstRungAtSeconds: TIME_STOP + 100, peakAtSeconds: TIME_STOP + 100 }))
+  // Stated purely as a counterfactual: the old `> 1.2`, and then `> 1`, were both
+  // pinning whatever the ladder happened to return, so tuning the ladder broke a test
+  // about peak ORDERING. The comparison is the property.
   check('a rung that fired early still counts when the PEAK came after the time stop',
-    earlyRungLatePeak > rungOutOfReach && earlyRungLatePeak > 1,
-    `${earlyRungLatePeak} vs ${rungOutOfReach}`)
+    earlyRungLatePeak > rungOutOfReach,
+    `${earlyRungLatePeak} vs ${rungOutOfReach} when the rung was out of reach`)
 
   // The rung itself out of reach: sold by the clock, at the price then standing.
   const lateRung = simulateLadder(row({ firstRungAtSeconds: TIME_STOP + 100, timeStopMultiple: 0.98 }))
@@ -1220,9 +1309,10 @@ console.log('\nExit replay vs the real holding window')
   const quietRow = row({
     firstRungAtSeconds: 500, staleExitAtSeconds: 300, staleExitMultiple: 0.7, timeStopMultiple: 1.4,
   })
-  check('the replay no longer sells on silence by default',
-    simulateLadder(quietRow) > 1, String(simulateLadder(quietRow)))
   const withOldRule = simulateLadder(quietRow, { sellOnStalePrice: true })
+  check('the replay no longer sells on silence by default',
+    simulateLadder(quietRow) > withOldRule * 1.2,
+    `${simulateLadder(quietRow)} vs ${withOldRule} under the old rule`)
   check('and does when the old rule is switched on', withOldRule < 0.75, String(withOldRule))
   check('which is the comparison the sweep needs',
     withOldRule < simulateLadder(quietRow), `${withOldRule} vs ${simulateLadder(quietRow)}`)
@@ -1237,7 +1327,7 @@ console.log('\nExit replay vs the real holding window')
     troughMultiple: 0.5, troughAtSeconds: 300, firstRungAtSeconds: 60,
   }))
   check('but a rung before the dip is not undone by it',
-    rungFirst > stoppedFirst && rungFirst > 1, `${rungFirst} vs ${stoppedFirst}`)
+    rungFirst > stoppedFirst, `${rungFirst} vs ${stoppedFirst} when the dip came first`)
 
   /**
    * 150,000 rows predate these fields. They must keep the old behaviour rather than
@@ -1254,7 +1344,7 @@ console.log('\nExit replay vs the real holding window')
    */
   const timedEquivalent = simulateLadder(row({ firstRungAtSeconds: 120, troughAtSeconds: 400 }))
   check('rows without the timing replay exactly as before',
-    near(legacy, timedEquivalent) && legacy > 1, `${legacy} vs ${timedEquivalent}`)
+    near(legacy, timedEquivalent), `${legacy} vs ${timedEquivalent}`)
 
   /**
    * AND THE TRACKER HAS TO PRODUCE THE FIELDS. Testing simulateLadder against
@@ -2256,26 +2346,32 @@ console.log('\nLearning')
   /**
    * Touched the rung, then round-tripped to zero — the worst case for the moon bag.
    *
-   * THE FIRST RUNG NO LONGER RECOVERS THE STAKE. Selling 67% at +50% returned ~1.0x, so
-   * anything after it was house money; selling 40% returns 0.6x, and the rest of the
-   * stake depends on the trailing stop catching the fall at half the peak. That is the
-   * cost side of the change the sweep says is worth making, and it should be stated
-   * rather than left for a surprised reading of a live trade.
+   * THE FIRST RUNG NO LONGER RECOVERS THE STAKE, AND PROTECTS LESS EACH TIME IT SHRINKS.
+   * Selling 67% at +50% returned ~1.0x, so everything after it was house money. Selling
+   * 20% returns 0.3x, and the other 80% of the stake rides on the trailing stop.
    *
-   * Even so, a coin that went to +50% and then to zero comes back near flat, while one
-   * that stalled just short of the rung takes the full stop-loss.
+   * That is the real price of the change the journal argues for, and it should be stated
+   * here rather than discovered on a live trade: on a coin that touches the rung and
+   * then goes to zero, a 20% sale is now barely better than never reaching the rung at
+   * all. The bet is that the paths where holding 80% pays more than cover it — which is
+   * what the out-of-sample replay says, and is a claim about the DISTRIBUTION, not about
+   * any single trade.
    */
   const roundTrip = simulateLadder({ peakMultiple: 1.5, endMultiple: 0.01, troughMultiple: 0.01 })
   const justShort = simulateLadder({ peakMultiple: 1.4, endMultiple: 0.01, troughMultiple: 0.01 })
-  // 0.90, not the 0.967 this read before the cost model was made honest. Charging the
-  // latency slip the paper account had been charging all along costs ~6pp here.
-  check('a rung hit then a total collapse comes back near flat', roundTrip > 0.9, String(roundTrip))
-  check('but the stake is NOT fully recovered at the first rung any more',
-    roundTrip < 1.0 && 0.4 * 1.5 < 1.0, String(roundTrip))
-  check(
-    'banking part of it is still what makes the collapse survivable',
-    roundTrip > justShort * 1.1, `${roundTrip} vs ${justShort} when it stalls just short`,
-  )
+  const rungSellFraction = config.exit.ladder[0].sellPct / 100
+  check('a rung hit then a total collapse still beats never reaching it',
+    roundTrip > justShort, `${roundTrip} vs ${justShort} when it stalls just short`)
+  check('but the stake is NOT recovered at the first rung any more',
+    roundTrip < 1.0 && rungSellFraction * 1.5 < 1.0,
+    `${roundTrip}, rung returns ${(rungSellFraction * 1.5).toFixed(2)}x of stake`)
+  /**
+   * How thin that protection has become, stated as a number so shrinking the rung again
+   * has to face it: the margin over never reaching the rung at all.
+   */
+  check('and the protection it buys on a round trip is now slim',
+    roundTrip / justShort < 1.1,
+    `${((roundTrip / justShort - 1) * 100).toFixed(1)}% better than never hitting the rung`)
 
   /**
    * Held to the end at the rung price with no drawdown. Two sells now, not one: the rung
