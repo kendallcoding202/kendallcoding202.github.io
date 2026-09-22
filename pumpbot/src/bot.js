@@ -64,6 +64,12 @@ export class Bot {
               this.candidates.has(mint) ||
               Boolean(getState().positions[mint]) ||
               Boolean(this.shadow?.has(mint)),
+            /**
+             * Wallets we track, on ANY token — including ones we have never watched,
+             * which is the whole point. Those trades were already being decoded and
+             * thrown away, so this is a Set lookup, not new work.
+             */
+            interestedTrader: (trader) => Boolean(this.wallets?.smartSet().has(trader)),
           })
         : null)
     this.candidates = new Map() // mint -> Candidate, pre-entry
@@ -295,6 +301,8 @@ export class Bot {
   #noteSmartMoney(event, candidate) {
     if (!this.wallets || !event?.trader) return
     if (!this.wallets.smartSet().has(event.trader)) return
+    const known = Boolean(candidate) || Boolean(getState().positions[event.mint]) ||
+      Boolean(this.shadow?.has(event.mint))
     this.smartTape.push({
       at: event.at ?? Date.now(),
       wallet: event.trader,
@@ -303,6 +311,13 @@ export class Bot {
       kind: event.kind === 'sell' ? 'sell' : 'buy',
       solAmount: Number(event.solAmount) || 0,
       ageSeconds: candidate ? Math.round(candidate.ageSeconds) : null,
+      /**
+       * A token the bot is NOT already following. These are the discovery cases — the
+       * only ones that could tell us about something our own pipeline missed — and
+       * they are invisible unless marked, because on the tape they look identical to
+       * a confirmation on a launch we were already screening.
+       */
+      unseen: !known,
     })
     // Display state, bounded hard — this is a tape, not a record.
     if (this.smartTape.length > 120) this.smartTape = this.smartTape.slice(-120)
@@ -499,6 +514,12 @@ export class Bot {
         this.stats.messages++
         this.#onTrade(e)
       })
+      /**
+       * A separate channel, deliberately. These are trades by wallets we track on ANY
+       * token, including ones the bot has never looked at — so they must not touch the
+       * trading path or its counters. They are an observation, not an input.
+       */
+      this.logFeed.on('smart-trade', (e) => this.#noteSmartMoney(e, this.candidates.get(e.mint)))
       this.logFeed.start()
       log.info('trade ticks from RPC program logs (free) — metered tape not subscribed')
     }
@@ -671,7 +692,6 @@ export class Bot {
 
     candidate?.apply(event)
     this.shadow?.onTrade(event)
-    this.#noteSmartMoney(event, candidate)
 
     if (position?.state === 'open') {
       markPrice(position, event.priceSol)

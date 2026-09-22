@@ -892,6 +892,7 @@ function renderWallets(w, tape) {
         ' ' + fmtSol(t.solAmount, 3) +
         (t.ageSeconds !== null && t.ageSeconds !== undefined
           ? ' <span class="dim">· ' + t.ageSeconds + 's into the launch</span>' : '') +
+        (t.unseen ? ' <span style="color:var(--amber)">· NOT on our radar</span>' : '') +
         '</div>',
       ).join('')
   const base = w.baseRate === null ? 'n/a' : (w.baseRate * 100).toFixed(1) + '%'
@@ -929,7 +930,8 @@ function renderWallets(w, tape) {
     'PICK QUALITY, not profit, and does not know when they sold. Nothing in the entry path reads this yet.</span>' +
     '<div style="margin-top:14px"><div class="label">Live trades by tracked wallets</div>' +
     '<div class="log" style="max-height:170px">' + tapeHtml + '</div>' +
-    '<span class="dim">Only covers launches already in our pipeline — not everything these wallets do.</span></div>'
+    '<span class="dim">Every trade by these wallets, on any token. Rows marked NOT ON OUR RADAR ' +
+    'are tokens the filter never looked at — those are the ones that could point somewhere new.</span></div>'
 }
 
 /**

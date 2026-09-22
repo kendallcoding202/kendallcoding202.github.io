@@ -22,17 +22,28 @@ import { tradeEventsFromLogs, toFeedEvent, rpcWebsocketUrl } from './pumpevents.
  * loss is acceptable; for exits it is covered by the stale-price rule.
  */
 export class LogFeed extends EventEmitter {
-  /** `interested` lets the bot skip decoding work for mints it does not care about. */
-  constructor({ interested = () => true } = {}) {
+  /**
+   * `interested` skips DOWNSTREAM work for mints we do not care about — the decode has
+   * already happened by then, since the mint is inside the event.
+   *
+   * `interestedTrader` is the other axis: a wallet we are tracking, on ANY token. That
+   * distinction is what separates a confirmation signal from a discovery one. Asking
+   * "is smart money in the launch I am already considering" only needs mints in our
+   * pipeline; asking "what did smart money just buy" needs the tokens we are NOT
+   * watching, which is precisely the interesting case. Those trades were being decoded
+   * and discarded, so the second axis costs one Set lookup.
+   */
+  constructor({ interested = () => true, interestedTrader = () => false } = {}) {
     super()
     this.interested = interested
+    this.interestedTrader = interestedTrader
     this.url = rpcWebsocketUrl()
     this.ws = null
     this.stopped = false
     this.attempt = 0
     this.subscriptionId = null
     this.lastMessageAt = 0
-    this.stats = { notifications: 0, decoded: 0, kept: 0 }
+    this.stats = { notifications: 0, decoded: 0, kept: 0, smart: 0 }
   }
 
   start() {
@@ -111,15 +122,7 @@ export class LogFeed extends EventEmitter {
       const value = msg.params?.result?.value
       if (!value || value.err) return // failed transactions moved no money
 
-      this.stats.notifications++
-      for (const trade of tradeEventsFromLogs(value.logs)) {
-        this.stats.decoded++
-        if (!this.interested(trade.mint)) continue
-        this.stats.kept++
-        const event = toFeedEvent(trade)
-        event.signature = value.signature
-        this.emit('trade', event)
-      }
+      this.handleNotification(value)
     })
 
     ws.on('close', () => {
@@ -128,6 +131,39 @@ export class LogFeed extends EventEmitter {
     })
 
     ws.on('error', (err) => log.warn(`log feed error: ${err.message}`))
+  }
+
+  /**
+   * Split out from the socket handler so the routing can be tested against real decoded
+   * logs rather than a reimplementation of it. Which channel a trade reaches is the
+   * whole behaviour here, and a test that rebuilds the rules to check them proves only
+   * that the copy agrees with itself.
+   */
+  handleNotification(value) {
+    if (!value || value.err) return
+    this.stats.notifications++
+    for (const trade of tradeEventsFromLogs(value.logs)) {
+      this.stats.decoded++
+      const mintWanted = this.interested(trade.mint)
+      const traderWanted = this.interestedTrader(trade.trader)
+      if (!mintWanted && !traderWanted) continue
+      const event = toFeedEvent(trade)
+      event.signature = value.signature
+      /**
+       * Emitted on a SEPARATE channel, not folded into 'trade'.
+       *
+       * A tracked wallet's trade on a token we do not follow must not reach the
+       * trading path: it would inflate the trade counters and be handed to candidate
+       * and shadow lookups that can only miss. Two questions, two events.
+       */
+      if (traderWanted) {
+        this.stats.smart++
+        this.emit('smart-trade', event)
+      }
+      if (!mintWanted) continue
+      this.stats.kept++
+      this.emit('trade', event)
+    }
   }
 
   async #reconnect() {

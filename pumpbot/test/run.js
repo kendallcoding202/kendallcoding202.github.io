@@ -1319,6 +1319,72 @@ console.log('\nBacktest calibration')
   s.daily = {}; s.totalRealizedSol = 0; s.closed = []
 }
 
+// ------------------------------- watching a wallet everywhere, not just where we look
+console.log('\nSmart-money discovery')
+{
+  const { LogFeed } = await import('../src/logfeed.js')
+
+  /**
+   * The decode happens BEFORE the mint filter — the mint is inside the event — so every
+   * pump.fun trade is already being decoded and then discarded. Watching a wallet on
+   * tokens we do NOT follow therefore costs a Set lookup, not new work.
+   *
+   * That distinction is the whole difference between a confirmation signal ("is smart
+   * money in the launch I am already considering") and a discovery one ("what did smart
+   * money just buy"), and only the second needs the tokens we are not watching.
+   */
+  const { PublicKey } = await import('@solana/web3.js')
+  const DISC = Buffer.from([189, 219, 127, 211, 78, 230, 97, 238])
+  /** A real encoded TradeEvent, so this drives the actual decode and routing. */
+  const logsFor = (mintKey, traderKey) => {
+    const b = Buffer.alloc(113)
+    DISC.copy(b, 0)
+    new PublicKey(mintKey).toBuffer().copy(b, 8)
+    b.writeBigUInt64LE(BigInt(0.4 * 1e9), 40)
+    b.writeBigUInt64LE(BigInt(1_500_000e6), 48)
+    b.writeUInt8(1, 56)
+    new PublicKey(traderKey).toBuffer().copy(b, 57)
+    b.writeBigInt64LE(BigInt(1789500000), 89)
+    b.writeBigUInt64LE(BigInt(32e9), 97)
+    b.writeBigUInt64LE(BigInt(1.073e15), 105)
+    return { logs: [`Program data: ${b.toString('base64')}`], signature: 'sig' }
+  }
+  const WATCHED = PublicKey.unique().toBase58()
+  const UNWATCHED = PublicKey.unique().toBase58()
+  const SMART = PublicKey.unique().toBase58()
+  const ANYONE = PublicKey.unique().toBase58()
+
+  const feed = new LogFeed({
+    interested: (mint) => mint === WATCHED,
+    interestedTrader: (trader) => trader === SMART,
+  })
+
+  const seen = { trade: [], smart: [] }
+  feed.on('trade', (e) => seen.trade.push(e))
+  feed.on('smart-trade', (e) => seen.smart.push(e))
+  const emit = (mint, trader) => feed.handleNotification(logsFor(mint, trader))
+
+  emit(WATCHED, ANYONE)
+  check('an ordinary trade on a watched token reaches the trading path',
+    seen.trade.length === 1 && seen.smart.length === 0)
+
+  emit(UNWATCHED, SMART)
+  check('a tracked wallet on a token we do NOT follow is captured',
+    seen.smart.length === 1 && seen.smart[0].mint === UNWATCHED)
+  check('but does NOT reach the trading path', seen.trade.length === 1)
+
+  emit(WATCHED, SMART)
+  check('a tracked wallet on a watched token reaches both',
+    seen.trade.length === 2 && seen.smart.length === 2)
+
+  emit(UNWATCHED, ANYONE)
+  check('and an ordinary trade on an unwatched token reaches neither',
+    seen.trade.length === 2 && seen.smart.length === 2)
+
+  check('the feed counts them separately', feed.stats.smart === 2 && feed.stats.kept === 2)
+  check('every trade was decoded either way — the discovery axis is free', feed.stats.decoded === 4)
+}
+
 // ------------------------------- what the BUYERS have done before
 console.log('\nWallet prior')
 {
