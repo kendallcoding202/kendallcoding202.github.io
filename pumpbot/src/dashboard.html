@@ -497,8 +497,32 @@ function render(d) {
 
   /* ---- chart ---- */
   drawChart(d.history, d.pnl.unrealizedSol)
-  document.getElementById('chartmeta').textContent =
-    d.history && d.history.length ? d.history.length + ' CLOSED · REALIZED ' + sgn(d.pnl.realizedTotalSol, 4) : ''
+  /**
+   * The chart meta now leads with THIS BUILD, not with all time.
+   *
+   * Cumulative P&L answers "how has this bot done", which stops being the useful
+   * question the moment the rules change: a book carrying days of losses from a
+   * configuration that no longer exists buries whatever the current one is doing, and
+   * reading it means remembering when the change landed and doing arithmetic by eye.
+   * All-time is still there, second, because the old rules are what make the new ones
+   * judgeable.
+   */
+  const cm = document.getElementById('chartmeta')
+  const b = d.build
+  if (b && b.closed > 0) {
+    const mult = b.multiple === null ? '' : ' · ' + b.multiple.toFixed(3) + 'x staked'
+    cm.innerHTML = '<b>BUILD ' + esc(b.version) + '</b> · ' + b.closed + ' CLOSED · ' +
+      b.wins + 'W/' + b.losses + 'L · ' + sgn(b.realizedSol, 4) + mult +
+      '<span style="color:var(--dimmer)"> — all time ' + sgn(d.pnl.realizedTotalSol, 4) +
+      ' over ' + (d.history ? d.history.length : 0) + '</span>'
+  } else if (b) {
+    cm.innerHTML = '<b>BUILD ' + esc(b.version) + '</b> · no closed trades yet' +
+      '<span style="color:var(--dimmer)"> — all time ' + sgn(d.pnl.realizedTotalSol, 4) +
+      ' over ' + (d.history ? d.history.length : 0) + '</span>'
+  } else {
+    cm.textContent = d.history && d.history.length
+      ? d.history.length + ' CLOSED · REALIZED ' + sgn(d.pnl.realizedTotalSol, 4) : ''
+  }
 
   /* ---- activity log ---- */
   const logEl = document.getElementById('log')

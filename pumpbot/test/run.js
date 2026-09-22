@@ -1237,8 +1237,62 @@ console.log('\nStartup provenance')
   check('but a long-running process is not accused of crash-looping',
     !/Quick restart/.test(calmText) && /4\.0h/.test(calmText), calmText)
 
-  s.lastStartedAt = 0
-  s.startCount = 0
+  /**
+   * MEASURING THE RULES THAT ARE RUNNING, not the book they inherited.
+   *
+   * Cumulative P&L stops answering anything useful the moment the strategy changes —
+   * days of losses from rules that no longer exist bury whatever the new ones do. The
+   * marker has to be keyed on the BUILD rather than on each start, or a restart resets
+   * the measurement and throws away an afternoon of evidence.
+   */
+  /**
+   * A FRESH reference: initStore() above reassigns the module's state object, so the `s`
+   * captured at the top of this block no longer points at the state recordStart mutates.
+   * Holding a stale handle made every assertion below pass against an object nothing was
+   * reading — which is the quiet way a test stops testing anything.
+   */
+  const st = store.getState()
+  st.closed = []
+  st.buildVersion = ''
+  st.buildFirstSeenAt = 0
+  const firstOfBuild = store.recordStart(5_000_000)
+  check('a new build stamps when it first ran',
+    firstOfBuild.buildChanged && firstOfBuild.buildFirstSeenAt === 5_000_000)
+  const restart = store.recordStart(5_000_000 + 3600_000)
+  check('but a RESTART of the same build does not move the marker',
+    !restart.buildChanged && restart.buildFirstSeenAt === 5_000_000,
+    String(restart.buildFirstSeenAt))
+
+  // Two losses under the old rules, then a win and a loss under the new build.
+  st.closed.push(
+    { mint: 'OLD1', closedAt: 4_000_000, realizedSol: -0.05, solSpent: 0.15 },
+    { mint: 'OLD2', closedAt: 4_500_000, realizedSol: -0.06, solSpent: 0.15 },
+    { mint: 'NEW1', closedAt: 6_000_000, realizedSol: 0.20, solSpent: 0.15 },
+    { mint: 'NEW2', closedAt: 6_100_000, realizedSol: -0.04, solSpent: 0.15 },
+    // Explore is a separate book and must not leak into the strategy's verdict.
+    { mint: 'EXP1', closedAt: 6_200_000, realizedSol: 5.0, solSpent: 0.15, explore: true },
+  )
+  const sinceBuild = store.recordSince(5_000_000)
+  check('P&L since this build counts only trades closed after it landed',
+    sinceBuild.closed === 2 && near(sinceBuild.realizedSol, 0.16, 1e-9),
+    JSON.stringify(sinceBuild))
+  check('and it does not let the experiment flatter the strategy',
+    !sinceBuild.realizedSol.toString().includes('5'), JSON.stringify(sinceBuild))
+  check('the multiple is staked and realized as a MATCHED set',
+    near(sinceBuild.multiple, (0.30 + 0.16) / 0.30, 1e-9), String(sinceBuild.multiple))
+  check('wins and losses are split over the same window',
+    sinceBuild.wins === 1 && sinceBuild.losses === 1)
+  /** The whole point: the inherited book must not drown the new rules. */
+  const allTime = store.recordSince(0)
+  check('while all time still shows the losses the new rules inherited',
+    allTime.closed === 4 && allTime.realizedSol < sinceBuild.realizedSol,
+    `${allTime.realizedSol} all time vs ${sinceBuild.realizedSol} this build`)
+
+  st.closed = []
+  st.lastStartedAt = 0
+  st.startCount = 0
+  st.buildVersion = ''
+  st.buildFirstSeenAt = 0
   store.save()
 }
 

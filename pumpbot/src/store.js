@@ -31,6 +31,9 @@ const EMPTY = {
    */
   lastStartedAt: 0,
   startCount: 0,
+  /** Which build is running, and when it first did — see recordStart. */
+  buildVersion: '',
+  buildFirstSeenAt: 0,
 }
 
 let state = null
@@ -86,8 +89,57 @@ export function recordStart(now = Date.now()) {
   const sinceSeconds = previousAt ? Math.round((now - previousAt) / 1000) : null
   s.lastStartedAt = now
   s.startCount = (s.startCount ?? 0) + 1
+  /**
+   * WHEN THIS BUILD FIRST RAN, stamped once per version.
+   *
+   * Cumulative P&L answers "how has this bot done", which stops being the useful
+   * question the moment the strategy changes: a book carrying days of losses from rules
+   * that no longer exist will bury whatever the new ones do, and the only way to read it
+   * is to remember when the change landed and do arithmetic by eye. Recording the moment
+   * makes "how are the CURRENT rules doing" answerable without discarding the history
+   * that makes the old rules judgeable.
+   *
+   * Keyed on version rather than on every start, so a restart does not reset the
+   * measurement and lose an afternoon of evidence.
+   */
+  if (s.buildVersion !== config.version) {
+    s.buildVersion = config.version
+    s.buildFirstSeenAt = now
+  }
   save()
-  return { previousAt, sinceSeconds, startCount: s.startCount }
+  return {
+    previousAt,
+    sinceSeconds,
+    startCount: s.startCount,
+    buildFirstSeenAt: s.buildFirstSeenAt,
+    buildChanged: s.buildFirstSeenAt === now,
+  }
+}
+
+/**
+ * Strategy P&L over the closed trades since `since`, so a config change can be judged on
+ * what it did rather than on what the book was carrying before it.
+ */
+export function recordSince(since) {
+  const s = getState()
+  const rows = s.closed.filter((p) => !p.explore && (p.closedAt ?? 0) >= since)
+  let wins = 0, realized = 0, staked = 0
+  for (const p of rows) {
+    realized += p.realizedSol ?? 0
+    staked += p.solSpent ?? 0
+    if ((p.realizedSol ?? 0) > 0) wins++
+  }
+  return {
+    since,
+    closed: rows.length,
+    wins,
+    losses: rows.length - wins,
+    realizedSol: realized,
+    stakedSol: staked,
+    // Multiple of what was actually staked over this window — the two are a matched set,
+    // which is the bug that produced a -5.7x calibration figure when they were not.
+    multiple: staked > 0 ? (staked + realized) / staked : null,
+  }
 }
 
 /** Write via a temp file + rename so a crash mid-write cannot corrupt the ledger. */

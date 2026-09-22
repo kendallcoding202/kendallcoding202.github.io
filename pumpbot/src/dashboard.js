@@ -13,6 +13,7 @@ import {
   todayPnl,
   strategyRecord,
   exploreRecord,
+  recordSince,
 } from './store.js'
 import { positionPnl } from './position.js'
 import { sizingSummary } from './sizing.js'
@@ -266,6 +267,19 @@ export function buildSnapshot(walletSol, stats = null) {
 
   const nextTierSol = sizingSummary(walletSol).nextTier?.atSol ?? null
 
+  /**
+   * How the CURRENT rules are doing, separately from the book they inherited.
+   *
+   * Cumulative P&L answers "how has this bot done", which stops being useful the moment
+   * the strategy changes: days of losses from rules that no longer exist bury whatever
+   * the new ones are doing, and reading it means remembering when the change landed and
+   * doing arithmetic by eye. This is the same figures over the trades closed since this
+   * build first ran.
+   */
+  const build = state.buildFirstSeenAt
+    ? { ...recordSince(state.buildFirstSeenAt), version: state.buildVersion }
+    : null
+
   return {
     mode: config.paper ? 'paper' : 'live',
     version: config.version,
@@ -279,6 +293,8 @@ export function buildSnapshot(walletSol, stats = null) {
       // Liquid SOL plus what the open bags are currently worth.
       totalValueSol: (Number.isFinite(walletSol) ? walletSol : 0) + markValueSol,
     },
+    /** How the rules RUNNING RIGHT NOW are doing, apart from the book they inherited. */
+    build,
     pnl: {
       realizedTotalSol: state.totalRealizedSol,
       realizedTodaySol: today.realizedSol,
