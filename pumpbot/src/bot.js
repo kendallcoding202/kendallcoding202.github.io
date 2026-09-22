@@ -1275,7 +1275,35 @@ export class Bot {
     if (position.retryAfter && Date.now() < position.retryAfter) return
 
     const decision = decideExit(position, { priceSol, vSol })
-    if (!(decision.sellTokens > 0)) return
+    if (!(decision.sellTokens > 0)) {
+      /**
+       * A RUNG CAN TRIGGER WITHOUT SELLING ANYTHING — and it still has to COUNT.
+       *
+       * `rungsHit` does two jobs beyond bookkeeping: it arms the trailing stop and it
+       * disarms the time stop. Both are gated on `hitAnyRung`, so whether the bot rides a
+       * runner or dumps it on the clock is decided by whether a rung was recorded, not by
+       * how much it sold.
+       *
+       * That was tied to a sale landing. A ladder of `50:0,900:40` — "start trailing at
+       * +50%, sell nothing yet", which is exactly how you hold the biggest possible bag —
+       * produced no tokens to sell, returned here, and never recorded the rung. The
+       * trailing stop then never armed and the time stop never lifted, so the position
+       * was managed as one that never got going and closed at 900s at whatever price
+       * happened to be standing. The config would have read as "ride it" and behaved as
+       * "sell it on a timer", silently, with nothing in the log disagreeing.
+       *
+       * Today's ladder sells 20% at the first rung, so this changes no live behaviour. It
+       * makes the zero-sell rung mean what it says, which is the precondition for testing
+       * a bigger moon bag at all.
+       */
+      const fresh = decision.rungs.filter((r) => !position.rungsHit.includes(r))
+      if (fresh.length) {
+        position.rungsHit.push(...fresh)
+        log.info(`${position.symbol} reached +${fresh.join('%, +')}% — trailing stop armed, nothing sold`)
+        save()
+      }
+      return
+    }
 
     this.busy.add(mint)
     try {

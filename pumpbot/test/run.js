@@ -5609,6 +5609,86 @@ console.log('\nEnd-to-end bot loop')
   check('bot stops cleanly', !feed.started)
 }
 
+// ------------------------------- a rung that sells nothing still has to COUNT
+console.log('\nA zero-sell rung, through the bot')
+{
+  const { EventEmitter } = await import('node:events')
+  const { Bot } = await import('../src/bot.js')
+  class Quiet extends EventEmitter {
+    constructor() { super(); this.watched = new Set() }
+    start() {} async stop() {} watch(m) { this.watched.add(m) } unwatch(m) { this.watched.delete(m) }
+    feedStats() { return { notifications: 0, decoded: 0, kept: 0, connected: true } }
+  }
+
+  /**
+   * `rungsHit` arms the trailing stop and disarms the time stop — both are gated on
+   * `hitAnyRung` in decideExit. Recording it was tied to a SALE landing, so a ladder that
+   * says "start trailing at +50%, sell nothing yet" armed nothing: #manage returned early
+   * on sellTokens === 0, and the position was then managed as one that never got going.
+   *
+   * That configuration is the whole shape of "hold as big a bag as possible", so it has
+   * to mean what it says before that can be tested at all. Driven through the real Bot,
+   * because the early return is in #manage and decideExit was always reporting the rung.
+   */
+  const realLadder = config.exit.ladder
+  config.exit.ladder = [{ atPct: 50, sellPct: 0 }, { atPct: 900, sellPct: 40 }]
+
+  const s = store.getState()
+  s.positions = {}; s.closed = []; s.daily = {}; s.totalRealizedSol = 0
+  s.consecutiveLosses = 0; s.blockedCreators = {}; s.halted = null
+  store.save()
+
+  const MINT = 'ZeroRungAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+  /**
+   * Up 300%: well past the first rung, nowhere near the second — and high enough that a
+   * 50% giveback still leaves the position ABOVE its stop-loss. At a lower peak the
+   * stop-loss fires first and the assertion below would pass on the wrong rule.
+   */
+  store.addPosition({
+    mint: MINT, symbol: 'ZERO', state: 'open', openedAt: Date.now() - 5000,
+    entryPriceSol: 1e-7, lastPriceSol: 4e-7, peakPriceSol: 4e-7, lastPriceAt: Date.now(),
+    tokensBought: 1000, tokensRemaining: 1000, solSpent: 0.15, solRecovered: 0,
+    rungsHit: [], fills: [], pool: 'pump', entryVSol: 100, lastVSol: 400, lastVTokens: 1e9,
+  })
+
+  const bot = new Bot({
+    feed: new Quiet(), logFeed: new Quiet(),
+    readCurve: async () => ({ curve: { vSol: 400, vTokens: 1e9 }, gone: false }),
+  })
+  await bot.start()
+  clearInterval(bot.sweepTimer); clearInterval(bot.balanceTimer); clearInterval(bot.heartbeatTimer)
+  await bot.tick()
+
+  const held = store.getState().positions[MINT]
+  check('a zero-sell rung does not close the position', Boolean(held))
+  check('and it still records the rung', held?.rungsHit.includes(50), JSON.stringify(held?.rungsHit))
+  check('so nothing was actually sold', held?.tokensRemaining === 1000 && held?.solRecovered === 0,
+    `${held?.tokensRemaining} left, ${held?.solRecovered} recovered`)
+
+  /**
+   * The consequence, which is the whole point: the trailing stop is now live on a bag
+   * that has sold nothing. Before the fix this position had no armed trail and no lifted
+   * time stop, so a 60% giveback was simply held until the clock ran out.
+   */
+  const giveback = decideExit(held, { priceSol: 1.9e-7, vSol: 190 })
+  check('the test exercises the trail, not the stop-loss — still well above entry',
+    1.9e-7 > 1e-7 * (1 - config.exit.stopLossPct / 100))
+  check('the trailing stop is armed on a bag that sold nothing',
+    giveback.sellAll && giveback.reasons[0].includes('peak'), JSON.stringify(giveback.reasons))
+
+  /**
+   * And the time stop must be LIFTED. A position past its first rung is riding, not
+   * stalled, so the rule for "never got going" must no longer apply to it.
+   */
+  const old = { ...held, openedAt: Date.now() - (config.exit.timeStopSeconds + 60) * 1000 }
+  const onClock = decideExit(old, { priceSol: 4e-7, vSol: 400 })
+  check('and the time stop no longer applies to it',
+    !onClock.reasons.some((r) => r.includes('time stop')), JSON.stringify(onClock.reasons))
+
+  await bot.stop()
+  config.exit.ladder = realLadder
+}
+
 // ------------------------------- a quiet position gets a price, not a market order
 console.log('\nStale price refresh, through the bot')
 {
