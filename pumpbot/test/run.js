@@ -1205,6 +1205,80 @@ console.log('\nTop-of-spike detection')
     topOfSpike([{ v: JOURNAL_VERSION, action: 'bought' }]).bought.n === 0)
 }
 
+// ------------------------------- a trailing stop can only be judged at tick time
+console.log('\nTrailing exits, decided live')
+{
+  const { ShadowTracker, TRAIL_LEVELS } = await import('../src/journal.js')
+  const mk = () => {
+    const t = new ShadowTracker({ maxTracked: 10, windowMs: 900_000 })
+    t.track({
+      candidate: { mint: 'T', symbol: 'T', creator: 'D', createdAt: Date.now(), priceSol: 1e-7 },
+      verdict: { pass: true, failed: [] }, action: 'bought', entryPriceSol: 1e-7,
+    })
+    return t
+  }
+  const at = (t, mult) => t.onTrade({ mint: 'T', priceSol: 1e-7 * mult })
+  const exits = (t) => t.rows.get('T').trailExits
+  const idx = (lvl) => TRAIL_LEVELS.indexOf(lvl)
+
+  /**
+   * THE LOOK-AHEAD TEST, and the reason this data exists at all.
+   *
+   * Price runs to 2x, dips to 1.7x (a 15% giveback), then rips to 50x. A 15% trail was
+   * ALREADY OUT at 1.7x and never saw the 50x — but a replay holding only peak, trough
+   * and end applies the trail to the 50x peak and credits us with 42.5x. That is not a
+   * small error, it is the whole reason tighter trails looked monotonically better all
+   * the way down to an absurd 2%.
+   */
+  const t1 = mk()
+  at(t1, 2.0)
+  at(t1, 1.7)   // -15% from the running peak of 2.0
+  at(t1, 50)    // the run a 15% trail is not present for
+  check('a trail that fired early records the price it fired AT',
+    near(exits(t1)[idx(15)], 1.7, 1e-6), String(exits(t1)[idx(15)]))
+  check('and is not retroactively handed the peak that came later',
+    exits(t1)[idx(15)] < 2, String(exits(t1)[idx(15)]))
+
+  /** A looser trail was still in for the run, which is the whole trade-off. */
+  check('a 50% trail was NOT stopped out by that same dip',
+    exits(t1)[idx(50)] === null || exits(t1)[idx(50)] > 2,
+    String(exits(t1)[idx(50)]))
+
+  /** Never falling far enough means the trail never fired — null, not a guess. */
+  const t2 = mk()
+  at(t2, 1.5); at(t2, 1.45); at(t2, 3.0)
+  check('a trail that never triggered stays null', exits(t2)[idx(25)] === null,
+    JSON.stringify(exits(t2)))
+
+  /** Each level fires once, at its own moment, and deeper levels fire later. */
+  const t3 = mk()
+  at(t3, 4.0)
+  at(t3, 3.5)   // -12.5%: nothing yet
+  at(t3, 3.2)   // -20%: the 10, 15 and 20 levels are out
+  at(t3, 1.8)   // -55%: everything is out
+  const e3 = exits(t3)
+  check('tighter levels exit earlier and higher than looser ones',
+    e3[idx(10)] >= e3[idx(20)] && e3[idx(20)] > e3[idx(50)],
+    JSON.stringify(e3))
+  check('and a level already triggered is not overwritten by a later low',
+    near(e3[idx(10)], 3.5, 1e-6), String(e3[idx(10)]))
+
+  /**
+   * The sweep must no longer report a trailing axis it cannot compute honestly. A number
+   * known to be biased is worse than no number, because the number gets acted on.
+   */
+  const { exitSweep } = await import('../src/learn.js')
+  const rows = Array.from({ length: 200 }, () => ({
+    v: JOURNAL_VERSION, action: 'bought', decisionPriceSol: 1, features: { organicBuyers: 40 },
+    hitFirstRung: true, peakMultiple: 3, troughMultiple: 0.6, endMultiple: 0.6,
+    hasOrdering: true, troughFirst: false,
+  }))
+  const sweep = exitSweep(rows, { minSamples: 10 })
+  check('the exit sweep no longer offers a trailing-stop verdict it cannot support',
+    !sweep.results.some((r) => r.axis === 'trailing stop'),
+    JSON.stringify(sweep.results.map((r) => r.axis).filter((a, i, z) => z.indexOf(a) === i)))
+}
+
 // ------------------------------- seeing a position after its curve closes
 console.log('\nOff-curve pricing')
 {

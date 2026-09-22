@@ -54,6 +54,24 @@ export const CREATOR_TIER = { poor: 0, unknown: 1, ordinary: 2, proven: 3 }
  */
 export const PATH_CHECKPOINTS = [30, 60, 120, 180, 300, 450, 600, 900]
 
+/**
+ * Trailing-stop levels evaluated LIVE, as ticks arrive.
+ *
+ * A journal row carrying only peak, trough and end CANNOT evaluate a trailing stop, and
+ * the replay's attempt to was silently look-ahead biased: it hands the simulator the
+ * peak and then applies the trail to it, which is only possible with hindsight. A real
+ * 2% trail fires on the first 2% wobble, long before any peak is reached — so it never
+ * sees that peak at all. The bias is one-directional and unbounded: on out-of-sample
+ * rows the replay rated a 2% trail at 1.29x and the shipped 50% at 1.04x, monotone all
+ * the way down, which is the shape of an artifact rather than a finding.
+ *
+ * The fix is to decide it at tick time, when the running peak is genuinely the running
+ * peak and the future is genuinely unknown. For each level below we record the multiple
+ * the position would have exited at, once, the first time the price falls that far from
+ * the peak SO FAR. Six numbers per row, exact, and no path to store.
+ */
+export const TRAIL_LEVELS = [10, 15, 20, 25, 35, 50]
+
 let journalPath = null
 
 function file() {
@@ -484,6 +502,9 @@ function hydrate(row) {
     staleExitAt: row.staleExitAt ?? null,
     staleExitPriceSol: row.staleExitPriceSol ?? null,
     timeStopPriceSol: row.timeStopPriceSol ?? null,
+    trailExits: Array.isArray(row.trailExits) && row.trailExits.length === TRAIL_LEVELS.length
+      ? row.trailExits
+      : TRAIL_LEVELS.map(() => null),
     pathPrices: Array.isArray(row.pathPrices) && row.pathPrices.length === PATH_CHECKPOINTS.length
       ? row.pathPrices
       : PATH_CHECKPOINTS.map(() => null),
@@ -569,6 +590,8 @@ export class ShadowTracker {
       timeStopPriceSol: null, // the price at the time-stop boundary
       // Price held at each PATH_CHECKPOINTS moment; null until that moment passes.
       pathPrices: PATH_CHECKPOINTS.map(() => null),
+      // Where a trailing stop at each level would ACTUALLY have exited. See TRAIL_LEVELS.
+      trailExits: TRAIL_LEVELS.map(() => null),
       /**
        * The wallets that bought inside the observation window, kept IN MEMORY ONLY so
        * the wallet index can be credited when this row's outcome is known. Sixty
@@ -632,6 +655,20 @@ export class ShadowTracker {
      * so the stop-loss can never knock it out of an eventual winner, and tighter stops
      * come out looking free. Two timestamps remove the guess.
      */
+    /**
+     * Trailing exits, decided HERE rather than reconstructed later — see TRAIL_LEVELS.
+     * Evaluated before the peak is updated, so a new high cannot retroactively trigger
+     * a level using information from the same tick that set it.
+     */
+    if (Array.isArray(row.trailExits) && row.peakPriceSol > 0) {
+      for (let i = 0; i < TRAIL_LEVELS.length; i++) {
+        if (row.trailExits[i] !== null) continue
+        if (event.priceSol <= row.peakPriceSol * (1 - TRAIL_LEVELS[i] / 100)) {
+          row.trailExits[i] = Number((event.priceSol / row.decisionPriceSol).toFixed(6))
+        }
+      }
+    }
+
     if (event.priceSol > row.peakPriceSol) {
       row.peakPriceSol = event.priceSol
       row.peakAt = now
@@ -733,6 +770,18 @@ export class ShadowTracker {
       pathMultiples: (row.pathPrices ?? PATH_CHECKPOINTS.map(() => null)).map((p) =>
         p > 0 ? Number((p / base).toFixed(4)) : null,
       ),
+      /**
+       * What a trailing stop at each TRAIL_LEVELS percentage would ACTUALLY have
+       * returned, decided tick by tick while the future was unknown. This is the only
+       * honest way to evaluate a trail: peak/trough/end cannot do it, and the replay's
+       * attempt was look-ahead biased in a way that made ever-tighter trails look
+       * ever-better, monotone down to an absurd 2%.
+       *
+       * A level still null means the price never fell that far from its running peak, so
+       * that trail never fired and the position ran to the window's end.
+       */
+      trailExits: row.trailExits ?? TRAIL_LEVELS.map(() => null),
+      hasTrailData: Array.isArray(row.trailExits),
       // The raw prices were working state; the multiples are the record. Keeping both
       // would grow every row for nothing, and the journal is the memory ceiling here.
       pathPrices: undefined,

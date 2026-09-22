@@ -380,11 +380,21 @@ export function exitSweep(rows, { minSamples = config.learning.minSamplesForSugg
       variants.push({ axis: 'stop-loss', label: `−${stopLossPct}%`, plan: { ...base, stopLossPct } })
     }
   }
-  for (const trailingPct of [25, 35, 50, 65]) {
-    if (trailingPct !== base.trailingPct) {
-      variants.push({ axis: 'trailing stop', label: `${trailingPct}% giveback`, plan: { ...base, trailingPct } })
-    }
-  }
+  /**
+   * THE TRAILING AXIS IS OMITTED, and its absence is the finding.
+   *
+   * A journal row carrying peak, trough and end cannot evaluate a trailing stop. The
+   * replay hands the simulator the peak and then applies the trail to it, which is only
+   * possible with hindsight — a real 2% trail fires on the first 2% wobble and never
+   * sees that peak at all. The bias runs one way and does not bound: out of sample this
+   * rated a 2% trail at 1.29x against 1.04x for the shipped 50%, improving monotonically
+   * the tighter it got, which is the shape of an artifact and not of an edge.
+   *
+   * Reporting a number known to be biased is worse than reporting none, because the
+   * number gets acted on. Rows now record where each trail level would REALLY have
+   * exited, decided tick by tick with the future unknown (TRAIL_LEVELS in journal.js),
+   * and this axis comes back when enough of them carry it.
+   */
   /**
    * WOULD A SECOND RUNG BEAT RIDING THE TRAIL DOWN? The sweep could not ask, because
    * every axis above keeps the ladder's LENGTH fixed and only moves the first rung.
