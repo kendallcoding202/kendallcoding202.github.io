@@ -7124,6 +7124,41 @@ console.log('\nEntry price vs cost basis')
 }
 
 
+
+// ------------------------------- decided is not passed
+console.log('\nScreened vs passed')
+{
+  const { EventEmitter } = await import('node:events')
+  const { Bot } = await import('../src/bot.js')
+  class Quiet extends EventEmitter {
+    constructor() { super(); this.watched = new Set() }
+    start() {} async stop() {} watch(m) { this.watched.add(m) } unwatch(m) { this.watched.delete(m) }
+    feedStats() { return { notifications: 0, decoded: 0, kept: 0, connected: true } }
+  }
+  const bot = new Bot({ feed: new Quiet(), logFeed: new Quiet() })
+
+  /**
+   * #countReject increments `screened` as well, so it has always counted every launch
+   * DECIDED — rejections included. Printed beside `entered` it reads as "passed
+   * screening", and that cost a real misdiagnosis: 146 screened / 0 entered looked like
+   * every approved launch being blocked at the capital gate, when in fact nothing had
+   * been approved. The two counts must be separately readable.
+   */
+  bot.stats.screened = 0
+  bot.stats.passed = 0
+  for (let i = 0; i < 5; i++) bot.stats.rejects && bot.stats.screened++ // stand-in for #countReject
+  bot.stats.screened += 2
+  bot.stats.passed += 2
+
+  const snap = bot.statsSnapshot()
+  check('the snapshot exposes passes separately from decisions',
+    snap.screened === 7 && snap.passed === 2, JSON.stringify({ s: snap.screened, p: snap.passed }))
+  check('and decided is never smaller than passed, since it contains it',
+    snap.screened >= snap.passed)
+  await bot.stop()
+}
+
+
 fs.rmSync(tmp, { recursive: true, force: true })
 
 console.log(`\n${passed} passed, ${failures.length} failed`)

@@ -121,13 +121,23 @@ export class Bot {
       trades: 0,
       tradesMatched: 0,
       screened: 0,
+      /**
+       * Launches that PASSED the filter, as distinct from `screened`.
+       *
+       * `screened` is incremented by #countReject as well as on the pass path, so it has
+       * always meant "decided" — every launch we formed an opinion about. Printed next to
+       * `entered` in the heartbeat it reads as "passed screening", and it cost a real
+       * misdiagnosis: 146 screened / 0 entered looked like every approved launch being
+       * blocked at the capital gate, when it meant no launch had been approved at all.
+       */
+      passed: 0,
       entered: 0,
       explored: 0,
       rejects: new Map(),
       firstParsedAt: null,
       startedAt: null,
       // Reset each heartbeat so the log shows rate, not just a running total.
-      sinceBeat: { messages: 0, creates: 0, screened: 0, entered: 0 },
+      sinceBeat: { messages: 0, creates: 0, screened: 0, passed: 0, entered: 0 },
       costWarned: false,
       // Messages on the METERED per-token trade tape only. Everything else is free.
       meteredMessages: 0,
@@ -173,6 +183,8 @@ export class Bot {
       tradeSource: this.usingRpcTrades ? 'rpc-logs' : 'pumpportal',
       logFeed: this.logFeed?.feedStats?.() ?? null,
       screened: s.screened,
+      /** Passed the filter. `screened` counts every launch DECIDED, rejections included. */
+      passed: s.passed,
       entered: s.entered,
       explored: s.explored,
       watching: this.candidates.size,
@@ -635,12 +647,13 @@ export class Bot {
       `+${beat.creates} launches (${s.creates} total) · watching ${this.candidates.size} · ` +
         `trades ${s.tradesMatched}/${s.trades} matched · subs ${subs?.watched ?? '?'}` +
         (subs?.dropped ? ` (${subs.dropped} dropped)` : '') + ' · ' +
-        `screened +${beat.screened}/${s.screened} · entered +${beat.entered}/${s.entered} · ` +
+        `decided +${beat.screened}/${s.screened} · passed +${beat.passed}/${s.passed} · ` +
+        `entered +${beat.entered}/${s.entered} · ` +
         `open ${openPositions().length} · shadow ${this.shadow?.size ?? 0}` +
         (rejects.length ? ` · rejects: ${rejects.map((r) => `${r.id}×${r.n}`).join(' ')}` : ''),
     )
 
-    s.sinceBeat = { messages: 0, creates: 0, screened: 0, entered: 0 }
+    s.sinceBeat = { messages: 0, creates: 0, screened: 0, passed: 0, entered: 0 }
   }
 
   async start() {
@@ -1124,6 +1137,8 @@ export class Bot {
 
       this.stats.screened++
       this.stats.sinceBeat.screened++
+      this.stats.passed++
+      this.stats.sinceBeat.passed++
       if (candidate.mayhem) this.stats.mayhemScreened++
 
       await this.#enter(candidate, verdict)
