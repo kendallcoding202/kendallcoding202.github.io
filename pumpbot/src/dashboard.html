@@ -210,6 +210,23 @@
   <div id="banner" class="banner" hidden></div>
   <div id="collect" class="collect" hidden></div>
 
+  <!--
+    A SEPARATE EXPERIMENT, deliberately set apart from everything above.
+
+    The launch strategy is a measured negative: 0.9637x gross, below 1.0 before any cost.
+    This is a different hypothesis, on a different population, with a different clock, and
+    it never trades. Folding its numbers into the P&L panels would let a promising figure
+    from an unrelated experiment read as the strategy recovering, which it is not.
+  -->
+  <section id="gradsec" hidden>
+    <h2 class="sec" style="color:var(--amber);margin-top:4px">
+      Graduation Experiment
+      <span style="font-size:11px;color:var(--dimmer);font-weight:400;letter-spacing:0"> · separate hypothesis · observation only, never trades</span>
+    </h2>
+    <div class="card" style="border-color:rgba(255,179,71,.35)"><div class="note" id="grad"></div></div>
+    <div style="border-bottom:1px solid rgba(255,179,71,.25);margin:22px 0 4px"></div>
+  </section>
+
   <div class="grid g4" id="stats"></div>
 
   <div class="goal" id="goalbar" hidden>
@@ -290,21 +307,6 @@
     <div class="card"><div class="note" id="limits"></div></div>
   </section>
 
-  <!--
-    A SEPARATE EXPERIMENT, deliberately set apart from everything above.
-
-    The launch strategy is a measured negative: 0.9637x gross, below 1.0 before any cost.
-    This is a different hypothesis, on a different population, with a different clock, and
-    it never trades. Folding its numbers into the P&L panels would let a promising figure
-    from an unrelated experiment read as the strategy recovering, which it is not.
-  -->
-  <section id="gradsec" hidden>
-    <h2 class="sec" style="color:var(--amber);border-top:1px solid var(--amber);padding-top:18px;margin-top:26px">
-      Graduation Experiment
-      <span style="font-size:11px;color:var(--dimmer);font-weight:400;letter-spacing:0"> · separate hypothesis · observation only, never trades</span>
-    </h2>
-    <div class="card" style="border-color:rgba(255,179,71,.35)"><div class="note" id="grad"></div></div>
-  </section>
 </div>
 
 <script>
