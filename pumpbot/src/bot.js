@@ -653,6 +653,37 @@ export class Bot {
         (rejects.length ? ` · rejects: ${rejects.map((r) => `${r.id}×${r.n}`).join(' ')}` : ''),
     )
 
+    /**
+     * THE PROBE'S RESULTS, IN THE LOG.
+     *
+     * probeLedger() was reachable only through statsSnapshot and therefore only through
+     * the dashboard — and the probe is precisely the deployment that has no dashboard,
+     * because exposing a live wallet's positions on a public URL needs a token and the
+     * right call is not to expose it at all. So the one measurement this bot spends real
+     * money to produce was being recorded and never shown.
+     *
+     * `attempts` against `trades` is the fill rate: orders sent versus positions opened.
+     * The median fill ratio is the latency slip — what we actually paid over what we were
+     * quoted — which is the largest term in the cost model and the only one never
+     * observed. Both belong where a live run can be read from, which is the log.
+     */
+    if (config.probe.enabled) {
+      const p = probeLedger()
+      const ratios = (p.fillRatios ?? []).filter((r) => Number.isFinite(r)).sort((a, b) => a - b)
+      const median = ratios.length ? ratios[Math.floor(ratios.length / 2)] : null
+      const topReasons = Object.entries(p.reasons ?? {})
+        .sort((a, b) => b[1] - a[1]).slice(0, 3).map(([r, n]) => `${r}×${n}`).join(' ')
+      log.info(
+        `probe: ${p.trades}/${p.attempts} orders landed` +
+          (p.attempts > 0 ? ` (${((p.trades / p.attempts) * 100).toFixed(0)}%)` : '') +
+          ` · ${sol(p.committedSol)} committed of ${sol(config.probe.maxTotalSol)}` +
+          (median !== null
+            ? ` · median fill ${median.toFixed(4)}x quoted (${((median - 1) * 100).toFixed(2)}% slip, n=${ratios.length})`
+            : ' · no fill ratios yet') +
+          (topReasons ? ` · failures: ${topReasons}` : ''),
+      )
+    }
+
     s.sinceBeat = { messages: 0, creates: 0, screened: 0, passed: 0, entered: 0 }
   }
 
