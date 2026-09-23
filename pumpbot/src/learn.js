@@ -887,8 +887,38 @@ function analyzeRows(rows, onDisk) {
    * and the exclusion is a computation anyone can re-run or reverse. Deleting would throw
    * away the diagnosis to tidy the symptom.
    */
+  /**
+   * THE CEILING WAS THE WRONG EXCLUSION -- it removes the symptom, not the cause.
+   *
+   * The 2026-09-23 export settled where the impossible multiples come from. Their PEAKS
+   * are unremarkable: a median peak market cap of 37.7 SOL, nowhere near the ~115 a curve
+   * completes at. It is the ENTRY that is wrong. Mayhem mints about 1e9 tokens off-curve,
+   * vTokens jumps, and since price = vSol/vTokens the observed price collapses to roughly
+   * a third of a true launch -- a median entry market cap of 9.8 SOL against 28.1. We
+   * record that as our entry and measure every later multiple against it. Nothing
+   * impossible ever happened to the price; the denominator was deflated at the moment we
+   * looked.
+   *
+   * So a multiple ceiling catches only the tail. On that export it dropped 108 rows and
+   * left 845 mayhem rows whose entry market cap was still deflated (20.8 vs 28.1), with a
+   * mean peak of 1.7386x against 1.2719x for clean rows and a mean END of 0.7728x against
+   * 0.9388x. Inflated on peak, far worse on realized outcome: precisely the shape that
+   * drags anything tuned on peaks -- a ladder, a trailing stop -- toward the coins that
+   * end worst.
+   *
+   * They are excluded because their multiples are measured against a broken denominator
+   * and are therefore not evidence in either direction, not because mayhem predicts a bad
+   * outcome. Counted separately so the exclusion stays visible.
+   *
+   * EXCLUDED, NOT DELETED. The rows stay on disk: they are the only evidence of how often
+   * this happens, and the exclusion is a computation anyone can re-run or reverse.
+   */
+  const unpriceable = (r) => r.peakMultiple > PUMP_MAX_ONCURVE_MULTIPLE || Boolean(r.features?.mayhem)
   const impossible = current.filter((r) => r.peakMultiple > PUMP_MAX_ONCURVE_MULTIPLE).length
-  const believable = current.filter((r) => !(r.peakMultiple > PUMP_MAX_ONCURVE_MULTIPLE))
+  const mayhemExcluded = current.filter(
+    (r) => !(r.peakMultiple > PUMP_MAX_ONCURVE_MULTIPLE) && Boolean(r.features?.mayhem),
+  ).length
+  const believable = current.filter((r) => !unpriceable(r))
   const labelled = believable.filter((r) => typeof r.hitFirstRung === 'boolean' && r.decisionPriceSol > 0)
   const bought = labelled.filter((r) => r.action === 'bought')
   const explored = labelled.filter((r) => r.action === 'explored')
@@ -1125,6 +1155,11 @@ function analyzeRows(rows, onDisk) {
       /** Rows excluded as physically impossible on a bonding curve — see above. */
       impossible,
       /**
+       * Rows excluded because supply was not conserved, so their entry price -- and
+       * therefore every multiple measured from it -- is not a curve price at all.
+       */
+      mayhemExcluded,
+      /**
        * THE TWO POPULATIONS, REPORTED APART.
        *
        * A Mayhem coin and an ordinary one are not the same instrument: the extra billion
@@ -1137,8 +1172,16 @@ function analyzeRows(rows, onDisk) {
        * `mayhemLikely` is the union of the agent test and the behavioural one; the two
        * are kept separately so the agent window's false-negative rate stays measurable.
        */
-      mayhemLikely: labelled.filter((r) => r.features?.mayhemLikely).length,
-      mayhemAgentSeen: labelled.filter((r) => r.features?.mayhem).length,
+      /*
+       * Counted over every row, not over the analysed subset.
+       *
+       * These rows are now excluded from `believable`, so counting them within it
+       * reported zero mayhem on a book that was full of it -- the exclusion would have
+       * hidden the very thing it exists to handle. How often this happens is the
+       * measurement; what it does to a multiple is what the exclusion is for.
+       */
+      mayhemLikely: current.filter((r) => r.features?.mayhemLikely).length,
+      mayhemAgentSeen: current.filter((r) => r.features?.mayhem).length,
       subLaunchPrice: labelled.filter((r) => r.features?.subLaunchPrice).length,
       labelled: labelled.length,
       bought: bought.length,

@@ -6689,6 +6689,27 @@ console.log('\nThe Mayhem split, in the report')
     ...Array.from({ length: 7 }, () => mk(f({ mayhem: false, subLaunchPrice: true, mayhemLikely: true }))),
   ]
   const a = analyze(rows, rows.length)
+  /**
+   * A MAYHEM ROW IS EXCLUDED EVEN WHEN ITS MULTIPLE LOOKS ORDINARY.
+   *
+   * Mayhem mints ~1e9 tokens off-curve, vTokens jumps, and since price = vSol/vTokens the
+   * observed price collapses to roughly a third of a true launch. The peak is unremarkable
+   * -- a median peak market cap of 37.7 SOL against a ~115 completion -- so a multiple
+   * ceiling catches only the tail. On the 2026-09-23 export it dropped 108 rows and left
+   * 845 whose entry was still deflated, with a mean peak of 1.7386x against 1.2719x and a
+   * mean end of 0.7728x against 0.9388x: inflated on peak, far worse on outcome.
+   *
+   * Excluded because the denominator is broken, so the multiple is not evidence either
+   * way -- these rows carry peakMultiple 2, well under the ceiling, and must still go.
+   */
+  check('a mayhem row under the ceiling is excluded from the analysed book',
+    a.totals.mayhemExcluded === 5, JSON.stringify(a.totals.mayhemExcluded))
+  /*
+   * But still COUNTED. Counting them inside the analysed subset reported zero mayhem on a
+   * book that was full of it -- the exclusion would have hidden the thing it exists for.
+   */
+  check('and is still reported, or the exclusion hides what it is for',
+    a.totals.mayhemAgentSeen === 5, JSON.stringify(a.totals.mayhemAgentSeen))
   check('the report counts the agent test and the behavioural one separately',
     a.totals.mayhemAgentSeen === 5 && a.totals.subLaunchPrice === 7,
     JSON.stringify({ agent: a.totals.mayhemAgentSeen, sub: a.totals.subLaunchPrice }))
