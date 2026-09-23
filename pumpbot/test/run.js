@@ -1953,9 +1953,29 @@ console.log('\nExit replay vs the real holding window')
   // Stated purely as a counterfactual: the old `> 1.2`, and then `> 1`, were both
   // pinning whatever the ladder happened to return, so tuning the ladder broke a test
   // about peak ORDERING. The comparison is the property.
+  /**
+   * Asserted on the MECHANISM, not on which outcome is larger.
+   *
+   * "The rung fired" and "the result is better" are different claims, and only the first
+   * is what this test is for. They came apart once the trailing stop was priced at its
+   * measured fill instead of its trigger: on a coin that peaks at 2.0, banking 20% at
+   * +50% and riding the rest into a 50% trail that fills 11.8% low nets very slightly
+   * LESS than simply exiting flat at the time stop. That is a real economic fact about a
+   * small peak, and the old assertion would have called it a regression.
+   *
+   * So test it directly. If the rung fired, changing how much it sells must change the
+   * answer; if it never fired, changing that must change nothing.
+   */
+  const withRung = (pct, over) =>
+    simulateLadder(row(over), { ladder: [{ atPct: 50, sellPct: pct }, { atPct: 900, sellPct: 40 }] })
+  const earlyOver = { firstRungAtSeconds: 120, peakAtSeconds: TIME_STOP + 100 }
+  const unreachOver = { firstRungAtSeconds: TIME_STOP + 100, peakAtSeconds: TIME_STOP + 100 }
   check('a rung that fired early still counts when the PEAK came after the time stop',
-    earlyRungLatePeak > rungOutOfReach,
-    `${earlyRungLatePeak} vs ${rungOutOfReach} when the rung was out of reach`)
+    Math.abs(withRung(20, earlyOver) - withRung(60, earlyOver)) > 1e-6,
+    `${withRung(20, earlyOver)} vs ${withRung(60, earlyOver)} — the rung made no difference`)
+  check('while a rung that was never reached changes nothing whatever it would have sold',
+    Math.abs(withRung(20, unreachOver) - withRung(60, unreachOver)) < 1e-12,
+    `${withRung(20, unreachOver)} vs ${withRung(60, unreachOver)}`)
 
   // The rung itself out of reach: sold by the clock, at the price then standing.
   const lateRung = simulateLadder(row({ firstRungAtSeconds: TIME_STOP + 100, timeStopMultiple: 0.98 }))
@@ -6669,6 +6689,91 @@ console.log('\nExit mix')
   check('so a shift toward the clock is readable rather than an impression',
     snap.collection.exitMix.strategy.reasons[0].reason === 'time stop',
     JSON.stringify(snap.collection.exitMix.strategy.reasons))
+}
+
+
+
+// ------------------------------- the trail is measured, not inferred
+console.log('\nTrailing stop: measurement over inference')
+{
+  const { simulateLadder } = await import('../src/learn.js')
+  const { TRAIL_LEVELS } = await import('../src/journal.js')
+  const LVL = config.exit.trailingDrawdownPct
+  const idx = TRAIL_LEVELS.indexOf(LVL)
+  check('the configured trail level is one we actually record', idx >= 0, String(LVL))
+
+  const base = {
+    v: JOURNAL_VERSION, peakMultiple: 4, endMultiple: 1.2, troughMultiple: 1.0,
+    hasOrdering: true, troughFirst: false, peakAtSeconds: 100, troughAtSeconds: 300,
+  }
+  const withExits = (m) => {
+    const a = TRAIL_LEVELS.map(() => null)
+    a[idx] = m
+    return { ...base, trailExits: a }
+  }
+
+  /**
+   * The measurement must actually be USED. Two rows identical except for the recorded
+   * trail exit must score differently, or the column is decorative.
+   */
+  const low = simulateLadder(withExits(1.1))
+  const high = simulateLadder(withExits(3.0))
+  check('a recorded trail exit drives the result', high > low, `${high} vs ${low}`)
+
+  /**
+   * A NULL entry is a measurement, not missing data: that level never fired, so the
+   * position ran to the window's end. Confusing the two is how "the trail rarely fires"
+   * would get manufactured out of rows that simply predate the recording.
+   */
+  const neverFired = simulateLadder({ ...base, trailExits: TRAIL_LEVELS.map(() => null) })
+  const ranToEnd = simulateLadder(withExits(base.endMultiple))
+  check('a null level means it never fired, so the position ran to the end',
+    near(neverFired, ranToEnd, 1e-9), `${neverFired} vs ${ranToEnd}`)
+
+  /**
+   * And the inference must differ from the measurement, or there was never a bug to fix.
+   * Inferred, this row exits at peak x (1 - 50%) less the measured fill gap; measured, it
+   * exits wherever the tick-time recording says.
+   */
+  const inferred = simulateLadder(base)
+  check('the inference and the measurement genuinely disagree',
+    Math.abs(inferred - simulateLadder(withExits(3.0))) > 1e-6,
+    `${inferred} vs ${simulateLadder(withExits(3.0))}`)
+
+  /**
+   * The fill gap: an inferred trail must NOT be credited with its trigger price. On a
+   * bonding curve the price moves only when somebody trades, so the stop fires at the
+   * next print, which has already jumped past.
+   */
+  const wasGap = config.exit.trailFillGapPct
+  config.exit.trailFillGapPct = 0
+  const noGap = simulateLadder(base)
+  config.exit.trailFillGapPct = wasGap
+  check('an inferred trail is charged the measured fill gap', inferred < noGap,
+    `${inferred} vs ${noGap} at a zero gap`)
+
+  /**
+   * STRICT MODE: refuse rather than infer. This is what any analysis whose conclusion
+   * turns on the trail must use — the inference is look-ahead biased in the trigger, and
+   * no fill correction repairs that.
+   */
+  check('strict mode refuses a row with no trail measurement',
+    simulateLadder(base, { strictTrail: true }) === null)
+  check('but still scores one that has it',
+    Number.isFinite(simulateLadder(withExits(3.0), { strictTrail: true })))
+  check('and a row that never reached the first rung needs no trail at all',
+    Number.isFinite(simulateLadder({ ...base, peakMultiple: 1.1 }, { strictTrail: true })))
+
+  /**
+   * Coverage, so a report can say what fraction of its rows were measured rather than
+   * quietly averaging the two together — the same discipline the sweep already applies
+   * to peak/trough ordering.
+   */
+  const cov = {}
+  simulateLadder(base, { coverage: cov })
+  simulateLadder(withExits(3.0), { coverage: cov })
+  check('coverage counts measured and inferred rows apart',
+    cov.trailTotal === 2 && cov.trailMeasured === 1, JSON.stringify(cov))
 }
 
 

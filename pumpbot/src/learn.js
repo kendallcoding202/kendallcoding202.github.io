@@ -1,5 +1,5 @@
 import { config, PUMP_MAX_ONCURVE_MULTIPLE } from './config.js'
-import { readAll, readRecent, JOURNAL_VERSION } from './journal.js'
+import { readAll, readRecent, JOURNAL_VERSION, TRAIL_LEVELS } from './journal.js'
 import { strategyRecord } from './store.js'
 import { WalletIndex, loadWallets } from './wallets.js'
 
@@ -180,6 +180,48 @@ function multipleAt(row, seconds) {
   return null
 }
 
+/**
+ * WHERE THE TRAILING STOP ACTUALLY EXITED — measured first, inferred only as a fallback.
+ *
+ * This used to be inferred from peak, trough and end, and that inference is look-ahead
+ * biased in a way that is one-directional and unbounded. The bias has two parts:
+ *
+ *  1. THE TRIGGER. A real trail fires on the first drawdown from the peak SO FAR. The
+ *     replay is handed the GLOBAL peak and asks whether the trough ever fell that far
+ *     below it — so a trail that would really have exited early, at a modest running
+ *     peak, is instead credited with the highest price the coin ever reached. The tighter
+ *     the trail, the larger the error: on out-of-sample rows this rated a 2% trail at
+ *     1.29x against the shipped 50% at 1.04x, monotone all the way down, which is the
+ *     shape of an artifact and not a finding. It is why the trailing axis was removed
+ *     from exitSweep rather than left to mislead.
+ *  2. THE FILL. Even when the trigger is right, it assumed the sale cleared exactly at
+ *     the trigger price. Measurement says it clears 11.8% below it at the 50% level.
+ *
+ * `trailExits` fixes both by deciding at tick time, while the running peak really is the
+ * running peak and the future is genuinely unknown. A null entry is a MEASUREMENT too —
+ * that level never fired, so the position ran to the window's end — and must not be
+ * confused with a row that carries no measurement at all.
+ *
+ * For rows written before that recording existed, the inference stays available with the
+ * measured fill gap applied, which corrects part 2 but not part 1. Callers who cannot
+ * tolerate part 1 pass strictTrail and get null instead of a number.
+ */
+function trailFill(row, trailingPct, { peak, trough, end, strict }) {
+  const i = TRAIL_LEVELS.indexOf(trailingPct)
+  if (i >= 0 && Array.isArray(row.trailExits)) {
+    const m = row.trailExits[i]
+    if (m === null) return { multiple: Math.max(end, 0), measured: true }
+    if (Number.isFinite(m)) return { multiple: m, measured: true }
+  }
+  if (strict) return null
+  const trigger = peak * (1 - trailingPct / 100)
+  const filled = trigger * (1 - config.exit.trailFillGapPct / 100)
+  const troughCouldTrail = row.hasOrdering ? !row.troughFirst : true
+  const drewDown = troughCouldTrail && Number.isFinite(trough) && trough <= trigger
+  return { multiple: drewDown ? filled : Math.max(end, 0), measured: false }
+}
+
+
 export function simulateLadder(
   row,
   {
@@ -191,6 +233,14 @@ export function simulateLadder(
     // a deletion so the sweep can price the old behaviour against the same coins.
     sellOnStalePrice = config.exit.sellOnStalePrice,
     stopFillGapShare = config.exit.stopFillGapShare,
+    /**
+     * Refuse to score a row whose trailing exit was never measured, rather than infer it.
+     * Off by default because it excludes almost every row written before tick-time trail
+     * recording existed; on for any analysis whose conclusion turns on the trail.
+     */
+    strictTrail = false,
+    /** Optional {trailTotal, trailMeasured} accumulator, so a report can state coverage. */
+    coverage = null,
     positionSol = livePositionSol(),
   } = {},
 ) {
@@ -315,10 +365,13 @@ export function simulateLadder(
      * without it fall back to the old assumption, which is why the sweep reports what
      * fraction carries ordering.
      */
-    const trailExit = peak * (1 - trailingPct / 100)
-    const troughCouldTrail = row.hasOrdering ? !row.troughFirst : true
-    const drewDown = troughCouldTrail && Number.isFinite(trough) && trough <= trailExit
-    recovered += tokensLeft * (drewDown ? trailExit : Math.max(end, 0))
+    const fill = trailFill(row, trailingPct, { peak, trough, end, strict: strictTrail })
+    if (fill === null) return null // strict mode: refuse rather than infer. See trailFill.
+    if (coverage) {
+      coverage.trailTotal = (coverage.trailTotal ?? 0) + 1
+      if (fill.measured) coverage.trailMeasured = (coverage.trailMeasured ?? 0) + 1
+    }
+    recovered += tokensLeft * fill.multiple
     sells++ // closing the remainder is its own transaction
   }
 

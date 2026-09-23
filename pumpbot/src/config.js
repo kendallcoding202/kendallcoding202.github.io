@@ -970,6 +970,23 @@ export const config = {
      * modelled EV (1.155x -> 1.116x) and that is the point: the replay was quietly
      * booking the best possible fill on the worst trades in the book.
      */
+    /**
+     * How far BELOW its trigger a trailing stop actually fills, as a fraction.
+     *
+     * Measured, not assumed: at the 50% level the median fill is 0.6059 against a median
+     * trigger of 0.7633 over 2,881 tick-time observations — an 11.8% gap. On a bonding
+     * curve the price only moves when somebody trades, so the trail never fires where it
+     * is set; it fires at the next print, which has already jumped past.
+     *
+     * Used ONLY for rows that predate tick-time trail recording. Rows that carry
+     * trailExits are scored from the measurement itself and ignore this entirely.
+     *
+     * The real gap is level-dependent — 19.1% at a 10% trail, 11.8% at 50% — so a single
+     * constant understates the tighter levels. It is a correction to a known-biased
+     * inference, not a substitute for the measurement.
+     */
+    trailFillGapPct: num('TRAIL_FILL_GAP_PCT', 11.8),
+
     stopFillGapShare: num('STOP_FILL_GAP_SHARE', 0.25),
     /**
      * KEEP PRICING A POSITION AFTER ITS CURVE CLOSES.
