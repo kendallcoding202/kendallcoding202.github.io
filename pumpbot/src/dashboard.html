@@ -1189,6 +1189,16 @@ function exitMixLine(mix) {
 }
 
 function mayhemLine(m) {
+  /*
+   * Declared before the first branch that uses it, not after.
+   *
+   * `const` does not hoist, so a call from the `m.seen > 0` branch to a `pct` declared
+   * further down threw "Cannot access 'pct' before initialization" -- every render, from
+   * the moment the bot first SAW a mayhem coin. The page fetched fine and then died
+   * formatting the result, and render() throwing inside the try block was reported as a
+   * network failure, so a formatting bug presented for days as a dead dashboard.
+   */
+  const pct = (v) => v === null ? '—' : (v * 100).toFixed(0) + '%'
   /**
    * Reported on candidates DECIDED, not on ones bought. `screened` counts only launches
    * that passed entry, so once entry started refusing these coins it pinned itself at
@@ -1205,7 +1215,6 @@ function mayhemLine(m) {
         : ' · <span style="color:var(--amber)">being traded (REJECT_MAYHEM off)</span>')
   }
   if (!m.screened) return 'Mayhem agent <span class="dim">nothing screened yet</span>'
-  const pct = (v) => v === null ? '—' : (v * 100).toFixed(0) + '%'
   return 'Mayhem agent seen in <code>' + pct(m.screenedShare) + '</code> of screened launches' +
     (m.entered ? ' · <code>' + pct(m.enteredShare) + '</code> of the ones we BOUGHT' : '') +
     '<br><span class="dim">It trades with equal buy/sell odds for 24h — variance, not demand. ' +

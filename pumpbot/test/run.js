@@ -7159,6 +7159,60 @@ console.log('\nScreened vs passed')
 }
 
 
+/**
+ * THE DASHBOARD'S CLIENT SCRIPT — the one part of this codebase nothing else executes.
+ *
+ * mayhemLine() called a `const pct` declared further down its own body. `const` does not
+ * hoist, so from the moment the bot first SAW a mayhem coin every render threw "Cannot
+ * access 'pct' before initialization". The page fetched its data perfectly and then died
+ * formatting it, and because render() is called inside the fetch try-block, the failure
+ * was reported as "DISCONNECTED" -- a formatting bug that presented for days as a dead
+ * dashboard, and sent us looking at DNS, ports, domains and billing.
+ *
+ * The scan is the real guard: it catches the whole class rather than this one instance.
+ */
+{
+  const html = fs.readFileSync(new URL('../src/dashboard.html', import.meta.url), 'utf8')
+  const scripts = [...html.matchAll(/<script(?![^>]*src=)[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1])
+  check('dashboard page has exactly one inline script', scripts.length === 1, `found ${scripts.length}`)
+  const js = scripts[0] ?? ''
+
+  // Use-before-declaration of a const/let inside any function body.
+  const lines = js.split('\n')
+  const risks = []
+  for (let i = 0; i < lines.length; i++) {
+    const fn = lines[i].match(/^function\s+([A-Za-z0-9_$]+)\s*\(/)
+    if (!fn) continue
+    let end = i + 1
+    while (end < lines.length && lines[end] !== '}') end++
+    const body = lines.slice(i + 1, end)
+    body.forEach((ln, j) => {
+      const decl = ln.match(/^\s*(?:const|let)\s+([A-Za-z0-9_$]+)\s*=/)
+      if (!decl) return
+      const used = new RegExp(`(?:^|[^A-Za-z0-9_$.])${decl[1].replace(/\$/g, '\\$')}\\s*\\(`)
+      for (let k = 0; k < j; k++) {
+        if (used.test(body[k])) { risks.push(`${fn[1]}() uses ${decl[1]}() before declaring it`); break }
+      }
+    })
+  }
+  check('dashboard script has no use-before-declaration', risks.length === 0, risks.join('; '))
+
+  // And exercise the branch that actually broke, with the shape the live bot produces.
+  const src = js.slice(js.indexOf('function mayhemLine'), js.indexOf('\n}', js.indexOf('function mayhemLine')) + 2)
+  const mayhemLine = new Function('num', `${src}\nreturn mayhemLine;`)((v) => String(v))
+  const branches = [
+    ['seen with decided', { seen: 125, decided: 400, rejecting: true, refused: 125, screened: 50 }],
+    ['seen without decided', { seen: 5, decided: 0, rejecting: false, refused: 0, screened: 0 }],
+    ['nothing screened', { seen: 0, screened: 0 }],
+    ['screened, none seen', { seen: 0, screened: 10, screenedShare: 0.25, enteredShare: null, entered: 0 }],
+  ]
+  for (const [label, m] of branches) {
+    let threw = null
+    try { mayhemLine(m) } catch (err) { threw = err.message }
+    check(`mayhemLine renders: ${label}`, threw === null, threw ?? '')
+  }
+}
+
 fs.rmSync(tmp, { recursive: true, force: true })
 
 console.log(`\n${passed} passed, ${failures.length} failed`)
