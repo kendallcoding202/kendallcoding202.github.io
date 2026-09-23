@@ -55,7 +55,15 @@ const MAX_RETRY_WAIT_MS = 4000
  * data grows.
  */
 export async function notify(text, { silent = false, pre = false } = {}) {
-  const tag = config.paper ? '📝 <b>[PAPER]</b> ' : ''
+  /*
+   * Real money is marked explicitly, not by the absence of a mark.
+   *
+   * Paper carried a tag and live carried nothing, which is the wrong way round: once
+   * both bots report into the same chat, the alerts that matter most are the ones with
+   * no marker on them, arriving in the middle of a much noisier paper stream. An
+   * unlabelled message is also indistinguishable from one sent before this existed.
+   */
+  const tag = config.paper ? '📝 <b>[PAPER]</b> ' : '🔴 <b>[LIVE]</b> '
   const body = tag + text
 
   deliveryStats.configured = Boolean(config.telegram.token && config.telegram.chatId)
