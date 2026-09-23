@@ -49,8 +49,11 @@ export class Bot {
    * and `readCurve` for the same reason — the stale-price refresh is an RPC call, and a
    * test that has to reach the chain to check an exit rule is a test nobody trusts.
    */
-  constructor({ feed, logFeed, readCurve = readCurveState } = {}) {
+  constructor({ feed, logFeed, readCurve = readCurveState, getBalance = getSolBalance } = {}) {
     this.readCurve = readCurve
+    // Injected for the same reason readCurve is: the startup balance gate is a rule worth
+    // testing, and a test that must reach the chain to exercise it is a test nobody runs.
+    this.getBalance = getBalance
     this.feed = feed ?? new Feed()
     this.usingRpcTrades = config.feed.tradeSource === 'rpc'
     // One subscription to the program covers every token, so the per-token tape is
@@ -649,11 +652,23 @@ export class Bot {
       this.paperStartSol = config.paperStartSol
       this.walletSol = paperWalletSol(this.paperStartSol)
     } else {
-      this.walletSol = await getSolBalance()
+      this.walletSol = await this.getBalance()
       const needed = buySolFor(this.walletSol) + config.sizing.reserveSol
       if (this.walletSol < needed) {
+        /**
+         * NAME THE WALLET. The address is two lines up and was not in the message.
+         *
+         * "wallet holds 0.0009 SOL" is unanswerable on its own, and it is emitted at the
+         * exact moment the likely cause is that the funded address and the address this
+         * key controls are DIFFERENT ONES — a private key exported from the wrong account
+         * in a multi-account wallet resolves to a real, empty address and fails exactly
+         * like this. Without the pubkey the reader cannot tell that from "the transfer
+         * has not landed yet", and those want opposite actions: re-export, or wait.
+         */
         throw new Error(
-          `wallet holds ${sol(this.walletSol)} — needs at least ${sol(needed)} (one position + reserve)`,
+          `wallet ${pubkey} holds ${sol(this.walletSol)} — needs at least ${sol(needed)} ` +
+            '(one position + reserve). If you funded a different address, this key belongs ' +
+            'to another account — check the address above against the one you sent SOL to.',
         )
       }
     }

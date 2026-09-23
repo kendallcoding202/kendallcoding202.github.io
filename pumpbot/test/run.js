@@ -6967,6 +6967,45 @@ console.log('\nOne trade, one impact number')
 }
 
 
+
+// ------------------------------- an underfunded wallet must say WHICH wallet
+console.log('\nUnderfunded live wallet')
+{
+  const { EventEmitter } = await import('node:events')
+  const { Bot } = await import('../src/bot.js')
+  const { getPublicKey } = await import('../src/wallet.js')
+  class Quiet extends EventEmitter {
+    constructor() { super(); this.watched = new Set() }
+    start() {} async stop() {} watch(m) { this.watched.add(m) } unwatch(m) { this.watched.delete(m) }
+    feedStats() { return { notifications: 0, decoded: 0, kept: 0, connected: true } }
+  }
+  const wasPaper = config.paper
+  config.paper = false
+  // A real, empty wallet — which is exactly what a key exported from the wrong
+  // account looks like. Injected so the test never needs the chain.
+  const bot = new Bot({ feed: new Quiet(), logFeed: new Quiet(), getBalance: async () => 0.0009 })
+  let msg = ''
+  try { await bot.start() } catch (err) { msg = err.message }
+  config.paper = wasPaper
+  try { await bot.stop() } catch { /* never started */ }
+
+  check('an underfunded live wallet refuses to start rather than trading', /needs at least/.test(msg), msg)
+  /**
+   * The address is resolved two lines above the throw and was missing from it. At that
+   * moment the likely cause is that the funded address and the address this key controls
+   * are different — a key exported from the wrong account in a multi-account wallet
+   * resolves to a real, empty address and fails exactly this way. Without the pubkey the
+   * reader cannot separate that from "the transfer has not landed", and the two want
+   * opposite actions.
+   */
+  check('and the message names the wallet, so a wrong key is distinguishable from a late transfer',
+    msg.includes(getPublicKey().toBase58()), msg)
+  check('and says what to compare it against',
+    /different address|sent SOL to/.test(msg), msg)
+  check('while never echoing the key itself', !/PRIVATE_KEY=|[A-Za-z0-9]{80,}/.test(msg), msg)
+}
+
+
 fs.rmSync(tmp, { recursive: true, force: true })
 
 console.log(`\n${passed} passed, ${failures.length} failed`)
