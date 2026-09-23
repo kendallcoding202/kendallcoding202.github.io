@@ -1305,7 +1305,9 @@ var authToken = ''
 async function tick() {
   try {
     const q = authToken ? '?token=' + encodeURIComponent(authToken) : ''
-    const res = await fetch('/api/state' + q, { cache: 'no-store' })
+    // Bounded, so a request that never comes back reports a timeout instead of
+    // leaving the page to look merely disconnected forever.
+    const res = await fetch('/api/state' + q, { cache: 'no-store', signal: AbortSignal.timeout(20000) })
     // The token was rotated or cleared — go back to the unlock screen rather than
     // silently showing a dead page.
     if (res.status === 401) {
@@ -1313,9 +1315,29 @@ async function tick() {
       location.replace('/')
       return
     }
-    if (res.ok) render(await res.json())
-  } catch {
-    document.getElementById('hstat').textContent = 'DISCONNECTED — RETRYING'
+    if (res.ok) {
+      render(await res.json())
+      return
+    }
+    /*
+     * Say WHICH failure this is.
+     *
+     * Every distinct cause -- a timeout, a 500, the container restarting under the
+     * analysis worker, a truncated body -- used to render the same six words, so the
+     * page reported that something was wrong while withholding the only detail that
+     * could fix it. A non-ok status was worse than that: it rendered nothing at all and
+     * left the last good numbers on screen, which reads as a healthy but frozen page.
+     */
+    document.getElementById('hstat').textContent = 'ERROR ' + res.status + ' — RETRYING'
+  } catch (err) {
+    /*
+     * A thrown fetch is a network-level failure, not an HTTP one: the request never
+     * completed. The message distinguishes an abort from a dropped connection, which
+     * are different problems with different fixes.
+     */
+    var why = (err && err.name === 'TimeoutError') ? 'TIMED OUT' : 'DISCONNECTED'
+    var detail = (err && err.message) ? ' (' + String(err.message).slice(0, 80) + ')' : ''
+    document.getElementById('hstat').textContent = why + detail + ' — RETRYING'
   }
 }
 tick()
