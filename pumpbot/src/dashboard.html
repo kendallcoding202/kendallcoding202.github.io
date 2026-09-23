@@ -1033,8 +1033,11 @@ function renderGraduation(g) {
     '<div style="font-size:11px;color:var(--dimmer)">' + num(g.complete) + ' of ' + num(g.needed) +
     ' needed before anything is decided (pre-registered)</div>'
 
+  // The rows live in their own file, so /api/export does not carry them.
+  const dl = '<div style="margin-top:10px"><a href="/api/graduations' + q +
+    '" style="color:var(--amber);font-size:12px">download graduation rows (.jsonl.gz)</a></div>'
   if (!g.powered) {
-    el.innerHTML = head + bar +
+    el.innerHTML = head + bar + dl +
       '<div class="dim" style="margin-top:12px">Not yet powered. The wallet result was reported as ' +
       'negative on n=191 with an interval that could not rule anything out; this one waits for its ' +
       'sample.</div>'
@@ -1046,7 +1049,7 @@ function renderGraduation(g) {
   const verdict = g.clearsToll
     ? '<span style="color:var(--green)">clears the ~5.6pp toll</span>'
     : '<span style="color:var(--red)">does not clear the ~5.6pp toll</span>'
-  el.innerHTML = head + bar +
+  el.innerHTML = head + bar + dl +
     '<div style="margin-top:12px">' + cells + '</div>' +
     '<div style="margin-top:8px">At 240m: <b>' + (g.meanAt240 === null ? '—' : g.meanAt240.toFixed(4) + 'x') +
     '</b> — ' + verdict + '</div>' +

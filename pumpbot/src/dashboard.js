@@ -1,4 +1,5 @@
 import http from 'node:http'
+import zlib from 'node:zlib'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -654,6 +655,36 @@ export function startDashboard(getContext) {
      * signatures, and an ALLOWLIST of columns so a field added to the journal later
      * cannot start riding along in a file that gets shared. See src/export.js.
      */
+    /**
+     * The graduation rows, downloadable.
+     *
+     * They live in their own file precisely so they cannot be averaged into the launch
+     * dataset -- which also means /api/export does not carry them, and on a hosted
+     * platform a file with no download path is a file that cannot be analysed. Gzipped
+     * JSONL rather than CSV: the rows hold a variable-length `mult` array, and flattening
+     * it here would duplicate the export's column logic for a second dataset that is one
+     * day old and still changing shape.
+     */
+    if (url.pathname === '/api/graduations') {
+      try {
+        const rows = readGraduations(200_000)
+        const gz = zlib.gzipSync(Buffer.from(rows.map((r) => JSON.stringify(r)).join('\n') + '\n'))
+        const stamp = new Date().toISOString().slice(0, 10)
+        res.writeHead(200, {
+          'content-type': 'application/gzip',
+          'content-disposition': `attachment; filename="pumpbot-graduations-${stamp}.jsonl.gz"`,
+          'content-length': gz.length,
+          'x-graduation-rows': String(rows.length),
+          'cache-control': 'no-store',
+        })
+        res.end(gz)
+      } catch (err) {
+        res.writeHead(500, { 'content-type': 'text/plain' })
+        res.end(`graduation export failed: ${err.message}`)
+      }
+      return
+    }
+
     if (url.pathname === '/api/export') {
       try {
         const cap = (name, dflt) =>
