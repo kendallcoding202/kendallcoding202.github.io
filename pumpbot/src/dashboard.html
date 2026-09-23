@@ -927,7 +927,27 @@ function storageLine(s) {
       '<br><span style="color:var(--dimmer)">A compact CSV for analysis elsewhere — no addresses, ' +
       'keys or signatures, and the deployer only as a salted hash.</span>'
     : ''
-  return 'Storage <code>' + esc(s.dataDir) + '</code> · journal <code>' + kb + '</code>' +
+  /**
+   * THE VOLUME, in plain numbers. "How big is my disk and how long have I got" should be
+   * readable here rather than looked up in a hosting console — and it is the one figure
+   * that says how urgent a retention plan is.
+   */
+  const v = s.volume
+  const gb = (b) => (b / 1e9).toFixed(2) + ' GB'
+  const volume = v
+    ? ' · volume <code>' + gb(v.usedBytes) + ' of ' + gb(v.totalBytes) + '</code> (' +
+      '<span style="color:' + (v.usedPct >= 85 ? 'var(--red)' : v.usedPct >= 70 ? 'var(--amber)' : 'var(--dim)') +
+      '">' + v.usedPct.toFixed(0) + '% full, ' + gb(v.freeBytes) + ' left</span>)'
+    : ''
+  // Failing writes outrank everything else on this line: it means rows are being lost
+  // right now, which no other indicator on the page reveals.
+  const writes = s.writes && s.writes.consecutive > 0
+    ? '<br><b style="color:var(--red)">JOURNAL NOT BEING WRITTEN — ' + s.writes.consecutive +
+      ' consecutive failures' + (s.writes.lastError ? ': ' + esc(String(s.writes.lastError)) : '') +
+      '. Rows since then are lost and cannot be recovered.</b>'
+    : ''
+  return 'Storage <code>' + esc(s.dataDir) + '</code> · journal <code>' + kb + '</code>' + volume +
+    writes +
     (s.writable ? '' : ' <b style="color:var(--red)">NOT WRITABLE</b>') +
     (s.pendingCheckpoint ? ' · pending observations checkpointed' :
       ' · <span style="color:var(--amber)">no checkpoint yet</span>') +

@@ -5,7 +5,7 @@ import { Candidate, evaluateEntry } from './filter.js'
 import { buy, sell } from './exec.js'
 import { canOpen, riskSummary, rolloverDaily, syncEquityBasis } from './risk.js'
 import { buySolFor, buySolForCurve, tooSmallToTrade, tierFor, sizingSummary } from './sizing.js'
-import { ShadowTracker, CreatorIndex, saveShadow, loadShadow, journalHealth } from './journal.js'
+import { ShadowTracker, CreatorIndex, saveShadow, loadShadow, journalHealth, volumeSpace } from './journal.js'
 import { WalletIndex, saveWallets, loadWallets } from './wallets.js'
 import {
   initStore,
@@ -521,6 +521,28 @@ export class Bot {
     } else if (writes.consecutive === 0 && this.journalAlerted) {
       this.journalAlerted = false
       notify('✅ <b>Journal writes recovered</b> — rows are landing again. Anything lost during the outage is still lost.')
+    }
+
+    /**
+     * And the warning BEFORE any of that, which is the half worth having.
+     *
+     * The alert above fires once rows are already being lost. This one fires while there
+     * is still room to do something — raise the volume, turn on rotation, take a backup.
+     * Latched, so it is said once per crossing rather than every beat.
+     */
+    const vol = volumeSpace()
+    if (vol && vol.usedPct >= config.volumeWarnPct && !this.volumeAlerted) {
+      this.volumeAlerted = true
+      const gb = (b) => (b / 1e9).toFixed(2)
+      log.warn(`data volume ${vol.usedPct.toFixed(0)}% full — ${gb(vol.freeBytes)} GB left`)
+      notify(
+        `⚠️ <b>Data volume ${vol.usedPct.toFixed(0)}% full</b>\n` +
+          `${gb(vol.freeBytes)} GB left of ${gb(vol.totalBytes)} GB at <code>${esc(config.dataDir)}</code>\n` +
+          `When it fills, journal rows are lost silently and cannot be recovered.`,
+      )
+    } else if (vol && vol.usedPct < config.volumeWarnPct - 5 && this.volumeAlerted) {
+      // Five points of hysteresis, so hovering at the threshold does not flap.
+      this.volumeAlerted = false
     }
 
     // Messages arriving but nothing parsing means the feed's field names moved.

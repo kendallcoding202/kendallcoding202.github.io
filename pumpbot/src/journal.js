@@ -134,6 +134,31 @@ export function journalHealth() {
 }
 
 /**
+ * HOW BIG THE VOLUME ACTUALLY IS, and how much of it is left.
+ *
+ * Asked because the answer was otherwise "go and find it in the Railway console", which
+ * is a question nobody should have to navigate a UI to answer about their own bot — and
+ * which gives a number nobody can act on later. statfs reports the real mount, so it is
+ * right whatever the platform is and whether or not a volume got attached at all.
+ *
+ * The last part matters most: if DATA_DIR is NOT on a mounted volume it still reports a
+ * perfectly healthy filesystem — the container's ephemeral disk — so this says how much
+ * room there is, not whether the data survives a redeploy. `storage.ledger` answers that.
+ */
+export function volumeSpace(dir = config.dataDir) {
+  try {
+    const s = fs.statfsSync(dir)
+    const total = s.blocks * s.bsize
+    // bavail, not bfree: bfree counts blocks reserved for root that we cannot use.
+    const free = s.bavail * s.bsize
+    if (!(total > 0)) return null
+    return { totalBytes: total, freeBytes: free, usedBytes: total - free, usedPct: ((total - free) / total) * 100 }
+  } catch {
+    return null
+  }
+}
+
+/**
  * Tests drive this from a known state rather than whatever a previous case left.
  *
  * Clears the memoized `journalPath` as well: it is resolved once on first use and then

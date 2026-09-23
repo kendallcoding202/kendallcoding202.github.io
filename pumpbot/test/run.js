@@ -22,6 +22,13 @@ const { buy, sell } = await import('../src/exec.js')
 const { wilson, simulateLadder, bestThreshold, analyze, roundTripCost } = await import('../src/learn.js')
 const { JOURNAL_VERSION, CreatorIndex } = await import('../src/journal.js')
 const { buildSnapshot } = await import('../src/dashboard.js')
+/**
+ * The volume-full warning must not fire on whatever the machine running the tests has
+ * free — that is a property of the CI box, not of this bot, and it turned two unrelated
+ * "is it collecting" assertions red on a host that happened to be 88% full. Pinned above
+ * 100 here; the test that actually exercises the warning sets it deliberately.
+ */
+config.volumeWarnPct = 101
 
 let passed = 0
 const failures = []
@@ -6148,6 +6155,39 @@ console.log('\nSilent data loss')
   check('and the three failures were really observed while the volume was unavailable',
     journalPath0 === 3, String(journalPath0))
   check('and the dashboard goes back to collecting', buildSnapshot(45, null).collection.collecting)
+
+  /**
+   * AND THE WARNING BEFORE THE FAILURE, which is the half that is actually useful.
+   *
+   * A full-disk alert tells you after rows have already been lost. The volume reading is
+   * what can say it beforehand — and it also answers "how big is this volume anyway"
+   * without anyone navigating a hosting console.
+   */
+  const vol = buildSnapshot(45, null).collection.storage.volume
+  check('the page reports the real size of the mounted volume',
+    vol && vol.totalBytes > 0 && vol.freeBytes >= 0 && vol.usedPct >= 0 && vol.usedPct <= 100,
+    JSON.stringify(vol))
+  check('and used + free accounts for the whole volume',
+    // Guarded: volumeSpace returns null if statfs is unavailable, and a test that throws
+    // takes the whole suite down instead of reporting one clean failure.
+    Boolean(vol) && near(vol.usedBytes + vol.freeBytes, vol.totalBytes, vol.totalBytes * 0.001),
+    vol ? `${vol.usedBytes} + ${vol.freeBytes} vs ${vol.totalBytes}` : 'no volume reading')
+
+  const wasWarn = config.volumeWarnPct
+  config.volumeWarnPct = 0 // any volume is now "too full"
+  const warned = buildSnapshot(45, null)
+  check('a volume past the threshold stops the page claiming it is collecting',
+    !warned.collection.collecting)
+  check('and says how full it is and how much is left, not just that there is a problem',
+    warned.collection.reasons.some((r) => /% full/.test(r) && /GB left of/.test(r)),
+    JSON.stringify(warned.collection.reasons))
+  check('and says WHY it matters — that a full volume loses rows silently',
+    warned.collection.reasons.some((r) => /lost silently/.test(r)))
+
+  config.volumeWarnPct = 101
+  check('and below the threshold it says nothing at all',
+    !buildSnapshot(45, null).collection.reasons.some((r) => /% full/.test(r)))
+  config.volumeWarnPct = wasWarn
 
   fs.rmSync(liveDir, { recursive: true, force: true })
   config.dataDir = realDir

@@ -104,6 +104,16 @@ export const config = {
   dataDir: str('DATA_DIR', path.join(ROOT, '.data')),
 
   /**
+   * How full the data volume may get before the banner says so.
+   *
+   * Warned BEFORE writes start failing, because by the time appends throw, rows are
+   * already being lost and unrecoverable. Configurable mostly so it is not a constant
+   * buried in a health check — and so a test does not inherit whatever the machine
+   * running it happens to have free, which is not a property of this bot.
+   */
+  volumeWarnPct: num('VOLUME_WARN_PCT', 85),
+
+  /**
    * Which build is actually running. Without this, "did my fix deploy?" is answered by
    * inferring from behaviour, which is exactly how you end up debugging a version that
    * is no longer running. Railway injects the first of these; the others cover other

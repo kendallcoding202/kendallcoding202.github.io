@@ -15,7 +15,7 @@ import {
   exploreRecord,
   recordSince,
 } from './store.js'
-import { journalHealth } from './journal.js'
+import { journalHealth, volumeSpace } from './journal.js'
 import { positionPnl } from './position.js'
 import { sizingSummary } from './sizing.js'
 import { consecutiveLossLimit } from './risk.js'
@@ -58,6 +58,12 @@ function storageSnapshot() {
      * everything", and it was not on the page.
      */
     writes: journalHealth(),
+    /**
+     * The real mount, so "how long until this fills up" stops being a question you have
+     * to answer by navigating a hosting console — and starts being one the bot can warn
+     * about BEFORE the writes start failing rather than after.
+     */
+    volume: volumeSpace(),
     journalBytes: journal?.bytes ?? 0,
     ledger: Boolean(stat(config.paper ? 'paper-state.json' : 'live-state.json')),
     // A checkpoint means pending observations will survive the next restart.
@@ -131,6 +137,20 @@ function collectionStatus(stats, storage, learning, analysis = null) {
    * the one that actually happens: the volume fills, appendFileSync throws ENOSPC on
    * every row, and every other indicator on this page stays green.
    */
+  /**
+   * Running OUT of room, said before the writes start failing.
+   *
+   * The failure alert below is the backstop, and a backstop is the wrong place to learn
+   * this: by the time appends throw, rows are already being lost. The default 85% is
+   * late enough not to nag and early enough to act on at ~40 MB/day.
+   */
+  if (storage.volume && storage.volume.usedPct >= config.volumeWarnPct) {
+    reasons.push(
+      `the volume at ${storage.dataDir} is ${storage.volume.usedPct.toFixed(0)}% full ` +
+        `(${(storage.volume.freeBytes / 1e9).toFixed(2)} GB left of ` +
+        `${(storage.volume.totalBytes / 1e9).toFixed(2)} GB) — when it fills, rows are lost silently`,
+    )
+  }
   if (storage.writes?.consecutive > 0) {
     reasons.push(
       `the journal is NOT being written — ${storage.writes.consecutive} consecutive failed writes` +
