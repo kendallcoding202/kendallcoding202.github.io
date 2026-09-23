@@ -678,7 +678,20 @@ export class Bot {
           (p.attempts > 0 ? ` (${((p.trades / p.attempts) * 100).toFixed(0)}%)` : '') +
           ` · ${sol(p.committedSol)} committed of ${sol(config.probe.maxTotalSol)}` +
           (median !== null
-            ? ` · median fill ${median.toFixed(4)}x quoted (${((median - 1) * 100).toFixed(2)}% slip, n=${ratios.length})`
+            ? ` · median fill ${median.toFixed(4)}x quoted (${((median - 1) * 100).toFixed(2)}% slip, n=${ratios.length})` +
+              /*
+               * The individual ratios, not just the median.
+               *
+               * This ledger PERSISTS across deploys, by design -- a restart must not hand
+               * the probe a fresh spending allowance. The side effect is that samples
+               * taken under an older build stay in the array and keep moving the median,
+               * long after the bug that produced them is fixed. A ratio near 1.29 is the
+               * signature of the pre-fix entry-price bug, where rent and fees were divided
+               * into the token count as though they had bought tokens; a clean sample sits
+               * just above 1.00. With n this small the raw list is the only way to see
+               * which of the two a median is actually reporting.
+               */
+              ` [${ratios.map((r) => r.toFixed(3)).join(' ')}]`
             : ' · no fill ratios yet') +
           (topReasons ? ` · failures: ${topReasons}` : ''),
       )
