@@ -10,6 +10,30 @@ import { config, PUMP_TOTAL_SUPPLY } from './config.js'
  * OBSERVE_SECONDS costs us the earliest entry and buys the only edge available at this
  * latency: knowing whether anyone real actually showed up.
  */
+/**
+ * A deterministic observation window for a mint, inside the configured band.
+ *
+ * FNV-1a over the mint. Not Math.random: the sweep re-reads a candidate every few
+ * seconds, so a window that changed between reads would let a launch be judged at one age
+ * with features binned against another — and a random window could not be recomputed from
+ * the journal afterwards, which is exactly what the analysis needs to do.
+ *
+ * Collapses to the fixed window when min and max are equal or the band is nonsense, so
+ * pinning it back is one environment variable and cannot half-apply.
+ */
+export function observeWindowFor(mint) {
+  const lo = Math.max(1, Math.round(config.entry.observeSecondsMin))
+  const hi = Math.max(lo, Math.round(config.entry.observeSecondsMax))
+  if (hi === lo) return lo
+  let h = 2166136261
+  const s = String(mint ?? '')
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return lo + ((h >>> 0) % (hi - lo + 1))
+}
+
 export class Candidate {
   constructor(createEvent) {
     this.mint = createEvent.mint
@@ -106,6 +130,21 @@ export class Candidate {
      * missed — which is exactly the false negative this exists to cover.
      */
     this.sawSubLaunchPrice = false
+
+    /**
+     * THIS LAUNCH'S OWN OBSERVATION WINDOW.
+     *
+     * Derived from the mint rather than drawn at random, for two reasons. It must be
+     * STABLE — the sweep re-reads a candidate every few seconds, and a window that
+     * changed between reads would let a launch be judged at one age and have its features
+     * binned at another. And it must be REPRODUCIBLE, so a row's window can be recomputed
+     * from the journal during analysis instead of being taken on trust.
+     *
+     * Read off the candidate everywhere, never off config, or the thirds that
+     * buyAcceleration is built from would be measured against a different window than the
+     * one the decision was made at.
+     */
+    this.observeSeconds = observeWindowFor(this.mint)
     this.peakMarketCapSol = createEvent.marketCapSol ?? 0
     this.lastEventAt = createEvent.at
   }
@@ -136,7 +175,7 @@ export class Candidate {
     }
 
     const ageMs = event.at - this.createdAt
-    const windowMs = Math.max(1, config.entry.observeSeconds * 1000)
+    const windowMs = Math.max(1, this.observeSeconds * 1000)
 
     if (event.kind === 'buy') {
       this.buys++

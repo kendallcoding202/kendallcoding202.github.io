@@ -579,6 +579,32 @@ export const config = {
    */
   entry: {
     observeSeconds: num('OBSERVE_SECONDS', 30),
+
+    /**
+     * RANDOMISED OBSERVATION WINDOW, so "is 30 seconds right?" becomes answerable.
+     *
+     * It currently is not, from any export this bot produces. Every row carries the same
+     * f_observeSeconds, so there is no variation to learn from — a regression of outcome
+     * on window length has one x value. No amount of further collection fixes that. The
+     * question has been open since the first week and would have stayed open forever.
+     *
+     * So spend a little edge to buy the variation. Each launch is assigned its own window
+     * in [min, max], and the window is journalled, so the analysis can finally condition
+     * on it. Set both to the same number to pin it back to fixed behaviour.
+     *
+     * WHAT THIS COSTS, stated plainly. buyAcceleration is thirds of the window, so a
+     * launch judged at 10s and one judged at 60s do not mean the same thing by
+     * `accel >= 1` — the construct is the same (is buying speeding up over what we
+     * watched) but the threshold was fitted at 30. Fewer buyers accumulate in a short
+     * window, so organicBuyers and topBuyerShare are noisier there too. Some decisions
+     * will therefore be worse than the fixed-window ones would have been.
+     *
+     * That is an acceptable price HERE and would not be everywhere: the book is at best
+     * break-even, so the marginal EV being risked is near zero, while the information is
+     * the only route to an answer. Revisit if the book ever starts earning.
+     */
+    observeSecondsMin: num('OBSERVE_SECONDS_MIN', 10),
+    observeSecondsMax: num('OBSERVE_SECONDS_MAX', 60),
     // Give up on a token that never qualifies, so the watch list cannot grow forever.
     abandonSeconds: num('ABANDON_SECONDS', 180),
     /**

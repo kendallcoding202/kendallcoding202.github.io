@@ -621,7 +621,9 @@ export function featuresOf(candidate, creatorIndex = null, walletIndex = null) {
     creatorTier: creatorIndex
       ? creatorIndex.tier(candidate.creator, { minLaunches: config.entry.minCreatorLaunches })
       : CREATOR_TIER.unknown,
-    observeSeconds: config.entry.observeSeconds,
+    // The window THIS launch was judged on. It varies per launch now, which is the
+    // whole point: with one constant there was nothing to regress outcome against.
+    observeSeconds: candidate.observeSeconds ?? config.entry.observeSeconds,
   }
 }
 

@@ -30,6 +30,17 @@ const { buildSnapshot } = await import('../src/dashboard.js')
  */
 config.volumeWarnPct = 101
 
+/**
+ * Pin the observation window for the suite. Fixtures place their buys at offsets chosen
+ * for a 30-second window, and the window is now drawn per mint from a band — so a fixture
+ * whose mint happens to draw 14s has its thirds land somewhere else entirely and
+ * buyAcceleration measures something the fixture never meant. Setting min == max collapses
+ * the draw to the fixed value, which is also the documented way to pin it in production.
+ * The test that exercises the randomisation sets its own band.
+ */
+config.entry.observeSecondsMin = config.entry.observeSeconds
+config.entry.observeSecondsMax = config.entry.observeSeconds
+
 let passed = 0
 const failures = []
 function check(name, cond, detail = '') {
@@ -6848,6 +6859,78 @@ console.log('\nThe fill probe, on its own defaults')
 
   config.probe.enabled = wasEnabled
   config.probe.positionSol = wasSize
+}
+
+
+
+// ------------------------------- buying the variation the question needs
+console.log('\nRandomised observation window')
+{
+  const { observeWindowFor, Candidate } = await import('../src/filter.js')
+  const { normalizeEvent } = await import('../src/curve.js')
+  const lo = 10, hi = 60
+  const wasMin = config.entry.observeSecondsMin, wasMax = config.entry.observeSecondsMax
+  config.entry.observeSecondsMin = lo
+  config.entry.observeSecondsMax = hi
+
+  const many = Array.from({ length: 4000 }, (_, i) => observeWindowFor('mint' + i))
+  check('every window lands inside the configured band',
+    many.every((w) => w >= lo && w <= hi), `${Math.min(...many)}..${Math.max(...many)}`)
+  check('and the band is actually covered, not clustered on one value',
+    new Set(many).size > (hi - lo) * 0.8, String(new Set(many).size))
+
+  /**
+   * STABILITY IS THE WHOLE DESIGN. The sweep re-reads a candidate every few seconds; a
+   * window that changed between reads would let a launch be judged at one age while its
+   * features were binned against another, which is a corruption that would look exactly
+   * like noise in the very regression this exists to enable.
+   */
+  check('the same mint always draws the same window',
+    observeWindowFor('SOMEMINT') === observeWindowFor('SOMEMINT'))
+  check('and it is recomputable from the mint alone, for analysis after the fact',
+    observeWindowFor('SOMEMINT') === observeWindowFor(String('SOMEMINT')))
+
+  /**
+   * The thirds buyAcceleration is built from must use the CANDIDATE'S window, not the
+   * global constant. Reading config here would bin every launch against 30s while it was
+   * decided at its own age — features and decision describing different windows.
+   */
+  const mk = (mint) => new Candidate(normalizeEvent({
+    txType: 'create', mint, traderPublicKey: 'DEV', name: 'W', symbol: 'W',
+    initialBuy: 1e6, solAmount: 0.5, vSolInBondingCurve: 30,
+    vTokensInBondingCurve: 1.073e9, marketCapSol: 28,
+  }))
+  const shortM = Array.from({ length: 400 }, (_, i) => 'sm' + i).find((m) => observeWindowFor(m) <= 15)
+  const longM = Array.from({ length: 400 }, (_, i) => 'lg' + i).find((m) => observeWindowFor(m) >= 55)
+  check('the band produces both short and long fixtures to compare', Boolean(shortM && longM),
+    `${shortM} / ${longM}`)
+
+  const c = mk(shortM)
+  check('a candidate carries its own window', c.observeSeconds === observeWindowFor(shortM),
+    `${c.observeSeconds} vs ${observeWindowFor(shortM)}`)
+
+  /**
+   * A buy at 12s is in the LAST third of a 15s window and the FIRST third of a 60s one.
+   * If the thirds were taken from config both candidates would bin it identically, and
+   * the difference this test looks for would vanish.
+   */
+  const at = (cand, ms) => cand.apply({
+    kind: 'buy', mint: cand.mint, trader: 'W' + ms, solAmount: 0.05, tokenAmount: 1000,
+    priceSol: 3e-8, vSol: 30, vTokens: 1.073e9, marketCapSol: 28, at: cand.createdAt + ms,
+  })
+  const shortC = mk(shortM), longC = mk(longM)
+  for (const ms of [1000, 12000]) { at(shortC, ms); at(longC, ms) }
+  check('the same tape bins differently under different windows',
+    shortC.lateBuys !== longC.lateBuys || shortC.earlyBuys !== longC.earlyBuys,
+    `short e=${shortC.earlyBuys} l=${shortC.lateBuys} · long e=${longC.earlyBuys} l=${longC.lateBuys}`)
+
+  /** Pinning must collapse the draw entirely — the documented escape hatch. */
+  config.entry.observeSecondsMin = 30
+  config.entry.observeSecondsMax = 30
+  check('setting min == max pins every launch to the fixed window',
+    ['a', 'b', 'c', 'zzz'].every((m) => observeWindowFor(m) === 30))
+  config.entry.observeSecondsMin = wasMin
+  config.entry.observeSecondsMax = wasMax
 }
 
 

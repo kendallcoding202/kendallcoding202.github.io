@@ -1071,7 +1071,8 @@ export class Bot {
         if (!this.shadow?.has(mint)) this.feed.unwatch(mint)
         continue
       }
-      if (candidate.ageSeconds < config.entry.observeSeconds) continue
+      // The candidate's OWN window, not the global one — see observeWindowFor.
+      if (candidate.ageSeconds < candidate.observeSeconds) continue
 
       const verdict = evaluateEntry(candidate, { creatorPrior: this.#creatorPrior(candidate.creator) })
       this.candidates.delete(mint)
