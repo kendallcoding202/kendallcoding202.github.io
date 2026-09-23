@@ -149,7 +149,7 @@ export async function buy({ mint, solAmount, curve, pool }) {
         const landed = await alreadyLanded(sent, mint)
         if (landed) {
           log.warn(`buy retry avoided — ${landed.sig.slice(0, 8)} actually landed`)
-          return finishBuy(mint, landed.fill, landed.sig)
+          return finishBuy(mint, landed.fill, landed.sig, solAmount)
         }
       }
 
@@ -165,7 +165,7 @@ export async function buy({ mint, solAmount, curve, pool }) {
       const fill = await fillFromTransaction(signature, mint)
       if (!fill) throw new Error('transaction sent but its effect could not be measured')
 
-      return finishBuy(mint, fill, signature)
+      return finishBuy(mint, fill, signature, solAmount)
     } catch (err) {
       lastError = err
       log.warn(`buy attempt ${attempt}/${config.exec.maxRetries} failed: ${err.message}`)
@@ -178,7 +178,7 @@ export async function buy({ mint, solAmount, curve, pool }) {
   if (landed) {
     log.warn('buy reported failure but a transaction landed — adopting it')
     try {
-      return finishBuy(mint, landed.fill, landed.sig)
+      return finishBuy(mint, landed.fill, landed.sig, solAmount)
     } catch (err) {
       return { ok: false, error: err.message }
     }
@@ -192,20 +192,49 @@ export async function buy({ mint, solAmount, curve, pool }) {
  * entry price cannot be exited correctly, so refusing here is far better than storing
  * it — an unusable fill should read as a failed buy.
  */
-function finishBuy(mint, fill, signature) {
+export function finishBuy(mint, fill, signature, swapSol) {
   const tokensReceived = fill.tokenDelta
   const solSpent = -fill.solDelta // buys move SOL out, so the delta is negative
 
   if (!(tokensReceived > 0)) throw new Error('transaction landed but no tokens arrived')
   if (!(solSpent > 0)) throw new Error(`measured a non-positive cost (${solSpent}) — refusing to open`)
 
-  const avgPriceSol = solSpent / tokensReceived
+  /**
+   * THE ENTRY PRICE IS WHAT THE SWAP PAID PER TOKEN — NOT THE WALLET DELTA PER TOKEN.
+   *
+   * This divided the whole balance change by the tokens received, which folds the network
+   * fee and, far worse, the ~0.00204 SOL of rent for a newly created token account into
+   * the PRICE of the asset. Those are costs of transacting; they buy no tokens and they
+   * are not what the market charged.
+   *
+   * The consequence was not a rounding error, it was a broken position. Every exit rule
+   * compares the live curve price against entryPriceSol, so inflating the entry inflates
+   * the loss on tick one: at a 0.01 SOL position the overhead is 25% of the trade, the
+   * position opens at about -20% before the market has moved at all, and a -15% stop
+   * fires within seconds. That is exactly what the first live run did — RANKR stopped at
+   * -28.4% after 3 seconds, SADA at -17.5% after 12, and SADA sold back the same 292,584
+   * tokens it bought for ~0.0099 against 0.0100 in. Neither was a market loss. The bot
+   * stopped itself out on its own accounting.
+   *
+   * It is a LIVE-ONLY fault that scales with position size — rent does not exist in paper,
+   * and at the strategy's 0.15 SOL it is a 1.7% nudge nobody would ever notice. Only the
+   * probe's deliberately tiny size made it visible.
+   *
+   * solSpent stays the full outflow, because P&L should count every lamport that left. The
+   * split is the point: DECISIONS use the price, ACCOUNTING uses the cost.
+   */
+  const swapped = Number.isFinite(swapSol) && swapSol > 0 ? Math.min(swapSol, solSpent) : solSpent
+  const avgPriceSol = swapped / tokensReceived
   if (!(avgPriceSol > 0) || !Number.isFinite(avgPriceSol)) {
     throw new Error(`measured an unusable entry price (${avgPriceSol}) — refusing to open`)
   }
+  const overheadSol = solSpent - swapped
 
-  log.info(`BUY ${mint} filled: ${tokensReceived.toFixed(0)} tokens for ${sol(solSpent)}`)
-  return { ok: true, tokensReceived, solSpent, avgPriceSol, signature }
+  log.info(
+    `BUY ${mint} filled: ${tokensReceived.toFixed(0)} tokens for ${sol(swapped)}` +
+      (overheadSol > 0 ? ` (+${sol(overheadSol)} rent/fees, ${sol(solSpent)} total)` : ''),
+  )
+  return { ok: true, tokensReceived, solSpent, swapSol: swapped, overheadSol, avgPriceSol, signature }
 }
 
 export async function sell({ mint, tokenAmount, curve, pool, paperCredit = 0 }) {
@@ -318,7 +347,12 @@ function paperBuy({ mint, solAmount, curve }) {
     ok: true,
     tokensReceived,
     solSpent,
-    avgPriceSol: solSpent / tokensReceived,
+    swapSol: solAmount,
+    overheadSol: config.exec.priorityFeeSol,
+    // The SWAP price, matching the live path. Folding the priority fee in is 0.3% at the
+    // strategy's size and 5% at the probe's — small enough to hide, large enough to
+    // misprice an exit, and there is no reason for the two executors to differ.
+    avgPriceSol: solAmount / tokensReceived,
     signature: `paper-buy-${Date.now()}`,
     paper: true,
   }

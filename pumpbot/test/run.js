@@ -7006,6 +7006,94 @@ console.log('\nUnderfunded live wallet')
 }
 
 
+
+// ------------------------------- the entry price is a price, not a cost basis
+console.log('\nEntry price vs cost basis')
+{
+  const { decideExit } = await import('../src/position.js')
+  const { buy } = await import('../src/exec.js')
+
+  /**
+   * THE FIRST LIVE RUN STOPPED ITSELF OUT ON ARITHMETIC.
+   *
+   * finishBuy divided the whole wallet delta by tokens received, folding the network fee
+   * and ~0.00204 SOL of rent for a new token account into the PRICE of the asset. Exit
+   * rules compare the live curve price against entryPriceSol, so an inflated entry is an
+   * instant loss: at a 0.01 SOL position the overhead is a quarter of the trade, the
+   * position opens around -20%, and the -15% stop fires within seconds. RANKR stopped at
+   * -28.4% after 3s; SADA at -17.5% after 12s having sold back the same 292,584 tokens
+   * for ~0.0099 against 0.0100 in. Neither was a market loss.
+   */
+  const RENT = 0.00203928
+  const swap = 0.01
+  const tokens = 292585
+  const marketPrice = swap / tokens
+
+  // What the old code produced: cost basis masquerading as a price.
+  const inflated = (swap + RENT + config.exec.priorityFeeSol) / tokens
+  const mk = (entryPriceSol) => ({
+    mint: 'M', symbol: 'S', state: 'open', openedAt: Date.now(),
+    entryPriceSol, tokensBought: tokens, tokensRemaining: tokens,
+    solSpent: swap + RENT + config.exec.priorityFeeSol, solRecovered: 0,
+    rungsHit: [], peakPriceSol: entryPriceSol, lastPriceSol: entryPriceSol,
+    lastPriceAt: Date.now(), entryVSol: 30, fills: [],
+  })
+
+  // The market has not moved: the curve still quotes exactly what we paid for the tokens.
+  const flatOld = decideExit(mk(inflated), { priceSol: marketPrice, vSol: 30 })
+  check('the OLD basis stops out a position the market has not moved',
+    flatOld.sellAll && /stop-loss/.test(flatOld.reasons[0] ?? ''), JSON.stringify(flatOld.reasons))
+
+  const flatNew = decideExit(mk(marketPrice), { priceSol: marketPrice, vSol: 30 })
+  check('the swap price does not', !flatNew.sellAll && flatNew.sellTokens === 0,
+    JSON.stringify(flatNew.reasons))
+
+  /** And a real fall must still stop it — the fix must not disable the rule. */
+  const fell = decideExit(mk(marketPrice), { priceSol: marketPrice * 0.8, vSol: 30 })
+  check('but a genuine 20% fall still stops out',
+    fell.sellAll && /stop-loss/.test(fell.reasons[0] ?? ''), JSON.stringify(fell.reasons))
+
+  /**
+   * The two numbers must stay SEPARATE, not merged. P&L should still count every lamport
+   * that left the wallet — the rent is really gone — while decisions use the price.
+   */
+  /**
+   * THE LIVE PATH, directly. The paper executor never creates a token account, so the
+   * rent — the term that actually broke this — only exists here. Driving finishBuy with
+   * the deltas a real transaction produced is the only way to pin the arithmetic that
+   * cost real SOL; without it, reverting the fix fails nothing on the live side.
+   */
+  const { finishBuy } = await import('../src/exec.js')
+  const liveFill = { tokenDelta: tokens, solDelta: -(swap + RENT + config.exec.priorityFeeSol) }
+  const live = finishBuy('M', liveFill, 'sig', swap)
+  check('the LIVE fill prices the swap, not the wallet delta',
+    near(live.avgPriceSol, marketPrice, 1e-15), `${live.avgPriceSol} vs ${marketPrice}`)
+  check('and separates the rent and fee out as overhead',
+    near(live.overheadSol, RENT + config.exec.priorityFeeSol, 1e-12), String(live.overheadSol))
+  check('while solSpent remains every lamport that left the wallet',
+    near(live.solSpent, swap + RENT + config.exec.priorityFeeSol, 1e-12), String(live.solSpent))
+  /**
+   * Without the requested amount there is nothing to divide by but the delta, so it must
+   * degrade to the old behaviour rather than invent a number — and a swap that somehow
+   * exceeded the outflow must be clamped, never trusted.
+   */
+  check('with no swap figure it falls back to the delta rather than guessing',
+    near(finishBuy('M', liveFill, 'sig').avgPriceSol, live.solSpent / tokens, 1e-15))
+  check('and a swap larger than the outflow is clamped, not believed',
+    near(finishBuy('M', liveFill, 'sig', 999).avgPriceSol, live.solSpent / tokens, 1e-15))
+
+  const f = await buy({ mint: 'M', solAmount: 0.01, curve: { vSol: 30, vTokens: 1.073e9 } })
+  check('the paper fill reports the swap price, not the cost basis',
+    near(f.avgPriceSol, 0.01 / f.tokensReceived, 1e-12),
+    `${f.avgPriceSol} vs ${0.01 / f.tokensReceived}`)
+  check('while solSpent still carries the full outflow for P&L',
+    f.solSpent > 0.01 && near(f.solSpent, 0.01 + config.exec.priorityFeeSol, 1e-12),
+    String(f.solSpent))
+  check('and the overhead is reported rather than hidden inside the price',
+    near(f.overheadSol, f.solSpent - f.swapSol, 1e-12), JSON.stringify({ o: f.overheadSol, s: f.swapSol }))
+}
+
+
 fs.rmSync(tmp, { recursive: true, force: true })
 
 console.log(`\n${passed} passed, ${failures.length} failed`)
