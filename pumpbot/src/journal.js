@@ -85,6 +85,23 @@ export const PATH_CHECKPOINTS = [2, 5, 10, 30, 60, 120, 180, 300, 450, 600, 900]
  */
 export const TRAIL_LEVELS = [10, 15, 20, 25, 35, 50]
 
+/**
+ * The buyers a wallet prior may look at: everyone except the dev and the Mayhem agent.
+ *
+ * Derived here rather than read off the candidate, so a caller that passes a plain object
+ * — every test fixture, and anything reconstructed from a checkpoint — gets the SAME
+ * exclusion instead of silently getting an empty list. Preferring the getter and falling
+ * back to `[]` is what the first version did, and it turned "score the right wallets"
+ * into "score no wallets" without failing anything.
+ */
+function organicBuyersOf(candidate) {
+  if (Array.isArray(candidate?.organicBuyerList)) return candidate.organicBuyerList
+  const set = new Set(candidate?.buyers ?? [])
+  set.delete(candidate?.creator)
+  set.delete(config.mayhem.agentWallet)
+  return [...set]
+}
+
 let journalPath = null
 
 function file() {
@@ -489,7 +506,9 @@ export function featuresOf(candidate, creatorIndex = null, walletIndex = null) {
    * outcomes that finalized earlier — the same discipline the deployer prior uses, and
    * the reason neither can see its own result.
    */
-  const buyers = walletIndex ? walletIndex.scoreBuyers([...(candidate.buyers ?? [])]) : null
+  // organicBuyerList, not the raw set: scoring the dev and the Mayhem agent as candidate
+  // "smart" wallets is what made agentBuys>0 imply smartBuyers>=1 in 821 of 821 rows.
+  const buyers = walletIndex ? walletIndex.scoreBuyers(organicBuyersOf(candidate)) : null
   return {
     smartBuyers: buyers?.smartBuyers ?? 0,
     knownBuyers: buyers?.knownBuyers ?? 0,
@@ -735,7 +754,14 @@ export class ShadowTracker {
        * addresses at 44 characters would add ~2.6 KB to every journalled row and roughly
        * triple a file that is already the memory ceiling, so it is dropped at append.
        */
-      buyers: config.learning.walletPrior ? [...(candidate.buyers ?? [])] : [],
+      /**
+       * The list the index LEARNS from, with the dev and the agent removed for the same
+       * reason they are removed from the score. The agent buys thousands of launches, so
+       * leaving it in gives it the largest sample in the index by a wide margin — on a
+       * wallet that is running a random walk by design, which is the exact opposite of
+       * the informed actor the prior is meant to find.
+       */
+      buyers: config.learning.walletPrior ? organicBuyersOf(candidate) : [],
       ticks: 0,
     })
   }

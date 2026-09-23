@@ -197,12 +197,32 @@ export class Candidate {
     return Math.min(100, Math.max(0, sold * 100))
   }
 
-  /** Buyers who are neither the dev nor the Mayhem agent — the number that matters. */
-  get organicBuyers() {
+  /**
+   * Buyers who are neither the dev nor the Mayhem agent — the WALLETS, not just a count.
+   *
+   * The count had this exclusion and the list did not, so everything downstream of the
+   * list kept the two wallets the count exists to remove. The wallet prior both SCORED
+   * and LEARNED from the raw set: `scoreBuyers([...candidate.buyers])` and
+   * `note(w, ...)` over `row.buyers`.
+   *
+   * The agent is the damaging one. It buys thousands of launches, so it clears
+   * minWalletLaunches faster than any real wallet can and then sits in the index with an
+   * enormous sample — which means it is plausibly one of the wallets the report calls
+   * "beating the market", and it is scored as a smart buyer on every coin it touches.
+   * The fingerprint is unmistakable: agentBuys>0 implies smartBuyers>=1 in 821 of 821
+   * rows, where chance would give about 55. That is a deterministic leak, not a
+   * correlation. And the whole point of the prior is to ask what INFORMED actors do,
+   * while this one is running a coin flip by design.
+   */
+  get organicBuyerList() {
     const set = new Set(this.buyers)
     set.delete(this.creator)
     set.delete(config.mayhem.agentWallet)
-    return set.size
+    return [...set]
+  }
+
+  get organicBuyers() {
+    return this.organicBuyerList.length
   }
 
   /**

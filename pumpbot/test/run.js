@@ -2708,6 +2708,56 @@ console.log('\nWallet prior')
     t.onTrade({ mint: 'LEAK', priceSol: 2e-7 }, Date.now() + 1000)
     const done = t.finalize('LEAK')
     check('only finalizing does', wi.byWallet.get('W1')?.launches === 1)
+
+    /**
+     * AND THE AGENT MUST NOT BE IN THE INDEX AT ALL.
+     *
+     * The wallet prior asks what INFORMED actors do. pump.fun's Mayhem agent trades with
+     * equal buy/sell probability by design — a coin flip — and it buys thousands of
+     * launches, so it clears minWalletLaunches faster than any real wallet and then sits
+     * on the largest sample in the index. It was both LEARNED FROM and SCORED: the
+     * fingerprint was agentBuys>0 implying smartBuyers>=1 in 821 of 821 rows, where
+     * chance gives about 55. A deterministic leak, not a correlation.
+     *
+     * The dev goes too, for the same reason organicBuyers already excluded it: the
+     * creator's own buy is not an independent opinion about the coin.
+     */
+    const wi2 = new WalletIndex({ maxWallets: 1000 })
+    const t2 = new ShadowTracker({ maxTracked: 10, windowMs: 900_000, walletIndex: wi2 })
+    t2.track({
+      candidate: {
+        mint: 'AGENT', symbol: 'AG', creator: 'DEV', createdAt: Date.now(), priceSol: 1e-7,
+        buyers: new Set(['REAL1', 'DEV', config.mayhem.agentWallet, 'REAL2']),
+      },
+      verdict: { pass: true, failed: [] }, action: 'bought',
+    })
+    t2.onTrade({ mint: 'AGENT', priceSol: 2e-7 }, Date.now() + 1000)
+    t2.finalize('AGENT')
+    check('the Mayhem agent is never credited into the wallet index',
+      !wi2.byWallet.has(config.mayhem.agentWallet),
+      [...wi2.byWallet.keys()].join(','))
+    check('nor is the dev, whose own buy is not an independent opinion',
+      !wi2.byWallet.has('DEV'), [...wi2.byWallet.keys()].join(','))
+    check('while the real buyers still are — the exclusion must not empty the list',
+      wi2.byWallet.get('REAL1')?.launches === 1 && wi2.byWallet.get('REAL2')?.launches === 1,
+      [...wi2.byWallet.keys()].join(','))
+
+    /**
+     * And the SCORING side, which is the half that reaches the journal row. A plain
+     * object is used deliberately: every fixture and every checkpoint-restored row is
+     * one, and the first version of this fix read a getter that only a real Candidate
+     * has, so it scored nobody at all and failed nothing.
+     */
+    const wi3 = new WalletIndex({ maxWallets: 1000 })
+    for (let i = 0; i < 40; i++) wi3.note(config.mayhem.agentWallet, true, Date.now())
+    for (let i = 0; i < 40; i++) wi3.note('REAL1', true, Date.now())
+    const scored = wi3.scoreBuyers(
+      [...new Set(['REAL1', config.mayhem.agentWallet])].filter(
+        (w) => w !== config.mayhem.agentWallet,
+      ),
+    )
+    check('an agent that has somehow entered the index cannot be scored as a smart buyer',
+      scored.smartBuyers <= 1, JSON.stringify(scored))
     check('and it credits the outcome that actually happened',
       wi.byWallet.get('W1').hits === (done.hitFirstRung ? 1 : 0))
 
