@@ -1020,6 +1020,19 @@ function memoryLine(a) {
  * a dozen rows must never be presented as an answer -- the page says how far from an
  * answer it is, which is the honest thing to show while data accumulates.
  */
+/**
+ * The token, as a query string, for links the page builds.
+ *
+ * There were two `const q` in this file, both function-scoped, and referencing one from
+ * a third function is a ReferenceError that kills only that render -- the card goes
+ * blank while every panel above it paints normally. That is the second time today a bad
+ * reference inside render() has presented as a layout problem rather than an error, so
+ * it is a hoisted top-level function now and there is one of it.
+ */
+function tokenQuery() {
+  return (typeof authToken === 'string' && authToken) ? '?token=' + encodeURIComponent(authToken) : ''
+}
+
 function renderGraduation(g) {
   const sec = document.getElementById('gradsec')
   if (!g) { sec.hidden = true; return }
@@ -1036,7 +1049,7 @@ function renderGraduation(g) {
     ' needed before anything is decided (pre-registered)</div>'
 
   // The rows live in their own file, so /api/export does not carry them.
-  const dl = '<div style="margin-top:10px"><a href="/api/graduations' + q +
+  const dl = '<div style="margin-top:10px"><a href="/api/graduations' + tokenQuery() +
     '" style="color:var(--amber);font-size:12px">download graduation rows (.jsonl.gz)</a></div>'
   if (!g.powered) {
     el.innerHTML = head + bar + dl +

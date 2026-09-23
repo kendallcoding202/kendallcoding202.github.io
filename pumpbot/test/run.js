@@ -7411,6 +7411,48 @@ console.log('\nThe graduation collector')
   }
   check('dashboard script has no use-before-declaration', risks.length === 0, risks.join('; '))
 
+  /**
+   * RENDERERS ARE EXECUTED, not just scanned.
+   *
+   * The use-before-declaration scan below catches a `const` referenced above itself, but
+   * not an identifier that is simply not in scope -- and renderGraduation referenced a
+   * `q` that lived inside two OTHER functions. That throws a ReferenceError, kills that
+   * one render, and leaves its card blank while every panel above it paints normally, so
+   * it reads as a layout problem rather than an error. Twice in one day a bad reference
+   * inside render() presented that way. Running the function is the only check that
+   * catches both.
+   */
+  {
+    const slice = (name) => {
+      const i = js.indexOf(`function ${name}(`)
+      return js.slice(i, js.indexOf('\n}', i) + 2)
+    }
+    const src = [slice('tokenQuery'), slice('renderGraduation')].join('\n')
+    const made = {}
+    const doc = { getElementById: (id) => (made[id] ??= { hidden: true, innerHTML: '' }) }
+    const render = new Function('document', 'authToken', 'num', `${src}\nreturn renderGraduation;`)(
+      doc, 'tok', (v) => String(v))
+    const base = { tracking: 4, recorded: 0, complete: 0, needed: 300, powered: false,
+      quietShare: null, checkpoints: [1, 5], curve: [{ min: 1, n: 0, mean: null }] }
+    let threw = null
+    try { render(base) } catch (err) { threw = err.message }
+    check('renderGraduation runs before it is powered', threw === null, threw ?? '')
+    check('and actually fills the card rather than leaving it blank',
+      (made.grad?.innerHTML ?? '').length > 50, String(made.grad?.innerHTML?.length))
+    check('and unhides its section', made.gradsec?.hidden === false)
+    threw = null
+    try {
+      render({ ...base, complete: 400, powered: true, meanAt240: 1.21, clearsToll: true,
+        quietShare: 0.3, curve: [{ min: 1, n: 400, mean: 1.02 }, { min: 240, n: 400, mean: 1.21 }] })
+    } catch (err) { threw = err.message }
+    check('and runs once it IS powered, which is a different branch', threw === null, threw ?? '')
+    check('the powered card reports the 240m figure', (made.grad?.innerHTML ?? '').includes('1.2100'),
+      (made.grad?.innerHTML ?? '').slice(0, 80))
+    // Null hides the section rather than throwing.
+    render(null)
+    check('and a missing block hides the section instead of erroring', made.gradsec?.hidden === true)
+  }
+
   // And exercise the branch that actually broke, with the shape the live bot produces.
   const src = js.slice(js.indexOf('function mayhemLine'), js.indexOf('\n}', js.indexOf('function mayhemLine')) + 2)
   const mayhemLine = new Function('num', `${src}\nreturn mayhemLine;`)((v) => String(v))
