@@ -765,6 +765,28 @@ export const config = {
      * on so the threshold scan can say where the cut actually belongs.
      */
     maxDevSoldPct: num('MAX_DEV_SOLD_PCT', 50),
+
+    /**
+     * Refuse coins whose token supply is not conserved — pump.fun's Mayhem mode.
+     *
+     * ON by default, and this is a RISK decision rather than an edge one. Mayhem mints an
+     * extra billion tokens outside the curve, which breaks every bound this bot reasons
+     * with: the appreciation ceiling, the reserve ceiling, the launch-price floor. Every
+     * physically impossible outcome in the 23 Sep export whose launch reserves we know
+     * was one of these coins.
+     *
+     * The prices are probably REAL. That is not the same as tradeable, and the difference
+     * is the one thing paper cannot see: pump.fun's own docs warn that once the agent is
+     * a net seller its extra billion are in circulation and "there may be some holders
+     * who cannot sell their tokens into the bonding curve due to the lack of liquidity".
+     * A price we cannot exit at is booked by paperSell as the best trade we ever made.
+     *
+     * So they are excluded until the live fill probe can say whether a real order clears
+     * on one. Set REJECT_MAYHEM=0 to trade them again — the explore book keeps buying
+     * them either way, so the evidence goes on accumulating while the strategy does not
+     * pay for it.
+     */
+    rejectMayhem: bool('REJECT_MAYHEM', true),
     // Symbols/names containing these are almost always impersonation scams.
     bannedWords: str('BANNED_WORDS', 'airdrop,claim,presale,official,giveaway')
       .split(',')

@@ -548,6 +548,15 @@ export function featuresOf(candidate, creatorIndex = null, walletIndex = null) {
      * which the docs warn holders may be unable to sell into the curve at all.
      */
     mayhem: candidate.mayhem,
+    /**
+     * The behavioural Mayhem tell, kept ALONGSIDE `mayhem` rather than folded into it.
+     * `mayhem` means the agent was seen trading inside the 30-second window and has a
+     * large known false-negative rate; this fires whenever the price goes below the
+     * coin's own launch price, which a conserved-supply curve cannot do. Recording both
+     * is how we find out how much the agent test was missing.
+     */
+    subLaunchPrice: candidate.subLaunchPrice,
+    mayhemLikely: candidate.mayhemLikely,
     agentBuys: candidate.agentBuys,
     agentSells: candidate.agentSells,
     agentNetSol: round4(candidate.agentNetSol),

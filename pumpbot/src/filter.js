@@ -90,6 +90,22 @@ export class Candidate {
      */
     this.launchVTokens = createEvent.vTokens
     this.launchVSol = createEvent.vSol
+    /**
+     * Has this coin ever priced BELOW its own launch price? A closed curve cannot.
+     *
+     * Its tokens leave the curve only by being bought out of it and return only by being
+     * sold back in, so vTokens can never exceed the launch supply and the launch price is
+     * a hard floor. Mayhem breaks that: its extra billion tokens are minted OUTSIDE the
+     * curve, so selling them in pushes vTokens past the launch supply and the price under
+     * the floor — and buying them back can carry it past where a closed curve completes.
+     *
+     * This is the structural tell the launch reserves could not give. Extra supply is
+     * minted off-curve, so launch reserves look completely ordinary; the giveaway is the
+     * BEHAVIOUR. 63.7% of agent-flagged coins price below their own launch price against
+     * 13.0% of the rest, and some of that 13% is Mayhem the 30-second agent window
+     * missed — which is exactly the false negative this exists to cover.
+     */
+    this.sawSubLaunchPrice = false
     this.peakMarketCapSol = createEvent.marketCapSol ?? 0
     this.lastEventAt = createEvent.at
   }
@@ -103,6 +119,14 @@ export class Candidate {
     }
     if (Number.isFinite(event.vSol)) this.vSol = event.vSol
     if (Number.isFinite(event.vTokens)) this.vTokens = event.vTokens
+
+    // 5% of slack so a rounding difference between the create event and the first trade
+    // cannot flag an ordinary coin. The real signal is a third below the floor, not a
+    // fraction of a percent.
+    const launchPrice = this.launchVSol > 0 && this.launchVTokens > 0 ? this.launchVSol / this.launchVTokens : 0
+    if (launchPrice > 0 && event.priceSol > 0 && event.priceSol < launchPrice * 0.95) {
+      this.sawSubLaunchPrice = true
+    }
 
     const isDev = event.trader && event.trader === this.creator
     const isAgent = Boolean(event.trader) && event.trader === config.mayhem.agentWallet
@@ -181,9 +205,41 @@ export class Candidate {
     return set.size
   }
 
-  /** Did pump.fun's random-walk agent trade this coin at all? */
+  /**
+   * Did pump.fun's random-walk agent trade this coin at all?
+   *
+   * DELIBERATELY UNCHANGED. It means what it has always meant — the published agent
+   * wallet was seen trading inside our observation window — so the journalled column
+   * stays comparable across the whole dataset. Its weakness is known and large: the
+   * window is 30 seconds, and an agent that stays quiet through it reads as false.
+   */
   get mayhem() {
     return this.agentBuys + this.agentSells > 0
+  }
+
+  /**
+   * The behavioural test, which does not require catching the agent in the act.
+   *
+   * A closed curve cannot price below its launch price, so seeing that means tokens are
+   * entering the curve that were never bought out of it — which is what Mayhem's extra
+   * billion does. Every impossible outcome in the 23 Sep export whose launch reserves we
+   * know was an agent-flagged coin (14 of 14, against a 32% base rate), and the price
+   * behaviour is the part that survives the agent being quiet.
+   */
+  get subLaunchPrice() {
+    return this.sawSubLaunchPrice
+  }
+
+  /**
+   * EITHER test firing. This is the one entry should act on.
+   *
+   * Neither alone is adequate: the agent test misses a quiet agent, and the price test
+   * only fires once the agent has been a net seller. Together they catch a coin whose
+   * supply is not conserved, which is the property that invalidates every bound this
+   * bot reasons with — the appreciation ceiling, the reserve ceiling, the price floor.
+   */
+  get mayhemLikely() {
+    return this.mayhem || this.sawSubLaunchPrice
   }
 
   /**
@@ -400,6 +456,34 @@ export function evaluateEntry(candidate, { creatorPrior = null } = {}) {
         : `dev has sold ${soldPct.toFixed(0)}% of their bag (want < ${e.maxDevSoldPct}%)`,
     ),
   )
+
+  /**
+   * SUPPLY THAT IS NOT CONSERVED — Mayhem mode.
+   *
+   * Every bound this bot reasons with assumes a coin's tokens leave the curve only by
+   * being bought out and return only by being sold back. Mayhem's extra billion is minted
+   * outside the curve, so none of them hold: not the appreciation ceiling, not the
+   * reserve ceiling, not the launch-price floor. Every physically impossible outcome in
+   * the 23 Sep export whose launch reserves we know was one of these.
+   *
+   * Excluded on RISK, not on measured edge — the flagged rows actually score slightly
+   * BETTER than the rest. The problem is that we cannot tell a real price from an
+   * unexitable one, and the docs say unexitable is the expected state once the agent
+   * turns net seller. Explore keeps buying them, so the evidence accrues either way.
+   */
+  if (e.rejectMayhem) {
+    checks.push(
+      check(
+        'supply_conserved',
+        !candidate.mayhemLikely,
+        candidate.mayhem
+          ? 'pump.fun mayhem agent is trading this coin'
+          : candidate.subLaunchPrice
+            ? 'priced below its own launch price — tokens are entering the curve from outside it'
+            : 'supply looks conserved',
+      ),
+    )
+  }
 
   /**
    * This deployer's own record, when there is enough of it to mean something.

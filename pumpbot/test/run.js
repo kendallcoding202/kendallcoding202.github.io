@@ -6357,6 +6357,109 @@ console.log('\nExcluding what cannot have happened')
 }
 
 
+
+// ------------------------------- supply that is not conserved
+console.log('\nMayhem: supply that is not conserved')
+{
+  const { Candidate, evaluateEntry } = await import('../src/filter.js')
+  const { normalizeEvent } = await import('../src/curve.js')
+
+  const LAUNCH_V_SOL = 30, LAUNCH_V_TOKENS = 1.073e9
+  const LAUNCH_PRICE = LAUNCH_V_SOL / LAUNCH_V_TOKENS
+  const mk = () => new Candidate(normalizeEvent({
+    txType: 'create', mint: 'MAYH', traderPublicKey: 'DEV', name: 'Mayhem Dog', symbol: 'MAYH',
+    initialBuy: 20_000_000, solAmount: 0.5, vSolInBondingCurve: LAUNCH_V_SOL,
+    vTokensInBondingCurve: LAUNCH_V_TOKENS, marketCapSol: 28,
+  }))
+  const tick = (c, { trader = 'W', priceSol, vSol = LAUNCH_V_SOL, vTokens = LAUNCH_V_TOKENS }) =>
+    c.apply({ kind: 'buy', mint: 'MAYH', trader, solAmount: 0.05, tokenAmount: 1000,
+      priceSol, vSol, vTokens, marketCapSol: 28, at: c.createdAt + 1000 })
+
+  /**
+   * A closed curve CANNOT price below its launch price: its tokens leave only by being
+   * bought out and return only by being sold back, so vTokens never exceeds the launch
+   * supply. Mayhem's extra billion is minted outside the curve, so selling it in pushes
+   * the price under that floor — which is the structural tell the launch reserves could
+   * not give, because the extra supply never touches them.
+   */
+  const ordinary = mk()
+  tick(ordinary, { priceSol: LAUNCH_PRICE * 1.4 })
+  check('an ordinary coin is not flagged', !ordinary.subLaunchPrice && !ordinary.mayhemLikely)
+
+  const dipped = mk()
+  tick(dipped, { priceSol: LAUNCH_PRICE * 0.6 })
+  check('a coin priced below its own launch price is flagged', dipped.subLaunchPrice)
+  check('and that alone marks it as mayhem-likely', dipped.mayhemLikely)
+  check('without claiming the agent was seen, which it was not', !dipped.mayhem)
+
+  /**
+   * The two tests are kept SEPARATE on the row. `mayhem` has meant "the agent was seen
+   * inside the 30-second window" for the whole dataset, and redefining it would make
+   * every historical rate incomparable to every new one.
+   */
+  const seen = mk()
+  seen.apply({ kind: 'sell', mint: 'MAYH', trader: config.mayhem.agentWallet, solAmount: 1,
+    tokenAmount: 1000, priceSol: LAUNCH_PRICE * 1.2, vSol: LAUNCH_V_SOL, vTokens: LAUNCH_V_TOKENS,
+    marketCapSol: 28, at: seen.createdAt + 1000 })
+  check('the agent test still fires on its own', seen.mayhem && seen.mayhemLikely)
+  check('and does not claim a sub-launch price it never saw', !seen.subLaunchPrice)
+
+  /** Slack, so a rounding difference between create and first trade cannot flag a coin. */
+  const grazed = mk()
+  tick(grazed, { priceSol: LAUNCH_PRICE * 0.98 })
+  check('a hair below launch is not a flag — the real signal is a third below',
+    !grazed.subLaunchPrice)
+
+  /**
+   * ENTRY. Excluded on RISK rather than on measured edge: the flagged rows actually score
+   * slightly BETTER. The problem is that we cannot tell a real price from an unexitable
+   * one, and pump.fun's docs say unexitable is expected once the agent turns net seller.
+   */
+  /**
+   * A launch that passes everything ELSE, so the only thing this can be refused for is
+   * the new rule. One buyer takes ~60% of the volume, which is the middle of the
+   * concentration band — seventy equal buyers land in the worst band and the test would
+   * pass on the wrong check.
+   */
+  const feed = (c) => {
+    const at = (i) => c.createdAt + 20_000 + i
+    c.apply({ kind: 'buy', mint: 'MAYH', trader: 'WHALE', solAmount: 3.0, tokenAmount: 1000,
+      priceSol: LAUNCH_PRICE * 1.4, vSol: LAUNCH_V_SOL, vTokens: LAUNCH_V_TOKENS,
+      marketCapSol: 28, at: at(0) })
+    for (let i = 1; i < 12; i++) {
+      c.apply({ kind: 'buy', mint: 'MAYH', trader: 'W' + i, solAmount: 0.18, tokenAmount: 1000,
+        priceSol: LAUNCH_PRICE * 1.4, vSol: LAUNCH_V_SOL, vTokens: LAUNCH_V_TOKENS,
+        marketCapSol: 28, at: at(i) })
+    }
+    return c
+  }
+  const was = config.entry.rejectMayhem
+  config.entry.rejectMayhem = true
+  const flagged = feed(mk())
+  tick(flagged, { priceSol: LAUNCH_PRICE * 0.6 })
+  const verdict = evaluateEntry(flagged, {})
+  check('a coin with unconserved supply is refused at entry', !verdict.pass, verdict.reason)
+  check('and THAT is what it is refused for, not something else the fixture trips',
+    verdict.reason === 'supply_conserved', verdict.reason)
+  check('and the detail names the mechanism rather than just the label',
+    /launch price|mayhem agent/.test(
+      verdict.checks?.find((c) => c.id === 'supply_conserved')?.detail ?? ''),
+    JSON.stringify(verdict.checks?.find((c) => c.id === 'supply_conserved')))
+
+  /**
+   * And the switch must actually switch. This is a risk call that may be reversed once
+   * the fill probe can say whether a real order clears on one of these.
+   */
+  config.entry.rejectMayhem = false
+  const off = evaluateEntry(flagged, {})
+  check('REJECT_MAYHEM=0 lets the same coin through', off.pass, off.reason)
+  check('and the check is not even reported when it is off',
+    !off.checks?.some((c) => c.id === 'supply_conserved'),
+    JSON.stringify(off.checks?.map((c) => c.id)))
+  config.entry.rejectMayhem = was
+}
+
+
 fs.rmSync(tmp, { recursive: true, force: true })
 
 console.log(`\n${passed} passed, ${failures.length} failed`)
