@@ -6934,6 +6934,39 @@ console.log('\nRandomised observation window')
 }
 
 
+
+// ------------------------------- the replay and the executor must price the same fill alike
+console.log('\nOne trade, one impact number')
+{
+  const { quoteBuy } = await import('../src/curve.js')
+  const S = config.exec.impactReferenceSol
+  const V_SOL = 30, V_TOKENS = 1.073e9
+
+  /**
+   * Constant product makes one side's drag exactly size/reserves. The paper executor gets
+   * this for free by pricing through the curve; the replay uses a linear stand-in. When
+   * the two disagree, the replay and the account tell different stories about the same
+   * trade — and the discrepancy was a clean factor of two, in the pessimistic direction,
+   * after a commit that claimed to have unified them.
+   */
+  const q = quoteBuy({ vSol: V_SOL, vTokens: V_TOKENS, solIn: S })
+  const actual = q.avgPriceSol / (V_SOL / V_TOKENS) - 1
+  const modelled = (config.exec.priceImpactPct / 100) * (S / config.exec.impactReferenceSol)
+  check('the curve charges exactly size over reserves on one side',
+    near(actual, S / V_SOL, 1e-9), `${actual} vs ${S / V_SOL}`)
+  check('and the replay estimate matches it at the reference size',
+    near(modelled, actual, 1e-4), `modelled ${modelled} vs actual ${actual}`)
+
+  /**
+   * Pinned as a RATIO rather than a constant, so the two stay tied if either moves. A
+   * future change to the reference size or the percentage keeps this honest without
+   * anyone remembering to update a magic number here.
+   */
+  check('so neither can drift from the other without failing this',
+    Math.abs(modelled / actual - 1) < 0.02, `${(modelled / actual).toFixed(4)}x`)
+}
+
+
 fs.rmSync(tmp, { recursive: true, force: true })
 
 console.log(`\n${passed} passed, ${failures.length} failed`)

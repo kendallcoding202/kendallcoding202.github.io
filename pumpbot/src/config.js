@@ -560,8 +560,25 @@ export const config = {
      *
      * Used by the REPLAY only. The paper executor does not need an estimate: it prices
      * fills through the real curve, which charges impact exactly.
+     *
+     * WHICH IS WHY THIS HAS TO AGREE WITH IT, AND DID NOT. Constant product makes the
+     * drag on one side exactly size/reserves: 0.075 into a 30 SOL curve is 0.2500%, and
+     * quoteBuy returns precisely that. This estimate said 0.5000% — twice the number the
+     * executor charged for the identical fill. The replay and the account were telling
+     * different stories about the same trade, which an earlier commit claimed to have
+     * ended, and the replay's story was the pessimistic one.
+     *
+     * 0.25 at a 0.075 reference encodes a 30 SOL curve, which is what the entry rules
+     * actually buy — median market cap on filter-passing rows is ~28 SOL. Thinner curves
+     * cost more and the linear model understates them, so this is not conservative
+     * everywhere; it is correct at the reference and wrong in both directions away from
+     * it, which is the honest property of a one-parameter stand-in for a hyperbola.
+     *
+     * Worth 0.5pp of round-trip cost. That is small against the 4pp of latency slip
+     * sitting beside it UNMEASURED, and it is the only one of the four cost terms that
+     * could be fixed by arithmetic rather than by an experiment.
      */
-    priceImpactPct: num('PRICE_IMPACT_PCT', 0.5),
+    priceImpactPct: num('PRICE_IMPACT_PCT', 0.25),
     // The position size the impact figure above was estimated for.
     impactReferenceSol: num('IMPACT_REFERENCE_SOL', 0.075),
     maxRetries: num('EXEC_MAX_RETRIES', 3),
