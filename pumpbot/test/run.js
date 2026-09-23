@@ -6808,6 +6808,49 @@ console.log('\nMayhem reporting survives mayhem rejection')
 }
 
 
+
+// ------------------------------- the probe must be able to place an order
+console.log('\nThe fill probe, on its own defaults')
+{
+  const { buySolFor, buySolForCurve, tooSmallToTrade } = await import('../src/sizing.js')
+
+  /**
+   * THE FACILITY WAS DEAD ON ITS DEFAULTS.
+   *
+   * PROBE_POSITION_SOL defaults to 0.01 and MIN_BUY_SOL to 0.02. buySolFor returns the
+   * probe size when probing, the floor then rejects it, and #enter skips the candidate
+   * with "below the fee floor". Zero orders, no error, an empty ledger indistinguishable
+   * from a quiet market — on the one instrument that can answer whether a real order
+   * fills at all, and therefore whether the 2% latency-slip guess is anywhere near right.
+   */
+  const wasEnabled = config.probe.enabled
+  const wasSize = config.probe.positionSol
+  check('the defaults really are the trap: probe size is under the floor',
+    config.probe.positionSol < config.sizing.minBuySol,
+    `${config.probe.positionSol} vs ${config.sizing.minBuySol}`)
+
+  config.probe.enabled = true
+  const sized = buySolForCurve(50, 40)
+  check('the probe sizes to its own figure, not the equity tier',
+    near(sized, config.probe.positionSol, 1e-12), String(sized))
+  check('and that size is NOT rejected as too small to trade', !tooSmallToTrade(sized))
+  check('a zero or negative size is still refused, probe or not', tooSmallToTrade(0))
+
+  /**
+   * The floor must still bite when the probe is OFF. It exists so a real position cannot
+   * be opened too small to earn back its fee, and that reasoning is untouched here.
+   */
+  config.probe.enabled = false
+  check('with the probe off the fee floor still applies',
+    tooSmallToTrade(config.sizing.minBuySol / 2))
+  check('and a normal position is still sized by the tier',
+    near(buySolFor(50), 0.15, 1e-12), String(buySolFor(50)))
+
+  config.probe.enabled = wasEnabled
+  config.probe.positionSol = wasSize
+}
+
+
 fs.rmSync(tmp, { recursive: true, force: true })
 
 console.log(`\n${passed} passed, ${failures.length} failed`)

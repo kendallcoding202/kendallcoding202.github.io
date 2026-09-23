@@ -55,8 +55,25 @@ export function buySolForCurve(walletSol, vSol) {
   return Math.min(tier, vSol * share)
 }
 
-/** Too small to be worth a priority fee — the caller should skip rather than shrink. */
+/**
+ * Too small to be worth a priority fee — the caller should skip rather than shrink.
+ *
+ * THE PROBE IS EXEMPT, and without that exemption it cannot place a single order.
+ * PROBE_POSITION_SOL defaults to 0.01 and MIN_BUY_SOL to 0.02, so buySolFor returns the
+ * probe size, this floor rejects it, and #enter skips every candidate with "below the fee
+ * floor". The facility that exists to answer the one question paper structurally cannot —
+ * whether a real order fills at all — was dead on its own defaults, and it would have
+ * failed silently: a log line per launch, no orders, no error, an empty ledger that looks
+ * exactly like a quiet market.
+ *
+ * The exemption is not a special case, it is the rule applied correctly. This floor asks
+ * whether a trade can EARN back its fee, which is the right question for a position taken
+ * to make money and the wrong one for a position taken to measure something. The probe's
+ * fee is not overhead to amortise; it is the price of the measurement, and it is bounded
+ * by probe.maxTrades and probe.maxTotalSol rather than by this.
+ */
 export function tooSmallToTrade(buySol) {
+  if (config.probe.enabled) return !(buySol > 0)
   return !(buySol >= config.sizing.minBuySol)
 }
 
