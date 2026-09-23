@@ -43,6 +43,36 @@ import { log, sol, esc, utcDay } from './log.js'
  * buying, then manage exits off the live trade feed. Exits are driven by price events
  * rather than a timer, so a rung fires on the tick that crosses it.
  */
+/**
+ * Split what the wallet holds into real unmanaged positions and rounding dust.
+ *
+ * A TRADE WE CLOSED IS NOT AN UNMANAGED POSITION. closePosition moves the record to
+ * `closed` and deletes it from `positions` (store.js), so checking `positions` alone
+ * cannot tell "we sold this and it left a fraction behind" from "we have never seen this
+ * mint". Every sell used to floor a six-decimal uiAmount, so essentially every closed
+ * trade left dust in its token account -- and this alert reported each of them, forever,
+ * as real money with no stop-loss.
+ *
+ * It cost a working day: the count climbing 5 -> 9 was read as deploys orphaning live
+ * positions, and sent us through the volume, the mount path and DATA_DIR, all of which
+ * were correct. The dust was from trades that had exited cleanly.
+ *
+ * Dust is still reported, as cleanup rather than as an emergency: closed trades fall off
+ * the end of the retained `closed` list, so their remainder reappears here later with no
+ * record left to match it against.
+ */
+export function classifyHeldTokens(held, state, dustTokens = config.exec.dustTokens) {
+  const known = new Set([
+    ...Object.keys(state?.positions ?? {}),
+    ...(state?.closed ?? []).map((p) => p.mint),
+  ])
+  const unknown = (held ?? []).filter((t) => !known.has(t.mint))
+  return {
+    orphans: unknown.filter((t) => t.amount >= dustTokens),
+    dust: unknown.filter((t) => t.amount < dustTokens),
+  }
+}
+
 export class Bot {
   /**
    * `feed` is injectable so the whole loop can be driven by a synthetic feed in tests,
@@ -1130,15 +1160,36 @@ export class Bot {
       return []
     }
 
-    const known = new Set(Object.keys(getState().positions))
-    const orphans = held.filter((t) => !known.has(t.mint))
+    /**
+     * A TRADE WE CLOSED IS NOT AN UNMANAGED POSITION.
+     *
+     * closePosition moves the record to `closed` and deletes it from `positions`
+     * (store.js), so checking `positions` alone cannot tell "we sold this and it left a
+     * fraction behind" from "we have never seen this mint". Every sell used to floor a
+     * six-decimal uiAmount, so essentially every closed trade left dust in its token
+     * account -- which meant this alert reported each of them, forever, as real money
+     * with no stop-loss.
+     *
+     * It cost a working day: the count climbing 5 -> 9 was read as deploys orphaning live
+     * positions, and sent us through the volume, the mount path and DATA_DIR, all of
+     * which were correct. The dust was from trades that had exited cleanly.
+     */
+    const { orphans, dust } = classifyHeldTokens(held, getState())
+
+    if (dust.length) {
+      log.info(
+        `${dust.length} token account(s) hold only dust (< ${config.exec.dustTokens} tokens) — ` +
+          'residue from closed trades. Each strands its rent until closed.',
+      )
+    }
     if (!orphans.length) return []
 
     log.error('═══════════════════════════════════════════════════════════')
     log.error(`${orphans.length} token(s) in the wallet are NOT in the ledger:`)
     for (const o of orphans) log.error(`   ${o.mint}  ${o.amount.toFixed(0)} tokens`)
     log.error('These are unmanaged — no stop-loss, no time stop, no exit.')
-    log.error('Usually this means the state file was lost (ephemeral storage?).')
+    log.error('This means a position was opened that the ledger never recorded, or the')
+    log.error('state file was lost. Dust from closed trades is reported separately.')
     log.error('Run `npm run adopt` to bring them under management, or sell manually.')
     log.error('═══════════════════════════════════════════════════════════')
 
@@ -1146,8 +1197,8 @@ export class Bot {
       `⚠️ <b>${orphans.length} unmanaged position(s)</b>\n` +
         'Tokens in the wallet that the ledger does not know about — they have no ' +
         'stop-loss and no exit rules.\n' +
-        orphans.map((o) => `<code>${o.mint}</code>`).join('\n') +
-        '\n\nThis usually means the state file was lost. Run <code>npm run adopt</code>.',
+        orphans.map((o) => `<code>${o.mint}</code> · ${o.amount.toFixed(0)} tokens`).join('\n') +
+        '\n\nRun <code>npm run adopt</code>.',
     )
 
     return orphans

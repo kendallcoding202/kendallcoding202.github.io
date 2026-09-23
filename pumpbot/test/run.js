@@ -7182,6 +7182,48 @@ console.log('\nScreened vs passed')
 
 
 /**
+ * A TRADE WE CLOSED IS NOT AN UNMANAGED POSITION.
+ *
+ * closePosition moves the record to `closed` and deletes it from `positions`, so a check
+ * against `positions` alone cannot tell "we sold this and it left a fraction behind" from
+ * "we have never seen this mint". Every sell used to floor a six-decimal uiAmount, so
+ * essentially every closed trade left dust -- and the orphan alert reported each of them,
+ * forever, as real money with no stop-loss. The real wallet showed CAV at "0 tokens" and
+ * another at "140" while the alert called all nine unmanaged positions.
+ */
+{
+  const { classifyHeldTokens } = await import('../src/bot.js')
+  const state = {
+    positions: { OPENMINT: { mint: 'OPENMINT' } },
+    closed: [{ mint: 'SOLDMINT' }],
+  }
+  const held = [
+    { mint: 'OPENMINT', amount: 355205 },   // open and managed
+    { mint: 'SOLDMINT', amount: 0.12 },     // closed cleanly, left dust
+    { mint: 'GHOSTMINT', amount: 412905 },  // never recorded -- the real alarm
+    { mint: 'OLDDUST', amount: 140 },       // dust whose closed record aged out
+  ]
+  const { orphans, dust } = classifyHeldTokens(held, state, 1000)
+  const mints = (xs) => xs.map((x) => x.mint).sort().join(',')
+  check('a managed position is not an orphan', !mints(orphans).includes('OPENMINT'))
+  check('and neither is dust from a trade we closed', !mints(orphans).includes('SOLDMINT'),
+    mints(orphans))
+  check('a mint the ledger never recorded IS an orphan', mints(orphans) === 'GHOSTMINT',
+    mints(orphans))
+  // A mint we still have a closed record for is not reported at all -- we know what it
+  // is. Only dust whose record has aged out of the retained list surfaces as cleanup.
+  check('a closed trade we still have a record of is not reported at all',
+    !mints(dust).includes('SOLDMINT') && !mints(orphans).includes('SOLDMINT'),
+    `orphans=${mints(orphans)} dust=${mints(dust)}`)
+  check('dust whose closed record aged out is reported as dust, not an emergency',
+    mints(dust) === 'OLDDUST', mints(dust))
+  // The bug in one line: `positions` alone would have called all three unmanaged.
+  const positionsOnly = held.filter((h) => !Object.keys(state.positions).includes(h.mint))
+  check('checking positions alone is what produced the false alarm',
+    positionsOnly.length === 3 && orphans.length === 1, `${positionsOnly.length} vs ${orphans.length}`)
+}
+
+/**
  * THE DEFAULT DATA_DIR IS INSIDE THE APPLICATION, which on a hosted platform is part of
  * the image: a container restart keeps it, a redeploy deletes it. State written there
  * survives just often enough to look fine -- one position re-attached cleanly across a

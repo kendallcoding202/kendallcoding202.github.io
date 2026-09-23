@@ -601,6 +601,14 @@ export const config = {
      * Set ATA_RENT_SOL=0 if a sweeper is ever added that closes accounts and reclaims it.
      */
     ataRentSol: num('ATA_RENT_SOL', 0.00203928),
+    /**
+     * Below this a token account holds a rounding remainder, not a position.
+     *
+     * Entries are hundreds of thousands of tokens, so this is under a hundredth of a
+     * percent of one -- small enough that nothing real is ever called dust, large enough
+     * to cover what flooring a six-decimal uiAmount used to leave behind.
+     */
+    dustTokens: num('DUST_TOKENS', 1000),
 
     // The position size the impact figure above was estimated for.
     impactReferenceSol: num('IMPACT_REFERENCE_SOL', 0.075),
