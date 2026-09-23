@@ -7,6 +7,7 @@ import { canOpen, riskSummary, rolloverDaily, syncEquityBasis } from './risk.js'
 import { buySolFor, buySolForCurve, tooSmallToTrade, tierFor, sizingSummary } from './sizing.js'
 import { ShadowTracker, CreatorIndex, saveShadow, loadShadow, journalHealth, volumeSpace } from './journal.js'
 import { WalletIndex, saveWallets, loadWallets } from './wallets.js'
+import { GraduationTracker, saveGraduations, loadGraduations } from './graduation.js'
 import {
   initStore,
   getState,
@@ -125,6 +126,17 @@ export class Bot {
     this.shadow = config.learning.enabled
       ? new ShadowTracker({ creatorIndex: CreatorIndex.fromJournal(), walletIndex: this.wallets })
       : null
+    /**
+     * THE GRADUATION EXPERIMENT -- a separate hypothesis, sharing this process only
+     * because it needs the same feed. It observes and never trades. See
+     * PREREG-GRADUATION.md; its rows go to their own file so they cannot be averaged
+     * into the launch dataset.
+     */
+    this.graduations = config.graduation.enabled ? new GraduationTracker() : null
+    if (this.graduations) {
+      const { restored } = this.graduations.restore(loadGraduations())
+      if (restored) log.info(`graduation tracking restored: ${restored} token(s) still inside their 24h window`)
+    }
     this.smartTape = [] // live tape of trades by wallets with a proven record
     this.walletSol = 0
     this.lastDay = utcDay()
@@ -268,6 +280,8 @@ export class Bot {
       offCurve: oracleHealth(),
       /** The fill probe's results — the one thing paper cannot measure. See config.probe. */
       probe: config.probe.enabled ? { ...probeLedger(), ...config.probe } : null,
+      /** Live handle for the separate graduation experiment. See PREREG-GRADUATION.md. */
+      graduationTracker: this.graduations,
     }
   }
 
@@ -916,6 +930,24 @@ export class Bot {
       }, 30_000)
       this.shadowTimer.unref?.()
     }
+    /**
+     * The graduation window is 24 HOURS, so this one cannot rely on a clean shutdown at
+     * all: on a hosted platform a row that is not persisted between deploys would never
+     * once reach its final checkpoint. Sweeping on the same timer advances each row's
+     * clock, journals the ones that have run their full window, and releases their feed
+     * subscription -- 400 tracked mints would otherwise hold subscriptions the launch
+     * strategy needs.
+     */
+    if (this.graduations) {
+      this.gradTimer = setInterval(() => {
+        const done = this.graduations.sweep()
+        for (const mint of done) {
+          if (!getState().positions[mint] && !this.shadow?.has(mint)) this.feed.unwatch(mint)
+        }
+        saveGraduations(this.graduations)
+      }, 30_000)
+      this.gradTimer.unref?.()
+    }
     if (config.telegram.summaryHours > 0) {
       this.summaryBase = summaryBaseline(this)
       const everyMs = config.telegram.summaryHours * 3600_000
@@ -946,6 +978,8 @@ export class Bot {
     save()
     saveShadow(this.shadow)
     saveWallets(this.wallets)
+    if (this.gradTimer) clearInterval(this.gradTimer)
+    saveGraduations(this.graduations)
     releaseLock()
   }
 
@@ -1055,6 +1089,34 @@ export class Bot {
    */
   async #onMigrate(event) {
     this.stats.migrations = (this.stats.migrations ?? 0) + 1
+
+    /**
+     * EVERY graduation is observed, not only the ones we happen to hold.
+     *
+     * This method used to return here unless the mint was an open position, so the
+     * subscription has been delivering every graduation on the network and we have been
+     * discarding all but a handful. That is the entire dataset the new hypothesis needs.
+     */
+    if (this.graduations) {
+      const opened = this.graduations.open({
+        mint: event.mint,
+        symbol: getState().positions[event.mint]?.symbol ?? this.candidates.get(event.mint)?.symbol ?? null,
+        at: Date.now(),
+        pool: event.pool ?? null,
+        marketCapSol: Number.isFinite(event.marketCapSol) ? event.marketCapSol : null,
+        /**
+         * Not copied here. The launch row for this mint is already in the journal with
+         * every feature we compute, and graduation happens long after the candidate has
+         * been evicted -- so the join is on `mint` at analysis time, against data that
+         * is already on disk. Duplicating it would only create a second copy to drift.
+         */
+        features: null,
+      })
+      // Watch it so post-graduation trades arrive: the price has to come from somewhere,
+      // and the migrate payload carries no reserves to price against.
+      if (opened) this.feed.watch(event.mint)
+    }
+
     const position = getState().positions[event.mint]
     if (!position || position.state !== 'open') return
 
@@ -1087,6 +1149,17 @@ export class Bot {
 
     candidate?.apply(event)
     this.shadow?.onTrade(event)
+
+    /**
+     * Post-graduation price, for the separate experiment.
+     *
+     * Taken from the trade's own price rather than from curve reserves: after graduation
+     * the bonding curve is CLOSED, so there are no reserves to divide and anything
+     * derived from them would be stale or invented. The pre-registration is explicit
+     * that a missing or deflated denominator is what produced the 46x and 228x fantasies
+     * on the curve side, so this side only ever records a price it actually saw traded.
+     */
+    if (this.graduations && event.priceSol > 0) this.graduations.note(event.mint, event.priceSol)
 
     if (position?.state === 'open') {
       /**

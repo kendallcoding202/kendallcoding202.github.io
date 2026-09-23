@@ -7202,6 +7202,84 @@ console.log('\nScreened vs passed')
 }
 
 
+// ------------------------------- the graduation experiment
+console.log('\nThe graduation collector')
+{
+  const { GraduationTracker, GRAD_CHECKPOINTS } = await import('../src/graduation.js')
+  const MIN = 60_000
+  const T0 = 1_000_000_000_000
+
+  // A token that trades normally after graduating.
+  {
+    const g = new GraduationTracker()
+    g.open({ mint: 'A', at: T0 })
+    check('a graduation with no trade yet has no denominator',
+      g.rows.get('A').basePriceSol === null)
+    g.note('A', 1e-7, T0 + 1000)
+    check('the first trade after graduation sets the base price',
+      g.rows.get('A').basePriceSol === 1e-7)
+    g.note('A', 1.5e-7, T0 + 2 * MIN)
+    check('and a checkpoint that has passed is filled from it',
+      g.rows.get('A').mult[0] === 1.5, JSON.stringify(g.rows.get('A').mult))
+    check('while checkpoints still in the future stay null',
+      g.rows.get('A').mult[1] === null)
+  }
+
+  /**
+   * THE SURVIVORSHIP TRAP, which the pre-registration names because it has already cost
+   * this project a wrong answer once. A token that stops trading must not silently drop
+   * out of the sample -- that would delete exactly the ones that died and leave a curve
+   * built from survivors. Its last price is carried forward, and `trades`/`lastTradeAt`
+   * travel with the row so a dead quote is distinguishable from a live one.
+   */
+  {
+    const g = new GraduationTracker()
+    g.open({ mint: 'Q', at: T0 })
+    g.note('Q', 1e-7, T0 + 1000)
+    g.note('Q', 5e-8, T0 + 30 * 1000)   // halved, then silence
+    g.sweep(T0 + 6 * MIN)
+    const r = g.rows.get('Q')
+    check('a token that goes quiet still fills its checkpoints', r.mult[0] === 0.5 && r.mult[1] === 0.5,
+      JSON.stringify(r.mult.slice(0, 2)))
+    check('and carries the evidence that it went quiet', r.trades === 2 && r.lastTradeAt === T0 + 30000)
+  }
+
+  // A row that never traded at all has no multiple to report -- and is still an outcome.
+  {
+    const g = new GraduationTracker()
+    g.open({ mint: 'Z', at: T0 })
+    g.sweep(T0 + 5 * MIN)
+    const r = g.rows.get('Z')
+    check('a graduation that never trades records no multiple', r.mult.every((m) => m === null))
+  }
+
+  // The 24h window only completes if a row survives restarts.
+  {
+    const g = new GraduationTracker()
+    g.open({ mint: 'R', at: T0 })
+    const snap = g.snapshot()
+    const g2 = new GraduationTracker()
+    check('a row inside its window is restored',
+      g2.restore(snap, T0 + 60 * MIN).restored === 1)
+    const g3 = new GraduationTracker()
+    check('and one past its window is not',
+      g3.restore(snap, T0 + (GRAD_CHECKPOINTS.at(-1) + 1) * MIN).restored === 0)
+  }
+
+  check('the window reaches 24h, unlike every horizon measured so far',
+    GRAD_CHECKPOINTS.at(-1) === 1440, String(GRAD_CHECKPOINTS.at(-1)))
+  /*
+   * A separate file, not a row type in the journal. Every analysis here assumes one
+   * journal row is one launch decision; a graduation row is a different unit on a
+   * different clock, and the launch dataset is the only thing that took months to build.
+   */
+  {
+    const src = fs.readFileSync(new URL('../src/graduation.js', import.meta.url), 'utf8')
+    check('graduation rows go to their own file, not the journal',
+      src.includes('graduations.jsonl') && !src.includes("from './journal.js'"))
+  }
+}
+
 /**
  * A TRADE WE CLOSED IS NOT AN UNMANAGED POSITION.
  *

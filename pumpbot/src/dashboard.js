@@ -23,6 +23,7 @@ import { consecutiveLossLimit } from './risk.js'
 import { refreshIfStale, snapshot as analysisSnapshot, analysisHealth } from './analysis.js'
 import { buildExportInWorker } from './export.js'
 import { deliveryStats } from './notify.js'
+import { readGraduations, GRAD_CHECKPOINTS } from './graduation.js'
 import { log } from './log.js'
 
 
@@ -234,6 +235,46 @@ function collectionStatus(stats, storage, learning, analysis = null) {
   }
 }
 
+/**
+ * THE GRADUATION EXPERIMENT, reported apart from the trading numbers.
+ *
+ * This is a different hypothesis on a different population with a different clock, and
+ * it never trades. Folding it into the P&L panels would invite exactly the confusion the
+ * whole exercise is meant to avoid -- the launch strategy is a measured negative, and a
+ * promising-looking number from a separate experiment must not read as its recovery.
+ *
+ * Progress is reported against the PRE-REGISTERED bar (n >= 300 complete to 240m), not
+ * against whatever has arrived, so a curve computed on 12 rows cannot look like an answer.
+ */
+function graduationSummary(tracker) {
+  if (!config.graduation.enabled) return null
+  const rows = readGraduations()
+  const idx240 = GRAD_CHECKPOINTS.indexOf(240)
+  // A fixed population, present at every checkpoint up to 240m. Coverage decaying with
+  // horizon is what made the on-curve horizon curve unreadable until it was controlled.
+  const complete = rows.filter((r) => r.mult?.slice(0, idx240 + 1).every((m) => m !== null))
+  const curve = GRAD_CHECKPOINTS.map((min, i) => {
+    const v = complete.map((r) => r.mult?.[i]).filter((m) => Number.isFinite(m))
+    return { min, n: v.length, mean: v.length ? v.reduce((s, x) => s + x, 0) / v.length : null }
+  })
+  const at240 = curve[idx240]
+  const quiet = rows.filter((r) => r.quoteWentQuiet).length
+  return {
+    tracking: tracker?.stats().tracking ?? 0,
+    recorded: rows.length,
+    complete: complete.length,
+    /** The pre-registered bar. Below it, nothing is decided. */
+    needed: 300,
+    powered: complete.length >= 300,
+    quietShare: rows.length ? quiet / rows.length : null,
+    curve,
+    meanAt240: at240?.mean ?? null,
+    /** Pre-registered: act only above 1.06, which is the ~5.6pp round trip. */
+    clearsToll: at240?.mean !== null && at240?.mean !== undefined ? at240.mean > 1.06 : null,
+    checkpoints: GRAD_CHECKPOINTS,
+  }
+}
+
 export function buildSnapshot(walletSol, stats = null) {
   const state = getState()
   const open = openPositions()
@@ -427,6 +468,7 @@ export function buildSnapshot(walletSol, stats = null) {
       enabled: config.explore.enabled,
     },
     learning: learningSnapshot(),
+    graduation: graduationSummary(stats?.graduationTracker ?? null),
     learningPending: config.learning.enabled && analysisHealth().at === 0,
     analysis: analysisHealth(),
     collection: collectionStatus(stats, storageSnapshot(), learningSnapshot(), analysisHealth()),

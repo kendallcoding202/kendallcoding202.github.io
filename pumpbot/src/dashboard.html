@@ -289,6 +289,22 @@
     <h2 class="sec">Active Limits</h2>
     <div class="card"><div class="note" id="limits"></div></div>
   </section>
+
+  <!--
+    A SEPARATE EXPERIMENT, deliberately set apart from everything above.
+
+    The launch strategy is a measured negative: 0.9637x gross, below 1.0 before any cost.
+    This is a different hypothesis, on a different population, with a different clock, and
+    it never trades. Folding its numbers into the P&L panels would let a promising figure
+    from an unrelated experiment read as the strategy recovering, which it is not.
+  -->
+  <section id="gradsec" hidden>
+    <h2 class="sec" style="color:var(--amber);border-top:1px solid var(--amber);padding-top:18px;margin-top:26px">
+      Graduation Experiment
+      <span style="font-size:11px;color:var(--dimmer);font-weight:400;letter-spacing:0"> · separate hypothesis · observation only, never trades</span>
+    </h2>
+    <div class="card" style="border-color:rgba(255,179,71,.35)"><div class="note" id="grad"></div></div>
+  </section>
 </div>
 
 <script>
@@ -859,6 +875,7 @@ function render(d) {
 
   /* ---- wallets we track ---- */
   renderWallets(d.learning && d.learning.wallets, d.collection && d.collection.smartTape)
+  renderGraduation(d.graduation)
 
   /* ---- limits ---- */
   const L = d.limits
@@ -993,6 +1010,52 @@ function memoryLine(a) {
  * with the analysis rather than being computed per poll — ranking the index is a scan
  * of tens of thousands of entries, and the page polls every few seconds.
  */
+/**
+ * The graduation experiment, reported against its PRE-REGISTERED bar.
+ *
+ * Progress is shown as "n of 300", not as a curve on whatever has arrived. Five
+ * hypotheses died this week and three of them looked alive first, so a mean computed on
+ * a dozen rows must never be presented as an answer -- the page says how far from an
+ * answer it is, which is the honest thing to show while data accumulates.
+ */
+function renderGraduation(g) {
+  const sec = document.getElementById('gradsec')
+  if (!g) { sec.hidden = true; return }
+  sec.hidden = false
+  const el = document.getElementById('grad')
+  const pct = Math.min(100, (g.complete / g.needed) * 100)
+  const head =
+    'Tracking <b>' + num(g.tracking) + '</b> token(s) · <b>' + num(g.recorded) + '</b> graduation(s) recorded · ' +
+    '<b>' + num(g.complete) + '</b> complete to 240m'
+  const bar =
+    '<div style="margin:10px 0 4px;height:6px;background:#1a2133;border-radius:3px;overflow:hidden">' +
+    '<div style="height:100%;width:' + pct.toFixed(1) + '%;background:var(--amber)"></div></div>' +
+    '<div style="font-size:11px;color:var(--dimmer)">' + num(g.complete) + ' of ' + num(g.needed) +
+    ' needed before anything is decided (pre-registered)</div>'
+
+  if (!g.powered) {
+    el.innerHTML = head + bar +
+      '<div class="dim" style="margin-top:12px">Not yet powered. The wallet result was reported as ' +
+      'negative on n=191 with an interval that could not rule anything out; this one waits for its ' +
+      'sample.</div>'
+    return
+  }
+  const cells = g.curve.filter((c) => c.n > 0).map((c) =>
+    '<code>' + (c.min < 60 ? c.min + 'm' : (c.min / 60) + 'h') + '</code> ' +
+    (c.mean === null ? '—' : c.mean.toFixed(4) + 'x')).join(' · ')
+  const verdict = g.clearsToll
+    ? '<span style="color:var(--green)">clears the ~5.6pp toll</span>'
+    : '<span style="color:var(--red)">does not clear the ~5.6pp toll</span>'
+  el.innerHTML = head + bar +
+    '<div style="margin-top:12px">' + cells + '</div>' +
+    '<div style="margin-top:8px">At 240m: <b>' + (g.meanAt240 === null ? '—' : g.meanAt240.toFixed(4) + 'x') +
+    '</b> — ' + verdict + '</div>' +
+    (g.quietShare !== null
+      ? '<div class="dim" style="margin-top:6px">' + (g.quietShare * 100).toFixed(1) +
+        '% stopped being quoted — counted as an outcome, not dropped.</div>'
+      : '')
+}
+
 function renderWallets(w, tape) {
   const sec = document.getElementById('smartmoneysec')
   if (!w) { sec.hidden = true; return }

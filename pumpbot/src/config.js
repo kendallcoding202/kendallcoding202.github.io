@@ -384,6 +384,24 @@ export const config = {
     autoApply: bool('LEARNING_AUTO_APPLY', false),
   },
 
+  /**
+   * The graduation experiment -- a SEPARATE hypothesis from the launch strategy.
+   *
+   * Every launch-side idea failed the same way: a ~5.6pp round trip against a median
+   * 30-second move of exactly 0.0%. Graduated tokens are the first population where the
+   * move may be larger than the toll. Observation only; it never trades. See
+   * PREREG-GRADUATION.md for what decides it.
+   */
+  graduation: {
+    enabled: bool('GRADUATION_TRACKING', true),
+    /**
+     * Each tracked mint holds a trade subscription for up to 24h, and the feed's
+     * subscription list is a finite resource shared with the launch strategy. This caps
+     * what the experiment can take from it.
+     */
+    maxTracked: num('GRADUATION_MAX_TRACKED', 400),
+  },
+
   dashboard: {
     enabled: bool('DASHBOARD', true),
     // PORT is the convention on hosted platforms (Railway, Render, Fly) — honour it
