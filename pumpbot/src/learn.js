@@ -76,12 +76,31 @@ function tradingCost({ sells, positionSol }) {
   const impact = (config.exec.priceImpactPct / 100) * (positionSol / config.exec.impactReferenceSol)
   const slip = config.exec.latencySlipPct / 100
   const sides = 1 + sells // one buy, plus however many times we sold
+
+  /**
+   * PROPORTIONAL COST SCALES WITH NOTIONAL, NOT WITH TRANSACTION COUNT.
+   *
+   * This charged `(fee + impact + slip) * (1 + sells)` — the whole position's percentage
+   * cost, once per transaction. Selling 20% of the bag was billed exactly what selling
+   * 100% was billed. But a percentage fee applies to what you actually trade: two sells
+   * of 20% and 80% move the same notional as one sell of 100%, and cost the same. Impact
+   * is linear in size here, so splitting a sale in two costs the same impact as making it
+   * once. Only the PRIORITY FEE is genuinely per-transaction — it is a flat lamport
+   * charge, so it scales with the number of signatures and nothing else.
+   *
+   * A full round trip therefore moves one unit of notional in and one out: two sides,
+   * whatever the ladder does in between. At 0.15 SOL the shipped ladder was being charged
+   * 14.50% against a true 10.00%, a 4.5pp penalty applied to exactly one class of plan.
+   *
+   * WHICH DIRECTION THIS ERROR RAN MATTERS. It made multi-sell ladders look worse than
+   * they are, so every exit sweep has been quietly biased toward selling fewer times, and
+   * the case for laddering was argued against a handicap. Correcting it moves the replay
+   * UP by about 0.0085 on the measured pool — real, and an order of magnitude smaller
+   * than the look-ahead in the trailing stop that sits alongside it.
+   */
   const priority = (config.exec.priorityFeeSol * sides) / positionSol
-  return {
-    proportional: (sideFee + impact + slip) * sides,
-    priority,
-    total: (sideFee + impact + slip) * sides + priority,
-  }
+  const proportional = (sideFee + impact + slip) * 2
+  return { proportional, priority, total: proportional + priority }
 }
 
 /**

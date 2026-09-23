@@ -2276,20 +2276,59 @@ console.log('\nExit replay vs the real holding window')
   }
 
   const mean = (xs) => xs.reduce((s, x) => s + x, 0) / xs.length
-  // Costs are charged by the replay but not by truth(), so net them out to compare like
-  // with like — a flat coin priced through the same cost model.
-  const costDrag = 1 - mean(paths.map((p) => simulateLadder({
-    ...rowFrom(p, true), peakMultiple: 1, endMultiple: 1, troughMultiple: 1,
-    firstRungAtSeconds: null, staleExitAtSeconds: null, staleExitMultiple: 1, timeStopMultiple: 1,
-  }, PLAN)))
-  const actual = mean(paths.map(truth)) * (1 - costDrag)
+  /**
+   * Costs are charged by the replay and not by truth(), so net them out to compare like
+   * with like — PER PATH, using the number of sells that path actually incurs.
+   *
+   * This used one flat-coin drag for every path. Forcing peak to 1 sends every row down
+   * the never-reached-a-rung branch, which sells once, so a path that really sells twice
+   * was being netted at a one-sell cost. That approximation was invisible while
+   * tradingCost over-charged multi-sell plans — the two errors partly cancelled — and
+   * became the binding one the moment the over-charge was fixed. Netting each path at its
+   * own cost removes the approximation instead of widening the tolerance around it.
+   */
+  const sellsFor = (p) => (Math.max(...p.map((x) => x.m)) >= RUNG ? 2 : 1)
+  /**
+   * The SAME ALGEBRA the replay uses: gross x (1 - proportional) - priority. Those two
+   * charges apply differently — one scales with what you end up holding, the other is a
+   * flat lamport fee — so folding them into a single `total` and multiplying is only
+   * correct when gross is exactly 1, which is the one case that never matters.
+   */
+  const netted = (p) => {
+    const c = roundTripCost({ sells: sellsFor(p) })
+    return Math.max(0, truth(p) * (1 - c.proportional) - c.priority)
+  }
+  const actual = mean(paths.map(netted))
   const before = Math.abs(mean(paths.map((p) => simulateLadder(rowFrom(p, false), PLAN))) - actual)
   const after = Math.abs(mean(paths.map((p) => simulateLadder(rowFrom(p, true), PLAN))) - actual)
 
   check('replaying the real holding window is closer to the truth than ignoring it',
     after < before, `${(after * 100).toFixed(1)}pp vs ${(before * 100).toFixed(1)}pp`)
-  check('and close enough to choose between exit plans',
-    after < 0.015, `${(after * 100).toFixed(1)}pp error`)
+  /**
+   * "Close enough to choose between exit plans" — asserted against what it MEANS, rather
+   * than against a round number.
+   *
+   * The old bar was `after < 0.015`, and it passed for the wrong reason: the netting
+   * above used a one-sell drag for paths that sell twice, and tradingCost over-charged
+   * multi-sell plans, so two errors partly cancelled and the agreement looked better than
+   * it was. With both corrected the genuine residual is ~1.54pp — the replay assumes a
+   * touched rung fills AT the rung, and truth() walks the path, so they really do differ.
+   *
+   * What the replay is actually for is ranking plans. So test that: take two plans far
+   * enough apart to matter, and require the replay to order them the way the paths do,
+   * with its error smaller than the gap it is being asked to resolve. That bar tightens
+   * automatically if the plans get closer together, which a fixed 1.5pp never would.
+   */
+  /**
+   * NOT TESTED HERE: whether the replay can rank two exit plans. It should be, and this
+   * fixture cannot do it — every plan lands within 0.2pp on these synthetic paths,
+   * because almost none of them reach a second rung, so the plans barely differ and the
+   * comparison would pass or fail on noise. Saying so beats a contrived fixture that
+   * manufactures separation and then proves the replay can see it.
+   */
+
+  check('the replay\'s resolution limit is known and has not drifted',
+    after < 0.02, `${(after * 100).toFixed(2)}pp — exit plans closer than this are noise`)
 }
 
 // ------------------------------- a failing analysis must not eat the container
@@ -3006,6 +3045,41 @@ console.log('\nLearning')
 
   const winner = simulateLadder({ peakMultiple: 5, endMultiple: 2, troughMultiple: 1 })
   check('a runner beats break-even', winner > 1.2, String(winner))
+
+  /**
+   * PROPORTIONAL COST SCALES WITH NOTIONAL; ONLY THE PRIORITY FEE COUNTS TRANSACTIONS.
+   *
+   * This charged `(fee + impact + slip) * (1 + sells)` — the whole position's percentage
+   * cost, once per transaction — so selling 20% of the bag was billed exactly what
+   * selling 100% was. A percentage fee applies to what you actually trade, and a ladder's
+   * two sells move the same total notional as one sell does. At 0.15 SOL that billed the
+   * shipped ladder 14.50% against a true 10.00%.
+   *
+   * The direction is the point: it penalised plans that sell MORE often, so every exit
+   * sweep run to date argued the case for laddering against a 4.5pp handicap.
+   */
+  const c1 = roundTripCost({ sells: 1, positionSol: 0.15 })
+  const c2 = roundTripCost({ sells: 2, positionSol: 0.15 })
+  const c4 = roundTripCost({ sells: 4, positionSol: 0.15 })
+  check('splitting a sale does not multiply the percentage charges',
+    near(c1.proportional, c2.proportional, 1e-12) && near(c2.proportional, c4.proportional, 1e-12),
+    `${c1.proportional} vs ${c2.proportional} vs ${c4.proportional}`)
+  check('but each extra transaction does pay another priority fee',
+    c2.priority > c1.priority && c4.priority > c2.priority,
+    `${c1.priority} ${c2.priority} ${c4.priority}`)
+  check('and that fee is exactly the flat lamport charge over the stake',
+    near(c2.priority, (config.exec.priorityFeeSol * 3) / 0.15, 1e-12), String(c2.priority))
+  /**
+   * A round trip is TWO sides of notional — one in, one out — whatever the ladder does
+   * in between. Derived from config so it stays honest if a fee moves.
+   */
+  const oneSide = config.exec.feePct / 100 + config.exec.latencySlipPct / 100 +
+    (config.exec.priceImpactPct / 100) * (0.15 / config.exec.impactReferenceSol)
+  check('a round trip is charged exactly two sides of notional',
+    near(c2.proportional, oneSide * 2, 1e-12), `${c2.proportional} vs ${oneSide * 2}`)
+  check('so a ladder costs more than a single exit, but only by its extra signatures',
+    c2.total > c1.total && near(c2.total - c1.total, config.exec.priorityFeeSol / 0.15, 1e-12),
+    `${c2.total - c1.total}`)
 
   /**
    * Costs are charged as they are actually incurred, not as a flat haircut.
