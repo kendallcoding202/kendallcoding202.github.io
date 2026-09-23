@@ -10,8 +10,8 @@ down to an absurd 2% trail because the replay was handed the peak and then asked
 it. Pre-committing is the cheap defence. If a rule below turns out to be the wrong rule,
 that is worth saying out loud and changing — but it gets said out loud.
 
-Nine questions are tested here. **The 5% threshold is Bonferroni-corrected to 0.0056**
-(0.05/9), so a result that clears an uncorrected bar and not this one counts as "keep
+Ten questions are tested here. **The 5% threshold is Bonferroni-corrected to 0.005**
+(0.05/10), so a result that clears an uncorrected bar and not this one counts as "keep
 watching", not "act".
 
 ---
@@ -27,6 +27,33 @@ Fixed: they now flatten to `trailExit10 … trailExit50` and `priceAt2s … pric
 named by level and second rather than by index. **The export must be taken from a build
 at or after `c71f229`** — check the header contains `trailExit50` before doing anything
 else. An older file cannot answer questions 1 or 3 and should not be used to try.
+
+---
+
+## 0. How many recorded outcomes are physically impossible? — ASK THIS FIRST
+
+Outranks everything below, because it decides whether the rest of the file is measuring
+anything real.
+
+A bonding curve's reserves ARE its price, and constant product bounds how far one can
+run: filling the curve is what COMPLETES it, so between launch and completion the price
+rises **about 15x and stops**. Two positions were marked at **46x (CHIMP)** and **228x
+(CYPH)** and "sold" into those marks for 6.5 and 26.5 SOL of paper profit. Those are not
+pumps. CYPH's price implies reserves of **507 SOL** against a ceiling near 115.
+
+**The number:** share of rows whose `peakMultiple` exceeds what a live curve can reach.
+Any row above ~15x was priced off something that was not a bonding curve.
+
+**Why it is the first question:** the top 25 coins of 1,388 were 100% of the measured
+profit, and those are precisely the extreme multiples. If most of them are above the
+physical ceiling, the edge measured all session is an artifact of the pricing bug, and
+every figure in questions 1, 2 and 7 is computed over contaminated outcomes.
+
+**Still unresolved:** where the impossible reserve reading came from. Most likely the coin
+graduated and post-graduation trades are being decoded with curve semantics, but that is a
+hypothesis, not a finding. The guard shipped in `4b91002` refuses such ticks and counts
+them, so the live rate is now visible on the dashboard — check it before reading anything
+else.
 
 ---
 
