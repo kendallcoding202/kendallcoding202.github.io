@@ -162,7 +162,7 @@ export function probeLedger() {
     failures: p.failures ?? 0,
     committedSol: p.committedSol ?? 0,
     reasons: p.reasons ?? {},
-    fillRatios: p.fillRatios ?? [],
+    fillRatios: (p.fillRatios ?? []).map(normalizeFillSample),
   }
 }
 
@@ -174,6 +174,23 @@ export function probeLedger() {
  * order did not land" and "it landed 30% worse" are different problems with different
  * fixes, and the reason string is the only thing that tells them apart.
  */
+/**
+ * A paper fill is not a measurement, so it never enters this ledger.
+ *
+ * The probe exists to find out what a REAL order does -- the one number paper cannot
+ * produce, because a paper fill is a model of exactly this. While the entry-price bug
+ * was being fixed the probe service ran with PAPER=1, and because the ledger persists
+ * across deploys those modelled fills stayed in it: a 0.01 SOL buy on a 30 SOL curve
+ * moves price about 0.03%, so they sit at 1.000 and quietly drag the median toward
+ * "no slip". They also must not consume the real spending allowance, since no SOL left
+ * the wallet.
+ */
+function normalizeFillSample(entry) {
+  // Samples written before this change are bare numbers of unknown provenance.
+  if (typeof entry === 'number') return { r: entry, build: null }
+  return { r: Number(entry?.r), build: entry?.build ?? null }
+}
+
 export function recordProbeOrder({ ok, solSpent = 0, fillRatio = null, reason = null }) {
   const s = getState()
   if (!s.probe) s.probe = { attempts: 0, trades: 0, failures: 0, committedSol: 0, reasons: {}, fillRatios: [] }
@@ -183,7 +200,18 @@ export function recordProbeOrder({ ok, solSpent = 0, fillRatio = null, reason = 
     p.trades = (p.trades ?? 0) + 1
     p.committedSol = (p.committedSol ?? 0) + solSpent
     if (Number.isFinite(fillRatio)) {
-      p.fillRatios = [...(p.fillRatios ?? []), Number(fillRatio.toFixed(4))].slice(-200)
+      /*
+       * Stamped with the build that measured it. A ratio is only comparable to others
+       * taken under the same execution code: the pre-fix entry-price bug divided rent
+       * and fees into the token count as though they had bought tokens, which inflated
+       * every sample it touched by an amount that varied with whether the token account
+       * already existed. Without the stamp those are indistinguishable from real
+       * adverse fills, and the median silently mixes the two.
+       */
+      p.fillRatios = [
+        ...(p.fillRatios ?? []),
+        { r: Number(fillRatio.toFixed(4)), build: config.version },
+      ].slice(-200)
     }
   } else {
     p.failures = (p.failures ?? 0) + 1

@@ -669,7 +669,19 @@ export class Bot {
      */
     if (config.probe.enabled) {
       const p = probeLedger()
-      const ratios = (p.fillRatios ?? []).filter((r) => Number.isFinite(r)).sort((a, b) => a - b)
+      /*
+       * Only samples from THIS build are averaged together.
+       *
+       * A fill ratio is comparable only to others taken under the same execution code.
+       * Mixing builds is how a median of six samples reported 21.98% slip while
+       * containing two paper fills and three measured by the pre-fix entry-price bug --
+       * a number with no referent, reported to four decimal places. Older samples are
+       * still counted and shown, so the sample is never silently narrowed.
+       */
+      const all = (p.fillRatios ?? []).filter((x) => Number.isFinite(x?.r))
+      const mine = all.filter((x) => x.build === config.version).map((x) => x.r).sort((a, b) => a - b)
+      const stale = all.length - mine.length
+      const ratios = mine
       const median = ratios.length ? ratios[Math.floor(ratios.length / 2)] : null
       const topReasons = Object.entries(p.reasons ?? {})
         .sort((a, b) => b[1] - a[1]).slice(0, 3).map(([r, n]) => `${r}×${n}`).join(' ')
@@ -692,7 +704,8 @@ export class Bot {
                * which of the two a median is actually reporting.
                */
               ` [${ratios.map((r) => r.toFixed(3)).join(' ')}]`
-            : ' · no fill ratios yet') +
+            : ` · no fill ratios from this build yet${stale ? ` (${stale} from older builds, not comparable)` : ''}`) +
+          (median !== null && stale ? ` · ${stale} older sample(s) excluded` : '') +
           (topReasons ? ` · failures: ${topReasons}` : ''),
       )
     }
@@ -1405,7 +1418,17 @@ export class Bot {
        * worse" are different problems with different fixes.
        */
       const quoted = candidate.vTokens > 0 ? candidate.vSol / candidate.vTokens : null
-      if (config.probe.enabled) {
+      /*
+       * A paper fill is not a measurement, so it never enters the probe ledger.
+       *
+       * The probe exists to find out what a REAL order does -- the one number paper
+       * cannot produce, because a paper fill is a model of exactly this. While the
+       * entry-price bug was being fixed the probe service ran with PAPER=1, and because
+       * the ledger persists across deploys those modelled fills stayed in it, sitting at
+       * 1.000 and dragging the median toward "no slip". They must not consume the real
+       * spending allowance either, since no SOL left the wallet.
+       */
+      if (config.probe.enabled && !config.paper) {
         recordProbeOrder({
           ok: Boolean(fill.ok),
           solSpent: fill.ok ? (fill.solSpent ?? buySol) : 0,

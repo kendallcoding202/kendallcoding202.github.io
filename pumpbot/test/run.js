@@ -1474,7 +1474,29 @@ console.log('\nFill probe guards')
     led.attempts === 3 && led.trades === 1 && led.failures === 2, JSON.stringify(led))
   check('failures keep their reason, since a revert and a bad fill differ',
     Object.values(led.reasons)[0] === 2, JSON.stringify(led.reasons))
-  check('and the fill ratio is what the exercise is for', led.fillRatios[0] === 1.04)
+  check('and the fill ratio is what the exercise is for', led.fillRatios[0].r === 1.04,
+    JSON.stringify(led.fillRatios))
+  /**
+   * Stamped with the build that measured it. A ratio is comparable only to others taken
+   * under the same execution code: the pre-fix entry-price bug inflated every sample it
+   * touched, and unstamped those are indistinguishable from real adverse fills, so a
+   * median of six silently mixed paper fills, buggy fills and real ones and reported the
+   * result as 21.98% slip.
+   */
+  check('and it records which build measured it', led.fillRatios[0].build === config.version,
+    `${led.fillRatios[0].build} vs ${config.version}`)
+  // Samples written before the stamp existed are readable, and declare that they are
+  // of unknown provenance rather than claiming to be from the running build.
+  {
+    const raw = store.getState().probe
+    raw.fillRatios = [1.29, ...raw.fillRatios]
+    const mixed = store.probeLedger()
+    check('legacy bare-number samples survive a read', mixed.fillRatios[0].r === 1.29,
+      JSON.stringify(mixed.fillRatios[0]))
+    check('and are not attributed to the running build', mixed.fillRatios[0].build === null,
+      JSON.stringify(mixed.fillRatios[0]))
+    raw.fillRatios = raw.fillRatios.slice(1)
+  }
 
   /** The trade cap stops it, at the gate every buy passes through. */
   st.probe.trades = config.probe.maxTrades
