@@ -6460,6 +6460,44 @@ console.log('\nMayhem: supply that is not conserved')
 }
 
 
+
+// ------------------------------- two populations, reported apart
+console.log('\nThe Mayhem split, in the report')
+{
+  const { analyze } = await import('../src/learn.js')
+  const mk = (over = {}) => ({
+    v: JOURNAL_VERSION, action: 'bought', creator: 'C', mint: 'M',
+    hitFirstRung: true, peakMultiple: 2, endMultiple: 1, troughMultiple: 0.9,
+    decisionPriceSol: 1e-7, finalizedAt: Date.now(),
+    features: { organicBuyers: 10, mayhem: false, subLaunchPrice: false, mayhemLikely: false },
+    ...over,
+  })
+  const f = (o) => ({ features: { organicBuyers: 10, ...o } })
+  const rows = [
+    ...Array.from({ length: 30 }, () => mk()),
+    // Agent seen in the window.
+    ...Array.from({ length: 5 }, () => mk(f({ mayhem: true, subLaunchPrice: false, mayhemLikely: true }))),
+    // Agent NOT seen, but the price went under the launch floor — the false negative the
+    // behavioural test exists to catch.
+    ...Array.from({ length: 7 }, () => mk(f({ mayhem: false, subLaunchPrice: true, mayhemLikely: true }))),
+  ]
+  const a = analyze(rows, rows.length)
+  check('the report counts the agent test and the behavioural one separately',
+    a.totals.mayhemAgentSeen === 5 && a.totals.subLaunchPrice === 7,
+    JSON.stringify({ agent: a.totals.mayhemAgentSeen, sub: a.totals.subLaunchPrice }))
+  check('and their union, which is what entry acts on',
+    a.totals.mayhemLikely === 12, String(a.totals.mayhemLikely))
+  /**
+   * The point of keeping both: the gap between them IS the agent window's false-negative
+   * rate. Folding them into one column would have hidden exactly that.
+   */
+  check('so the agent window\'s misses are measurable rather than assumed',
+    a.totals.mayhemLikely - a.totals.mayhemAgentSeen === 7)
+  check('a book with none of them reports zero, not null',
+    analyze(Array.from({ length: 30 }, () => mk()), 30).totals.mayhemLikely === 0)
+}
+
+
 fs.rmSync(tmp, { recursive: true, force: true })
 
 console.log(`\n${passed} passed, ${failures.length} failed`)

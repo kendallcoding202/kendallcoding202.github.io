@@ -1040,6 +1040,22 @@ function analyzeRows(rows, onDisk) {
       stale,
       /** Rows excluded as physically impossible on a bonding curve — see above. */
       impossible,
+      /**
+       * THE TWO POPULATIONS, REPORTED APART.
+       *
+       * A Mayhem coin and an ordinary one are not the same instrument: the extra billion
+       * tokens are minted off the curve, so the supply the curve holds is not conserved
+       * and none of the bounds this analysis reasons with apply — not the appreciation
+       * ceiling, not the reserve ceiling, not the launch-price floor. Averaging them
+       * together produces a number that describes neither, which is what every figure
+       * before today did.
+       *
+       * `mayhemLikely` is the union of the agent test and the behavioural one; the two
+       * are kept separately so the agent window's false-negative rate stays measurable.
+       */
+      mayhemLikely: labelled.filter((r) => r.features?.mayhemLikely).length,
+      mayhemAgentSeen: labelled.filter((r) => r.features?.mayhem).length,
+      subLaunchPrice: labelled.filter((r) => r.features?.subLaunchPrice).length,
       labelled: labelled.length,
       bought: bought.length,
       explored: explored.length,

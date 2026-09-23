@@ -1,3 +1,12 @@
+# SUPERSEDED — see RESULTS-2026-09-23.md
+
+This file pre-registered the 23 Sep run. It was answered; the results and what they
+changed are in `RESULTS-2026-09-23.md`. Kept as written, including the questions that
+turned out to be the wrong questions, because a pre-registration edited after the fact
+is not one.
+
+---
+
 # What the next export is being used to settle
 
 Written **before** the data arrives, on purpose.
