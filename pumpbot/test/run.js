@@ -7182,6 +7182,27 @@ console.log('\nScreened vs passed')
 
 
 /**
+ * THE DEFAULT DATA_DIR IS INSIDE THE APPLICATION, which on a hosted platform is part of
+ * the image: a container restart keeps it, a redeploy deletes it. State written there
+ * survives just often enough to look fine -- one position re-attached cleanly across a
+ * restart, that was read as proof the disk persisted, and four more were orphaned by
+ * later deploys. An orphan has no stop-loss and no exit rules.
+ *
+ * This pins the relationship the startup guard tests for, so the guard cannot silently
+ * stop matching if the default ever moves.
+ */
+{
+  const { ROOT } = await import('../src/config.js')
+  const path2 = await import('node:path')
+  const defaultDir = path2.join(ROOT, '.data')
+  check('the default data dir lives inside the app, which is why the guard exists',
+    defaultDir.startsWith(ROOT), `${defaultDir} vs ${ROOT}`)
+  // And the suite's own dir is outside it, so the guard stays quiet here.
+  check('an explicit DATA_DIR outside the app does not trip the guard',
+    !config.dataDir.startsWith(ROOT), config.dataDir)
+}
+
+/**
  * A FULL EXIT MUST LAND ON ZERO, or the account's rent is stranded for good.
  *
  * getTokenBalance reports uiAmount -- a float in display units -- and these tokens carry

@@ -1,4 +1,4 @@
-import { config, envReport, PUMP_MAX_CURVE_SOL } from './config.js'
+import { config, envReport, ROOT, PUMP_MAX_CURVE_SOL } from './config.js'
 import { Feed } from './feed.js'
 import { LogFeed } from './logfeed.js'
 import { Candidate, evaluateEntry } from './filter.js'
@@ -765,6 +765,34 @@ export class Bot {
           ? ` · next ${sol(summary.sizing.nextTier.buySol)}/trade at ${sol(summary.sizing.nextTier.atSol)}`
           : ''),
     )
+    /**
+     * A LIVE BOT ON AN EPHEMERAL DISK LOSES ITS POSITIONS, SILENTLY.
+     *
+     * DATA_DIR defaults to a directory inside the application itself, which on a hosted
+     * platform is part of the image: a container restart keeps it, a redeploy does not.
+     * State written there survives just often enough to look fine. That is exactly how
+     * this was missed -- one position re-attached cleanly across a restart, which was
+     * read as proof the disk persisted, and four more were orphaned by later deploys.
+     *
+     * An orphan has no stop-loss and no exit rules, so the failure mode is real money
+     * sitting in the wallet with nothing managing it, discovered only by the orphan
+     * sweep on some later boot. Say so at startup, on the channel that reaches a phone,
+     * rather than leaving it to be inferred from a list of mints.
+     */
+    if (!config.paper && config.dataDir.startsWith(ROOT)) {
+      log.error(
+        `DATA_DIR is unset, so live state is being written to ${config.dataDir} — inside the ` +
+          'container. A redeploy will DELETE it and every open position becomes an orphan ' +
+          'with no stop-loss. Mount a persistent volume and point DATA_DIR at it.',
+      )
+      notify(
+        '⚠️ <b>State is not persistent</b>\n' +
+          `Live positions are stored in <code>${config.dataDir}</code>, inside the container.\n` +
+          'The next deploy will orphan every open position — no stop-loss, no exit rules.\n' +
+          'Mount a volume and set <code>DATA_DIR</code> to it.',
+      ).catch(() => {})
+    }
+
     const start = recordStart()
     log.info(
       `start #${start.startCount} of build ${config.version}` +
