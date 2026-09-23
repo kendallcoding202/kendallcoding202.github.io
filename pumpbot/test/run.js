@@ -6777,6 +6777,37 @@ console.log('\nTrailing stop: measurement over inference')
 }
 
 
+
+// ------------------------------- a counter must not go silent when its subject is filtered
+console.log('\nMayhem reporting survives mayhem rejection')
+{
+  const { EventEmitter } = await import('node:events')
+  const { Bot } = await import('../src/bot.js')
+  class Quiet extends EventEmitter {
+    constructor() { super(); this.watched = new Set() }
+    start() {} async stop() {} watch(m) { this.watched.add(m) } unwatch(m) { this.watched.delete(m) }
+    feedStats() { return { notifications: 0, decoded: 0, kept: 0, connected: true } }
+  }
+  const bot = new Bot({ feed: new Quiet(), logFeed: new Quiet() })
+  const s = bot.statsSnapshot()
+  check('the panel reports mayhem candidates DECIDED, not only ones bought',
+    typeof s.mayhem.seen === 'number' && typeof s.mayhem.refused === 'number',
+    JSON.stringify(s.mayhem))
+  /**
+   * mayhemScreened sits after the pass check. Once entry started refusing these coins it
+   * could never increment again, so the line read "nothing screened yet" forever on a
+   * population that is roughly a third of what the bot looks at. A counter that goes
+   * permanently silent the moment its subject starts being filtered reports ABSENCE
+   * where there is AVOIDANCE, which is the opposite of what the reader needs.
+   */
+  check('and says whether entry is currently refusing them',
+    s.mayhem.rejecting === config.entry.rejectMayhem, String(s.mayhem.rejecting))
+  check('the old screened counter is still there, unredefined',
+    s.mayhem.screened === 0 && typeof s.mayhem.screenedShare !== 'undefined')
+  await bot.stop()
+}
+
+
 fs.rmSync(tmp, { recursive: true, force: true })
 
 console.log(`\n${passed} passed, ${failures.length} failed`)

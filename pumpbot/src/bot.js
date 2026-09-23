@@ -148,6 +148,9 @@ export class Bot {
       /** Ticks refused for reporting reserves a live curve cannot hold. See #onTrade. */
       impossibleCurve: 0,
       lastImpossibleCurve: null,
+      /** Mayhem-likely candidates DECIDED, and how many entry then refused. */
+      mayhemSeen: 0,
+      mayhemRefused: 0,
       mayhemScreened: 0,
       mayhemEntered: 0,
       uptimeHours() {
@@ -208,6 +211,11 @@ export class Bot {
         entered: s.mayhemEntered,
         screenedShare: s.screened > 0 ? s.mayhemScreened / s.screened : null,
         enteredShare: s.entered > 0 ? s.mayhemEntered / s.entered : null,
+        /** Decided, and refused — the figures that survive entry rejecting them. */
+        seen: s.mayhemSeen,
+        refused: s.mayhemRefused,
+        decided: s.screened + [...s.rejects.values()].reduce((a, b) => a + b, 0),
+        rejecting: config.entry.rejectMayhem,
       },
       blockedEntries: [...s.blockedEntries.entries()]
         .sort((a, b) => b[1] - a[1]).slice(0, 5).map(([reason, n]) => ({ reason, n })),
@@ -1067,6 +1075,20 @@ export class Bot {
 
       const verdict = evaluateEntry(candidate, { creatorPrior: this.#creatorPrior(candidate.creator) })
       this.candidates.delete(mint)
+
+      /**
+       * Counted on every DECIDED candidate, not only on the ones we buy.
+       *
+       * mayhemScreened sits after the pass check, so once entry started refusing these
+       * coins it could never increment again and the panel read "nothing screened yet"
+       * forever — on a population that is roughly a third of what we look at. A counter
+       * that goes permanently silent the moment its subject starts being filtered is
+       * worse than no counter: it reports absence where there is avoidance.
+       */
+      if (candidate.mayhemLikely) {
+        this.stats.mayhemSeen++
+        if (!verdict.pass) this.stats.mayhemRefused++
+      }
 
       if (!verdict.pass) {
         log.debug(`skip ${candidate.symbol}: ${verdict.reason}`)

@@ -639,7 +639,19 @@ export function startDashboard(getContext) {
 
     if (url.pathname === '/' || url.pathname === '/index.html') {
       try {
-        const html = fs.readFileSync(PAGE)
+        /**
+         * STAMP THE PAGE WITH THE BUILD THAT SERVED IT.
+         *
+         * A page left open across a deploy keeps polling /api/dashboard, so it renders
+         * NEW data with OLD code. The header's build number comes from that payload, so
+         * the one thing you would check to confirm a deploy looks correct while the
+         * renderer around it is stale — two lines shipped that afternoon were simply
+         * absent, and nothing said why.
+         *
+         * The page can only notice this if it knows its OWN build, which it cannot get
+         * from the payload. So it is injected at serve time and compared client-side.
+         */
+        const html = String(fs.readFileSync(PAGE)).replace('__PAGE_BUILD__', config.version)
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
         res.end(html)
       } catch (err) {

@@ -206,6 +206,7 @@
     <div class="hstat" id="hstat"></div>
   </header>
 
+  <div id="stalepage" class="banner" hidden></div>
   <div id="banner" class="banner" hidden></div>
   <div id="collect" class="collect" hidden></div>
 
@@ -440,6 +441,24 @@ function render(d) {
         pipelineTail(c) + '</span>'
     }
   } else col.hidden = true
+
+  /**
+   * A PAGE OLDER THAN THE BOT RENDERS NEW DATA WITH OLD CODE.
+   *
+   * PAGE_BUILD is stamped in when the HTML is served; d.version comes from the live
+   * payload. They differ exactly when this tab has outlived a deploy — at which point
+   * every render function here is the previous build's, so a newly shipped line is
+   * silently missing and the build number in the header still reads correctly, because
+   * that number came from the payload rather than from the page.
+   */
+  const PAGE_BUILD = '__PAGE_BUILD__'
+  const stale = document.getElementById('stalepage')
+  if (PAGE_BUILD !== '__PAGE' + '_BUILD__' && d.version && PAGE_BUILD !== d.version) {
+    stale.hidden = false
+    stale.innerHTML = 'This page was loaded from build <code>' + esc(PAGE_BUILD) +
+      '</code> and the bot is now running <code>' + esc(d.version) +
+      '</code>. You are seeing new data drawn by old code — <b>reload to see what actually shipped.</b>'
+  } else stale.hidden = true
 
   const banner = document.getElementById('banner')
   /**
@@ -1170,6 +1189,21 @@ function exitMixLine(mix) {
 }
 
 function mayhemLine(m) {
+  /**
+   * Reported on candidates DECIDED, not on ones bought. `screened` counts only launches
+   * that passed entry, so once entry started refusing these coins it pinned itself at
+   * zero and the line read "nothing screened yet" on a population that is about a third
+   * of what the bot looks at — absence reported where there was avoidance.
+   */
+  if (m.seen > 0) {
+    const share = m.decided > 0 ? ' · <code>' + pct(m.seen / m.decided) + '</code> of decided launches' : ''
+    return 'Supply not conserved (mayhem) · <b>' + num(m.seen) + '</b> seen' + share +
+      (m.rejecting
+        ? ' · <span style="color:var(--amber)">' + num(m.refused) + ' refused at entry</span>' +
+          '<br><span class="dim">Excluded on risk, not on measured edge: their prices may be real ' +
+          'and unexitable, which paper cannot tell apart. Explore still buys them.</span>'
+        : ' · <span style="color:var(--amber)">being traded (REJECT_MAYHEM off)</span>')
+  }
   if (!m.screened) return 'Mayhem agent <span class="dim">nothing screened yet</span>'
   const pct = (v) => v === null ? '—' : (v * 100).toFixed(0) + '%'
   return 'Mayhem agent seen in <code>' + pct(m.screenedShare) + '</code> of screened launches' +
