@@ -1,4 +1,4 @@
-import { config } from './config.js'
+import { config, PUMP_MAX_ONCURVE_MULTIPLE } from './config.js'
 import { readAll, readRecent, JOURNAL_VERSION } from './journal.js'
 import { strategyRecord } from './store.js'
 import { WalletIndex, loadWallets } from './wallets.js'
@@ -785,7 +785,27 @@ function analyzeRows(rows, onDisk) {
   // rows were never materialised, so this comes from the on-disk count rather than from
   // the difference between two arrays we happen to be holding.
   const olderThanCap = Math.max(0, onDisk - rows.length) + (all.length - current.length)
-  const labelled = current.filter((r) => typeof r.hitFirstRung === 'boolean' && r.decisionPriceSol > 0)
+  /**
+   * OUTCOMES THAT CANNOT HAVE HAPPENED, excluded from every number below.
+   *
+   * A bonding curve's reserves are its price, and constant product bounds how far one can
+   * run: filling it is what COMPLETES it, so a coin can appreciate about 15x on-curve and
+   * then the curve closes. Rows recorded above that were priced off something that was
+   * not a curve — a paper sale was quoted against reserves no curve can hold, and booked.
+   *
+   * They are 2.2% of the rows the filter takes and 27% of all the peak value, so leaving
+   * them in does not nudge the result, it produces it. Every multiple measured before this
+   * — the 1.19x, the case for a bigger moon bag — was computed over a book a quarter of
+   * whose apparent value could not occur.
+   *
+   * EXCLUDED, NOT DELETED. The rows stay on disk: they are the only evidence of how often
+   * this happens and the only way to diagnose where the bad reserve readings come from,
+   * and the exclusion is a computation anyone can re-run or reverse. Deleting would throw
+   * away the diagnosis to tidy the symptom.
+   */
+  const impossible = current.filter((r) => r.peakMultiple > PUMP_MAX_ONCURVE_MULTIPLE).length
+  const believable = current.filter((r) => !(r.peakMultiple > PUMP_MAX_ONCURVE_MULTIPLE))
+  const labelled = believable.filter((r) => typeof r.hitFirstRung === 'boolean' && r.decisionPriceSol > 0)
   const bought = labelled.filter((r) => r.action === 'bought')
   const explored = labelled.filter((r) => r.action === 'explored')
   // Everything the filter declined — whether we shadow-tracked it or bought it anyway
@@ -1018,13 +1038,15 @@ function analyzeRows(rows, onDisk) {
        */
       labelledLastHour: labelled.filter((r) => (r.finalizedAt ?? 0) > Date.now() - 3_600_000).length,
       stale,
+      /** Rows excluded as physically impossible on a bonding curve — see above. */
+      impossible,
       labelled: labelled.length,
       bought: bought.length,
       explored: explored.length,
       rejected: rejected.length,
       blocked: blocked.length,
       blockedReasons,
-      pending: current.length - labelled.length,
+      pending: believable.length - labelled.length,
       truncated,
       olderThanCap,
       medianObservedSeconds,

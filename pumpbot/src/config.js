@@ -1070,3 +1070,23 @@ export const PUMP_INITIAL_VIRTUAL_SOL = 30
  * That is a guard against decoding the wrong bytes, not against this.
  */
 export const PUMP_MAX_CURVE_SOL = 200
+
+/**
+ * The most a coin can appreciate WHILE STILL ON ITS CURVE, as a multiple.
+ *
+ * Constant product with a curve that completes near 115 virtual SOL: between launch and
+ * completion the price rises about 14.7x, and then the curve closes. Entering above
+ * launch only lowers it, so any recorded outcome above this was priced off something that
+ * was not a bonding curve — whatever the coin subsequently did.
+ *
+ * Rounded UP to 16 rather than down. The purpose is to exclude the provably impossible,
+ * not to adjudicate the boundary, and a rule that discards real winners to be safe would
+ * be the same mistake in the opposite direction.
+ *
+ * Kept separate from PUMP_MAX_CURVE_SOL, which is the LIVE guard and is deliberately
+ * loose so an unusual coin is never refused a price. This one is for judging rows after
+ * the fact, where being strict costs nothing and being wrong costs the whole analysis:
+ * on the last export 2.2% of the rows the filter takes are above it, and they carry 27%
+ * of all the peak value in the book.
+ */
+export const PUMP_MAX_ONCURVE_MULTIPLE = 16

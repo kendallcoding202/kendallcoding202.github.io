@@ -6296,6 +6296,56 @@ console.log('\nFantasy fills')
 }
 
 
+
+// ------------------------------- impossible outcomes must not be averaged in
+console.log('\nExcluding what cannot have happened')
+{
+  const { analyze } = await import('../src/learn.js')
+  const { PUMP_MAX_ONCURVE_MULTIPLE } = await import('../src/config.js')
+
+  /**
+   * A curve can appreciate about 15x before it completes and closes, so a row above that
+   * was priced off something that was not a curve. On the last export those rows were
+   * 2.2% of what the filter takes and 27% of all the peak value — so leaving them in does
+   * not nudge a result, it produces one.
+   */
+  const mk = (peak) => ({
+    v: JOURNAL_VERSION, action: 'bought', creator: 'C', mint: 'M',
+    hitFirstRung: peak >= 1.5, peakMultiple: peak, endMultiple: 1, troughMultiple: 0.9,
+    decisionPriceSol: 1e-7, finalizedAt: Date.now(), features: { organicBuyers: 10 },
+  })
+  const ordinary = Array.from({ length: 40 }, () => mk(2))
+  const fantasy = [mk(228), mk(46), mk(40)] // CYPH, CHIMP, and one in the old guard's gap
+
+  const clean = analyze(ordinary, ordinary.length)
+  const dirty = analyze([...ordinary, ...fantasy], ordinary.length + fantasy.length)
+
+  check('impossible rows are counted, not silently dropped',
+    dirty.totals.impossible === 3, String(dirty.totals.impossible))
+  check('and they do not inflate the labelled sample',
+    dirty.totals.labelled === clean.totals.labelled,
+    `${dirty.totals.labelled} vs ${clean.totals.labelled}`)
+  check('a clean book reports none', clean.totals.impossible === 0, String(clean.totals.impossible))
+
+  /**
+   * The rows are EXCLUDED, not deleted: still on disk, still counted, still available to
+   * diagnose where the bad reserve readings came from. journalled is the on-disk total
+   * and must keep describing the file rather than the filtered view.
+   */
+  check('the on-disk count still describes the file, not the filtered view',
+    dirty.totals.journalled === ordinary.length + fantasy.length,
+    String(dirty.totals.journalled))
+
+  /**
+   * A row AT the boundary is kept. The threshold is rounded up on purpose — discarding
+   * real winners to be safe is the same mistake pointing the other way.
+   */
+  const edge = analyze([...ordinary, mk(PUMP_MAX_ONCURVE_MULTIPLE)], ordinary.length + 1)
+  check('a row exactly at the ceiling is kept, not discarded',
+    edge.totals.impossible === 0, String(edge.totals.impossible))
+}
+
+
 fs.rmSync(tmp, { recursive: true, force: true })
 
 console.log(`\n${passed} passed, ${failures.length} failed`)
