@@ -340,7 +340,20 @@ function paperBuy({ mint, solAmount, curve }) {
   const feeMultiplier = 1 - config.exec.feePct / 100
   const slipMultiplier = 1 - config.exec.latencySlipPct / 100
   const tokensReceived = q.tokensOut * feeMultiplier * slipMultiplier
-  const solSpent = solAmount + config.exec.priorityFeeSol
+  /**
+   * Paper pays the TOKEN-ACCOUNT RENT too, because paper exists to predict live.
+   *
+   * A live buy of a mint the wallet has never held creates an associated token account
+   * and is charged ~0.00204 SOL of rent-exemption for it, which nothing in this bot ever
+   * reclaims. Paper creates no account, so it is not charged by the chain — but a paper
+   * book that skips a cost the live book pays is not a forecast of anything. At 0.15 SOL
+   * it overstates every trade by 1.4% of stake; at the probe's 0.01 it would be 20%.
+   *
+   * Charged as part of solSpent, alongside the priority fee, and deliberately NOT folded
+   * into avgPriceSol — it is a cost of transacting, not a price the market quoted.
+   */
+  const overheadSol = config.exec.priorityFeeSol + config.exec.ataRentSol
+  const solSpent = solAmount + overheadSol
 
   log.info(`[paper] BUY ${mint}: ${tokensReceived.toFixed(0)} tokens for ${sol(solSpent)}`)
   return {
@@ -348,7 +361,7 @@ function paperBuy({ mint, solAmount, curve }) {
     tokensReceived,
     solSpent,
     swapSol: solAmount,
-    overheadSol: config.exec.priorityFeeSol,
+    overheadSol,
     // The SWAP price, matching the live path. Folding the priority fee in is 0.3% at the
     // strategy's size and 5% at the probe's — small enough to hide, large enough to
     // misprice an exit, and there is no reason for the two executors to differ.

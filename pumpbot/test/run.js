@@ -3139,6 +3139,32 @@ console.log('\nLearning')
    * The direction is the point: it penalised plans that sell MORE often, so every exit
    * sweep run to date argued the case for laddering against a 4.5pp handicap.
    */
+  /**
+   * TOKEN-ACCOUNT RENT: once per position, never per transaction and never per notional.
+   *
+   * Measured on the live tape, not modelled: the first live run spent 0.0122 SOL on a
+   * 0.0100 buy and recovered 0.0094 selling the same tokens back, and none of the
+   * difference returned. Live sells measure proceeds as a wallet delta, so a refund would
+   * have shown. Nothing in this bot closes a token account, so the charge lands once and
+   * stays.
+   */
+  const rent1 = roundTripCost({ sells: 1, positionSol: 0.15 })
+  const rent3 = roundTripCost({ sells: 3, positionSol: 0.15 })
+  check('rent is charged once however many times the position sells',
+    near(rent1.rent, rent3.rent, 1e-12), `${rent1.rent} vs ${rent3.rent}`)
+  check('and it is exactly the account rent over the stake',
+    near(rent1.rent, config.exec.ataRentSol / 0.15, 1e-12), String(rent1.rent))
+  /**
+   * It is a FIXED charge, so it bites in inverse proportion to size — which is why it hid
+   * for eight days at 0.15 SOL and was impossible to miss at the probe's 0.01.
+   */
+  const tinyPos = roundTripCost({ sells: 1, positionSol: 0.01 })
+  check('so a tenth the size pays ten times the rent as a share of stake',
+    near(tinyPos.rent / rent1.rent, 15, 1e-9), String(tinyPos.rent / rent1.rent))
+  check('and the total now carries it', near(rent1.total, rent1.proportional + rent1.priority + rent1.rent, 1e-12))
+  check('with the fixed terms grouped, since those are the ones size dilutes',
+    near(rent1.fixed, rent1.priority + rent1.rent, 1e-12))
+
   const c1 = roundTripCost({ sells: 1, positionSol: 0.15 })
   const c2 = roundTripCost({ sells: 2, positionSol: 0.15 })
   const c4 = roundTripCost({ sells: 4, positionSol: 0.15 })
@@ -3245,7 +3271,10 @@ console.log('\nLearning')
 
     const b = quoteBuy({ vSol, vTokens, solIn: size })
     const tokens = b.tokensOut * fee * slip
-    const spent = size + config.exec.priorityFeeSol
+    // Rent is part of what a live buy costs and is now charged by both the paper
+    // executor and the replay, so the hand-built executor figure has to include it or
+    // this test is comparing two different cost definitions.
+    const spent = size + config.exec.priorityFeeSol + config.exec.ataRentSol
     const s = quoteSell({ vSol: vSol + size, vTokens: vTokens - b.tokensOut, tokensIn: tokens })
     const back = s.solOut * fee * slip - config.exec.priorityFeeSol
 
@@ -5507,7 +5536,8 @@ console.log('\nEnd-to-end bot loop')
   // paper book starts at PAPER_START_SOL, which is deliberately large enough that the
   // total-loss limit cannot end the experiment early.
   const expectedBuy = (await import('../src/sizing.js')).buySolFor(bot.walletSol)
-  check('entry used the tier size', pos && near(pos.solSpent, expectedBuy + config.exec.priorityFeeSol, 1e-9),
+  check('entry used the tier size',
+    pos && near(pos.solSpent, expectedBuy + config.exec.priorityFeeSol + config.exec.ataRentSol, 1e-9),
     `${pos?.solSpent} vs ${expectedBuy} at ${bot.walletSol} SOL`)
   check('entry counted in stats', bot.statsSnapshot().entered === 1)
   check('position is shadow-tracked for learning', bot.shadow.has(MINT))
@@ -7087,7 +7117,7 @@ console.log('\nEntry price vs cost basis')
     near(f.avgPriceSol, 0.01 / f.tokensReceived, 1e-12),
     `${f.avgPriceSol} vs ${0.01 / f.tokensReceived}`)
   check('while solSpent still carries the full outflow for P&L',
-    f.solSpent > 0.01 && near(f.solSpent, 0.01 + config.exec.priorityFeeSol, 1e-12),
+    f.solSpent > 0.01 && near(f.solSpent, 0.01 + config.exec.priorityFeeSol + config.exec.ataRentSol, 1e-12),
     String(f.solSpent))
   check('and the overhead is reported rather than hidden inside the price',
     near(f.overheadSol, f.solSpent - f.swapSol, 1e-12), JSON.stringify({ o: f.overheadSol, s: f.swapSol }))

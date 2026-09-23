@@ -100,7 +100,19 @@ function tradingCost({ sells, positionSol }) {
    */
   const priority = (config.exec.priorityFeeSol * sides) / positionSol
   const proportional = (sideFee + impact + slip) * 2
-  return { proportional, priority, total: proportional + priority }
+  /**
+   * Token-account rent: ONCE per position, not per transaction and not per notional.
+   *
+   * A position creates one account whatever the ladder does afterwards, and nothing in
+   * this bot ever closes it, so the charge lands once and stays. Confirmed on the live
+   * tape rather than modelled — see config.exec.ataRentSol.
+   *
+   * Grouped with `priority` in the return because both are FIXED lamport charges divided
+   * by the stake, which is the property that matters to a reader deciding position size:
+   * they are the terms that get cheaper as you size up, while `proportional` does not.
+   */
+  const rent = config.exec.ataRentSol / positionSol
+  return { proportional, priority, rent, fixed: priority + rent, total: proportional + priority + rent }
 }
 
 /**

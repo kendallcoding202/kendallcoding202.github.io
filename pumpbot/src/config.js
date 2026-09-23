@@ -579,6 +579,29 @@ export const config = {
      * could be fixed by arithmetic rather than by an experiment.
      */
     priceImpactPct: num('PRICE_IMPACT_PCT', 0.25),
+    /**
+     * RENT FOR THE TOKEN ACCOUNT, which is paid once per position and never comes back.
+     *
+     * Buying a mint the wallet has never held creates an associated token account, and
+     * Solana charges rent-exemption for it: 2,039,280 lamports for a 165-byte account.
+     * It is recoverable in principle — closing the account refunds it — and this bot has
+     * no code that closes one, so today it is simply gone.
+     *
+     * MEASURED, not assumed. The first live run spent 0.0122 SOL on a 0.0100 SOL buy and
+     * got 0.0094 back on a sale of the same tokens; the difference is this plus the two
+     * priority fees, and none of it returned on the sell. Live sells measure proceeds as
+     * a wallet delta, so a refund would have been visible. It was not.
+     *
+     * It is a FIXED charge, like the priority fee rather than like the trading fee, so it
+     * hurts in inverse proportion to position size: 1.4% of stake at the strategy's 0.15
+     * SOL, 20% at the probe's 0.01. That shape is why it hid for eight days — paper never
+     * creates an account, and at the sizes the strategy trades it is a rounding error
+     * next to the 4pp of unmeasured latency slip.
+     *
+     * Set ATA_RENT_SOL=0 if a sweeper is ever added that closes accounts and reclaims it.
+     */
+    ataRentSol: num('ATA_RENT_SOL', 0.00203928),
+
     // The position size the impact figure above was estimated for.
     impactReferenceSol: num('IMPACT_REFERENCE_SOL', 0.075),
     maxRetries: num('EXEC_MAX_RETRIES', 3),
