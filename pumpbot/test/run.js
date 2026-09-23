@@ -18,7 +18,7 @@ const { Candidate, evaluateEntry } = await import('../src/filter.js')
 const { decideExit, newPosition, applySell, markPrice, positionPnl } = await import('../src/position.js')
 const store = await import('../src/store.js')
 const { canOpen } = await import('../src/risk.js')
-const { buy, sell } = await import('../src/exec.js')
+const { buy, sell, sellAmountFor } = await import('../src/exec.js')
 const { wilson, simulateLadder, bestThreshold, analyze, roundTripCost } = await import('../src/learn.js')
 const { JOURNAL_VERSION, CreatorIndex } = await import('../src/journal.js')
 const { buildSnapshot } = await import('../src/dashboard.js')
@@ -7180,6 +7180,36 @@ console.log('\nScreened vs passed')
   await bot.stop()
 }
 
+
+/**
+ * A FULL EXIT MUST LAND ON ZERO, or the account's rent is stranded for good.
+ *
+ * getTokenBalance reports uiAmount -- a float in display units -- and these tokens carry
+ * six decimals, so Math.floor discarded up to 0.999999 tokens on every sell. That is the
+ * "1 tokens left" in the log, and a token account can only be closed at a balance of
+ * exactly zero, so each exit gave up its 0.00203928 SOL: 2.72pp of a round trip at the
+ * top tier, more than twice the entire measured edge, lost to a rounding mode.
+ */
+{
+  const R = config.exec.maxRetries
+  check('a full exit asks the venue for the whole balance',
+    sellAmountFor({ sellAll: true, attempt: 1, target: 355205.123456 }) === '100%')
+  check('and keeps asking while retries remain',
+    sellAmountFor({ sellAll: true, attempt: R - 1, target: 355205.123456 }) === '100%')
+  /*
+   * Being unable to exit is the worst outcome available. A venue that rejects the
+   * percentage form must not be able to trap a position, so the final attempt is always
+   * the numeric path that worked before this existed.
+   */
+  check('but the last attempt falls back to the proven numeric path',
+    sellAmountFor({ sellAll: true, attempt: R, target: 355205.123456 }) === 355205,
+    String(sellAmountFor({ sellAll: true, attempt: R, target: 355205.123456 })))
+  check('a partial rung sell never asks for the whole balance',
+    sellAmountFor({ sellAll: false, attempt: 1, target: 70000.5 }) === 70000)
+  // The dust this exists to eliminate: flooring a six-decimal uiAmount.
+  check('flooring a uiAmount is what stranded the rent',
+    Math.floor(355205.123456) !== 355205.123456)
+}
 
 /**
  * THE DASHBOARD'S CLIENT SCRIPT — the one part of this codebase nothing else executes.

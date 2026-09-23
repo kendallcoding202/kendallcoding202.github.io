@@ -237,7 +237,27 @@ export function finishBuy(mint, fill, signature, swapSol) {
   return { ok: true, tokensReceived, solSpent, swapSol: swapped, overheadSol, avgPriceSol, signature }
 }
 
-export async function sell({ mint, tokenAmount, curve, pool, paperCredit = 0 }) {
+/**
+ * What to ask the venue to sell on this attempt.
+ *
+ * '100%' lets the venue compute the exact raw balance, which is the only way to land on
+ * zero: getTokenBalance reports uiAmount, a float in display units, and these tokens
+ * carry six decimals, so flooring it left up to 0.999999 tokens behind on every sell.
+ * A token account can only be closed at a balance of exactly zero, so that rounding
+ * stranded its 0.00203928 SOL rent permanently -- 2.72pp of a round trip at the top
+ * tier, more than twice the measured edge.
+ *
+ * The LAST attempt always falls back to the numeric amount. Being unable to exit is the
+ * worst outcome available, so a venue that rejects the percentage form must never be
+ * able to trap a position; the fallback keeps every exit path at least as wide as it
+ * was before this existed.
+ */
+export function sellAmountFor({ sellAll, attempt, target, maxRetries = config.exec.maxRetries }) {
+  if (sellAll && attempt < maxRetries) return '100%'
+  return Math.floor(target)
+}
+
+export async function sell({ mint, tokenAmount, curve, pool, paperCredit = 0, sellAll = false }) {
   // paperCredit is only meaningful to the paper fill — a live sale takes what the chain
   // gives it, and our SOL really is in the curve.
   if (config.paper) return paperSell({ mint, tokenAmount, curve, paperCredit })
@@ -263,10 +283,25 @@ export async function sell({ mint, tokenAmount, curve, pool, paperCredit = 0 }) 
       // Being unable to exit is the worst outcome available, so each retry widens
       // the slippage tolerance rather than giving up at the original limit.
       const slippage = Math.min(90, config.exec.sellSlippagePct * attempt)
+      /**
+       * A FULL EXIT ASKS FOR THE WHOLE BALANCE, not a number we rounded.
+       *
+       * getTokenBalance reports uiAmount -- a float in display units -- and these tokens
+       * carry six decimals, so Math.floor discarded up to 0.999999 tokens on every sell.
+       * That is the "1 tokens left" in the log. A token account can only be closed at a
+       * balance of exactly zero, so each exit stranded its 0.00203928 SOL rent forever:
+       * 2.72pp of every round trip at the top tier, which is more than twice the entire
+       * measured edge, thrown away on a rounding mode.
+       *
+       * The venue computes the exact raw balance for '100%', which is the only way to
+       * land on zero from a float. The LAST attempt always falls back to the numeric
+       * path: being unable to exit is the worst outcome available, and a venue that
+       * rejects the percentage form must not be able to trap a position.
+       */
       const tx = await buildTransaction({
         action: 'sell',
         mint,
-        amount: Math.floor(target),
+        amount: sellAmountFor({ sellAll, attempt, target }),
         denominatedInSol: false,
         slippage,
         pool,

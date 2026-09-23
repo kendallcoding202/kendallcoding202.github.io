@@ -1539,6 +1539,9 @@ export class Bot {
       const fill = await sell({
         mint,
         tokenAmount: decision.sellTokens,
+        // A full exit asks the venue for the whole balance, so nothing is left behind
+        // to strand the account's rent. See sell().
+        sellAll: Boolean(decision.sellAll),
         curve: { vSol, vTokens: position.lastVTokens, realSol: position.lastRealSol },
         // What of OUR stake is still in — the chain's real reserve cannot include a
         // paper buy that never happened. See paperSell.
@@ -1644,6 +1647,8 @@ export class Bot {
         const fill = await sell({
           mint: position.mint,
           tokenAmount: position.tokensRemaining,
+          // Panic is always a full exit.
+          sellAll: true,
           curve: { vSol: position.lastVSol, vTokens: position.lastVTokens },
           pool: position.pool === 'pump' ? 'auto' : position.pool,
         })
