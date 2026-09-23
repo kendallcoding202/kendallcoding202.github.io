@@ -39,11 +39,29 @@ export function buySolFor(walletSol) {
  * reserves. Flat sizing therefore means the same number is a 0.2% cost on a 150 SOL
  * curve and a 15% cost on a 2 SOL one.
  *
- * That stopped being hypothetical when the market-cap floor came off: 41% of the
- * launches the entry rules now accept sit below 20 SOL of depth, and the median is 28.
- * Charging the drag row by row, capping at 2% of depth returns 1.31 SOL per hundred
- * candidates against 1.17 flat — and, more to the point, it stops the bot putting a
- * seventh of a thin curve's entire reserves into one position.
+ * THE CAP IS CURRENTLY INERT, AND THE MEASUREMENT THAT JUSTIFIED IT CANNOT HAVE HAPPENED.
+ *
+ * `vSol` is the VIRTUAL reserve, which on pump.fun starts at 30 SOL and only rises — the
+ * 30 is an accounting offset, not money. So 2% of it is at least 0.600 SOL, against a
+ * largest tier of 0.150. The cap binds only below vSol 7.5, which a live curve never
+ * reaches. It has never changed a single position size.
+ *
+ * Which condemns the justification this comment used to carry: "capping at 2% of depth
+ * returns 1.31 SOL per hundred candidates against 1.17 flat". If the cap cannot bind
+ * then the capped arm and the flat arm are the SAME CONFIGURATION and must return the
+ * same number. They cannot differ by 12%. That comparison was measuring something else,
+ * and it sat in the source as settled fact.
+ *
+ * Kept rather than deleted, and NOT repointed at real reserves. Real reserves are
+ * vSol - 30, which near launch is a fraction of a SOL: at 2% of that, only about a fifth
+ * of candidates would clear minBuySol at all. That is an off switch wearing a risk
+ * control's name. The parameter stays as a backstop against a genuinely thin curve — the
+ * case it was written for is real even though it has never occurred — and the claim that
+ * it was measured to help does not.
+ *
+ * The depth argument itself still holds and is charged elsewhere: 41% of the launches the
+ * entry rules accept sit below 20 SOL of depth, and exec.js prices the fill drag through
+ * the actual curve on every paper trade.
  *
  * Below `minBuySol` the trade is not worth its priority fee, so it is skipped rather
  * than taken in a size that cannot pay for itself.

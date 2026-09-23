@@ -486,10 +486,21 @@ export function evaluateEntry(candidate, { creatorPrior = null } = {}) {
    * reserve ceiling, not the launch-price floor. Every physically impossible outcome in
    * the 23 Sep export whose launch reserves we know was one of these.
    *
-   * Excluded on RISK, not on measured edge — the flagged rows actually score slightly
-   * BETTER than the rest. The problem is that we cannot tell a real price from an
-   * unexitable one, and the docs say unexitable is the expected state once the agent
-   * turns net seller. Explore keeps buying them, so the evidence accrues either way.
+   * Excluded on RISK, and — contrary to what this comment first claimed — on measured
+   * edge as well, once the population is the right one.
+   *
+   * The original claim was that flagged rows "score slightly BETTER than the rest". That
+   * is true across ALL rows (0.9394 against 0.9142 at peak<=16) and false of the rows
+   * that matter. Among launches the entry filter would otherwise TAKE, Mayhem returns
+   * 0.7995 [0.720, 0.889] against 1.0022 [0.966, 1.039] for the rest — dramatically
+   * worse, with intervals that do not overlap, on n=27 against n=1361. The whole-book
+   * comparison was the wrong denominator: this rule only ever fires on candidates that
+   * passed everything else, so that is the only population it can be judged on.
+   *
+   * The risk argument stands on its own regardless: we cannot tell a real price from an
+   * unexitable one, and pump.fun's own docs say unexitable is the expected state once
+   * the agent turns net seller. Explore keeps buying them, so evidence accrues either
+   * way — and n=27 is small enough that it should.
    */
   if (e.rejectMayhem) {
     checks.push(

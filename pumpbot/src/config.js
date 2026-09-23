@@ -432,9 +432,15 @@ export const config = {
      * floor kept us out of thin curves; 41% of what the entry rules now accept sits
      * below 20 SOL of depth.
      *
-     * 2% measured best on the journal (1.31 SOL per hundred candidates against 1.17 for
-     * flat sizing), but the number matters less than the shape — it is what stops one
-     * position being a seventh of everything backing the token.
+     * INERT AS CONFIGURED. vSol is the VIRTUAL reserve, which starts at 30 SOL and only
+     * rises, so 2% of it is at least 0.600 against a largest tier of 0.150 — the cap
+     * binds only below vSol 7.5 and has never changed a position size.
+     *
+     * The old justification here ("2% measured best on the journal, 1.31 SOL per hundred
+     * candidates against 1.17 for flat sizing") cannot be true: if the cap never binds,
+     * the capped and flat arms are the same configuration and must return the same
+     * number. See sizing.js for why it is kept anyway and why it must not simply be
+     * repointed at real reserves.
      */
     maxCurveSharePct: num('MAX_CURVE_SHARE_PCT', 2),
     /**
