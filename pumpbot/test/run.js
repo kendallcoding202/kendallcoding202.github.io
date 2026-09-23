@@ -1269,10 +1269,19 @@ console.log('\nJournal export')
    */
   {
     const { TRAIL_LEVELS, PATH_CHECKPOINTS } = await import('../src/journal.js')
+    // The whole point of hasPathData: it must be 1 somewhere, or the columns are dead.
+    const rowsHavePath = (ex) => {
+      const hdr = ex.csv.split('\n')[0].split(',')
+      const at = hdr.indexOf('hasPathData')
+      return ex.csv.trim().split('\n').slice(1).some((l) => l.split(',')[at] === '1')
+    }
     journal.append(mkRow('bought', CREATOR_A, {
       // Distinct values per slot, so a column cannot pass by matching its neighbour.
       trailExits: TRAIL_LEVELS.map((lvl) => lvl / 100),
-      pathPrices: PATH_CHECKPOINTS.map((sec) => sec * 1e-9),
+      // pathMultiples is what finalize() actually writes; pathPrices is working state
+      // it deliberately discards. Seeding the wrong one is how eleven columns shipped
+      // empty, so the fixture uses the field the journal really carries.
+      pathMultiples: PATH_CHECKPOINTS.map((sec) => sec * 1e-9),
     }))
     const withPath = buildExport({ maxRejected: 5, salt: 'fixed-salt' })
     const header = withPath.csv.split('\n')[0].split(',')
@@ -1281,8 +1290,10 @@ console.log('\nJournal export')
       check(`the export carries where a ${lvl}% trail actually exited`,
         header.includes(`trailExit${lvl}`), header.join(','))
     }
-    check('and the price at each early checkpoint, which is what a fill window needs',
-      PATH_CHECKPOINTS.every((sec) => header.includes(`priceAt${sec}s`)), header.join(','))
+    check('and the move at each early checkpoint, which is what a fill window needs',
+      PATH_CHECKPOINTS.every((sec) => header.includes(`multAt${sec}s`)), header.join(','))
+    check('reading the finalized field, not the working one the journal discards',
+      header.includes('hasPathData') && rowsHavePath(withPath), 'hasPathData was 0 on every row')
 
     /**
      * Named by LEVEL, not by index — so the column cannot be misread if the levels are
@@ -1294,8 +1305,8 @@ console.log('\nJournal export')
     check('a trail level lands in its own column, not its neighbour\'s',
       seeded && TRAIL_LEVELS.every((lvl) => seeded[header.indexOf(`trailExit${lvl}`)] === String(lvl / 100)),
       seeded ? TRAIL_LEVELS.map((l) => seeded[header.indexOf(`trailExit${l}`)]).join(',') : 'row not found')
-    check('and so does a checkpoint price',
-      seeded && PATH_CHECKPOINTS.every((sec) => Number(seeded[header.indexOf(`priceAt${sec}s`)]) === sec * 1e-9))
+    check('and so does a checkpoint multiple',
+      seeded && PATH_CHECKPOINTS.every((sec) => Number(seeded[header.indexOf(`multAt${sec}s`)]) === sec * 1e-9))
 
     /**
      * A level that never triggered is null, and must export as EMPTY rather than as a

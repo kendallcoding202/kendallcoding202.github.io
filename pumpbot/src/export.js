@@ -84,9 +84,20 @@ const arrayColumns = () => [
    * the signal. Filter on this before computing anything about trails or fill windows.
    */
   ['hasTrailData', (row) => Array.isArray(row.trailExits)],
-  ['hasPathData', (row) => Array.isArray(row.pathPrices)],
+  ['hasPathData', (row) => Array.isArray(row.pathMultiples)],
   ...TRAIL_LEVELS.map((lvl, i) => [`trailExit${lvl}`, (row) => row.trailExits?.[i]]),
-  ...PATH_CHECKPOINTS.map((sec, i) => [`priceAt${sec}s`, (row) => row.pathPrices?.[i]]),
+  /**
+   * `pathMultiples`, NOT `pathPrices`. finalize() deliberately drops the raw prices —
+   * they are working state, the multiples are the record, and keeping both would grow
+   * every row for nothing. Reading the tracking field instead of the finalized one is
+   * how the first attempt shipped: `hasPathData` came back 0 on every one of 40,346
+   * rows, and eleven columns arrived empty, in the export built to stop exactly that.
+   *
+   * Named for what they are. A multiple against the decision price is also the more
+   * useful quantity for the fill question — "how far had it moved by the time an order
+   * would land" is a ratio, not a price.
+   */
+  ...PATH_CHECKPOINTS.map((sec, i) => [`multAt${sec}s`, (row) => row.pathMultiples?.[i]]),
 ]
 
 /**
