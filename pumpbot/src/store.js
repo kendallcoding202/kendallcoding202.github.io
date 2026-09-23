@@ -399,6 +399,46 @@ export function strategyRecord() {
   return { wins, losses, closed: wins + losses, stakedSol, stakedTrades, realizedOnStaked, realizedMultiple }
 }
 
+/**
+ * WHY positions are closing, tallied — so "more timeouts lately" is a number.
+ *
+ * The closed list carries a reason per row and nothing aggregated it, so a shift in the
+ * exit mix could only be noticed by scrolling the table and forming an impression. That
+ * matters more than it sounds: the exit mix is the fastest read on whether a change had
+ * the effect intended. Refusing to price a coin, for instance, must show up as more time
+ * stops — the position keeps its last good price, never reaches a rung, and the clock
+ * takes it — and without this there is no way to confirm that is what happened rather
+ * than something else.
+ *
+ * Over the RETAINED rows, which are capped per book, so it describes the recent mix
+ * rather than all time. The count is returned with it; a share without its denominator
+ * is the bug this file has hit more than once.
+ */
+export function closeReasonMix(explore = false) {
+  const s = getState()
+  const rows = s.closed.filter((p) => Boolean(p.explore) === explore)
+  const tally = new Map()
+  for (const p of rows) {
+    // The reason carries numbers ("time stop at 912s, never reached +50%"); group by the
+    // rule that fired, not by the instance, or every row is its own category.
+    const raw = String(p.closeReason ?? 'unknown')
+    const kind = /time stop/.test(raw) ? 'time stop'
+      : /max hold/.test(raw) ? 'max hold'
+      : /stop-loss/.test(raw) ? 'stop-loss'
+      : /from peak/.test(raw) ? 'trailing stop'
+      : /rung/.test(raw) ? 'ladder rung'
+      : /graduated/.test(raw) ? 'graduated'
+      : /drained/.test(raw) ? 'curve drained'
+      : /cannot price/.test(raw) ? 'unpriceable'
+      : raw.slice(0, 24)
+    tally.set(kind, (tally.get(kind) ?? 0) + 1)
+  }
+  return {
+    n: rows.length,
+    reasons: [...tally.entries()].sort((a, b) => b[1] - a[1]).map(([reason, count]) => ({ reason, count })),
+  }
+}
+
 export function exploreRecord() {
   const s = getState()
   const wins = s.exploreWins ?? 0

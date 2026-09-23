@@ -14,6 +14,7 @@ import {
   strategyRecord,
   exploreRecord,
   recordSince,
+  closeReasonMix,
 } from './store.js'
 import { journalHealth, volumeSpace } from './journal.js'
 import { positionPnl } from './position.js'
@@ -210,6 +211,8 @@ function collectionStatus(stats, storage, learning, analysis = null) {
     mayhem: stats?.mayhem ?? null,
     /** Price ticks refused as physically impossible for a bonding curve. */
     impossibleCurve: stats?.impossibleCurve ?? null,
+    /** WHY positions are closing, per book — the fastest read on whether a change landed. */
+    exitMix: { strategy: closeReasonMix(false), explore: closeReasonMix(true) },
     /** The fill probe's results — the one thing paper cannot measure. */
     probe: stats?.probe ?? null,
     // Live, from the bot — unlike the rankings, which ride along with the analysis.

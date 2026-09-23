@@ -6498,6 +6498,56 @@ console.log('\nThe Mayhem split, in the report')
 }
 
 
+
+// ------------------------------- why positions are closing, as a number
+console.log('\nExit mix')
+{
+  const { closeReasonMix } = store
+  const { buildSnapshot } = await import('../src/dashboard.js')
+  const s = store.getState()
+  s.positions = {}; s.closed = []; s.daily = {}; s.totalRealizedSol = 0; s.halted = null
+
+  const close = (mint, reason, explore = false) => {
+    store.addPosition({ mint, symbol: mint, state: 'open', openedAt: Date.now(),
+      solSpent: 0.15, solRecovered: 0.1, tokensRemaining: 0, rungsHit: [], explore })
+    store.closePosition(mint, reason)
+  }
+  // The reasons carry numbers, so they must be grouped by the RULE that fired. Grouping
+  // by the raw string would make every row its own category and the tally useless.
+  close('A', 'time stop at 912s, never reached +50%')
+  close('B', 'time stop at 903s, never reached +50%')
+  close('C', 'stop-loss at -19.4%')
+  close('D', 'gave back 61% from peak')
+  close('E', 'held 30m — max hold reached, releasing the slot')
+  close('X', 'time stop at 900s, never reached +50%', true)
+
+  const mix = closeReasonMix(false)
+  check('exit reasons are grouped by the rule, not by the instance',
+    mix.reasons.find((r) => r.reason === 'time stop')?.count === 2,
+    JSON.stringify(mix.reasons))
+  check('and the distinct rules are kept apart',
+    ['stop-loss', 'trailing stop', 'max hold'].every((k) => mix.reasons.some((r) => r.reason === k)),
+    JSON.stringify(mix.reasons))
+  check('the count comes with the tally, so a share always has its denominator',
+    mix.n === 5, String(mix.n))
+  check('and the two books are tallied separately',
+    closeReasonMix(true).n === 1 && closeReasonMix(true).reasons[0].reason === 'time stop')
+
+  const snap = buildSnapshot(45, null)
+  check('the dashboard carries the mix for both books',
+    snap.collection.exitMix.strategy.n === 5 && snap.collection.exitMix.explore.n === 1,
+    JSON.stringify(snap.collection.exitMix))
+  /**
+   * The point of it: a change that refuses to price a coin MUST surface as more time
+   * stops, because the position keeps its last good price, never reaches a rung, and the
+   * clock takes it. Without this that could only be noticed as an impression.
+   */
+  check('so a shift toward the clock is readable rather than an impression',
+    snap.collection.exitMix.strategy.reasons[0].reason === 'time stop',
+    JSON.stringify(snap.collection.exitMix.strategy.reasons))
+}
+
+
 fs.rmSync(tmp, { recursive: true, force: true })
 
 console.log(`\n${passed} passed, ${failures.length} failed`)

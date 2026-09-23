@@ -395,6 +395,22 @@ export class Bot {
       return
     }
 
+    /**
+     * THE SAME REFUSAL AS THE TICK PATH. Half-applying it is worse than not applying it.
+     *
+     * #onTrade refuses a reserve figure no live curve can hold, but this path did not —
+     * so a coin whose supply is not conserved was refused a price from its trades and
+     * then handed one by the next curve read, which is the fantasy mark arriving by a
+     * different door. The decoder's own bound is 100,000 SOL, far past anything possible,
+     * so nothing else was going to stop it.
+     */
+    if (Number.isFinite(curve.vSol) && curve.vSol > PUMP_MAX_CURVE_SOL) {
+      this.stats.impossibleCurve++
+      this.stats.lastImpossibleCurve = { mint: position.mint, symbol: position.symbol, vSol: curve.vSol, at: Date.now() }
+      log.debug(`${position.symbol}: curve read reports ${curve.vSol.toFixed(1)} SOL — refusing to price it`)
+      return
+    }
+
     updatePosition(position.mint, {
       lastPriceSol: price,
       lastPriceAt: Date.now(),

@@ -422,12 +422,7 @@ function render(d) {
         '<span class="why">' + why +
         '<br>Journalling is unaffected — launches are still being written to disk.' +
         (c.analysisError ? '<br>Last error: ' + esc(String(c.analysisError)) : '') +
-        (c.storage ? '<br>' + storageLine(c.storage) : '') +
-        (c.creatorPrior ? '<br>' + priorLine(c.creatorPrior) : '') +
-        (c.walletPrior ? '<br>' + walletLine(c.walletPrior) : '') +
-        (c.offCurve ? '<br>' + oracleLine(c.offCurve) : '') +
-        (c.mayhem ? '<br>' + mayhemLine(c.mayhem) : '') +
-        (c.probe ? '<br>' + probeLine(c.probe) : '') + '</span>'
+        pipelineTail(c) + '</span>'
     } else if (c.collecting) {
       // "in the last hour", not "about N/hr" — it is a count over a real window, and
       // the vaguer phrasing is what let an impossible extrapolation look plausible.
@@ -438,17 +433,11 @@ function render(d) {
       col.innerHTML = '● COLLECTING · <b>' + c.usableRows + '</b> usable rows' + rate +
         ' · watching <b>' + c.tracking + '</b> tokens' +
         '<span class="why">' + togo + ' · ' + c.rowsOnDisk + ' rows on disk in total' +
-        (c.storage ? '<br>' + storageLine(c.storage) : '') +
-        (c.creatorPrior ? '<br>' + priorLine(c.creatorPrior) : '') +
-        (c.walletPrior ? '<br>' + walletLine(c.walletPrior) : '') +
-        (c.offCurve ? '<br>' + oracleLine(c.offCurve) : '') +
-        (c.mayhem ? '<br>' + mayhemLine(c.mayhem) : '') +
-        (c.probe ? '<br>' + probeLine(c.probe) : '') + '</span>'
+        pipelineTail(c) + '</span>'
     } else {
       col.innerHTML = '▲ NOT COLLECTING' +
         '<span class="why">' + c.reasons.map(esc).join('<br>') +
-        (c.offCurve ? '<br>' + oracleLine(c.offCurve) : '') +
-        (c.storage ? '<br>' + storageLine(c.storage) : '') + '</span>'
+        pipelineTail(c) + '</span>'
     }
   } else col.hidden = true
 
@@ -1124,6 +1113,60 @@ function probeLine(p) {
       ? '<br><span style="color:var(--red)">' + p.failures + ' orders did NOT land: ' +
         Object.entries(p.reasons || {}).map(([r, n]) => esc(r) + ' x' + n).join(' · ') + '</span>'
       : '')
+}
+
+/**
+ * THE LINES EVERY BRANCH OF THE BANNER MUST SHOW, in one place.
+ *
+ * There are three branches — waiting, collecting, not collecting — and a line added by
+ * hand goes into two of them. That has already happened once with the oracle line, which
+ * was missing from exactly the state a test then produced. Composing the tail once makes
+ * it impossible: a new line is added here and appears in all three, or in none.
+ */
+function pipelineTail(c) {
+  return (c.storage ? '<br>' + storageLine(c.storage) : '') +
+    (c.creatorPrior ? '<br>' + priorLine(c.creatorPrior) : '') +
+    (c.walletPrior ? '<br>' + walletLine(c.walletPrior) : '') +
+    (c.offCurve ? '<br>' + oracleLine(c.offCurve) : '') +
+    (c.mayhem ? '<br>' + mayhemLine(c.mayhem) : '') +
+    (c.impossibleCurve ? '<br>' + impossibleLine(c.impossibleCurve) : '') +
+    (c.exitMix ? '<br>' + exitMixLine(c.exitMix) : '') +
+    (c.probe ? '<br>' + probeLine(c.probe) : '')
+}
+
+/**
+ * Price ticks refused because no live curve could hold those reserves. Surfaced because
+ * the symptom of NOT showing it is a bag marked at 228x and sold into that mark, which
+ * reads as the best trade the bot ever made.
+ */
+function impossibleLine(ic) {
+  if (!ic.count) return 'Curve sanity <span class="dim">no impossible reserve readings</span>'
+  const last = ic.last
+    ? ' · last <code>' + esc(String(last_sym(ic.last))) + '</code> at <code>' + ic.last.vSol.toFixed(0) + ' SOL</code>'
+    : ''
+  return '<span style="color:var(--amber)">Curve sanity · <b>' + num(ic.count) +
+    '</b> price ticks refused as impossible</span>' + last +
+    '<br><span class="dim">Those positions keep their last good price and exit on the clock, ' +
+    'which shows up as time stops.</span>'
+}
+const last_sym = (l) => l.symbol ?? l.mint ?? '?'
+
+/**
+ * WHY positions are closing. A shift in the mix is the fastest read on whether a change
+ * did what it was meant to — refusing to price a coin must show up as more time stops —
+ * and without this it could only be guessed at by scrolling the closed table.
+ */
+function exitMixLine(mix) {
+  const one = (label, m) => {
+    if (!m || !m.n) return ''
+    const top = m.reasons.slice(0, 4)
+      .map((r) => esc(r.reason) + ' <code>' + Math.round((r.count / m.n) * 100) + '%</code>')
+      .join(' · ')
+    return label + ' ' + top + ' <span class="dim">(last ' + m.n + ')</span>'
+  }
+  const s = one('Exits · strategy', mix.strategy)
+  const e = one('Exits · explore', mix.explore)
+  return [s, e].filter(Boolean).join('<br>') || 'Exits <span class="dim">none closed yet</span>'
 }
 
 function mayhemLine(m) {
