@@ -1,4 +1,4 @@
-import { config, envReport } from './config.js'
+import { config, envReport, PUMP_MAX_CURVE_SOL } from './config.js'
 import { Feed } from './feed.js'
 import { LogFeed } from './logfeed.js'
 import { Candidate, evaluateEntry } from './filter.js'
@@ -145,6 +145,9 @@ export class Bot {
        * what that produces, so "is our edge inside this population or outside it" is the
        * open question, and this is the live read on how big the population even is.
        */
+      /** Ticks refused for reporting reserves a live curve cannot hold. See #onTrade. */
+      impossibleCurve: 0,
+      lastImpossibleCurve: null,
       mayhemScreened: 0,
       mayhemEntered: 0,
       uptimeHours() {
@@ -194,6 +197,12 @@ export class Bot {
        * outcomes, this at least answers how much of what we trade is a coin the house is
        * running a random walk on.
        */
+      /**
+       * Ticks refused for quoting reserves no live curve can hold. Surfaced because the
+       * symptom of NOT having this — a bag marked at 228x and sold into that mark — reads
+       * as the best trade the bot has ever made.
+       */
+      impossibleCurve: { count: s.impossibleCurve, last: s.lastImpossibleCurve },
       mayhem: {
         screened: s.mayhemScreened,
         entered: s.mayhemEntered,
@@ -348,6 +357,9 @@ export class Bot {
         patch.lastPriceAt = Date.now()
         patch.lastVSol = curve.vSol
         patch.lastVTokens = curve.vTokens
+        // The MEASURED real balance, which only a curve-account read carries — a trade
+        // event has the virtual reserves alone. It is what bounds a sale's proceeds.
+        if (Number.isFinite(curve.realSol)) patch.lastRealSol = curve.realSol
       }
       updatePosition(position.mint, patch)
       Object.assign(position, patch)
@@ -398,6 +410,7 @@ export class Bot {
     position.lastPriceAt = Date.now()
     position.lastVSol = curve.vSol
     position.lastVTokens = curve.vTokens
+    if (Number.isFinite(curve.realSol)) position.lastRealSol = curve.realSol
     position.blindReads = 0
     position.lastBlindReadAt = 0
 
@@ -909,6 +922,34 @@ export class Bot {
     this.shadow?.onTrade(event)
 
     if (position?.state === 'open') {
+      /**
+       * A RESERVE THAT CANNOT EXIST MEANS A PRICE THAT CANNOT EXIST, and it was being
+       * marked and sold into anyway.
+       *
+       * On a bonding curve the reserves ARE the price. Constant product then caps how far
+       * a curve can run: filling it is what completes it, so between launch and
+       * completion the price can rise about 15x and no further. Positions have been
+       * marked at 46x and 228x, which is not a pump — it is a reserve figure that no live
+       * curve can hold, and the paper executor quoted a sale against it and booked the
+       * proceeds as profit. Those fantasy fills are concentrated in the largest wins,
+       * which is where the entire measured edge lives.
+       *
+       * Ignoring the tick is the conservative response, not an aggressive one: the
+       * position keeps its last good price, goes stale, and the existing stale/blind-exit
+       * path takes it. Inventing a correction would be guessing at a number we do not
+       * have.
+       */
+      if (Number.isFinite(event.vSol) && event.vSol > PUMP_MAX_CURVE_SOL) {
+        this.stats.impossibleCurve++
+        this.stats.lastImpossibleCurve = { mint: event.mint, symbol: position.symbol, vSol: event.vSol, at: Date.now() }
+        if (this.stats.impossibleCurve === 1) {
+          log.error(
+            `${position.symbol}: reserves report ${event.vSol.toFixed(1)} SOL, which no live pump.fun ` +
+              'curve can hold (completes near 115). Refusing to price or sell against it.',
+          )
+        }
+        return
+      }
       markPrice(position, event.priceSol)
       // Only overwrite with real numbers. A tick without reserves would otherwise wipe
       // the values the drain detector and the paper sell path both need.
@@ -1362,7 +1403,10 @@ export class Bot {
       const fill = await sell({
         mint,
         tokenAmount: decision.sellTokens,
-        curve: { vSol, vTokens: position.lastVTokens },
+        curve: { vSol, vTokens: position.lastVTokens, realSol: position.lastRealSol },
+        // What of OUR stake is still in — the chain's real reserve cannot include a
+        // paper buy that never happened. See paperSell.
+        paperCredit: Math.max(0, (position.solSpent ?? 0) - (position.solRecovered ?? 0)),
         // 'auto' rather than the venue recorded at creation: a graduated token no
         // longer trades where it was born.
         pool: position.pool === 'pump' ? 'auto' : position.pool,

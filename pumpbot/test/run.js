@@ -6193,6 +6193,109 @@ console.log('\nSilent data loss')
   config.dataDir = realDir
 }
 
+
+// ------------------------------- a curve cannot pay out money it does not hold
+console.log('\nFantasy fills')
+{
+  const { quoteSell } = await import('../src/curve.js')
+  const { PUMP_INITIAL_VIRTUAL_SOL, PUMP_MAX_CURVE_SOL } = await import('../src/config.js')
+
+  /**
+   * virtual_sol = 30 + real_sol. The 30 shapes the price curve and is NOT money: a
+   * brand-new coin quotes vSol = 30 while holding nothing at all. Constant product alone
+   * caps a sale at vSol, so the model would hand back 30 SOL from an empty curve — and
+   * the error is largest on exactly the trades that matter, a big bag sold into a thin
+   * curve, which is to say every large "win" in the book.
+   */
+  const fresh = { vSol: PUMP_INITIAL_VIRTUAL_SOL, vTokens: 1.073e9 }
+  const unbounded = quoteSell({ ...fresh, tokensIn: 5e6 })
+  check('constant product alone lets an EMPTY curve pay out', unbounded.solOut > 0,
+    String(unbounded.solOut))
+  const bounded = quoteSell({ ...fresh, tokensIn: 5e6, realSol: 0 })
+  check('but a curve holding nothing pays nothing', bounded.solOut === 0, String(bounded.solOut))
+  check('and says it was capped, so a fill reality could not provide is visible',
+    bounded.capped && bounded.wantedSol > 0, JSON.stringify(bounded))
+
+  /**
+   * The cap must never make an ordinary trade worse. Selling into a curve deep enough to
+   * pay is unchanged — a guard that quietly taxes every exit is its own bug.
+   */
+  const deep = { vSol: 90, vTokens: 3.6e8 }
+  const free = quoteSell({ ...deep, tokensIn: 1e5 })
+  const capped = quoteSell({ ...deep, tokensIn: 1e5, realSol: 60 })
+  check('a curve that can pay is unaffected by the bound',
+    near(free.solOut, capped.solOut, 1e-12) && !capped.capped, `${free.solOut} vs ${capped.solOut}`)
+
+  /**
+   * THE CYPH CASE. A bonding curve cannot appreciate indefinitely: filling it is what
+   * COMPLETES it, so between launch and completion the price rises about 15x and stops.
+   * CYPH was marked at 228x its entry and CHIMP at 46x, then "sold" into those marks for
+   * 26.5 and 6.5 SOL of paper profit. Both imply reserves no live curve can hold.
+   */
+  const k = PUMP_INITIAL_VIRTUAL_SOL * 1.073e9
+  const maxLivePrice = PUMP_MAX_CURVE_SOL / (k / PUMP_MAX_CURVE_SOL)
+  const launchPrice = PUMP_INITIAL_VIRTUAL_SOL / 1.073e9
+  check('the most a curve can appreciate before it completes is bounded, not open-ended',
+    maxLivePrice / launchPrice < 50, String(maxLivePrice / launchPrice))
+  const cyphImpliedVSol = Math.sqrt(k * 7.99e-6)
+  check("CYPH's marked price implies reserves a live curve cannot hold",
+    cyphImpliedVSol > PUMP_MAX_CURVE_SOL, `${cyphImpliedVSol.toFixed(0)} SOL vs max ${PUMP_MAX_CURVE_SOL}`)
+
+  /**
+   * And the bot must REFUSE such a tick rather than mark against it. Ignoring it is the
+   * conservative branch: the position keeps its last good price, goes stale, and the
+   * existing stale/blind-exit path takes it. Driven through the real Bot, because the
+   * refusal lives in #onTrade.
+   */
+  const { EventEmitter } = await import('node:events')
+  const { Bot } = await import('../src/bot.js')
+  class Quiet extends EventEmitter {
+    constructor() { super(); this.watched = new Set() }
+    start() {} async stop() {} watch(m) { this.watched.add(m) } unwatch(m) { this.watched.delete(m) }
+    feedStats() { return { notifications: 0, decoded: 0, kept: 0, connected: true } }
+  }
+  const st = store.getState()
+  st.positions = {}; st.closed = []; st.halted = null
+  const M = 'FantasyFillAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+  store.addPosition({
+    mint: M, symbol: 'CYPH', state: 'open', openedAt: Date.now(),
+    entryPriceSol: 3.5e-8, lastPriceSol: 3.5e-8, peakPriceSol: 3.5e-8, lastPriceAt: Date.now(),
+    tokensBought: 4.3e6, tokensRemaining: 4.3e6, solSpent: 0.1505, solRecovered: 0,
+    rungsHit: [], fills: [], pool: 'pump', entryVSol: 33.6, lastVSol: 33.6, lastVTokens: 9.59e8,
+  })
+  // Trades arrive on the logFeed, not the tape: with tradeSource 'rpc' the feed's own
+  // 'trade' handler is never registered, so emitting there reaches nothing at all.
+  const tape = new Quiet()
+  const bot = new Bot({ feed: new Quiet(), logFeed: tape, readCurve: async () => ({ curve: { vSol: 33.6, vTokens: 9.59e8 }, gone: false }) })
+  await bot.start()
+  clearInterval(bot.sweepTimer); clearInterval(bot.balanceTimer); clearInterval(bot.heartbeatTimer)
+
+  tape.emit('trade', { kind: 'buy', mint: M, trader: 'T', solAmount: 1, tokenAmount: 1,
+    vSol: 507, vTokens: 6.35e7, priceSol: 7.99e-6, at: Date.now(), pool: 'pump' })
+  await new Promise((r) => setImmediate(r))
+
+  const held = store.getState().positions[M]
+  check('a tick quoting impossible reserves does not mark the position',
+    held && held.lastPriceSol === 3.5e-8, String(held?.lastPriceSol))
+  check('and the bag is not revalued to a number the curve could never pay',
+    held && held.tokensRemaining * held.lastPriceSol < 1, String(held?.tokensRemaining * held?.lastPriceSol))
+  check('and it is counted, so this is measurable rather than invisible',
+    bot.statsSnapshot().impossibleCurve.count === 1,
+    JSON.stringify(bot.statsSnapshot().impossibleCurve))
+  check('a normal tick still prices the position',
+    (() => {
+      tape.emit('trade', { kind: 'buy', mint: M, trader: 'T', solAmount: 1, tokenAmount: 1,
+        vSol: 40, vTokens: 8e8, priceSol: 5e-8, at: Date.now(), pool: 'pump' })
+      return true
+    })())
+  await new Promise((r) => setImmediate(r))
+  check('so the guard rejects the impossible and nothing else',
+    store.getState().positions[M]?.lastPriceSol === 5e-8 ||
+      !store.getState().positions[M], String(store.getState().positions[M]?.lastPriceSol))
+  await bot.stop()
+}
+
+
 fs.rmSync(tmp, { recursive: true, force: true })
 
 console.log(`\n${passed} passed, ${failures.length} failed`)

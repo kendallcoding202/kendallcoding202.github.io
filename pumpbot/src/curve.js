@@ -98,16 +98,42 @@ export function quoteBuy({ vSol, vTokens, solIn }) {
   }
 }
 
-export function quoteSell({ vSol, vTokens, tokensIn }) {
+/**
+ * `realSol` is what the curve can ACTUALLY PAY, and leaving it out was how a paper sale
+ * came to book more SOL than existed.
+ *
+ * virtual_sol_reserves is `PUMP_INITIAL_VIRTUAL_SOL + real_sol_reserves`. The offset
+ * shapes the price curve and is not money: a brand-new coin quotes vSol = 30 while
+ * holding nothing at all. Pricing off the virtual side is right — the offset cancels on
+ * any trade small against the reserves — but the PROCEEDS of a sale come out of the real
+ * balance, and nothing was bounding them by it. The constant-product maths alone caps a
+ * sale at vSol, so the model would happily hand back 30 SOL from an empty curve.
+ *
+ * That is not a rounding error on the trades that matter. It is largest exactly where the
+ * measured edge lives: a big bag sold into a thin curve is precisely the case where the
+ * virtual and real answers diverge most, so every large paper win is the one most likely
+ * to be fiction.
+ *
+ * `capped` says the bound bit, so a fill that reality could not have provided is visible
+ * instead of silently smaller.
+ */
+export function quoteSell({ vSol, vTokens, tokensIn, realSol = null }) {
   if (!(vSol > 0 && vTokens > 0 && tokensIn > 0)) return null
   const k = vSol * vTokens
-  const solOut = vSol - k / (vTokens + tokensIn)
-  if (!(solOut > 0)) return null
+  const raw = vSol - k / (vTokens + tokensIn)
+  if (!(raw > 0)) return null
+  // Only bound when we have a real figure. Inventing one would replace a known
+  // overstatement with an unknown one.
+  const payable = Number.isFinite(realSol) && realSol >= 0 ? realSol : Infinity
+  const solOut = Math.min(raw, payable)
+  if (!(solOut > 0)) return { solOut: 0, avgPriceSol: 0, nextVSol: vSol, nextVTokens: vTokens + tokensIn, capped: true, wantedSol: raw }
   return {
     solOut,
     avgPriceSol: solOut / tokensIn,
     nextVSol: vSol - solOut,
     nextVTokens: vTokens + tokensIn,
+    capped: solOut < raw,
+    wantedSol: raw,
   }
 }
 

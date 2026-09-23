@@ -208,6 +208,8 @@ function collectionStatus(stats, storage, learning, analysis = null) {
     offCurve: stats?.offCurve ?? null,
     /** How much of what we trade is a coin pump.fun is running a random walk on. */
     mayhem: stats?.mayhem ?? null,
+    /** Price ticks refused as physically impossible for a bonding curve. */
+    impossibleCurve: stats?.impossibleCurve ?? null,
     /** The fill probe's results — the one thing paper cannot measure. */
     probe: stats?.probe ?? null,
     // Live, from the bot — unlike the rankings, which ride along with the analysis.

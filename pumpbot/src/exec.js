@@ -1,5 +1,5 @@
 import { VersionedTransaction } from '@solana/web3.js'
-import { config, LAMPORTS_PER_SOL } from './config.js'
+import { config, LAMPORTS_PER_SOL, PUMP_INITIAL_VIRTUAL_SOL } from './config.js'
 import { getKeypair, getPublicKey, getConnection, getTokenBalance } from './wallet.js'
 import { quoteBuy, quoteSell } from './curve.js'
 import { log, sleep, sol } from './log.js'
@@ -208,8 +208,10 @@ function finishBuy(mint, fill, signature) {
   return { ok: true, tokensReceived, solSpent, avgPriceSol, signature }
 }
 
-export async function sell({ mint, tokenAmount, curve, pool }) {
-  if (config.paper) return paperSell({ mint, tokenAmount, curve })
+export async function sell({ mint, tokenAmount, curve, pool, paperCredit = 0 }) {
+  // paperCredit is only meaningful to the paper fill — a live sale takes what the chain
+  // gives it, and our SOL really is in the curve.
+  if (config.paper) return paperSell({ mint, tokenAmount, curve, paperCredit })
 
   const held = await getTokenBalance(mint)
   if (!(held > 0)) return { ok: false, error: 'no tokens held' }
@@ -322,9 +324,42 @@ function paperBuy({ mint, solAmount, curve }) {
   }
 }
 
-function paperSell({ mint, tokenAmount, curve }) {
-  const q = quoteSell({ vSol: curve?.vSol, vTokens: curve?.vTokens, tokensIn: tokenAmount })
+function paperSell({ mint, tokenAmount, curve, paperCredit = 0 }) {
+  /**
+   * WHAT THE CURVE CAN ACTUALLY PAY, which this was not asking.
+   *
+   * A pump.fun trade event carries the VIRTUAL reserves only, and virtual SOL is
+   * `PUMP_INITIAL_VIRTUAL_SOL + real`. So the real balance is recoverable from it, and
+   * where we have read the curve account directly we have the real figure outright.
+   * Prefer the measured one; fall back to the derivation; and if neither is available
+   * pass null rather than a guess, so quoteSell leaves the old behaviour alone instead
+   * of trading a known overstatement for an invented number.
+   */
+  const onCurve = Number.isFinite(curve?.realSol)
+    ? curve.realSol
+    : Number.isFinite(curve?.vSol)
+      ? Math.max(0, curve.vSol - PUMP_INITIAL_VIRTUAL_SOL)
+      : null
+  /**
+   * OUR OWN MONEY IS NOT IN THAT BALANCE, because in paper the buy never happened.
+   *
+   * The chain's real reserve reflects everyone's trades except ours, so capping a paper
+   * sale at it alone would under-pay every position — most obviously one sold moments
+   * after entry on a fresh curve, where the real balance is ~0 and we would book nothing
+   * for a stake we notionally paid. `paperCredit` is what we still have in: spent minus
+   * already recovered, floored at zero. On a bag that has already taken more out than it
+   * put in it contributes nothing, which is exactly when the cap needs to bite hardest.
+   */
+  const realSol = onCurve === null ? null : onCurve + Math.max(0, paperCredit)
+  const q = quoteSell({ vSol: curve?.vSol, vTokens: curve?.vTokens, tokensIn: tokenAmount, realSol })
   if (!q) return { ok: false, error: 'no curve state for paper fill' }
+  if (q.capped) {
+    log.warn(
+      `[paper] SELL ${mint} capped by the curve's real balance: wanted ${sol(q.wantedSol)}, ` +
+        `the curve holds ${sol(realSol ?? 0)} (incl. our ${sol(Math.max(0, paperCredit))} stake). ` +
+          'A live sale could not have returned more.',
+    )
+  }
 
   const feeMultiplier = 1 - config.exec.feePct / 100
   const slipMultiplier = 1 - config.exec.latencySlipPct / 100

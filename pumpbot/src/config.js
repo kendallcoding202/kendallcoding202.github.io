@@ -1036,3 +1036,37 @@ export const LAMPORTS_PER_SOL = 1_000_000_000
 // Every pump.fun mint is 1e9 tokens at 6 decimals.
 export const PUMP_TOTAL_SUPPLY = 1_000_000_000
 export const PUMP_DECIMALS = 6
+
+/**
+ * The VIRTUAL SOL a pump.fun curve starts with, holding none.
+ *
+ * This is the whole difference between the price being right and a sale being possible.
+ * A curve's `virtual_sol_reserves` is `30 + real_sol_reserves`: the 30 is an accounting
+ * offset that shapes the price curve and is NOT money anybody can withdraw. The price
+ * vSol/vTokens is correct regardless — the offset cancels for a small trade — but the
+ * PROCEEDS of a sale are bounded by the real reserves, and only by them.
+ *
+ * Used to bound what a paper sale may book when the real reserve is not to hand, since
+ * a pump.fun trade event carries the virtual reserves and not the real ones.
+ */
+export const PUMP_INITIAL_VIRTUAL_SOL = 30
+
+/**
+ * The most virtual SOL a LIVE pump.fun curve can hold, past which it is not a curve.
+ *
+ * A curve completes at roughly 85 real SOL, so virtual tops out near 115. Deliberately
+ * generous here: the point is to catch values that are impossible by orders of magnitude,
+ * not to adjudicate the exact completion point, and a coin with a non-standard supply
+ * (Mayhem mints an extra billion tokens) must not be rejected for being unusual.
+ *
+ * Why it is needed at all: the reserves are the price, so an impossible reserve is an
+ * impossible price, and an impossible price is what a bag gets marked and "sold" at.
+ * Constant product puts a hard ceiling on this — between launch and completion a curve
+ * can appreciate about 15x, no more, because filling it is what ENDS it. A position
+ * marked at 46x or 228x its entry is therefore not a position on a bonding curve, and
+ * both of those were sitting on the dashboard being counted as profit.
+ *
+ * The decoders' own bound is `vSol < 100_000`, three orders of magnitude past possible.
+ * That is a guard against decoding the wrong bytes, not against this.
+ */
+export const PUMP_MAX_CURVE_SOL = 200
