@@ -5,7 +5,7 @@ import { Candidate, evaluateEntry } from './filter.js'
 import { buy, sell } from './exec.js'
 import { canOpen, riskSummary, rolloverDaily, syncEquityBasis } from './risk.js'
 import { buySolFor, buySolForCurve, tooSmallToTrade, tierFor, sizingSummary } from './sizing.js'
-import { ShadowTracker, CreatorIndex, saveShadow, loadShadow } from './journal.js'
+import { ShadowTracker, CreatorIndex, saveShadow, loadShadow, journalHealth } from './journal.js'
 import { WalletIndex, saveWallets, loadWallets } from './wallets.js'
 import {
   initStore,
@@ -492,6 +492,36 @@ export class Bot {
   #heartbeat() {
     const s = this.stats
     const beat = s.sinceBeat
+
+    /**
+     * IS THE JOURNAL ACTUALLY BEING WRITTEN? Checked first, because everything else this
+     * heartbeat reports is about trading and this is about whether any of it is being
+     * remembered.
+     *
+     * A failed append was caught inside journal.append and logged to stdout, which on a
+     * hosted box nobody reads. So a full volume meant every row silently failing while
+     * the bot traded on and the dashboard stayed green — the storage check tests
+     * permissions, and a disk with no space left is still permissioned to write.
+     *
+     * The journal is the only copy of everything gathered, and the deployer and wallet
+     * priors are rebuilt from it at every startup. Alerted ONCE per outage rather than
+     * per beat: a channel that repeats itself every minute gets muted, and this is the
+     * message that must not be.
+     */
+    const writes = journalHealth()
+    if (writes.consecutive > 0 && !this.journalAlerted) {
+      this.journalAlerted = true
+      log.error(`JOURNAL NOT BEING WRITTEN — ${writes.consecutive} consecutive failures: ${writes.lastError}`)
+      notify(
+        `🚨 <b>The journal is not being written</b>\n` +
+          `${writes.consecutive} consecutive failed writes — <code>${esc(String(writes.lastError))}</code>\n` +
+          `Everything gathered from here is being LOST and cannot be recovered. ` +
+          `Most likely the volume at <code>${esc(config.dataDir)}</code> is full.`,
+      )
+    } else if (writes.consecutive === 0 && this.journalAlerted) {
+      this.journalAlerted = false
+      notify('✅ <b>Journal writes recovered</b> — rows are landing again. Anything lost during the outage is still lost.')
+    }
 
     // Messages arriving but nothing parsing means the feed's field names moved.
     if (s.messages > 50 && s.creates === 0 && s.trades === 0) {

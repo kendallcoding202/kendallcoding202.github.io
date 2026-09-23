@@ -15,6 +15,7 @@ import {
   exploreRecord,
   recordSince,
 } from './store.js'
+import { journalHealth } from './journal.js'
 import { positionPnl } from './position.js'
 import { sizingSummary } from './sizing.js'
 import { consecutiveLossLimit } from './risk.js'
@@ -50,6 +51,13 @@ function storageSnapshot() {
   return {
     dataDir: config.dataDir,
     writable,
+    /**
+     * Whether rows are LANDING, which `writable` does not answer. accessSync tests
+     * permissions; a volume with no space left passes it and then fails every write.
+     * This is the only signal that separates "collecting" from "silently losing
+     * everything", and it was not on the page.
+     */
+    writes: journalHealth(),
     journalBytes: journal?.bytes ?? 0,
     ledger: Boolean(stat(config.paper ? 'paper-state.json' : 'live-state.json')),
     // A checkpoint means pending observations will survive the next restart.
@@ -118,6 +126,18 @@ function collectionStatus(stats, storage, learning, analysis = null) {
   const reasons = []
   if (!config.learning.enabled) reasons.push('LEARNING is off — nothing is being journalled')
   if (!storage.writable) reasons.push(`${storage.dataDir} is not writable — nothing can be saved`)
+  /**
+   * Writes FAILING is a different failure from the directory being unwritable, and it is
+   * the one that actually happens: the volume fills, appendFileSync throws ENOSPC on
+   * every row, and every other indicator on this page stays green.
+   */
+  if (storage.writes?.consecutive > 0) {
+    reasons.push(
+      `the journal is NOT being written — ${storage.writes.consecutive} consecutive failed writes` +
+        `${storage.writes.lastError ? ` (${storage.writes.lastError})` : ''}. ` +
+        'Everything gathered since then is lost and is not recoverable.',
+    )
+  }
   if (stats) {
     if (!stats.parsing && stats.messages > 50) reasons.push('the feed is not parsing')
     if (stats.creates > 40 && stats.tradesMatched === 0) {

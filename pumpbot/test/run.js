@@ -6075,6 +6075,84 @@ console.log('\nCreator prior, through the bot')
   await bot.stop()
 }
 
+
+// ------------------------------- a full disk must not look like a healthy bot
+console.log('\nSilent data loss')
+{
+  const journalMod = await import('../src/journal.js')
+  let journalPath0 = 0
+  const { buildSnapshot } = await import('../src/dashboard.js')
+  journalMod.__resetJournalHealthForTests()
+
+  /**
+   * THE FAILURE THIS EXISTS TO MAKE LOUD.
+   *
+   * journal.append() caught a failed write, logged it at warn level to stdout, and
+   * carried on. On a hosted box nobody reads stdout, so a volume with no space left
+   * meant every row silently failing while the bot went on trading and the dashboard
+   * went on saying COLLECTING — because the storage check is fs.accessSync(W_OK), which
+   * tests PERMISSIONS, and a full disk is still perfectly permissioned to write.
+   *
+   * The journal is the only copy of everything gathered, and the deployer and wallet
+   * priors are rebuilt from it at every startup. Losing it without being told is the
+   * worst outcome available here.
+   */
+  // Its own directory, so this does not depend on whatever a previous block left in
+  // config.dataDir — an earlier section removes its temp dir, which made the "recovered"
+  // writes below fail for an unrelated reason and the test pass or fail by accident.
+  const realDir = config.dataDir
+  const liveDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pumpbot-journal-'))
+  config.dataDir = liveDir
+  journalMod.append({ v: 2, action: 'rejected', mint: 'OK' })
+  const healthy = buildSnapshot(45, null)
+  check('a working journal reports as collecting',
+    healthy.collection.storage.writes.healthy, JSON.stringify(healthy.collection.storage.writes))
+
+  /**
+   * A FILE standing where the data directory should be. Any unusable path works — the
+   * guard keys on the write throwing, which is what a full volume also does — and this
+   * one fails instantly with ENOTDIR. (`/proc/...` was the obvious choice and mkdirSync
+   * on it hangs indefinitely in some sandboxes, which is a hung test suite, not a
+   * failing one.)
+   */
+  const blocker = path.join(liveDir, 'not-a-directory')
+  fs.writeFileSync(blocker, 'x')
+  config.dataDir = path.join(blocker, 'data')
+  journalMod.__resetJournalHealthForTests() // re-resolve the path at the new dataDir
+  for (let i = 0; i < 3; i++) journalMod.append({ v: 2, action: 'rejected', mint: 'X' })
+
+  const h = journalMod.journalHealth()
+  check('failed writes are counted rather than swallowed', h.failed === 3, JSON.stringify(h))
+  check('and consecutive failures are tracked, so a blip differs from a dead volume',
+    h.consecutive === 3 && !h.healthy, JSON.stringify(h))
+
+  const broken = buildSnapshot(45, null)
+  check('the dashboard stops claiming it is collecting', !broken.collection.collecting)
+  check('and says the journal is not being written, not just "not writable"',
+    broken.collection.reasons.some((r) => /not being written/i.test(r)),
+    JSON.stringify(broken.collection.reasons))
+  check('and says the loss is unrecoverable, since that is the part that matters',
+    broken.collection.reasons.some((r) => /cannot be recovered|not recoverable/.test(r)),
+    JSON.stringify(broken.collection.reasons))
+
+  /**
+   * Recovery has to clear it, or the banner stays red forever after one bad moment and
+   * stops being read at all.
+   */
+  config.dataDir = liveDir
+  journalPath0 = journalMod.journalHealth().failed // remembered across the path reset
+  journalMod.__resetJournalHealthForTests()
+  journalMod.append({ v: 2, action: 'rejected', mint: 'X' })
+  check('a successful write clears the consecutive count',
+    journalMod.journalHealth().consecutive === 0 && journalMod.journalHealth().healthy)
+  check('and the three failures were really observed while the volume was unavailable',
+    journalPath0 === 3, String(journalPath0))
+  check('and the dashboard goes back to collecting', buildSnapshot(45, null).collection.collecting)
+
+  fs.rmSync(liveDir, { recursive: true, force: true })
+  config.dataDir = realDir
+}
+
 fs.rmSync(tmp, { recursive: true, force: true })
 
 console.log(`\n${passed} passed, ${failures.length} failed`)

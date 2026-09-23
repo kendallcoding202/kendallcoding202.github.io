@@ -95,12 +95,58 @@ function file() {
   return journalPath
 }
 
+/**
+ * WHETHER THE JOURNAL IS ACTUALLY BEING WRITTEN, which nothing was asking.
+ *
+ * A failed append was caught, logged at warn level to stdout, and forgotten. On a hosted
+ * box nobody reads stdout, so a full volume would mean every row silently failing while
+ * the bot went on trading and the dashboard went on saying COLLECTING in green — the
+ * health check tests `fs.accessSync(W_OK)`, which is PERMISSIONS, and a full disk is
+ * still perfectly writable by that test.
+ *
+ * The journal is the only copy of everything this project has built, and it is also what
+ * the deployer and wallet priors are rebuilt from at every startup. Losing it silently is
+ * the worst failure available here, so it has to be loud.
+ *
+ * `consecutive` is what distinguishes a blip from a dead volume: one failed write is a
+ * bad moment, a hundred in a row is the disk.
+ */
+const writeHealth = { written: 0, failed: 0, consecutive: 0, lastError: null, lastFailureAt: 0 }
+
 export function append(row) {
   try {
     fs.appendFileSync(file(), JSON.stringify(row) + '\n')
+    writeHealth.written++
+    writeHealth.consecutive = 0
   } catch (err) {
-    log.warn(`journal write failed: ${err.message}`)
+    writeHealth.failed++
+    writeHealth.consecutive++
+    writeHealth.lastError = err?.message ?? String(err)
+    writeHealth.lastFailureAt = Date.now()
+    // Still logged, but the log is no longer the only place this shows up.
+    log.warn(`journal write failed: ${writeHealth.lastError}`)
   }
+}
+
+/** Read by the dashboard banner and by the bot's alert — see writeHealth. */
+export function journalHealth() {
+  return { ...writeHealth, healthy: writeHealth.consecutive === 0 }
+}
+
+/**
+ * Tests drive this from a known state rather than whatever a previous case left.
+ *
+ * Clears the memoized `journalPath` as well: it is resolved once on first use and then
+ * never re-read, so a test that repoints config.dataDir would otherwise keep writing to
+ * the previous directory and quietly measure nothing.
+ */
+export function __resetJournalHealthForTests() {
+  writeHealth.written = 0
+  writeHealth.failed = 0
+  writeHealth.consecutive = 0
+  writeHealth.lastError = null
+  writeHealth.lastFailureAt = 0
+  journalPath = null
 }
 
 const shadowPath = () =>
