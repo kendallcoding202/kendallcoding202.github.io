@@ -1060,6 +1060,16 @@ function renderGraduation(g) {
     (pricedWarn
       ? '<div style="color:var(--red);margin-top:8px">No tracked token has produced a price yet — ' +
         'the feed may not deliver trades once a curve closes. Every row would fill with nulls.</div>'
+      : '') +
+    /*
+     * A price a completed curve cannot have produced is a pre-graduation tick, and every
+     * multiple measured from it would be garbage the same way the deflated mayhem
+     * denominator was. The on-curve side had no such check for weeks.
+     */
+    (g.implausible > 0
+      ? '<div style="color:var(--amber);margin-top:8px">' + num(g.implausible) +
+        ' priced outside what a completed curve can produce — likely pre-graduation ticks, ' +
+        'flagged on the row rather than dropped.</div>'
       : '')
   const bar =
     '<div style="margin:10px 0 4px;height:6px;background:#1a2133;border-radius:3px;overflow:hidden">' +

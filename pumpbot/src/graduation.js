@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { config } from './config.js'
+import { config, PUMP_TOTAL_SUPPLY, PUMP_INITIAL_VIRTUAL_SOL } from './config.js'
 import { log } from './log.js'
 
 /**
@@ -13,6 +13,59 @@ import { log } from './log.js'
  * if it were true.
  */
 export const GRAD_CHECKPOINTS = [1, 5, 15, 30, 60, 120, 240, 480, 1440]
+
+/**
+ * IS THIS PRICE ACTUALLY A POST-GRADUATION PRICE?
+ *
+ * A curve completes at a known state, so the price at graduation is predictable within a
+ * band: a mint is 1e9 tokens, virtual SOL starts at 30 and a completing curve sits near
+ * 115, so the implied market cap at the first post-graduation trade should be on the
+ * order of a hundred SOL. A base price implying ~30 SOL is a LAUNCH price -- a stale tick
+ * that arrived before the migration, which would make every multiple measured from it
+ * garbage in the same way the deflated mayhem denominator did.
+ *
+ * This is the check the on-curve side never had. The 46x and 228x fantasies survived for
+ * weeks because nothing ever asked whether a recorded price was physically reachable, and
+ * that single omission is why the measured edge collapsed when it was finally asked.
+ *
+ * It classifies rather than rejects: the row is kept either way, because how often the
+ * instrument catches the wrong tick is itself a measurement.
+ */
+const PUMP_INITIAL_VIRTUAL_TOKENS = 1.073e9
+/** Virtual SOL a curve holds when it completes: the 30 offset plus ~85 real. */
+const COMPLETION_VIRTUAL_SOL = 115
+
+/**
+ * Implied market cap at a completing curve, derived rather than guessed.
+ *
+ * price = vSol/vTokens and the curve is constant product, so at completion vTokens has
+ * fallen to k/115 -- about 280M, NOT the 1e9 supply. Multiplying a completion price by
+ * total supply therefore gives ~411 SOL, not 115. Getting this wrong by that factor is
+ * exactly how a launch-era tick would have been waved through as plausible: a first
+ * attempt at this check used 80 as the floor, which accepts a mid-curve price of 90.
+ */
+const COMPLETION_MCAP_SOL =
+  (COMPLETION_VIRTUAL_SOL /
+    ((PUMP_INITIAL_VIRTUAL_SOL * PUMP_INITIAL_VIRTUAL_TOKENS) / COMPLETION_VIRTUAL_SOL)) *
+  PUMP_TOTAL_SUPPLY
+
+export function baseSanity(basePriceSol) {
+  if (!(basePriceSol > 0)) return { ok: false, impliedMcapSol: null, verdict: 'no price' }
+  const impliedMcapSol = basePriceSol * PUMP_TOTAL_SUPPLY
+  // Half the completion level cannot be a token that just completed its curve.
+  if (impliedMcapSol < COMPLETION_MCAP_SOL / 2) {
+    return {
+      ok: false,
+      impliedMcapSol,
+      verdict: impliedMcapSol < PUMP_INITIAL_VIRTUAL_SOL * 2 ? 'launch-era tick' : 'pre-graduation tick',
+    }
+  }
+  // Twelve times completion on the FIRST trade after migrating is a bad read, not a run.
+  if (impliedMcapSol > COMPLETION_MCAP_SOL * 12) {
+    return { ok: false, impliedMcapSol, verdict: 'implausibly high' }
+  }
+  return { ok: true, impliedMcapSol, verdict: 'plausible' }
+}
 
 const gradFile = () => path.join(config.dataDir, 'graduations.jsonl')
 
@@ -147,6 +200,8 @@ export class GraduationTracker {
       pool: row.pool,
       marketCapAtGraduation: row.marketCapAtGraduation,
       basePriceSol: row.basePriceSol,
+      /** Whether that price could belong to a completed curve at all. See baseSanity. */
+      baseSanity: baseSanity(row.basePriceSol),
       trades: row.trades,
       lastTradeAt: row.lastTradeAt,
       quoteWentQuiet: row.lastTradeAt === null || Date.now() - row.lastTradeAt > 3_600_000,
@@ -218,14 +273,20 @@ export class GraduationTracker {
      */
     let priced = 0
     let quiet = 0
+    let implausible = 0
     const now = Date.now()
     for (const r of this.rows.values()) {
-      if (r.basePriceSol !== null) priced++
+      if (r.basePriceSol !== null) {
+        priced++
+        if (!baseSanity(r.basePriceSol).ok) implausible++
+      }
       if (r.lastTradeAt !== null && now - r.lastTradeAt > 600_000) quiet++
     }
     return {
       tracking: this.rows.size,
       priced,
+      /** Priced, but at a price a completed curve cannot have produced. */
+      implausible,
       quiet,
       completed: this.completed,
       expired: this.expired,

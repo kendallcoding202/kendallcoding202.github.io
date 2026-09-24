@@ -278,6 +278,12 @@ function graduationSummary(tracker) {
      * experiment is collecting nothing -- which must be visible now, not in 24 hours.
      */
     priced: live?.priced ?? 0,
+    /**
+     * Priced at a level a completed curve cannot have produced -- almost always a
+     * pre-graduation tick. The on-curve side had no such check, which is why the 46x and
+     * 228x fantasies survived for weeks.
+     */
+    implausible: live?.implausible ?? 0,
     quiet: live?.quiet ?? 0,
     recorded: rows.filter((r) => !r.pending).length,
     /** Tracked, priced, and not yet at the end of their window. */

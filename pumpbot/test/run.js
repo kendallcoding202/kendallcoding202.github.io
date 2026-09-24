@@ -7266,6 +7266,44 @@ console.log('\nThe graduation collector')
       g3.restore(snap, T0 + (GRAD_CHECKPOINTS.at(-1) + 1) * MIN).restored === 0)
   }
 
+  /**
+   * IS THE RECORDED PRICE PHYSICALLY REACHABLE? The check the on-curve side never had.
+   *
+   * A mint is 1e9 tokens and a completing curve sits near 115 virtual SOL, so the implied
+   * market cap at the first post-graduation trade should be on the order of a hundred
+   * SOL. A base price implying ~28 SOL is a LAUNCH price -- a stale tick that arrived
+   * before the migration -- and every multiple measured from it would be garbage in
+   * exactly the way the deflated mayhem denominator was. Nothing ever asked that question
+   * on the curve side, which is why 46x and 228x survived for weeks.
+   */
+  {
+    const { baseSanity } = await import('../src/graduation.js')
+    check('a launch-era price is caught, not trusted',
+      baseSanity(2.8e-8).verdict === 'launch-era tick', JSON.stringify(baseSanity(2.8e-8)))
+    check('a price just under completion is caught as a pre-graduation tick',
+      baseSanity(9e-8).verdict === 'pre-graduation tick', JSON.stringify(baseSanity(9e-8)))
+    /*
+     * The threshold has to come from the curve, not from intuition. price x supply at
+     * completion is ~411 SOL because vTokens has fallen to ~280M -- a first version of
+     * this check used 80 as the floor and would have waved through a mid-curve tick of
+     * 90. The test that caught it is this one.
+     */
+    check('a mid-curve price is NOT mistaken for a completed one', baseSanity(1.15e-7).ok === false,
+      JSON.stringify(baseSanity(1.15e-7)))
+    check('a completing curve prices as plausible', baseSanity(4.1e-7).ok === true,
+      JSON.stringify(baseSanity(4.1e-7)))
+    check('and a token that ran after graduating is still plausible', baseSanity(2e-6).ok === true,
+      JSON.stringify(baseSanity(2e-6)))
+    check('but twelve times completion on the FIRST trade is a bad read',
+      baseSanity(6e-6).verdict === 'implausibly high', JSON.stringify(baseSanity(6e-6)))
+    check('no price is not a plausible price', baseSanity(null).ok === false)
+    // Classified, never rejected: how often the instrument catches the wrong tick is
+    // itself one of the things this experiment measures.
+    const src = fs.readFileSync(new URL('../src/graduation.js', import.meta.url), 'utf8')
+    check('the verdict rides on the row rather than dropping it',
+      src.includes('baseSanity: baseSanity(row.basePriceSol)'))
+  }
+
   check('the window reaches 24h, unlike every horizon measured so far',
     GRAD_CHECKPOINTS.at(-1) === 1440, String(GRAD_CHECKPOINTS.at(-1)))
   /*
