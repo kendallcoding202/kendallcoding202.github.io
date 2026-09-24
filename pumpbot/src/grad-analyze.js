@@ -62,15 +62,36 @@ export function usable(rows) {
   return rows.filter((r) => (r.baseSanity ? r.baseSanity.ok : baseSanity(r.basePriceSol).ok))
 }
 
+/**
+ * ONE VENUE, because the bar is 1 + toll and the toll belongs to the venue.
+ *
+ * Graduations do not all land in the same place: of the first 268, 94% went to pump-amm
+ * and 6% to raydium-cpmm, which has a different fee schedule. A single bar applied across
+ * both would be wrong for one of them.
+ *
+ * Raydium rows are still tracked and journalled -- they are evidence, and n=300 on that
+ * arm is about nineteen days at the observed rate, which makes it a separate experiment
+ * rather than a reason to throw the rows away. The count set aside is reported, so the
+ * restriction is never silent.
+ */
+export const HEADLINE_POOL = 'pump-amm'
+export function onHeadlineVenue(rows) {
+  return rows.filter((r) => r.pool === HEADLINE_POOL)
+}
+
 export function analyseGraduations({ rows = readGraduations(200_000), toll = null, minN = 300 } = {}) {
   const all = rows
-  const clean = usable(all)
+  const onVenue = onHeadlineVenue(all)
+  const clean = usable(onVenue)
   const idx240 = GRAD_CHECKPOINTS.indexOf(240)
   const pop = fixedPopulation(clean, 240)
 
   const out = {
     rows: all.length,
-    dropped: all.length - clean.length,
+    /** Set aside as a different venue with a different toll. Never silent. */
+    otherVenue: all.length - onVenue.length,
+    headlinePool: HEADLINE_POOL,
+    dropped: onVenue.length - clean.length,
     fixedPopulation: pop.length,
     minN,
     powered: pop.length >= minN,
@@ -126,7 +147,7 @@ export function analyseGraduations({ rows = readGraduations(200_000), toll = nul
 
 export function formatGraduationReport(a) {
   const L = []
-  L.push(`rows ${a.rows} · dropped for an unreachable base price ${a.dropped} · fixed population to 240m ${a.fixedPopulation}`)
+  L.push(`rows ${a.rows} · ${a.otherVenue} set aside (not ${a.headlinePool}) · ${a.dropped} dropped for an unreachable base price · fixed population to 240m ${a.fixedPopulation}`)
   if (!a.powered) {
     L.push(a.verdict)
     return L.join('\n')

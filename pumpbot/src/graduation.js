@@ -256,6 +256,8 @@ export class GraduationTracker {
     return [...this.rows.values()].map((r) => ({
       mint: r.mint,
       graduatedAt: r.graduatedAt,
+      /** The venue decides the toll, so it travels with every row. */
+      pool: r.pool,
       basePriceSol: r.basePriceSol,
       trades: r.trades,
       lastTradeAt: r.lastTradeAt,

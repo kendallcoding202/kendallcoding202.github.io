@@ -26,6 +26,7 @@ import { buildExportInWorker } from './export.js'
 import { deliveryStats } from './notify.js'
 import { readGraduations, GRAD_CHECKPOINTS } from './graduation.js'
 import { gradProbeLedger } from './store.js'
+import { onHeadlineVenue, HEADLINE_POOL } from './grad-analyze.js'
 import { log } from './log.js'
 
 
@@ -259,7 +260,14 @@ function graduationSummary(tracker) {
    * priced. A row whose 240m checkpoint is filled is evidence whether or not its last
    * checkpoint has arrived.
    */
-  const rows = [...readGraduations(), ...(tracker?.inFlight() ?? [])]
+  /**
+   * Restricted to the headline venue, because the bar is 1 + toll and the toll belongs to
+   * the venue: 94% of graduations go to pump-amm and 6% to raydium-cpmm, which has a
+   * different fee schedule. Progress toward n=300 must count the population the verdict
+   * will actually be read on.
+   */
+  const everything = [...readGraduations(), ...(tracker?.inFlight() ?? [])]
+  const rows = onHeadlineVenue(everything)
   const idx240 = GRAD_CHECKPOINTS.indexOf(240)
   // A fixed population, present at every checkpoint up to 240m. Coverage decaying with
   // horizon is what made the on-curve horizon curve unreadable until it was controlled.
@@ -292,6 +300,9 @@ function graduationSummary(tracker) {
     implausible: live?.implausible ?? 0,
     quiet: live?.quiet ?? 0,
     recorded: rows.filter((r) => !r.pending).length,
+    /** Tracked but on another venue, so not counted toward the bar. */
+    otherVenue: everything.length - rows.length,
+    headlinePool: HEADLINE_POOL,
     /** Tracked, priced, and not yet at the end of their window. */
     pending: rows.filter((r) => r.pending).length,
     complete: complete.length,

@@ -7387,7 +7387,7 @@ console.log('\nThe graduation analysis')
   // A plausible post-graduation base price: ~411 SOL implied market cap.
   const BASE = 4.11e-7
   const mk = (mults, over = {}) => ({
-    mint: 'M' + Math.random(), basePriceSol: BASE, graduatedAt: 1,
+    mint: 'M' + Math.random(), basePriceSol: BASE, graduatedAt: 1, pool: 'pump-amm',
     mult: GRAD_CHECKPOINTS.map((_, i) => mults[i] ?? mults.at(-1)), ...over,
   })
   const flat = (v, over = {}) => mk(GRAD_CHECKPOINTS.map(() => v), over)
@@ -7439,6 +7439,30 @@ console.log('\nThe graduation analysis')
       ...Array.from({ length: 5 }, () => flat(1.2, { basePriceSol: 2.8e-8 }))]
     check('rows priced off a launch-era tick are dropped before anything is computed',
       usable(rows).length === 10, String(usable(rows).length))
+  }
+
+  /**
+   * ONE VENUE, because the bar is 1 + toll and the toll belongs to the venue. 94% of
+   * graduations went to pump-amm and 6% to raydium-cpmm, which has a different fee
+   * schedule -- a single bar across both is wrong for one of them. Raydium rows are kept
+   * and journalled; they are simply not what the verdict is read on.
+   */
+  {
+    const { onHeadlineVenue } = await import('../src/grad-analyze.js')
+    const mixed = [...Array.from({ length: 300 }, () => flat(1.4)),
+      ...Array.from({ length: 40 }, () => flat(9.0, { pool: 'raydium-cpmm' }))]
+    check('another venue is excluded from the headline population',
+      onHeadlineVenue(mixed).length === 300, String(onHeadlineVenue(mixed).length))
+    const a = analyseGraduations({ rows: mixed, toll: 0.03 })
+    check('and the analysis says how many it set aside, never silently',
+      a.otherVenue === 40, String(a.otherVenue))
+    /*
+     * The raydium rows here are 9.0x -- wildly profitable. If the restriction were not
+     * applied they would drag the headline, which is exactly the contamination a single
+     * bar across two fee schedules invites.
+     */
+    check('so a different venue cannot drag the headline', a.fixedPopulation === 300,
+      String(a.fixedPopulation))
   }
 
   /**
@@ -7623,6 +7647,7 @@ console.log('\nThe graduation analysis')
     const render = new Function('document', 'authToken', 'num', `${src}\nreturn renderGraduation;`)(
       doc, 'tok', (v) => String(v))
     const base = { tracking: 4, priced: 4, quiet: 0, recorded: 0, pending: 4, complete: 0, needed: 300,
+      otherVenue: 2, headlinePool: 'pump-amm', toll: null,
       powered: false, quietShare: null, checkpoints: [1, 5], curve: [{ min: 1, n: 0, mean: null }] }
     let threw = null
     try { render(base) } catch (err) { threw = err.message }

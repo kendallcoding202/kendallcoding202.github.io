@@ -8,6 +8,7 @@ import { buySolFor, buySolForCurve, tooSmallToTrade, tierFor, sizingSummary } fr
 import { ShadowTracker, CreatorIndex, saveShadow, loadShadow, journalHealth, volumeSpace } from './journal.js'
 import { WalletIndex, saveWallets, loadWallets } from './wallets.js'
 import { GraduationTracker, saveGraduations, loadGraduations, baseSanity } from './graduation.js'
+import { HEADLINE_POOL } from './grad-analyze.js'
 import {
   initStore,
   getState,
@@ -1160,6 +1161,11 @@ export class Bot {
     const now = Date.now()
     const target = this.graduations.inFlight().find(
       (r) =>
+        /*
+         * Same venue as the headline population. Measuring a round trip on Raydium and
+         * applying it to a pump-amm population is the venue error in the other direction.
+         */
+        r.pool === HEADLINE_POOL &&
         r.basePriceSol > 0 &&
         baseSanity(r.basePriceSol).ok &&
         r.trades >= 3 &&

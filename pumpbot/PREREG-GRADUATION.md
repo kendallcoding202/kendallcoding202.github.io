@@ -131,3 +131,38 @@ traps.
 **What this does not change:** if the curve decays monotonically the way the on-curve one
 did, the hypothesis is dead regardless of where the toll lands, because no toll makes a
 decaying curve profitable.
+
+---
+
+## AMENDMENT 2 — 2026-09-24, on the venue split
+
+Made before any outcome was read. The first 268 rows were used for instrument validation
+only, and they cannot be used for anything else: only the ~60 that won a trade
+subscription slot were ever priced, so the 128 priced rows are a selected subset rather
+than a small sample, and they are excluded from the eventual analysis entirely.
+
+**Graduations do not all land in the same place:**
+
+| pool | n | share |
+|---|---|---|
+| `pump-amm` | 252 | 94% |
+| `raydium-cpmm` | 16 | 6% |
+
+The bar is `1 + toll`, and `toll` is a property of the venue. Two venues means two tolls,
+so a single bar applied across both would be wrong for one of them.
+
+**The headline population is restricted to `pump-amm`.** It is 94% of graduations, one
+venue, one fee schedule, one measured toll. Raydium rows are still tracked and still
+journalled — they are evidence, and n=300 on that arm would take about nineteen days at
+the observed rate, which is a separate experiment rather than a reason to discard them.
+The analysis reports how many it set aside so the restriction is never silent.
+
+The toll probe is likewise restricted: measuring a round trip on Raydium and applying it
+to a pump-amm population would be the same error in the other direction.
+
+Nothing else changes: n >= 300 complete to 240m on the restricted population, the 60/40
+split by `graduatedAt`, Bonferroni at 0.0125, the four questions, the five traps.
+
+**Observed graduation rate: 44.2/hour, ~1,061/day.** So n=300 on the restricted arm is a
+matter of hours once pricing works, not days — which is why restricting costs almost
+nothing and buying a second venue's worth of data would cost a lot.

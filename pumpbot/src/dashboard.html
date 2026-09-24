@@ -1051,6 +1051,8 @@ function renderGraduation(g) {
     ' · <b' + (pricedWarn ? ' style="color:var(--red)"' : '') + '>' + num(g.priced) +
     '</b> with a post-graduation price' +
     ' · <b>' + num(g.complete) + '</b> past 240m' +
+    // The verdict is read on one venue, so progress counts that venue. Never silent.
+    (g.otherVenue > 0 ? ' <span class="dim">(' + num(g.otherVenue) + ' on another venue, set aside)</span>' : '') +
     /*
      * "Finalised" is a separate, slower number on purpose: a row is only written when its
      * full 24h window expires, while the decision horizon is 240m. Progress counts rows
