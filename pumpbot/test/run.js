@@ -7318,6 +7318,41 @@ console.log('\nThe graduation collector')
   }
 }
 
+// ------------------------------- measuring the PumpSwap round trip
+console.log('\nThe graduation toll probe')
+{
+  const { recordGradProbe, gradProbeLedger } = store
+  /**
+   * The toll is the fraction of the stake that does not come back. That one number is
+   * the whole measurement -- fees, slippage, impact and priority together, with no model
+   * between it and the wallet -- and the graduation bar is 1 + it, because the 1.06 in
+   * the original pre-registration came from a bonding curve.
+   */
+  check('an unmeasured toll is null, never a default',
+    gradProbeLedger().medianToll === null, String(gradProbeLedger().medianToll))
+  recordGradProbe({ ok: true, spentSol: 0.01, returnedSol: 0.0097, mint: 'A' })
+  check('a round trip that returns 97% measures a 3pp toll',
+    Math.abs(gradProbeLedger().medianToll - 0.03) < 1e-9, String(gradProbeLedger().medianToll))
+  /*
+   * A failed leg measures nothing. Averaging a zero in would flatter the result, and a
+   * buy that could not be sold is the one outcome that matters most.
+   */
+  recordGradProbe({ ok: false, spentSol: 0.01, mint: 'B', reason: 'sell: no route' })
+  const led = gradProbeLedger()
+  check('a failed leg records no toll', led.tolls.length === 1, JSON.stringify(led.tolls))
+  check('but is counted, with its reason', led.failures === 1 && Object.keys(led.reasons).length === 1,
+    JSON.stringify(led.reasons))
+  check('and its stake still counts against the ceiling',
+    Math.abs(led.spentSol - 0.02) < 1e-9, String(led.spentSol))
+  // Median, not mean: one failed-to-route leg must not set the bar for everything.
+  recordGradProbe({ ok: true, spentSol: 0.01, returnedSol: 0.0099, mint: 'C' })
+  recordGradProbe({ ok: true, spentSol: 0.01, returnedSol: 0.0050, mint: 'D' })
+  check('the estimate is a median, so one bad fill cannot set the bar',
+    gradProbeLedger().medianToll <= 0.03, String(gradProbeLedger().medianToll))
+  // It must be off unless someone turned it on: it spends real money to buy a number.
+  check('the toll probe is off by default', config.gradProbe.enabled === false)
+}
+
 // ------------------------------- the pre-registered graduation analysis
 console.log('\nThe graduation analysis')
 {

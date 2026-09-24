@@ -1090,9 +1090,17 @@ function renderGraduation(g) {
   const cells = g.curve.filter((c) => c.n > 0).map((c) =>
     '<code>' + (c.min < 60 ? c.min + 'm' : (c.min / 60) + 'h') + '</code> ' +
     (c.mean === null ? '—' : c.mean.toFixed(4) + 'x')).join(' · ')
-  const verdict = g.clearsToll
-    ? '<span style="color:var(--green)">clears the ~5.6pp toll</span>'
-    : '<span style="color:var(--red)">does not clear the ~5.6pp toll</span>'
+  /*
+   * No measured toll, no verdict. The 1.06 bar came from a pump.fun bonding curve and
+   * this trades on PumpSwap; standing it in would be inventing the number the whole
+   * decision rests on.
+   */
+  const verdict =
+    g.toll === null
+      ? '<span style="color:var(--amber)">PumpSwap toll not measured yet — no bar, no verdict</span>'
+      : g.clearsToll
+        ? '<span style="color:var(--green)">clears the measured ' + (g.toll * 100).toFixed(2) + 'pp toll</span>'
+        : '<span style="color:var(--red)">does not clear the measured ' + (g.toll * 100).toFixed(2) + 'pp toll</span>'
   el.innerHTML = head + bar + dl +
     '<div style="margin-top:12px">' + cells + '</div>' +
     '<div style="margin-top:8px">At 240m: <b>' + (g.meanAt240 === null ? '—' : g.meanAt240.toFixed(4) + 'x') +

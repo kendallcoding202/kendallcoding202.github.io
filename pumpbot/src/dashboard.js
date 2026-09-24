@@ -25,6 +25,7 @@ import { refreshIfStale, snapshot as analysisSnapshot, analysisHealth } from './
 import { buildExportInWorker } from './export.js'
 import { deliveryStats } from './notify.js'
 import { readGraduations, GRAD_CHECKPOINTS } from './graduation.js'
+import { gradProbeLedger } from './store.js'
 import { log } from './log.js'
 
 
@@ -268,6 +269,11 @@ function graduationSummary(tracker) {
     return { min, n: v.length, mean: v.length ? v.reduce((s, x) => s + x, 0) / v.length : null }
   })
   const at240 = curve[idx240]
+  /**
+   * The bar is 1 + the MEASURED PumpSwap round trip, never the 1.06 that came from a
+   * bonding curve. Null until the probe has produced one, and null means no verdict.
+   */
+  const toll = gradProbeLedger().medianToll
   const quiet = rows.filter((r) => r.quoteWentQuiet).length
   const live = tracker?.stats() ?? null
   return {
@@ -295,8 +301,11 @@ function graduationSummary(tracker) {
     quietShare: rows.length ? quiet / rows.length : null,
     curve,
     meanAt240: at240?.mean ?? null,
-    /** Pre-registered: act only above 1.06, which is the ~5.6pp round trip. */
-    clearsToll: at240?.mean !== null && at240?.mean !== undefined ? at240.mean > 1.06 : null,
+    /** The measured PumpSwap round trip, or null while it is still unmeasured. */
+    toll,
+    bar: toll === null ? null : 1 + toll,
+    clearsToll:
+      toll !== null && at240?.mean !== null && at240?.mean !== undefined ? at240.mean > 1 + toll : null,
     checkpoints: GRAD_CHECKPOINTS,
   }
 }

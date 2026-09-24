@@ -9,6 +9,7 @@ import { keygen, getPublicKey, getSolBalance, getAllTokenBalances } from './wall
 import { sizingSummary } from './sizing.js'
 import { analyze, formatReport } from './learn.js'
 import { analyseGraduations, formatGraduationReport } from './grad-analyze.js'
+import { gradProbeLedger } from './store.js'
 import { readBondingCurve } from './onchain.js'
 import { heldByAnother } from './lock.js'
 import { readRecent } from './journal.js'
@@ -356,7 +357,18 @@ async function panic() {
  */
 function gradReport() {
   const raw = process.argv[3]
-  const toll = raw === undefined ? null : Number(raw)
+  /**
+   * The MEASURED toll if the probe has produced one, otherwise none at all.
+   *
+   * Never a default: the 1.06 bar came from a pump.fun bonding curve and this trades on
+   * PumpSwap, so an unmeasured toll must block the verdict rather than quietly stand in
+   * for it. An explicit argument overrides, for asking what-if.
+   */
+  const measured = gradProbeLedger().medianToll
+  const toll = raw === undefined ? measured : Number(raw)
+  if (raw === undefined && measured !== null) {
+    console.log(`\n  using the MEASURED PumpSwap toll: ${(measured * 100).toFixed(2)}pp`)
+  }
   if (raw !== undefined && !(toll >= 0 && toll < 1)) {
     console.error('\n  Toll must be a fraction, e.g. 0.03 for 3pp.\n')
     process.exitCode = 1

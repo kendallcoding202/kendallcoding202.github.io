@@ -385,6 +385,32 @@ export const config = {
   },
 
   /**
+   * MEASURING THE PUMPSWAP ROUND TRIP, which is the blocker on any graduation verdict.
+   *
+   * The 1.06 bar came from a pump.fun BONDING CURVE: feePct 1.5 and priceImpactPct 0.25,
+   * a single set of numbers with no venue distinction. Graduated tokens trade on an AMM
+   * holding ~85 SOL of real reserves, where impact on a small order is far smaller and
+   * the fee schedule is not pump.fun's. A bar set too high rejects a viable strategy and
+   * one set too low accepts a losing one.
+   *
+   * So it is measured the only way a round trip can be: buy a tiny amount and sell all of
+   * it immediately. The SOL that does not come back IS the toll -- fees, slippage, impact
+   * and priority together, with no model in between.
+   *
+   * OFF by default. It spends real money to buy a number, and that has to be a decision
+   * someone makes rather than something a deploy starts doing.
+   */
+  gradProbe: {
+    enabled: bool('GRAD_PROBE', false),
+    /** Small enough that impact is negligible; the point is the FEE floor, not depth. */
+    positionSol: num('GRAD_PROBE_SOL', 0.01),
+    /** Hard ceiling on what the whole measurement may ever spend. */
+    maxTotalSol: num('GRAD_PROBE_MAX_SOL', 0.1),
+    /** Stop once the estimate has stopped moving; more round trips buy nothing. */
+    targetSamples: num('GRAD_PROBE_SAMPLES', 8),
+  },
+
+  /**
    * The graduation experiment -- a SEPARATE hypothesis from the launch strategy.
    *
    * Every launch-side idea failed the same way: a ~5.6pp round trip against a median

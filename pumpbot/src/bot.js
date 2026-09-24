@@ -7,7 +7,7 @@ import { canOpen, riskSummary, rolloverDaily, syncEquityBasis } from './risk.js'
 import { buySolFor, buySolForCurve, tooSmallToTrade, tierFor, sizingSummary } from './sizing.js'
 import { ShadowTracker, CreatorIndex, saveShadow, loadShadow, journalHealth, volumeSpace } from './journal.js'
 import { WalletIndex, saveWallets, loadWallets } from './wallets.js'
-import { GraduationTracker, saveGraduations, loadGraduations } from './graduation.js'
+import { GraduationTracker, saveGraduations, loadGraduations, baseSanity } from './graduation.js'
 import {
   initStore,
   getState,
@@ -26,6 +26,8 @@ import {
   recordProbeOrder,
   probeLedger,
   recordStart,
+  recordGradProbe,
+  gradProbeLedger,
 } from './store.js'
 import { decideExit, newPosition, applySell, markPrice, positionPnl } from './position.js'
 import { getPublicKey, getSolBalance, getAllTokenBalances } from './wallet.js'
@@ -938,6 +940,22 @@ export class Bot {
      * subscription -- 400 tracked mints would otherwise hold subscriptions the launch
      * strategy needs.
      */
+    /**
+     * The toll measurement, on its own slow timer. Off unless GRAD_PROBE is set: it
+     * spends real money to buy a number, which has to be someone's decision rather than
+     * something a deploy starts doing. Slow because eight round trips is the entire
+     * sample -- there is no hurry, and haste here only spends more.
+     */
+    if (config.gradProbe.enabled && !config.paper) {
+      log.warn(
+        `graduation toll probe ENABLED — will spend up to ${sol(config.gradProbe.maxTotalSol)} ` +
+          `in ${config.gradProbe.positionSol} SOL round trips to measure the PumpSwap round trip`,
+      )
+      this.gradProbeTimer = setInterval(() => {
+        this.#gradProbeTick().catch((err) => log.error(`grad probe: ${err.message}`))
+      }, 90_000)
+      this.gradProbeTimer.unref?.()
+    }
     if (this.graduations) {
       this.gradTimer = setInterval(() => {
         const done = this.graduations.sweep()
@@ -979,6 +997,7 @@ export class Bot {
     saveShadow(this.shadow)
     saveWallets(this.wallets)
     if (this.gradTimer) clearInterval(this.gradTimer)
+    if (this.gradProbeTimer) clearInterval(this.gradProbeTimer)
     saveGraduations(this.graduations)
     releaseLock()
   }
@@ -1080,6 +1099,88 @@ export class Bot {
      */
     this.candidates.set(event.mint, new Candidate(event))
     this.feed.watch(event.mint)
+  }
+
+  /**
+   * MEASURE ONE PUMPSWAP ROUND TRIP, in the only way a round trip can be measured.
+   *
+   * Buy a tiny amount of a graduated token and sell all of it immediately. The SOL that
+   * does not come back IS the toll: fees, slippage, impact and priority together, with no
+   * model in between. The graduation bar is 1 + this number, because the 1.06 in the
+   * original pre-registration came from a bonding curve and this hypothesis does not
+   * trade on one.
+   *
+   * Deliberately NOT a strategy. It holds for no time, picks no winners, and exists only
+   * to turn an assumption into a measurement. It stops as soon as the estimate stops
+   * moving -- more round trips after that buy nothing and cost real money.
+   */
+  async #gradProbeTick() {
+    if (!config.gradProbe.enabled || config.paper || this.stopping) return
+    const led = gradProbeLedger()
+    if (led.trips >= config.gradProbe.targetSamples) return
+    if (led.spentSol + config.gradProbe.positionSol > config.gradProbe.maxTotalSol) return
+    if (!this.graduations) return
+
+    /**
+     * Only a token whose price could belong to a completed curve, and that is actually
+     * trading. Probing a mint priced off a stale pre-migration tick would measure the
+     * round trip of something that is not the population under test.
+     */
+    const now = Date.now()
+    const target = this.graduations.inFlight().find(
+      (r) =>
+        r.basePriceSol > 0 &&
+        baseSanity(r.basePriceSol).ok &&
+        r.trades >= 3 &&
+        r.lastTradeAt !== null &&
+        now - r.lastTradeAt < 120_000 &&
+        !this.busy.has(r.mint) &&
+        !this.gradProbed?.has(r.mint),
+    )
+    if (!target) return
+
+    this.gradProbed ??= new Set()
+    this.gradProbed.add(target.mint)
+    this.busy.add(target.mint)
+    try {
+      const spend = config.gradProbe.positionSol
+      const fill = await buy({ mint: target.mint, solAmount: spend, pool: 'auto' })
+      if (!fill.ok) {
+        recordGradProbe({ ok: false, spentSol: 0, mint: target.mint, reason: `buy: ${fill.error}` })
+        log.warn(`grad probe buy failed on ${target.mint.slice(0, 8)}: ${fill.error}`)
+        return
+      }
+      // Straight back out. Anything held is a position, and this is a measurement.
+      const out = await sell({
+        mint: target.mint,
+        tokenAmount: fill.tokensReceived,
+        sellAll: true,
+        pool: 'auto',
+      })
+      if (!out.ok) {
+        /**
+         * Bought and could not sell. That is worth more than a clean number: a venue we
+         * cannot exit is a venue the strategy cannot use, whatever its round trip costs.
+         */
+        recordGradProbe({ ok: false, spentSol: fill.solSpent, mint: target.mint, reason: `sell: ${out.error}` })
+        log.error(`grad probe COULD NOT EXIT ${target.mint} — ${out.error}`)
+        await notify(`⚠️ <b>Graduation probe could not exit</b>\n<code>${target.mint}</code>\n${out.error}`).catch(() => {})
+        return
+      }
+      const spentSol = fill.solSpent
+      const returnedSol = out.solReceived ?? 0
+      const g = recordGradProbe({ ok: true, spentSol, returnedSol, mint: target.mint })
+      const toll = 1 - returnedSol / spentSol
+      log.info(
+        `grad probe: ${sol(spentSol)} out, ${sol(returnedSol)} back — toll ${(toll * 100).toFixed(2)}% ` +
+          `(${g.trips}/${config.gradProbe.targetSamples} samples)`,
+      )
+    } catch (err) {
+      recordGradProbe({ ok: false, spentSol: 0, mint: target.mint, reason: err.message })
+      log.error(`grad probe error: ${err.message}`)
+    } finally {
+      this.busy.delete(target.mint)
+    }
   }
 
   /**

@@ -70,6 +70,8 @@ const EMPTY = {
    * gap between them is the answer we are paying for.
    */
   probe: { attempts: 0, trades: 0, failures: 0, committedSol: 0, reasons: {}, fillRatios: [] },
+  /** Measured PumpSwap round trips. See recordGradProbe and config.gradProbe. */
+  gradProbe: { attempts: 0, trips: 0, failures: 0, spentSol: 0, reasons: {}, tolls: [] },
 }
 
 let state = null
@@ -189,6 +191,54 @@ function normalizeFillSample(entry) {
   // Samples written before this change are bare numbers of unknown provenance.
   if (typeof entry === 'number') return { r: entry, build: null }
   return { r: Number(entry?.r), build: entry?.build ?? null }
+}
+
+/**
+ * One measured PumpSwap round trip.
+ *
+ * `toll` is the fraction of the stake that did not come back: 1 - returned/spent. That
+ * single number is the whole measurement -- fees, slippage, impact and priority together,
+ * with no model between it and the wallet. It is what the graduation bar is built from,
+ * because the 1.06 in the original pre-registration came from a bonding curve and this
+ * hypothesis does not trade on one.
+ *
+ * A failed leg is recorded with its reason and NO toll: a round trip that did not
+ * complete measures nothing, and averaging a zero in would flatter the result.
+ */
+export function recordGradProbe({ ok, spentSol = 0, returnedSol = 0, mint = null, reason = null }) {
+  const s = getState()
+  if (!s.gradProbe) s.gradProbe = { attempts: 0, trips: 0, failures: 0, spentSol: 0, reasons: {}, tolls: [] }
+  const g = s.gradProbe
+  g.attempts = (g.attempts ?? 0) + 1
+  g.spentSol = (g.spentSol ?? 0) + Math.max(0, spentSol)
+  if (ok && spentSol > 0) {
+    g.trips = (g.trips ?? 0) + 1
+    const toll = 1 - returnedSol / spentSol
+    g.tolls = [...(g.tolls ?? []), { toll: Number(toll.toFixed(5)), mint, build: config.version }].slice(-100)
+  } else {
+    g.failures = (g.failures ?? 0) + 1
+    const key = String(reason ?? 'unknown').replace(/\d+/g, 'N').slice(0, 120)
+    g.reasons[key] = (g.reasons[key] ?? 0) + 1
+  }
+  save()
+  return g
+}
+
+/** The measured toll, or null while it is still unmeasured. Never a default. */
+export function gradProbeLedger() {
+  const g = getState().gradProbe ?? {}
+  const tolls = (g.tolls ?? []).filter((x) => Number.isFinite(x?.toll)).map((x) => x.toll)
+  const sorted = [...tolls].sort((a, b) => a - b)
+  return {
+    attempts: g.attempts ?? 0,
+    trips: g.trips ?? 0,
+    failures: g.failures ?? 0,
+    spentSol: g.spentSol ?? 0,
+    reasons: g.reasons ?? {},
+    tolls,
+    /** Median, not mean: one failed-to-route leg should not set the bar for everything. */
+    medianToll: sorted.length ? sorted[sorted.length >> 1] : null,
+  }
 }
 
 export function recordProbeOrder({ ok, solSpent = 0, fillRatio = null, reason = null }) {
