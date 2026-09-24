@@ -260,8 +260,16 @@ function graduationSummary(tracker) {
   })
   const at240 = curve[idx240]
   const quiet = rows.filter((r) => r.quoteWentQuiet).length
+  const live = tracker?.stats() ?? null
   return {
-    tracking: tracker?.stats().tracking ?? 0,
+    tracking: live?.tracking ?? 0,
+    /**
+     * Watched mints that have actually produced a post-graduation price. If this stays
+     * at zero while `tracking` climbs, the feed is not delivering PumpSwap trades and the
+     * experiment is collecting nothing -- which must be visible now, not in 24 hours.
+     */
+    priced: live?.priced ?? 0,
+    quiet: live?.quiet ?? 0,
     recorded: rows.length,
     complete: complete.length,
     /** The pre-registered bar. Below it, nothing is decided. */

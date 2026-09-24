@@ -1039,9 +1039,22 @@ function renderGraduation(g) {
   sec.hidden = false
   const el = document.getElementById('grad')
   const pct = Math.min(100, (g.complete / g.needed) * 100)
+  /*
+   * `priced` is the health line. After graduation the curve is closed and the token
+   * trades on PumpSwap, so a price arrives only if the feed delivers those trades for a
+   * watched mint. Tracking climbing while priced stays at zero means the experiment is
+   * collecting nothing, and that has to be visible now rather than in 24 hours.
+   */
+  const pricedWarn = g.tracking > 2 && g.priced === 0
   const head =
-    'Tracking <b>' + num(g.tracking) + '</b> token(s) · <b>' + num(g.recorded) + '</b> graduation(s) recorded · ' +
-    '<b>' + num(g.complete) + '</b> complete to 240m'
+    'Tracking <b>' + num(g.tracking) + '</b> token(s)' +
+    ' · <b' + (pricedWarn ? ' style="color:var(--red)"' : '') + '>' + num(g.priced) +
+    '</b> with a post-graduation price' +
+    ' · <b>' + num(g.recorded) + '</b> recorded · <b>' + num(g.complete) + '</b> complete to 240m' +
+    (pricedWarn
+      ? '<div style="color:var(--red);margin-top:8px">No tracked token has produced a price yet — ' +
+        'the feed may not deliver trades once a curve closes. Every row would fill with nulls.</div>'
+      : '')
   const bar =
     '<div style="margin:10px 0 4px;height:6px;background:#1a2133;border-radius:3px;overflow:hidden">' +
     '<div style="height:100%;width:' + pct.toFixed(1) + '%;background:var(--amber)"></div></div>' +

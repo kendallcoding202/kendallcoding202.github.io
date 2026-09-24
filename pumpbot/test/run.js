@@ -7432,8 +7432,8 @@ console.log('\nThe graduation collector')
     const doc = { getElementById: (id) => (made[id] ??= { hidden: true, innerHTML: '' }) }
     const render = new Function('document', 'authToken', 'num', `${src}\nreturn renderGraduation;`)(
       doc, 'tok', (v) => String(v))
-    const base = { tracking: 4, recorded: 0, complete: 0, needed: 300, powered: false,
-      quietShare: null, checkpoints: [1, 5], curve: [{ min: 1, n: 0, mean: null }] }
+    const base = { tracking: 4, priced: 4, quiet: 0, recorded: 0, complete: 0, needed: 300,
+      powered: false, quietShare: null, checkpoints: [1, 5], curve: [{ min: 1, n: 0, mean: null }] }
     let threw = null
     try { render(base) } catch (err) { threw = err.message }
     check('renderGraduation runs before it is powered', threw === null, threw ?? '')
@@ -7448,6 +7448,21 @@ console.log('\nThe graduation collector')
     check('and runs once it IS powered, which is a different branch', threw === null, threw ?? '')
     check('the powered card reports the 240m figure', (made.grad?.innerHTML ?? '').includes('1.2100'),
       (made.grad?.innerHTML ?? '').slice(0, 80))
+    /**
+     * THE HEALTH LINE. After graduation the curve is closed and the token trades on
+     * PumpSwap, so a price arrives only if the feed delivers those trades for a watched
+     * mint. Tracking climbing while priced stays at zero means the experiment is
+     * collecting nothing but nulls, and waiting 24h for the first empty row to prove it
+     * is 24h wasted.
+     */
+    render({ ...base, tracking: 9, priced: 0 })
+    check('no price on any tracked token is called out, not left to be inferred',
+      (made.grad?.innerHTML ?? '').includes('No tracked token has produced a price yet'),
+      (made.grad?.innerHTML ?? '').slice(0, 120))
+    render({ ...base, tracking: 9, priced: 3 })
+    check('and the warning clears once prices are arriving',
+      !(made.grad?.innerHTML ?? '').includes('No tracked token has produced a price yet'))
+
     // Null hides the section rather than throwing.
     render(null)
     check('and a missing block hides the section instead of erroring', made.gradsec?.hidden === true)

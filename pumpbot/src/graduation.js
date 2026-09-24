@@ -182,7 +182,29 @@ export class GraduationTracker {
   }
 
   stats() {
-    return { tracking: this.rows.size, completed: this.completed, expired: this.expired }
+    /**
+     * `priced` is the health check for the whole experiment.
+     *
+     * After graduation the bonding curve is CLOSED and the token trades on PumpSwap, so
+     * a price only arrives if the feed actually delivers post-graduation trades for a
+     * watched mint. If it does not, every row fills with nulls and we would not find out
+     * until the first 24h window expired with nothing in it. Tracked-but-unpriced is the
+     * number that says so within minutes instead.
+     */
+    let priced = 0
+    let quiet = 0
+    const now = Date.now()
+    for (const r of this.rows.values()) {
+      if (r.basePriceSol !== null) priced++
+      if (r.lastTradeAt !== null && now - r.lastTradeAt > 600_000) quiet++
+    }
+    return {
+      tracking: this.rows.size,
+      priced,
+      quiet,
+      completed: this.completed,
+      expired: this.expired,
+    }
   }
 }
 
