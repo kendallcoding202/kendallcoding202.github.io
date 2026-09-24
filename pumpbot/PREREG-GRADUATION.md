@@ -95,3 +95,39 @@ Each one has already cost this project a wrong answer:
   0.01 SOL, the same way the fill probe was run.
 - **Fails:** record it here with the numbers, stop work on pump.fun entirely, and move the
   sorting methodology to a venue where the toll is 10-30bp — the only remaining idea.
+
+---
+
+## AMENDMENT — 2026-09-24, before any row was analysed
+
+Recorded as an amendment rather than an edit, because a pre-registration quietly rewritten
+is not one. No outcome data has been looked at: 0 rows finalised, and the collector had
+been running a few hours.
+
+**The 1.06x bar was derived from the wrong venue.** It came from the ~5.6pp best-case
+round trip on a pump.fun BONDING CURVE — `feePct` 1.5 and `priceImpactPct` 0.25, which is
+a single set of numbers with no venue distinction anywhere in the cost model. This
+hypothesis trades graduated tokens on **PumpSwap**, which is a different venue: an AMM
+holding roughly 85 SOL of real reserves at graduation, where impact for a 0.01-0.1 SOL
+order is far smaller than on a young curve, and where the fee schedule is not pump.fun's.
+
+Carrying a bonding-curve toll into a PumpSwap decision could fail in either direction — a
+bar set too high rejects a viable strategy, one set too low accepts a losing one. Both are
+worse than admitting the number is not yet known.
+
+**So the bar is now derived, not fixed:**
+
+> act only if the mean at 240m exceeds **1 + toll**, where `toll` is the MEASURED
+> PumpSwap round trip, not the bonding-curve figure.
+
+`toll` has to be measured the same way the bonding-curve one was — from real fills, by the
+probe, on graduated tokens — before any verdict is read. Until it exists, the dashboard
+keeps showing 1.06 as a placeholder and that number carries no authority.
+
+Everything else stands unchanged: n >= 300 complete to 240m, the 60/40 split by
+`graduatedAt`, the Bonferroni threshold of 0.0125, the four questions, and the five named
+traps.
+
+**What this does not change:** if the curve decays monotonically the way the on-curve one
+did, the hypothesis is dead regardless of where the toll lands, because no toll makes a
+decaying curve profitable.
