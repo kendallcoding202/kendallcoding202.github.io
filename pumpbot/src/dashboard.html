@@ -1046,6 +1046,21 @@ function renderGraduation(g) {
    * collecting nothing, and that has to be visible now rather than in 24 hours.
    */
   const pricedWarn = g.tracking > 2 && g.priced === 0
+  /*
+   * Every price now comes from the off-curve oracle, which prices nothing until it has
+   * agreed with known curve prices often enough. An untrusted oracle collects NOTHING,
+   * so it is the first thing this section reports rather than something to infer from a
+   * counter that never moves.
+   */
+  const orc = g.oracle || null
+  const oracleLine =
+    orc && !orc.trusted
+      ? '<div style="color:var(--red);margin-top:8px">Off-curve oracle NOT trusted yet — ' +
+        num(orc.agreements) + ' of ' + num(orc.needed) + ' agreements' +
+        (orc.checks ? ' over ' + num(orc.checks) + ' checks' : '') +
+        '. Nothing can be priced until it earns trust, so this experiment is collecting ' +
+        'graduations but no prices.</div>'
+      : ''
   const head =
     'Tracking <b>' + num(g.tracking) + '</b> token(s)' +
     ' · <b' + (pricedWarn ? ' style="color:var(--red)"' : '') + '>' + num(g.priced) +
@@ -1061,8 +1076,8 @@ function renderGraduation(g) {
     ' <span class="dim">(' + num(g.recorded) + ' finalised to disk, 24h each)</span>' +
     (pricedWarn
       ? '<div style="color:var(--red);margin-top:8px">No tracked token has produced a price yet — ' +
-        'the feed may not deliver trades once a curve closes. Every row would fill with nulls.</div>'
-      : '') +
+        'every row would fill with nulls.</div>'
+      : '') + oracleLine +
     /*
      * A price a completed curve cannot have produced is a pre-graduation tick, and every
      * multiple measured from it would be garbage the same way the deflated mayhem

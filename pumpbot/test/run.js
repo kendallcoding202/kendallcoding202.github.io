@@ -7648,6 +7648,7 @@ console.log('\nThe graduation analysis')
       doc, 'tok', (v) => String(v))
     const base = { tracking: 4, priced: 4, quiet: 0, recorded: 0, pending: 4, complete: 0, needed: 300,
       otherVenue: 2, headlinePool: 'pump-amm', toll: null,
+      oracle: { trusted: true, agreements: 9, needed: 8, checks: 10, agreementRate: 0.9 },
       powered: false, quietShare: null, checkpoints: [1, 5], curve: [{ min: 1, n: 0, mean: null }] }
     let threw = null
     try { render(base) } catch (err) { threw = err.message }
@@ -7677,6 +7678,19 @@ console.log('\nThe graduation analysis')
     render({ ...base, tracking: 9, priced: 3 })
     check('and the warning clears once prices are arriving',
       !(made.grad?.innerHTML ?? '').includes('No tracked token has produced a price yet'))
+    /**
+     * Every price now comes from the off-curve oracle, which prices nothing until it has
+     * agreed with known curve prices often enough. That gate is correct -- an oracle
+     * parsing the wrong field invents a denominator -- but it means an untrusted oracle
+     * collects NOTHING where the old subscription path collected 48%.
+     */
+    render({ ...base, oracle: { trusted: false, agreements: 3, needed: 8, checks: 4, agreementRate: 0.75 } })
+    check('an untrusted oracle is reported as the blocker it is',
+      (made.grad?.innerHTML ?? '').includes('NOT trusted yet'),
+      (made.grad?.innerHTML ?? '').slice(0, 120))
+    render(base)
+    check('and a trusted one says nothing about itself',
+      !(made.grad?.innerHTML ?? '').includes('NOT trusted yet'))
 
     // Null hides the section rather than throwing.
     render(null)

@@ -27,6 +27,7 @@ import { deliveryStats } from './notify.js'
 import { readGraduations, GRAD_CHECKPOINTS } from './graduation.js'
 import { gradProbeLedger } from './store.js'
 import { onHeadlineVenue, HEADLINE_POOL } from './grad-analyze.js'
+import { oracleHealth } from './offcurve.js'
 import { log } from './log.js'
 
 
@@ -282,6 +283,18 @@ function graduationSummary(tracker) {
    * bonding curve. Null until the probe has produced one, and null means no verdict.
    */
   const toll = gradProbeLedger().medianToll
+  /**
+   * THE BINDING CONSTRAINT, now that pricing is a checkpoint poll.
+   *
+   * Graduations are no longer subscribed to -- that consumed slots the launch strategy
+   * needed and capped coverage at 60 mints -- so every price comes from the off-curve
+   * oracle, and the oracle prices nothing until it has earned trust against curve prices
+   * we already know exactly. That gate is correct: an oracle parsing the wrong field
+   * invents a denominator, which is what produced the 46x and 228x fantasies. But it
+   * means an untrusted oracle collects NOTHING, where the old path collected 48%, and
+   * that has to be on the page rather than inferred from a flat counter.
+   */
+  const oracle = oracleHealth()
   const quiet = rows.filter((r) => r.quoteWentQuiet).length
   const live = tracker?.stats() ?? null
   return {
@@ -315,6 +328,13 @@ function graduationSummary(tracker) {
     /** The measured PumpSwap round trip, or null while it is still unmeasured. */
     toll,
     bar: toll === null ? null : 1 + toll,
+    oracle: {
+      trusted: oracle.trusted,
+      agreements: oracle.agreements,
+      needed: oracle.needed,
+      checks: oracle.checks,
+      agreementRate: oracle.agreementRate,
+    },
     clearsToll:
       toll !== null && at240?.mean !== null && at240?.mean !== undefined ? at240.mean > 1 + toll : null,
     checkpoints: GRAD_CHECKPOINTS,
