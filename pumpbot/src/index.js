@@ -8,6 +8,7 @@ import { initStore, getState, clearHalt, openPositions, save, addPosition } from
 import { keygen, getPublicKey, getSolBalance, getAllTokenBalances } from './wallet.js'
 import { sizingSummary } from './sizing.js'
 import { analyze, formatReport } from './learn.js'
+import { analyseGraduations, formatGraduationReport } from './grad-analyze.js'
 import { readBondingCurve } from './onchain.js'
 import { heldByAnother } from './lock.js'
 import { readRecent } from './journal.js'
@@ -24,6 +25,7 @@ const commands = {
   positions,
   panic,
   learn,
+  graduations: gradReport,
   export: doExport,
   record,
   replay,
@@ -340,6 +342,27 @@ async function panic() {
   const bot = new Bot()
   await bot.panicSell()
   process.exit(0)
+}
+
+/**
+ * The pre-registered graduation analysis. See PREREG-GRADUATION.md.
+ *
+ * Takes the toll as an argument rather than assuming one: the 1.06 bar in the original
+ * pre-registration came from a pump.fun BONDING CURVE round trip, and this hypothesis
+ * trades on PumpSwap. Run without one and it reports BLOCKED rather than inventing a bar.
+ *
+ *   npm run graduations            -- curve and coverage, no verdict
+ *   npm run graduations -- 0.03    -- with a measured 3pp round trip
+ */
+function gradReport() {
+  const raw = process.argv[3]
+  const toll = raw === undefined ? null : Number(raw)
+  if (raw !== undefined && !(toll >= 0 && toll < 1)) {
+    console.error('\n  Toll must be a fraction, e.g. 0.03 for 3pp.\n')
+    process.exitCode = 1
+    return
+  }
+  console.log('\n' + formatGraduationReport(analyseGraduations({ toll })) + '\n')
 }
 
 function learn() {

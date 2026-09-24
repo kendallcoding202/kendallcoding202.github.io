@@ -7318,6 +7318,99 @@ console.log('\nThe graduation collector')
   }
 }
 
+// ------------------------------- the pre-registered graduation analysis
+console.log('\nThe graduation analysis')
+{
+  const { analyseGraduations, bootstrapCI, fixedPopulation, usable } =
+    await import('../src/grad-analyze.js')
+  const { GRAD_CHECKPOINTS } = await import('../src/graduation.js')
+  const I240 = GRAD_CHECKPOINTS.indexOf(240)
+  // A plausible post-graduation base price: ~411 SOL implied market cap.
+  const BASE = 4.11e-7
+  const mk = (mults, over = {}) => ({
+    mint: 'M' + Math.random(), basePriceSol: BASE, graduatedAt: 1,
+    mult: GRAD_CHECKPOINTS.map((_, i) => mults[i] ?? mults.at(-1)), ...over,
+  })
+  const flat = (v, over = {}) => mk(GRAD_CHECKPOINTS.map(() => v), over)
+
+  /**
+   * NOTHING IS DECIDED BELOW n=300. The wallet result was reported as negative on n=191
+   * with an interval that could not rule anything out; this is the guard against that.
+   */
+  {
+    const a = analyseGraduations({ rows: Array.from({ length: 299 }, () => flat(1.5)), toll: 0.03 })
+    check('below the pre-registered n, no verdict is reached', a.powered === false, a.verdict)
+    check('and the curve is not even computed', a.curve === null)
+  }
+
+  /**
+   * A DECAYING CURVE IS DEAD REGARDLESS OF THE TOLL. The on-curve horizon curve fell
+   * monotonically from 0.9816x to 0.9430x, and no round trip makes that profitable -- so
+   * decay is checked BEFORE anything involving the bar.
+   */
+  {
+    const decaying = Array.from({ length: 400 }, () =>
+      mk(GRAD_CHECKPOINTS.map((_, i) => 1.5 - i * 0.05)))
+    const a = analyseGraduations({ rows: decaying, toll: 0.0 })
+    check('a monotonically decaying curve is dead even at a zero toll',
+      a.verdict.startsWith('DEAD'), a.verdict)
+  }
+
+  /**
+   * The 1.06 bar came from a pump.fun BONDING CURVE round trip and this trades on
+   * PumpSwap, so an unmeasured toll must block rather than default to a number.
+   */
+  {
+    const rising = Array.from({ length: 400 }, () => mk([1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8]))
+    const a = analyseGraduations({ rows: rising, toll: null })
+    check('an unmeasured toll blocks the verdict rather than inventing a bar',
+      a.verdict.startsWith('BLOCKED'), a.verdict)
+    const b = analyseGraduations({ rows: rising, toll: 0.03 })
+    check('and with a measured toll it decides', b.verdict.startsWith('CLEARS'), b.verdict)
+    const c = analyseGraduations({ rows: rising, toll: 0.90 })
+    check('a toll large enough swallows the same edge', c.verdict.startsWith('FAILS'), c.verdict)
+  }
+
+  /**
+   * A base price a completed curve cannot produce is a pre-migration tick, and every
+   * multiple measured from it is garbage the way the deflated mayhem denominator was.
+   */
+  {
+    const rows = [...Array.from({ length: 10 }, () => flat(1.2)),
+      ...Array.from({ length: 5 }, () => flat(1.2, { basePriceSol: 2.8e-8 }))]
+    check('rows priced off a launch-era tick are dropped before anything is computed',
+      usable(rows).length === 10, String(usable(rows).length))
+  }
+
+  /**
+   * Coverage decays with horizon -- 6,723 rows reached 2s on the curve side and 13
+   * reached 900s -- so a curve built from whatever is present at each checkpoint measures
+   * selection, not returns.
+   */
+  {
+    const full = flat(1.2)
+    const partial = mk([1.2, 1.2])
+    partial.mult = partial.mult.map((m, i) => (i <= 1 ? m : null))
+    check('the fixed population excludes rows missing a later checkpoint',
+      fixedPopulation([full, partial], 240).length === 1)
+    check('but keeps them at a horizon they DO cover',
+      fixedPopulation([full, partial], 5).length === 2)
+  }
+
+  /**
+   * The bootstrap asserts its interval contains its own sample mean. An LCG using
+   * s*1103515245 exceeds 2^53 in float64 and produced an interval that did not.
+   */
+  {
+    const v = Array.from({ length: 500 }, (_, i) => 1 + (i % 7) * 0.1)
+    const [lo, hi] = bootstrapCI(v)
+    const m = v.reduce((s, x) => s + x, 0) / v.length
+    check('the bootstrap interval contains its own sample mean', lo <= m && m <= hi,
+      `[${lo}, ${hi}] vs ${m}`)
+    check('and it is an interval, not a point', hi > lo)
+  }
+}
+
 /**
  * A TRADE WE CLOSED IS NOT AN UNMANAGED POSITION.
  *
