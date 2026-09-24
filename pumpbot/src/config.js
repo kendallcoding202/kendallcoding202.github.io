@@ -425,7 +425,14 @@ export const config = {
      * subscription list is a finite resource shared with the launch strategy. This caps
      * what the experiment can take from it.
      */
-    maxTracked: num('GRADUATION_MAX_TRACKED', 400),
+    /**
+     * Raised now that pricing is a checkpoint poll rather than a trade subscription.
+     * At ~39 graduations an hour a 24h window needs room for ~950; 400 evicted every row
+     * at a median age of 10.3h and lost the 1440m checkpoint entirely.
+     */
+    maxTracked: num('GRADUATION_MAX_TRACKED', 1500),
+    /** Outbound price reads per 30s sweep, so a backlog cannot become a burst. */
+    maxPricePerSweep: num('GRADUATION_MAX_PRICE_PER_SWEEP', 12),
   },
 
   dashboard: {

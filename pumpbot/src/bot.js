@@ -958,10 +958,8 @@ export class Bot {
     }
     if (this.graduations) {
       this.gradTimer = setInterval(() => {
+        this.#gradPriceSweep().catch((err) => log.error(`graduation pricing: ${err.message}`))
         const done = this.graduations.sweep()
-        for (const mint of done) {
-          if (!getState().positions[mint] && !this.shadow?.has(mint)) this.feed.unwatch(mint)
-        }
         saveGraduations(this.graduations)
       }, 30_000)
       this.gradTimer.unref?.()
@@ -1102,6 +1100,39 @@ export class Bot {
   }
 
   /**
+   * Ask the off-curve oracle for a price, but only for rows with a checkpoint due.
+   *
+   * The oracle has to EARN trust before it prices anything -- it is checked continuously
+   * against curve prices we already know exactly, and only a source that agrees
+   * repeatedly is parsing the right field of the right object. An untrusted oracle
+   * records nothing rather than inventing a denominator, which is the failure that
+   * produced the 46x and 228x fantasies on the curve side.
+   *
+   * Capped per sweep so a backlog cannot turn into a burst of outbound calls.
+   */
+  async #gradPriceSweep() {
+    if (!this.graduations || this.stopping) return
+    if (!oracleTrusted()) {
+      this.stats.gradOracleBlocked = (this.stats.gradOracleBlocked ?? 0) + 1
+      return
+    }
+    const due = this.graduations.dueForPrice().slice(0, config.graduation.maxPricePerSweep)
+    if (!due.length) return
+    for (const row of due) {
+      try {
+        const p = await offCurvePrice(row.mint, this.solPriceUsd)
+        if (p?.priceSol > 0) {
+          this.graduations.note(row.mint, p.priceSol)
+          this.stats.gradPriced = (this.stats.gradPriced ?? 0) + 1
+        }
+      } catch (err) {
+        this.stats.gradPriceErrors = (this.stats.gradPriceErrors ?? 0) + 1
+        if ((this.stats.gradPriceErrors ?? 0) === 1) log.warn(`graduation pricing: ${err.message}`)
+      }
+    }
+  }
+
+  /**
    * MEASURE ONE PUMPSWAP ROUND TRIP, in the only way a round trip can be measured.
    *
    * Buy a tiny amount of a graduated token and sell all of it immediately. The SOL that
@@ -1213,9 +1244,17 @@ export class Bot {
          */
         features: null,
       })
-      // Watch it so post-graduation trades arrive: the price has to come from somewhere,
-      // and the migrate payload carries no reserves to price against.
-      if (opened) this.feed.watch(event.mint)
+      /**
+       * DELIBERATELY NOT SUBSCRIBED.
+       *
+       * Watching every graduation's trades was the wrong shape: subscriptions are capped
+       * at 60 and shared with the launch strategy, and PumpPortal meters the feed. With
+       * 400 tracked mints, at most 60 could ever be priced -- 47.8% of the first 268
+       * rows had no price at all -- and the rest silently consumed slots the strategy
+       * needed. The experiment needs nine prices over 24h, not a day of every trade, so
+       * it asks the off-curve oracle when a checkpoint falls due. See #gradPriceSweep.
+       */
+      void opened
     }
 
     const position = getState().positions[event.mint]

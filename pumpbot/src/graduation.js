@@ -174,6 +174,29 @@ export class GraduationTracker {
     }
   }
 
+  /**
+   * Rows whose next checkpoint has passed and that still need a price for it.
+   *
+   * Nine samples over 24h is what this experiment needs. Holding a per-token TRADE
+   * subscription to get them was the wrong shape entirely: subscriptions are capped at
+   * 60 and shared with the launch strategy, and PumpPortal meters the feed, so 400
+   * tracked mints meant at most 60 could ever be priced -- 47.8% of the first 268 rows
+   * had no price at all -- while the rest silently starved the strategy's own slots.
+   *
+   * Asking for a price only when a checkpoint is actually due costs nine reads per token
+   * instead of a day of every trade, and scales past the cap rather than fighting it.
+   */
+  dueForPrice(now = Date.now()) {
+    const out = []
+    for (const row of this.rows.values()) {
+      const age = now - row.graduatedAt
+      const due = this.checkpoints.some((m, i) => row.mult[i] === null && age >= m * 60_000)
+      // Base price first: without it there is no denominator and no multiple to record.
+      if (due || row.basePriceSol === null) out.push(row)
+    }
+    return out
+  }
+
   /** Advance every row's clock; finalize the ones that have run their full window. */
   sweep(now = Date.now()) {
     const done = []

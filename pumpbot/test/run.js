@@ -7304,6 +7304,30 @@ console.log('\nThe graduation collector')
       src.includes('baseSanity: baseSanity(row.basePriceSol)'))
   }
 
+  /**
+   * NINE PRICES OVER 24H, NOT A DAY OF EVERY TRADE.
+   *
+   * Holding a per-token trade subscription to collect them was the wrong shape:
+   * subscriptions cap at 60 and are shared with the launch strategy, and the feed is
+   * metered. With 400 tracked mints at most 60 could ever be priced -- 47.8% of the
+   * first 268 real rows had no price at all -- while the rest starved the strategy's
+   * slots. Asking only when a checkpoint falls due costs nine reads per token.
+   */
+  {
+    const g = new GraduationTracker()
+    g.open({ mint: 'D1', at: T0 })
+    check('a row with no base price is due immediately, or it has no denominator',
+      g.dueForPrice(T0).length === 1)
+    g.note('D1', 4.11e-7, T0 + 1000)
+    check('once priced and inside its first checkpoint it is not asked again',
+      g.dueForPrice(T0 + 30 * 1000).length === 0)
+    check('but it is due again the moment a checkpoint passes',
+      g.dueForPrice(T0 + 2 * MIN).length === 1)
+    g.note('D1', 5e-7, T0 + 2 * MIN)
+    check('and not once that checkpoint is filled',
+      g.dueForPrice(T0 + 2 * MIN).length === 0)
+  }
+
   check('the window reaches 24h, unlike every horizon measured so far',
     GRAD_CHECKPOINTS.at(-1) === 1440, String(GRAD_CHECKPOINTS.at(-1)))
   /*
