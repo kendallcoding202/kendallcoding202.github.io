@@ -7432,7 +7432,7 @@ console.log('\nThe graduation collector')
     const doc = { getElementById: (id) => (made[id] ??= { hidden: true, innerHTML: '' }) }
     const render = new Function('document', 'authToken', 'num', `${src}\nreturn renderGraduation;`)(
       doc, 'tok', (v) => String(v))
-    const base = { tracking: 4, priced: 4, quiet: 0, recorded: 0, complete: 0, needed: 300,
+    const base = { tracking: 4, priced: 4, quiet: 0, recorded: 0, pending: 4, complete: 0, needed: 300,
       powered: false, quietShare: null, checkpoints: [1, 5], curve: [{ min: 1, n: 0, mean: null }] }
     let threw = null
     try { render(base) } catch (err) { threw = err.message }

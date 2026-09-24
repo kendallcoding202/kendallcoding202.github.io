@@ -162,6 +162,31 @@ export class GraduationTracker {
     return out
   }
 
+  /**
+   * In-flight rows, in the same shape a journalled one has.
+   *
+   * A row is only written when its full 24h window expires, so for the first day the
+   * file is empty and any count taken from it reads zero -- including "complete to
+   * 240m", which is the pre-registered decision horizon and is FOUR hours, not
+   * twenty-four. The data exists in memory long before it lands on disk; not counting it
+   * made the progress bar sit at zero while the experiment was working perfectly.
+   *
+   * Finalising at 240m instead would be the wrong fix: it would throw away the 480m and
+   * 1440m checkpoints, which are the whole reason for a 24h window.
+   */
+  inFlight() {
+    return [...this.rows.values()].map((r) => ({
+      mint: r.mint,
+      graduatedAt: r.graduatedAt,
+      basePriceSol: r.basePriceSol,
+      trades: r.trades,
+      lastTradeAt: r.lastTradeAt,
+      quoteWentQuiet: r.lastTradeAt === null || Date.now() - r.lastTradeAt > 3_600_000,
+      mult: r.mult,
+      pending: true,
+    }))
+  }
+
   /** Survives a restart. A 24h window that a deploy resets would never complete a row. */
   snapshot() {
     return { v: 1, rows: [...this.rows.values()], completed: this.completed, expired: this.expired }

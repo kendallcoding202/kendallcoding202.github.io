@@ -249,7 +249,16 @@ function collectionStatus(stats, storage, learning, analysis = null) {
  */
 function graduationSummary(tracker) {
   if (!config.graduation.enabled) return null
-  const rows = readGraduations()
+  /**
+   * Journalled rows AND the ones still inside their window.
+   *
+   * A row lands on disk only when its full 24h window expires, but the pre-registered
+   * decision horizon is 240m -- four hours. Counting the file alone left the progress bar
+   * at zero for a full day while 153 tokens were being tracked and 70 were already
+   * priced. A row whose 240m checkpoint is filled is evidence whether or not its last
+   * checkpoint has arrived.
+   */
+  const rows = [...readGraduations(), ...(tracker?.inFlight() ?? [])]
   const idx240 = GRAD_CHECKPOINTS.indexOf(240)
   // A fixed population, present at every checkpoint up to 240m. Coverage decaying with
   // horizon is what made the on-curve horizon curve unreadable until it was controlled.
@@ -270,7 +279,9 @@ function graduationSummary(tracker) {
      */
     priced: live?.priced ?? 0,
     quiet: live?.quiet ?? 0,
-    recorded: rows.length,
+    recorded: rows.filter((r) => !r.pending).length,
+    /** Tracked, priced, and not yet at the end of their window. */
+    pending: rows.filter((r) => r.pending).length,
     complete: complete.length,
     /** The pre-registered bar. Below it, nothing is decided. */
     needed: 300,

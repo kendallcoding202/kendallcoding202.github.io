@@ -1050,7 +1050,13 @@ function renderGraduation(g) {
     'Tracking <b>' + num(g.tracking) + '</b> token(s)' +
     ' · <b' + (pricedWarn ? ' style="color:var(--red)"' : '') + '>' + num(g.priced) +
     '</b> with a post-graduation price' +
-    ' · <b>' + num(g.recorded) + '</b> recorded · <b>' + num(g.complete) + '</b> complete to 240m' +
+    ' · <b>' + num(g.complete) + '</b> past 240m' +
+    /*
+     * "Finalised" is a separate, slower number on purpose: a row is only written when its
+     * full 24h window expires, while the decision horizon is 240m. Progress counts rows
+     * past 240m whether or not they have landed on disk, and this says how many have.
+     */
+    ' <span class="dim">(' + num(g.recorded) + ' finalised to disk, 24h each)</span>' +
     (pricedWarn
       ? '<div style="color:var(--red);margin-top:8px">No tracked token has produced a price yet — ' +
         'the feed may not deliver trades once a curve closes. Every row would fill with nulls.</div>'
