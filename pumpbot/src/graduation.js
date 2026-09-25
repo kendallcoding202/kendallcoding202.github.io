@@ -190,11 +190,48 @@ export class GraduationTracker {
     const out = []
     for (const row of this.rows.values()) {
       const age = now - row.graduatedAt
-      const due = this.checkpoints.some((m, i) => row.mult[i] === null && age >= m * 60_000)
+      const dueIdx = this.checkpoints.findIndex((m, i) => row.mult[i] === null && age >= m * 60_000)
       // Base price first: without it there is no denominator and no multiple to record.
-      if (due || row.basePriceSol === null) out.push(row)
+      if (dueIdx === -1 && row.basePriceSol !== null) continue
+      /**
+       * BACK OFF A ROW THAT KEEPS FAILING TO PRICE.
+       *
+       * About half of graduated tokens never get a quote the oracle can serve. Those rows
+       * stay unpriced, so they are due forever -- and served in Map order they sat at the
+       * head of the queue and consumed the whole per-sweep budget on every sweep, for
+       * good. The result looked like success: every row got exactly ONE price, at
+       * graduation, which #fill then carried into all nine checkpoints. 175 of 175 rows
+       * came out completely flat, every multiple 1.000 by construction, and the analysis
+       * would have reported a clean decay-free curve built entirely from one number.
+       */
+      const attempts = row.priceAttempts ?? 0
+      const wait = Math.min(30 * 60_000, 30_000 * 2 ** Math.min(attempts, 6))
+      if (row.lastPriceAttemptAt && now - row.lastPriceAttemptAt < wait) continue
+      out.push({ row, overdueBy: dueIdx === -1 ? 0 : age - this.checkpoints[dueIdx] * 60_000 })
     }
-    return out
+    /**
+     * FEWEST FAILURES FIRST, then most overdue.
+     *
+     * Backoff alone does not fix this. A row that cannot be priced becomes eligible again
+     * the moment its wait expires, and on a tie it still wins on insertion order -- so
+     * the same unpriceable rows keep taking the budget, just less often. Ordering by
+     * failure count puts every row that IS being served ahead of every row that is not,
+     * which is what actually stops the starvation.
+     */
+    out.sort((a, b) => {
+      const fa = a.row.priceAttempts ?? 0
+      const fb = b.row.priceAttempts ?? 0
+      return fa !== fb ? fa - fb : b.overdueBy - a.overdueBy
+    })
+    return out.map((x) => x.row)
+  }
+
+  /** Records that a price was attempted, so a failing row backs off instead of spinning. */
+  markPriceAttempt(mint, ok, now = Date.now()) {
+    const row = this.rows.get(mint)
+    if (!row) return
+    row.lastPriceAttemptAt = now
+    row.priceAttempts = ok ? 0 : (row.priceAttempts ?? 0) + 1
   }
 
   /** Advance every row's clock; finalize the ones that have run their full window. */

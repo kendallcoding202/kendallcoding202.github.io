@@ -74,6 +74,23 @@ export function usable(rows) {
  * rather than a reason to throw the rows away. The count set aside is reported, so the
  * restriction is never silent.
  */
+/**
+ * A ROW PRICED ONCE HAS AN UNKNOWN PATH, NOT A FLAT ONE.
+ *
+ * #fill carries the last known price into every checkpoint whose moment has passed --
+ * correct for a token that stops trading, and catastrophic for one that was simply never
+ * asked again. A starvation bug in the price sweep did exactly that: 175 of 175 rows came
+ * back with a median of ONE price observation, carried into all nine checkpoints, every
+ * multiple 1.000 by construction. The curve would have looked clean and meant nothing.
+ *
+ * So a path has to have been observed to count as one. Rows below the minimum are
+ * excluded and reported, never silently averaged in as evidence of no movement.
+ */
+export const MIN_PRICE_OBSERVATIONS = 3
+export function observed(rows, min = MIN_PRICE_OBSERVATIONS) {
+  return rows.filter((r) => (r.trades ?? 0) >= min)
+}
+
 export const HEADLINE_POOL = 'pump-amm'
 export function onHeadlineVenue(rows) {
   return rows.filter((r) => r.pool === HEADLINE_POOL)
@@ -82,7 +99,8 @@ export function onHeadlineVenue(rows) {
 export function analyseGraduations({ rows = readGraduations(200_000), toll = null, minN = 300 } = {}) {
   const all = rows
   const onVenue = onHeadlineVenue(all)
-  const clean = usable(onVenue)
+  const priced = usable(onVenue)
+  const clean = observed(priced)
   const idx240 = GRAD_CHECKPOINTS.indexOf(240)
   const pop = fixedPopulation(clean, 240)
 
@@ -91,7 +109,9 @@ export function analyseGraduations({ rows = readGraduations(200_000), toll = nul
     /** Set aside as a different venue with a different toll. Never silent. */
     otherVenue: all.length - onVenue.length,
     headlinePool: HEADLINE_POOL,
-    dropped: onVenue.length - clean.length,
+    dropped: onVenue.length - priced.length,
+    /** Priced, but too few times to call the result a path rather than one number. */
+    unobserved: priced.length - clean.length,
     fixedPopulation: pop.length,
     minN,
     powered: pop.length >= minN,
@@ -147,7 +167,7 @@ export function analyseGraduations({ rows = readGraduations(200_000), toll = nul
 
 export function formatGraduationReport(a) {
   const L = []
-  L.push(`rows ${a.rows} · ${a.otherVenue} set aside (not ${a.headlinePool}) · ${a.dropped} dropped for an unreachable base price · fixed population to 240m ${a.fixedPopulation}`)
+  L.push(`rows ${a.rows} · ${a.otherVenue} set aside (not ${a.headlinePool}) · ${a.dropped} dropped for an unreachable base price · ${a.unobserved} dropped for too few price observations · fixed population to 240m ${a.fixedPopulation}`)
   if (!a.powered) {
     L.push(a.verdict)
     return L.join('\n')

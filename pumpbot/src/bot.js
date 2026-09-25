@@ -1122,11 +1122,16 @@ export class Bot {
     for (const row of due) {
       try {
         const p = await offCurvePrice(row.mint, this.solPriceUsd)
-        if (p?.priceSol > 0) {
+        const ok = p?.priceSol > 0
+        if (ok) {
           this.graduations.note(row.mint, p.priceSol)
           this.stats.gradPriced = (this.stats.gradPriced ?? 0) + 1
         }
+        // Success resets the backoff; failure lengthens it, so a token the oracle cannot
+        // serve stops consuming a budget the rest of the book needs.
+        this.graduations.markPriceAttempt(row.mint, ok)
       } catch (err) {
+        this.graduations.markPriceAttempt(row.mint, false)
         this.stats.gradPriceErrors = (this.stats.gradPriceErrors ?? 0) + 1
         if ((this.stats.gradPriceErrors ?? 0) === 1) log.warn(`graduation pricing: ${err.message}`)
       }

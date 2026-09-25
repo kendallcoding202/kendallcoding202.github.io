@@ -7328,6 +7328,61 @@ console.log('\nThe graduation collector')
       g.dueForPrice(T0 + 2 * MIN).length === 0)
   }
 
+  /**
+   * A BACKLOG AT THE HEAD OF THE QUEUE MUST NOT STARVE EVERYTHING BEHIND IT.
+   *
+   * About half of graduated tokens never get a quote the oracle can serve, so those rows
+   * stay unpriced and are due forever. Served in Map order with a fixed slice, they sat
+   * at the head and consumed the whole per-sweep budget permanently: every row got
+   * exactly ONE price, #fill carried it into all nine checkpoints, and 175 of 175 rows
+   * came out completely flat with every multiple 1.000 by construction.
+   */
+  {
+    const g = new GraduationTracker()
+    // Twenty rows the oracle can never serve, inserted FIRST so they own the head.
+    for (let i = 0; i < 20; i++) g.open({ mint: 'DEAD' + i, at: T0 })
+    g.open({ mint: 'LIVE', at: T0 })
+    g.note('LIVE', 4.11e-7, T0 + 1000)
+
+    /*
+     * Run to steady state, which is the condition that matters: every row has been tried
+     * at least once, the unpriceable ones carry failures, and the served one does not.
+     * Two sweeps is not enough to show it -- rows never yet attempted tie at zero
+     * failures and win on insertion order, which is the transient, not the bug.
+     */
+    let now = T0 + 2 * MIN
+    let sawLive = false
+    for (let sweep = 0; sweep < 8; sweep++) {
+      const batch = g.dueForPrice(now).slice(0, 12)
+      if (batch.some((r) => r.mint === 'LIVE')) sawLive = true
+      for (const r of batch) g.markPriceAttempt(r.mint, r.mint === 'LIVE', now)
+      now += 10 * MIN
+    }
+    check('a priceable row is reached instead of being starved by the backlog', sawLive)
+    /*
+     * And it keeps being reached. Under the old ordering the same head-of-queue rows took
+     * the budget on every sweep, for good -- which is how 175 of 175 rows ended up with a
+     * single price observation carried into all nine checkpoints.
+     */
+    const served = g.dueForPrice(now).slice(0, 12).map((r) => r.mint)
+    check('and it stays reachable once the failures are known',
+      served.includes('LIVE'), served.join(','))
+  }
+
+  /**
+   * A row priced ONCE has an unknown path, not a flat one -- #fill carries its single
+   * price into every checkpoint. Counting that as evidence of no movement is how a
+   * starvation bug becomes a clean-looking curve.
+   */
+  {
+    const { observed } = await import('../src/grad-analyze.js')
+    const one = { trades: 1, mult: [1, 1, 1] }
+    const many = { trades: 9, mult: [1, 1.2, 0.9] }
+    check('a row observed once is not counted as a measured path',
+      observed([one, many]).length === 1, String(observed([one, many]).length))
+    check('and a row observed repeatedly is', observed([one, many])[0] === many)
+  }
+
   check('the window reaches 24h, unlike every horizon measured so far',
     GRAD_CHECKPOINTS.at(-1) === 1440, String(GRAD_CHECKPOINTS.at(-1)))
   /*
@@ -7388,6 +7443,8 @@ console.log('\nThe graduation analysis')
   const BASE = 4.11e-7
   const mk = (mults, over = {}) => ({
     mint: 'M' + Math.random(), basePriceSol: BASE, graduatedAt: 1, pool: 'pump-amm',
+    // Observed repeatedly: a row priced once has an unknown path, not a flat one.
+    trades: 9,
     mult: GRAD_CHECKPOINTS.map((_, i) => mults[i] ?? mults.at(-1)), ...over,
   })
   const flat = (v, over = {}) => mk(GRAD_CHECKPOINTS.map(() => v), over)
@@ -7439,6 +7496,20 @@ console.log('\nThe graduation analysis')
       ...Array.from({ length: 5 }, () => flat(1.2, { basePriceSol: 2.8e-8 }))]
     check('rows priced off a launch-era tick are dropped before anything is computed',
       usable(rows).length === 10, String(usable(rows).length))
+  }
+
+  /**
+   * A row priced ONCE is excluded from the analysis itself, not just by the helper. The
+   * starvation bug produced 175 such rows, every multiple 1.000 by construction.
+   */
+  {
+    const mixed = [...Array.from({ length: 300 }, () => flat(1.4)),
+      ...Array.from({ length: 50 }, () => flat(1.0, { trades: 1 }))]
+    const a = analyseGraduations({ rows: mixed, toll: 0.03 })
+    check('rows priced once are excluded from the analysed population',
+      a.fixedPopulation === 300, String(a.fixedPopulation))
+    check('and the count of them is reported, never silent',
+      a.unobserved === 50, String(a.unobserved))
   }
 
   /**
