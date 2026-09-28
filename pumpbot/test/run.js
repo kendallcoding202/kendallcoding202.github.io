@@ -7397,6 +7397,90 @@ console.log('\nThe graduation collector')
   }
 }
 
+// ------------------------------- Stage 0: qualifying a venue
+console.log('\nStage 0 — venue qualification')
+{
+  const { observableToll, opportunity, qualify, GATE_MULTIPLE } = await import('../src/venue/stage0.js')
+  const { parseL2Book, parseCandles, parseUniverse, requireFeeBps } =
+    await import('../src/venue/hyperliquid.js')
+
+  /**
+   * Nothing in the adapter could be checked against the live endpoint -- outbound is
+   * denied from here -- and a parser that is quietly wrong does not fail loudly, it
+   * invents a number. That is how the off-curve oracle spent four days returning nothing
+   * while looking configured. So every parser returns null on a shape it does not
+   * recognise, and the runner reports that as a failure to READ the venue rather than as
+   * a venue with no opportunity.
+   */
+  check('a well-formed book parses', parseL2Book({ levels: [[{ px: '99', sz: '100' }], [{ px: '101', sz: '100' }]] })?.bids.length === 1)
+  check('a crossed book is a shape we do not understand, so null',
+    parseL2Book({ levels: [[{ px: '102', sz: '1' }], [{ px: '101', sz: '1' }]] }) === null)
+  check('and so is a missing side', parseL2Book({ levels: [[{ px: '99', sz: '1' }]] }) === null)
+  check('candles come back in time order',
+    JSON.stringify(parseCandles([{ t: 2, c: '5' }, { t: 1, c: '4' }])) === '[4,5]')
+  check('an unrecognised candle shape is null, not an empty series',
+    parseCandles([{ nope: 1 }]) === null)
+  check('a universe parses', JSON.stringify(parseUniverse({ universe: [{ name: 'BTC' }] })) === '["BTC"]')
+
+  /**
+   * The taker fee is what the gate divides by, and this codebase carried a 4pp slip GUESS
+   * unexamined for weeks. It is supplied, never assumed.
+   */
+  let threw = null
+  try { requireFeeBps(undefined) } catch (e) { threw = e.message }
+  check('a missing fee is refused rather than defaulted', threw !== null)
+  check('and a real one is accepted', requireFeeBps(2.5) === 2.5)
+
+  /**
+   * Hand-checkable: mid 100, bids 99, asks 101. A $1,000 order fills entirely at the top
+   * level, so it pays the half-spread on each side -- 100bp each way -- plus 2.5bp of fee
+   * twice. 205bp in total.
+   */
+  const book = { bids: [{ px: 99, sz: 100 }], asks: [{ px: 101, sz: 100 }] }
+  const toll = observableToll({ ...book, feeBps: 2.5, sizeUsd: 1000 })
+  check('the toll is spread plus fees, both sides', Math.abs(toll.totalBps - 205) < 1e-9,
+    String(toll.totalBps))
+  check('and it is labelled a lower bound, since no round trip was made', toll.isLowerBound === true)
+  /*
+   * A size is mandatory. At size zero the walk never runs and this would report the fee
+   * alone -- a 5bp toll on a venue with a 200bp spread.
+   */
+  check('a toll without a size is refused', observableToll({ ...book, feeBps: 2.5, sizeUsd: 0 }) === null)
+  check('a book too thin for the size reports so rather than guessing',
+    observableToll({ ...book, feeBps: 2.5, sizeUsd: 1e9 }).totalBps === null)
+
+  /**
+   * ABSOLUTE moves, because a venue that can be shorted makes a fall as tradeable as a
+   * rise. pump.fun was long-only, which is part of why a decaying curve there was fatal.
+   */
+  const down = [100, 90, 81]
+  const opp = opportunity(down, { horizons: [1], tollBps: 100 })
+  check('a fall counts as a move, not as a zero',
+    Math.abs(opp.horizons[0].medianAbsBps - 1000) < 1,
+    String(opp.horizons[0].medianAbsBps))
+  check('while the signed median still shows the direction',
+    opp.horizons[0].medianSignedBps < 0)
+
+  /**
+   * THE GATE, exactly as pre-registered. Three, not one: a venue whose typical move
+   * merely equals its toll needs a perfect signal, and this project has never had one.
+   */
+  check('the gate multiple is 3 and comes from the pre-registration', GATE_MULTIPLE === 3)
+  const flat = opportunity([100, 100, 100, 100], { horizons: [1] })
+  const g1 = qualify({ toll: { totalBps: 560 }, opportunity: flat })
+  check('pump.fun fails its own gate: a 0bp median against a 560bp toll',
+    g1.qualifies === false, g1.reason)
+  const rich = opportunity([100, 130, 169, 220], { horizons: [1] })
+  const g2 = qualify({ toll: { totalBps: 205 }, opportunity: rich })
+  check('a venue whose median move is many times its toll qualifies', g2.qualifies === true, g2.reason)
+  const marginal = opportunity([100, 102, 104.04], { horizons: [1] })
+  const g3 = qualify({ toll: { totalBps: 100 }, opportunity: marginal })
+  check('but merely beating the toll is NOT enough — 2x fails a 3x gate',
+    g3.qualifies === false, g3.reason)
+  check('an unreadable book is inconclusive, never a rejection',
+    qualify({ toll: { totalBps: null }, opportunity: rich }).qualifies === null)
+}
+
 // ------------------------------- measuring the PumpSwap round trip
 console.log('\nThe graduation toll probe')
 {

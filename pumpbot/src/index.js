@@ -10,6 +10,7 @@ import { sizingSummary } from './sizing.js'
 import { analyze, formatReport } from './learn.js'
 import { analyseGraduations, formatGraduationReport } from './grad-analyze.js'
 import { gradProbeLedger } from './store.js'
+import { stage0Cli } from './venue/run-stage0.js'
 import { readBondingCurve } from './onchain.js'
 import { heldByAnother } from './lock.js'
 import { readRecent } from './journal.js'
@@ -27,6 +28,7 @@ const commands = {
   panic,
   learn,
   graduations: gradReport,
+  stage0: () => stage0Cli(process.argv.slice(3)),
   export: doExport,
   record,
   replay,

@@ -24,7 +24,8 @@
     "paper:export": "PAPER=1 node src/index.js export",
     "reset": "node src/index.js reset",
     "paper:reset": "PAPER=1 node src/index.js reset",
-    "graduations": "node src/index.js graduations"
+    "graduations": "node src/index.js graduations",
+    "stage0": "node src/index.js stage0"
   },
   "dependencies": {
     "@solana/web3.js": "^1.99.0",
