@@ -1056,8 +1056,9 @@ function renderGraduation(g) {
   const oracleLine =
     orc && !orc.trusted
       ? '<div style="color:var(--red);margin-top:8px">Off-curve oracle NOT trusted yet — ' +
-        num(orc.agreements) + ' of ' + num(orc.needed) + ' agreements' +
-        (orc.checks ? ' over ' + num(orc.checks) + ' checks' : '') +
+        num(orc.agreements) + ' of ' + num(orc.needed) + ' agreements over ' +
+        num(orc.checks) + ' checks' +
+        (orc.checks === 0 ? ' (the source returned no quote at all)' : '') +
         '. Nothing can be priced until it earns trust, so this experiment is collecting ' +
         'graduations but no prices.</div>'
       : ''
@@ -1065,7 +1066,7 @@ function renderGraduation(g) {
     'Tracking <b>' + num(g.tracking) + '</b> token(s)' +
     ' · <b' + (pricedWarn ? ' style="color:var(--red)"' : '') + '>' + num(g.priced) +
     '</b> with a post-graduation price' +
-    ' · <b>' + num(g.complete) + '</b> past 240m' +
+    ' · <b>' + num(g.complete) + '</b> usable' +
     // The verdict is read on one venue, so progress counts that venue. Never silent.
     (g.otherVenue > 0 ? ' <span class="dim">(' + num(g.otherVenue) + ' on another venue, set aside)</span>' : '') +
     /*
@@ -1097,8 +1098,22 @@ function renderGraduation(g) {
   // The rows live in their own file, so /api/export does not carry them.
   const dl = '<div style="margin-top:10px"><a href="/api/graduations' + tokenQuery() +
     '" style="color:var(--amber);font-size:12px">download graduation rows (.jsonl.gz)</a></div>'
+  /*
+   * What was thrown away and why. A page that reports only what survived invites the
+   * reader to assume nothing was lost -- and this one once showed "2,144 of 300 needed"
+   * beside a curve reading 3.8740x at every horizon, while the analysis on the same data
+   * had zero usable rows.
+   */
+  const drops = []
+  if (g.droppedUnreachable) drops.push(num(g.droppedUnreachable) + ' unreachable base price')
+  if (g.droppedUnobserved) drops.push(num(g.droppedUnobserved) + ' too few observations')
+  if (g.droppedStale) drops.push(num(g.droppedStale) + ' unobserved before 240m')
+  if (g.otherVenue) drops.push(num(g.otherVenue) + ' on another venue')
+  const dropLine = drops.length
+    ? '<div class="dim" style="margin-top:6px">excluded: ' + drops.join(' · ') + '</div>'
+    : ''
   if (!g.powered) {
-    el.innerHTML = head + bar + dl +
+    el.innerHTML = head + bar + dropLine + dl +
       '<div class="dim" style="margin-top:12px">Not yet powered. The wallet result was reported as ' +
       'negative on n=191 with an interval that could not rule anything out; this one waits for its ' +
       'sample.</div>'
@@ -1118,7 +1133,7 @@ function renderGraduation(g) {
       : g.clearsToll
         ? '<span style="color:var(--green)">clears the measured ' + (g.toll * 100).toFixed(2) + 'pp toll</span>'
         : '<span style="color:var(--red)">does not clear the measured ' + (g.toll * 100).toFixed(2) + 'pp toll</span>'
-  el.innerHTML = head + bar + dl +
+  el.innerHTML = head + bar + dropLine + dl +
     '<div style="margin-top:12px">' + cells + '</div>' +
     '<div style="margin-top:8px">At 240m: <b>' + (g.meanAt240 === null ? '—' : g.meanAt240.toFixed(4) + 'x') +
     '</b> — ' + verdict + '</div>' +

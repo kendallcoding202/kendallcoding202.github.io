@@ -7748,6 +7748,7 @@ console.log('\nThe graduation analysis')
       doc, 'tok', (v) => String(v))
     const base = { tracking: 4, priced: 4, quiet: 0, recorded: 0, pending: 4, complete: 0, needed: 300,
       otherVenue: 2, headlinePool: 'pump-amm', toll: null,
+      droppedUnreachable: 5, droppedUnobserved: 3, droppedStale: 7,
       oracle: { trusted: true, agreements: 9, needed: 8, checks: 10, agreementRate: 0.9 },
       powered: false, quietShare: null, checkpoints: [1, 5], curve: [{ min: 1, n: 0, mean: null }] }
     let threw = null
@@ -7791,6 +7792,16 @@ console.log('\nThe graduation analysis')
     render(base)
     check('and a trusted one says nothing about itself',
       !(made.grad?.innerHTML ?? '').includes('NOT trusted yet'))
+    /**
+     * WHAT WAS THROWN AWAY, on the page. Reporting only survivors invites the reader to
+     * assume nothing was lost: this page once showed "2,144 of 300 needed" beside a curve
+     * reading 3.8740x at every horizon while the analysis on the same data had zero
+     * usable rows.
+     */
+    check('the page says what it excluded and why',
+      ['unreachable base price', 'too few observations', 'unobserved before 240m']
+        .every((s) => (made.grad?.innerHTML ?? '').includes(s)),
+      (made.grad?.innerHTML ?? '').slice(0, 200))
 
     // Null hides the section rather than throwing.
     render(null)

@@ -26,7 +26,7 @@ import { buildExportInWorker } from './export.js'
 import { deliveryStats } from './notify.js'
 import { readGraduations, GRAD_CHECKPOINTS } from './graduation.js'
 import { gradProbeLedger } from './store.js'
-import { onHeadlineVenue, HEADLINE_POOL } from './grad-analyze.js'
+import { analyseGraduations, HEADLINE_POOL } from './grad-analyze.js'
 import { oracleHealth } from './offcurve.js'
 import { log } from './log.js'
 
@@ -253,81 +253,49 @@ function collectionStatus(stats, storage, learning, analysis = null) {
 function graduationSummary(tracker) {
   if (!config.graduation.enabled) return null
   /**
-   * Journalled rows AND the ones still inside their window.
+   * ONE CODE PATH, because two counts of the same thing will disagree and the prettier
+   * one will be believed.
    *
-   * A row lands on disk only when its full 24h window expires, but the pre-registered
-   * decision horizon is 240m -- four hours. Counting the file alone left the progress bar
-   * at zero for a full day while 153 tokens were being tracked and 70 were already
-   * priced. A row whose 240m checkpoint is filled is evidence whether or not its last
-   * checkpoint has arrived.
+   * This function used to do its own counting, and it drifted: with the guards applied
+   * the analysis reported ZERO usable rows while this page reported "2,144 of 300
+   * needed" and drew a curve reading 3.8740x at every horizon from 1m to 4h -- the
+   * carried-forward-price signature, displayed as a finding. A page that announces a
+   * powered experiment and a 3.87x edge that does not exist is worse than no page.
+   *
+   * So the page now asks the pre-registered analysis, the same function `npm run
+   * graduations` runs. If a row does not count there it does not count here.
    */
-  /**
-   * Restricted to the headline venue, because the bar is 1 + toll and the toll belongs to
-   * the venue: 94% of graduations go to pump-amm and 6% to raydium-cpmm, which has a
-   * different fee schedule. Progress toward n=300 must count the population the verdict
-   * will actually be read on.
-   */
-  const everything = [...readGraduations(), ...(tracker?.inFlight() ?? [])]
-  const rows = onHeadlineVenue(everything)
-  const idx240 = GRAD_CHECKPOINTS.indexOf(240)
-  // A fixed population, present at every checkpoint up to 240m. Coverage decaying with
-  // horizon is what made the on-curve horizon curve unreadable until it was controlled.
-  const complete = rows.filter((r) => r.mult?.slice(0, idx240 + 1).every((m) => m !== null))
-  const curve = GRAD_CHECKPOINTS.map((min, i) => {
-    const v = complete.map((r) => r.mult?.[i]).filter((m) => Number.isFinite(m))
-    return { min, n: v.length, mean: v.length ? v.reduce((s, x) => s + x, 0) / v.length : null }
-  })
-  const at240 = curve[idx240]
-  /**
-   * The bar is 1 + the MEASURED PumpSwap round trip, never the 1.06 that came from a
-   * bonding curve. Null until the probe has produced one, and null means no verdict.
-   */
+  const inFlight = tracker?.inFlight() ?? []
+  const rows = [...readGraduations(), ...inFlight]
   const toll = gradProbeLedger().medianToll
-  /**
-   * THE BINDING CONSTRAINT, now that pricing is a checkpoint poll.
-   *
-   * Graduations are no longer subscribed to -- that consumed slots the launch strategy
-   * needed and capped coverage at 60 mints -- so every price comes from the off-curve
-   * oracle, and the oracle prices nothing until it has earned trust against curve prices
-   * we already know exactly. That gate is correct: an oracle parsing the wrong field
-   * invents a denominator, which is what produced the 46x and 228x fantasies. But it
-   * means an untrusted oracle collects NOTHING, where the old path collected 48%, and
-   * that has to be on the page rather than inferred from a flat counter.
-   */
-  const oracle = oracleHealth()
-  const quiet = rows.filter((r) => r.quoteWentQuiet).length
+  const a = analyseGraduations({ rows, toll })
   const live = tracker?.stats() ?? null
+  const oracle = oracleHealth()
   return {
     tracking: live?.tracking ?? 0,
-    /**
-     * Watched mints that have actually produced a post-graduation price. If this stays
-     * at zero while `tracking` climbs, the feed is not delivering PumpSwap trades and the
-     * experiment is collecting nothing -- which must be visible now, not in 24 hours.
-     */
     priced: live?.priced ?? 0,
-    /**
-     * Priced at a level a completed curve cannot have produced -- almost always a
-     * pre-graduation tick. The on-curve side had no such check, which is why the 46x and
-     * 228x fantasies survived for weeks.
-     */
     implausible: live?.implausible ?? 0,
     quiet: live?.quiet ?? 0,
-    recorded: rows.filter((r) => !r.pending).length,
-    /** Tracked but on another venue, so not counted toward the bar. */
-    otherVenue: everything.length - rows.length,
     headlinePool: HEADLINE_POOL,
-    /** Tracked, priced, and not yet at the end of their window. */
-    pending: rows.filter((r) => r.pending).length,
-    complete: complete.length,
-    /** The pre-registered bar. Below it, nothing is decided. */
-    needed: 300,
-    powered: complete.length >= 300,
-    quietShare: rows.length ? quiet / rows.length : null,
-    curve,
-    meanAt240: at240?.mean ?? null,
-    /** The measured PumpSwap round trip, or null while it is still unmeasured. */
+    otherVenue: a.otherVenue,
+    /** Dropped by the guards, itemised so the page never overstates what it has. */
+    droppedUnreachable: a.dropped,
+    droppedUnobserved: a.unobserved,
+    droppedStale: a.staleAtHorizon,
+    recorded: rows.filter((r) => !r.pending).length,
+    pending: inFlight.length,
+    /** The ONLY count that means anything: rows the analysis would actually use. */
+    complete: a.fixedPopulation,
+    needed: a.minN,
+    powered: a.powered,
+    curve: a.curve,
+    meanAt240: a.at240?.mean ?? null,
+    quietShare: a.quietShare,
     toll,
-    bar: toll === null ? null : 1 + toll,
+    bar: a.bar,
+    clearsToll: a.powered && toll !== null && a.at240?.mean != null ? a.at240.mean > 1 + toll : null,
+    verdict: a.verdict,
+    checkpoints: GRAD_CHECKPOINTS,
     oracle: {
       trusted: oracle.trusted,
       agreements: oracle.agreements,
@@ -335,9 +303,6 @@ function graduationSummary(tracker) {
       checks: oracle.checks,
       agreementRate: oracle.agreementRate,
     },
-    clearsToll:
-      toll !== null && at240?.mean !== null && at240?.mean !== undefined ? at240.mean > 1 + toll : null,
-    checkpoints: GRAD_CHECKPOINTS,
   }
 }
 
