@@ -263,6 +263,16 @@ export class GraduationTracker {
       /** Whether that price could belong to a completed curve at all. See baseSanity. */
       baseSanity: baseSanity(row.basePriceSol),
       trades: row.trades,
+      /**
+       * How far past graduation the LAST observation actually reached.
+       *
+       * The count of observations is not the guard. Rows arrived with 56 and 865
+       * observations and were still completely flat, because every one of them landed in
+       * the first 0.2 minutes -- trade ticks from a mint that was still a watched
+       * candidate -- and #fill then carried that single early price across all nine
+       * checkpoints. A path observed for 0.2 minutes cannot describe 240 of them.
+       */
+      observedThroughMin: row.lastTradeAt === null ? 0 : (row.lastTradeAt - row.graduatedAt) / 60_000,
       lastTradeAt: row.lastTradeAt,
       quoteWentQuiet: row.lastTradeAt === null || Date.now() - row.lastTradeAt > 3_600_000,
       reason,

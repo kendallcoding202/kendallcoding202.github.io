@@ -714,6 +714,22 @@ export class Bot {
      * quoted — which is the largest term in the cost model and the only one never
      * observed. Both belong where a live run can be read from, which is the log.
      */
+    /**
+     * The oracle gates every graduation price, so an untrusted one is reported here
+     * rather than inferred from a counter that never moves. `no quote` distinguishes
+     * "the source does not carry this token" from "it disagreed", which are different
+     * problems with different fixes.
+     */
+    if (config.graduation.enabled && config.exit.offCurvePricing && !oracleTrusted()) {
+      const o = oracleHealth()
+      log.warn(
+        `off-curve oracle NOT trusted: ${o.agreements}/${o.needed} agreements over ${o.checks} checks` +
+          (this.stats.oracleNoQuote ? ` · ${this.stats.oracleNoQuote} no-quote` : '') +
+          (this.stats.oracleCheckErrors ? ` · ${this.stats.oracleCheckErrors} errors` : '') +
+          ' — graduation prices are blocked until it earns trust',
+      )
+    }
+
     if (config.probe.enabled) {
       const p = probeLedger()
       /*
@@ -959,6 +975,7 @@ export class Bot {
     }
     if (this.graduations) {
       this.gradTimer = setInterval(() => {
+        this.#oracleTrustTick().catch((err) => log.error(`oracle trust: ${err.message}`))
         this.#gradPriceSweep().catch((err) => log.error(`graduation pricing: ${err.message}`))
         const done = this.graduations.sweep()
         saveGraduations(this.graduations)
@@ -1098,6 +1115,39 @@ export class Bot {
      */
     this.candidates.set(event.mint, new Candidate(event))
     this.feed.watch(event.mint)
+  }
+
+  /**
+   * LET THE ORACLE EARN TRUST FROM WHAT WE WATCH, NOT ONLY FROM WHAT WE HOLD.
+   *
+   * noteOracleCheck was reachable from one place: the loop over OPEN POSITIONS. A book
+   * that rarely holds anything therefore never accumulates the eight agreements the
+   * oracle needs, so it is never trusted, so the graduation sweep returns immediately
+   * every time and prices nothing. The experiment needs the oracle and the oracle needed
+   * positions the experiment does not create -- a deadlock that presented as 4,038 rows
+   * whose every price arrived in the first 0.2 minutes and was then carried, unchanged,
+   * across all nine checkpoints.
+   *
+   * The safety property is untouched. A candidate still ON its curve has a price we know
+   * exactly from reserves, which is the same ground truth a held position offered; there
+   * are simply hundreds of them rather than none. An oracle that agrees with the curve
+   * repeatedly is reading the right field of the right object for the right token.
+   */
+  async #oracleTrustTick() {
+    if (!config.exit.offCurvePricing || oracleTrusted() || this.stopping) return
+    if (Date.now() - (this.lastOracleCheckAt ?? 0) < config.exit.oracleCheckSeconds * 1000) return
+    const candidate = [...this.candidates.values()].find((c) => c.vSol > 0 && c.vTokens > 0)
+    if (!candidate) return
+    this.lastOracleCheckAt = Date.now()
+    try {
+      const known = candidate.vSol / candidate.vTokens
+      const probe = await offCurvePrice(candidate.mint, this.solPriceUsd)
+      if (probe?.priceSol > 0) noteOracleCheck(candidate.mint, known, probe.priceSol)
+      else this.stats.oracleNoQuote = (this.stats.oracleNoQuote ?? 0) + 1
+    } catch (err) {
+      this.stats.oracleCheckErrors = (this.stats.oracleCheckErrors ?? 0) + 1
+      if ((this.stats.oracleCheckErrors ?? 0) === 1) log.warn(`oracle trust check: ${err.message}`)
+    }
   }
 
   /**

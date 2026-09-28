@@ -91,6 +91,21 @@ export function observed(rows, min = MIN_PRICE_OBSERVATIONS) {
   return rows.filter((r) => (r.trades ?? 0) >= min)
 }
 
+/**
+ * A PATH HAS TO HAVE BEEN WATCHED AS FAR AS THE HORIZON IT IS QUOTED AT.
+ *
+ * Counting observations is not enough, and a dataset proved it: rows with 56 and 865
+ * observations came back completely flat because every observation landed in the first
+ * 0.2 minutes, and #fill carried that one early price across all nine checkpoints. The
+ * multiple at 240m was real arithmetic on a price from minute zero.
+ *
+ * So a row counts at a horizon only if it was still being observed AT that horizon.
+ * Anything else is extrapolation wearing a measurement's clothes.
+ */
+export function observedThrough(rows, minutes) {
+  return rows.filter((r) => (r.observedThroughMin ?? 0) >= minutes)
+}
+
 export const HEADLINE_POOL = 'pump-amm'
 export function onHeadlineVenue(rows) {
   return rows.filter((r) => r.pool === HEADLINE_POOL)
@@ -100,7 +115,9 @@ export function analyseGraduations({ rows = readGraduations(200_000), toll = nul
   const all = rows
   const onVenue = onHeadlineVenue(all)
   const priced = usable(onVenue)
-  const clean = observed(priced)
+  const seen = observed(priced)
+  // Watched as far as the decision horizon, not merely watched a lot at the start.
+  const clean = observedThrough(seen, 240)
   const idx240 = GRAD_CHECKPOINTS.indexOf(240)
   const pop = fixedPopulation(clean, 240)
 
@@ -111,7 +128,9 @@ export function analyseGraduations({ rows = readGraduations(200_000), toll = nul
     headlinePool: HEADLINE_POOL,
     dropped: onVenue.length - priced.length,
     /** Priced, but too few times to call the result a path rather than one number. */
-    unobserved: priced.length - clean.length,
+    unobserved: priced.length - seen.length,
+    /** Observed, but never past the horizon being quoted -- a carried-forward price. */
+    staleAtHorizon: seen.length - clean.length,
     fixedPopulation: pop.length,
     minN,
     powered: pop.length >= minN,
@@ -167,7 +186,7 @@ export function analyseGraduations({ rows = readGraduations(200_000), toll = nul
 
 export function formatGraduationReport(a) {
   const L = []
-  L.push(`rows ${a.rows} · ${a.otherVenue} set aside (not ${a.headlinePool}) · ${a.dropped} dropped for an unreachable base price · ${a.unobserved} dropped for too few price observations · fixed population to 240m ${a.fixedPopulation}`)
+  L.push(`rows ${a.rows} · ${a.otherVenue} set aside (not ${a.headlinePool}) · ${a.dropped} dropped for an unreachable base price · ${a.unobserved} dropped for too few price observations · ${a.staleAtHorizon} dropped for going unobserved before 240m · fixed population to 240m ${a.fixedPopulation}`)
   if (!a.powered) {
     L.push(a.verdict)
     return L.join('\n')

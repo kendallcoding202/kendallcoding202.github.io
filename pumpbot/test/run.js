@@ -7443,8 +7443,9 @@ console.log('\nThe graduation analysis')
   const BASE = 4.11e-7
   const mk = (mults, over = {}) => ({
     mint: 'M' + Math.random(), basePriceSol: BASE, graduatedAt: 1, pool: 'pump-amm',
-    // Observed repeatedly: a row priced once has an unknown path, not a flat one.
-    trades: 9,
+    // Observed repeatedly AND as far as the horizon: a row watched only at the start
+    // carries one early price across every checkpoint.
+    trades: 9, observedThroughMin: 1440,
     mult: GRAD_CHECKPOINTS.map((_, i) => mults[i] ?? mults.at(-1)), ...over,
   })
   const flat = (v, over = {}) => mk(GRAD_CHECKPOINTS.map(() => v), over)
@@ -7496,6 +7497,34 @@ console.log('\nThe graduation analysis')
       ...Array.from({ length: 5 }, () => flat(1.2, { basePriceSol: 2.8e-8 }))]
     check('rows priced off a launch-era tick are dropped before anything is computed',
       usable(rows).length === 10, String(usable(rows).length))
+  }
+
+  /**
+   * A PATH MUST HAVE BEEN WATCHED AS FAR AS THE HORIZON IT IS QUOTED AT.
+   *
+   * Counting observations is not enough and a real dataset proved it: rows with 56 and
+   * 865 observations came back completely flat because every one landed in the first 0.2
+   * minutes, and #fill carried that single early price across all nine checkpoints. The
+   * 240m multiple was real arithmetic on a price from minute zero. Of 4,038 rows, zero
+   * survived this guard.
+   */
+  {
+    const { observedThrough } = await import('../src/grad-analyze.js')
+    const early = flat(1.9, { trades: 865, observedThroughMin: 0.2 })
+    const proper = flat(1.9, { trades: 9, observedThroughMin: 300 })
+    check('a row watched only at the start does not count at 240m',
+      observedThrough([early, proper], 240).length === 1,
+      String(observedThrough([early, proper], 240).length))
+    check('and observation COUNT alone does not rescue it',
+      !observedThrough([early], 240).length)
+    const a = analyseGraduations({
+      rows: [...Array.from({ length: 400 }, () => flat(1.4, { observedThroughMin: 300 })),
+        ...Array.from({ length: 60 }, () => flat(1.9, { trades: 865, observedThroughMin: 0.2 }))],
+      toll: 0.03,
+    })
+    check('the analysis excludes them and says how many', a.staleAtHorizon === 60, String(a.staleAtHorizon))
+    check('so a price from minute zero cannot be quoted as a 240m outcome',
+      a.fixedPopulation === 400, String(a.fixedPopulation))
   }
 
   /**
