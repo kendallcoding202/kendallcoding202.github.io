@@ -11,6 +11,8 @@ import { analyze, formatReport } from './learn.js'
 import { analyseGraduations, formatGraduationReport } from './grad-analyze.js'
 import { gradProbeLedger } from './store.js'
 import { stage0Cli } from './venue/run-stage0.js'
+import { qualifyPrediction, formatPrediction } from './venue/prediction.js'
+import { fromFile } from './venue/predmarkets.js'
 import { readBondingCurve } from './onchain.js'
 import { heldByAnother } from './lock.js'
 import { readRecent } from './journal.js'
@@ -29,6 +31,7 @@ const commands = {
   learn,
   graduations: gradReport,
   stage0: () => stage0Cli(process.argv.slice(3)),
+  prediction: predictionCli,
   export: doExport,
   record,
   replay,
@@ -377,6 +380,50 @@ function gradReport() {
     return
   }
   console.log('\n' + formatGraduationReport(analyseGraduations({ toll })) + '\n')
+}
+
+/**
+ * Stage 0 for a prediction market, from a file of markets.
+ *
+ *   npm run prediction -- kalshi markets.json 0.01 0.20
+ *                         venue  file        fee  annual hurdle
+ *
+ * The fee is what the strategy races against and the hurdle is a business decision, so
+ * both are supplied. Nothing here forecasts anything: it checks whether a basket of
+ * mutually exclusive outcomes can be bought for less than the $1 it is guaranteed to pay.
+ */
+function predictionCli() {
+  const [venue, file, feeFraction, hurdleAnnual] = process.argv.slice(3)
+  if (!venue || !file || feeFraction === undefined || hurdleAnnual === undefined) {
+    console.error('\n  usage: npm run prediction -- <kalshi|polymarket> <markets.json> <feeFraction> <annualHurdle>')
+    console.error('  e.g.:  npm run prediction -- kalshi markets.json 0.01 0.20\n')
+    process.exitCode = 1
+    return
+  }
+  let markets
+  try {
+    markets = fromFile(JSON.parse(fs.readFileSync(file, 'utf8')), venue)
+  } catch (err) {
+    console.error(`\n  could not read ${file}: ${err.message}\n`)
+    process.exitCode = 1
+    return
+  }
+  /**
+   * Unreadable is not the same as empty. A venue whose shape we failed to parse must
+   * never be reported as a venue with no opportunity.
+   */
+  if (!markets) {
+    console.error('\n  no markets could be normalised — the response shape did not match.')
+    console.error('  That is a failure to READ the venue, not a venue with no opportunity.\n')
+    process.exitCode = 1
+    return
+  }
+  const r = qualifyPrediction({
+    markets,
+    feeFraction: Number(feeFraction),
+    hurdleAnnual: Number(hurdleAnnual),
+  })
+  console.log('\n' + formatPrediction(r) + '\n')
 }
 
 function learn() {

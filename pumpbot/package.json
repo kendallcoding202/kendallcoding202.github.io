@@ -25,7 +25,8 @@
     "reset": "node src/index.js reset",
     "paper:reset": "PAPER=1 node src/index.js reset",
     "graduations": "node src/index.js graduations",
-    "stage0": "node src/index.js stage0"
+    "stage0": "node src/index.js stage0",
+    "prediction": "node src/index.js prediction"
   },
   "dependencies": {
     "@solana/web3.js": "^1.99.0",

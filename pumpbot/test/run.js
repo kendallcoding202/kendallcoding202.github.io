@@ -7397,6 +7397,130 @@ console.log('\nThe graduation collector')
   }
 }
 
+// ------------------------------- prediction markets: arithmetic, not forecasting
+console.log('\nStage 0 — prediction markets')
+{
+  const { eligible, basket, annualise, qualifyPrediction } = await import('../src/venue/prediction.js')
+  const mk = (asks, over = {}) => ({
+    id: 'm', exclusive: true, exhaustive: true, daysToResolution: 30,
+    outcomes: asks.map((a) => ({ ask: a })), ...over,
+  })
+
+  /**
+   * EXHAUSTIVE AND EXCLUSIVE, OR NOT ELIGIBLE.
+   *
+   * The entire strategy is the identity "exactly one of these pays $1". Applied where
+   * that is false -- overlapping legs, or a set missing an "any other" outcome -- the
+   * basket does not pay $1 and a guaranteed profit becomes an uncapped directional loss.
+   * It is never inferred from the prices, because prices that happen to sum near one are
+   * exactly what a mispriced non-exhaustive market looks like.
+   */
+  check('a market that is not exhaustive is not eligible', !eligible(mk([0.4, 0.5], { exhaustive: false })))
+  check('nor one that is not exclusive', !eligible(mk([0.4, 0.5], { exclusive: false })))
+  check('and eligibility is never inferred from prices summing near one',
+    !eligible({ outcomes: [{ ask: 0.5 }, { ask: 0.5 }] }))
+
+  /**
+   * Hand-checkable: legs at 0.40 and 0.55 cost 0.95 for a basket that pays 1.00. Fees of
+   * 1% on notional are 0.0095, so the net edge is 0.0405 on 0.95 of capital.
+   */
+  const b = basket(mk([0.40, 0.55]), { feeFraction: 0.01 })
+  check('the basket cost is the sum of the asks', Math.abs(b.cost - 0.95) < 1e-12)
+  check('the gross edge is what the identity guarantees', Math.abs(b.grossEdge - 0.05) < 1e-12)
+  check('fees come off it', Math.abs(b.netEdge - (0.05 - 0.0095)) < 1e-12, String(b.netEdge))
+  check('and the return is on the capital tied up, not on $1',
+    Math.abs(b.returnOnCapital - (0.05 - 0.0095) / 0.95) < 1e-12)
+  let threw = null
+  try { basket(mk([0.4, 0.5]), {}) } catch (e) { threw = e.message }
+  check('a fee is required, never assumed', threw !== null)
+
+  /**
+   * CAPITAL IS LOCKED UNTIL RESOLUTION. Two percent in a day and two percent in ninety
+   * days are the same number and wildly different businesses -- and ranking on per-trade
+   * return would systematically favour the slowest markets. Every other venue this
+   * project looked at turned capital over in seconds, so it never came up.
+   */
+  const fast = annualise(0.02, 1)
+  const slow = annualise(0.02, 90)
+  check('the same edge is worth far more when it resolves sooner', fast > slow * 10,
+    `${fast.toFixed(2)} vs ${slow.toFixed(2)}`)
+  check('and ninety days of 2% is single-digit annualised', slow > 0.07 && slow < 0.09, String(slow))
+
+  /**
+   * The gate: the GROSS edge must beat the fees by the multiple, because an edge only
+   * fractionally larger than its fees is flipped negative by a small fee misestimate,
+   * one adverse fill, or a single leg filling at the next tick.
+   */
+  const thin = mk([0.40, 0.5895]) // cost 0.9895, gross 1.05% against ~0.99% of fees
+  const r1 = qualifyPrediction({ markets: [thin], feeFraction: 0.01, hurdleAnnual: 0.1 })
+  check('an edge barely above its fees does not survive the gate', r1.robust === 0, JSON.stringify(r1.robust))
+  check('even though it looks profitable before robustness', r1.profitableBeforeRobustness === 1)
+
+  const fat = mk([0.40, 0.50]) // cost 0.90, gross 10% against 0.9% of fees
+  const r2 = qualifyPrediction({ markets: [fat], feeFraction: 0.01, hurdleAnnual: 0.1 })
+  check('a real dislocation clears it', r2.qualifies === true && r2.clearsHurdle === 1, JSON.stringify(r2))
+
+  // A basket that costs MORE than it pays is the normal state of an efficient market.
+  const normal = mk([0.52, 0.50])
+  const r3 = qualifyPrediction({ markets: [normal], feeFraction: 0.01, hurdleAnnual: 0.1 })
+  check('an efficiently priced market is rejected, not forced', r3.qualifies === false)
+  check('and its negative edge is reported rather than hidden', r3.medianGrossEdge < 0)
+
+  // The hurdle is a business decision, so it is supplied rather than invented here.
+  threw = null
+  try { qualifyPrediction({ markets: [fat], feeFraction: 0.01 }) } catch (e) { threw = e.message }
+  check('an annual hurdle is required, since it is a decision not a measurement', threw !== null)
+
+  /*
+   * A slow resolution can fail the hurdle on the same edge that passes it quickly --
+   * which is the whole reason capital-time is in the model.
+   */
+  const slowFat = mk([0.40, 0.50], { daysToResolution: 3650 })
+  const r4 = qualifyPrediction({ markets: [slowFat], feeFraction: 0.01, hurdleAnnual: 0.2 })
+  check('the same 10% edge fails the hurdle when capital is locked for a decade',
+    r4.qualifies === false, JSON.stringify(r4.medianAnnualOfClearing))
+}
+
+{
+  const { parseKalshiEvent, parsePolymarketGroup, fromFile } =
+    await import('../src/venue/predmarkets.js')
+  const NOW = Date.parse('2026-01-01T00:00:00Z')
+  const IN30 = '2026-01-31T00:00:00Z'
+
+  /**
+   * Kalshi quotes CENTS. A basket priced in cents against a $1 payout is a 100x error
+   * that would make every market on the venue look like a colossal arbitrage.
+   */
+  const k = parseKalshiEvent({ event_ticker: 'E', mutually_exclusive: true, close_time: IN30,
+    markets: [{ yes_ask: 40 }, { yes_ask: 55 }] }, NOW)
+  check('kalshi cents are converted to dollars', Math.abs(k.outcomes[0].ask - 0.40) < 1e-12,
+    String(k.outcomes[0].ask))
+  check('and the basket would cost 0.95, not 95',
+    Math.abs(k.outcomes.reduce((s, o) => s + o.ask, 0) - 0.95) < 1e-12)
+  check('days to resolution comes from the close time', Math.round(k.daysToResolution) === 30)
+  /*
+   * Exclusivity is taken from the venue's own flag, never from the prices. A set summing
+   * near one is exactly what a mispriced non-exhaustive market looks like.
+   */
+  check('without the venue saying so, a kalshi event is not eligible',
+    parseKalshiEvent({ event_ticker: 'E', close_time: IN30,
+      markets: [{ yes_ask: 40 }, { yes_ask: 55 }] }, NOW).exclusive === false)
+  check('a shape we do not recognise is null, not an empty market',
+    parseKalshiEvent({ markets: [{ nope: 1 }, { nope: 2 }] }, NOW) === null)
+
+  const pm = parsePolymarketGroup({ id: 'P', negRisk: true, endDate: IN30,
+    markets: [{ bestAsk: '0.40' }, { bestAsk: '0.55' }] }, NOW)
+  check('polymarket prices are already in dollars', Math.abs(pm.outcomes[1].ask - 0.55) < 1e-12)
+  check('negRisk is what makes the legs a basket',
+    parsePolymarketGroup({ id: 'P', endDate: IN30,
+      markets: [{ bestAsk: '0.4' }, { bestAsk: '0.5' }] }, NOW).exclusive === false)
+
+  check('a file of markets normalises for running before network access exists',
+    fromFile([{ event_ticker: 'E', mutually_exclusive: true, close_time: IN30,
+      markets: [{ yes_ask: 40 }, { yes_ask: 55 }] }], 'kalshi', NOW).length === 1)
+  check('and an unknown venue is refused', fromFile([], 'nasdaq', NOW) === null)
+}
+
 // ------------------------------- Stage 0: qualifying a venue
 console.log('\nStage 0 — venue qualification')
 {
