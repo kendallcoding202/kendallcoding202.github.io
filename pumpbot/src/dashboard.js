@@ -250,6 +250,21 @@ function collectionStatus(stats, storage, learning, analysis = null) {
  * Progress is reported against the PRE-REGISTERED bar (n >= 300 complete to 240m), not
  * against whatever has arrived, so a curve computed on 12 rows cannot look like an answer.
  */
+/**
+ * The Stage 0 result for the live experiment, read from disk.
+ *
+ * A measurement, not a live feed: it is what the venue looked like when it was qualified,
+ * and it is on the page so the current experiment states its own basis rather than being
+ * a section whose reason for existing lives in a commit message.
+ */
+function solanaStage0() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(here, '..', 'data', 'stage0-solana.json'), 'utf8'))
+  } catch {
+    return null
+  }
+}
+
 function graduationSummary(tracker) {
   if (!config.graduation.enabled) return null
   /**
@@ -500,6 +515,7 @@ export function buildSnapshot(walletSol, stats = null) {
     },
     learning: learningSnapshot(),
     graduation: graduationSummary(stats?.graduationTracker ?? null),
+    solana: solanaStage0(),
     learningPending: config.learning.enabled && analysisHealth().at === 0,
     analysis: analysisHealth(),
     collection: collectionStatus(stats, storageSnapshot(), learningSnapshot(), analysisHealth()),

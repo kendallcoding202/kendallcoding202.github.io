@@ -218,15 +218,31 @@
     it never trades. Folding its numbers into the P&L panels would let a promising figure
     from an unrelated experiment read as the strategy recovering, which it is not.
   -->
-  <section id="gradsec" hidden>
-    <h2 class="sec" style="color:var(--amber);margin-top:4px">
-      Graduation Experiment
-      <span style="font-size:11px;color:var(--dimmer);font-weight:400;letter-spacing:0"> · separate hypothesis · observation only, never trades</span>
-    </h2>
-    <div class="card" style="border-color:rgba(255,179,71,.35)"><div class="note" id="grad"></div></div>
-    <div style="border-bottom:1px solid rgba(255,179,71,.25);margin:22px 0 4px"></div>
-  </section>
+  <!--
+    THE LIVE EXPERIMENT. Liquid Solana tokens, and the first venue to pass Stage 0.
 
+    Everything below it is archived rather than deleted: the pump.fun strategy is a
+    measured negative (0.9637x gross, below 1.0 before any cost) and the graduation
+    experiment produced zero usable rows, but both are the evidence for why this one
+    exists, and a page that hides how it got here invites repeating it.
+  -->
+  <section>
+    <h2 class="sec" style="color:var(--green);margin-top:4px">
+      Solana Momentum
+      <span style="font-size:11px;color:var(--dimmer);font-weight:400;letter-spacing:0"> · liquid tokens · passed Stage 0 · no signal yet</span>
+    </h2>
+    <div class="card" style="border-color:rgba(46,232,138,.35)"><div class="note" id="solana"></div></div>
+    <div style="border-bottom:1px solid rgba(46,232,138,.2);margin:22px 0 4px"></div>
+  </section>
+  <!--
+    Archived, not deleted. Six hypotheses died here and the record of how is the reason
+    the current one is scoped the way it is.
+  -->
+  <details style="margin-top:26px">
+    <summary style="cursor:pointer;color:var(--dim);font-size:12px;letter-spacing:.08em;text-transform:uppercase;padding:10px 0;border-top:1px solid #1a2133">
+      pump.fun strategy · archived · measured negative
+    </summary>
+    <div style="opacity:.82;padding-top:10px">
   <div class="grid g4" id="stats"></div>
 
   <div class="goal" id="goalbar" hidden>
@@ -306,6 +322,23 @@
     <h2 class="sec">Active Limits</h2>
     <div class="card"><div class="note" id="limits"></div></div>
   </section>
+    </div>
+  </details>
+  <details style="margin-top:10px">
+    <summary style="cursor:pointer;color:var(--dim);font-size:12px;letter-spacing:.08em;text-transform:uppercase;padding:10px 0;border-top:1px solid #1a2133">
+      graduation experiment · archived · zero usable rows
+    </summary>
+    <div style="opacity:.82;padding-top:10px">
+  <section id="gradsec" hidden>
+    <h2 class="sec" style="color:var(--amber);margin-top:4px">
+      Graduation Experiment
+      <span style="font-size:11px;color:var(--dimmer);font-weight:400;letter-spacing:0"> · separate hypothesis · observation only, never trades</span>
+    </h2>
+    <div class="card" style="border-color:rgba(255,179,71,.35)"><div class="note" id="grad"></div></div>
+    <div style="border-bottom:1px solid rgba(255,179,71,.25);margin:22px 0 4px"></div>
+  </section>
+    </div>
+  </details>
 
 </div>
 
@@ -878,6 +911,7 @@ function render(d) {
   /* ---- wallets we track ---- */
   renderWallets(d.learning && d.learning.wallets, d.collection && d.collection.smartTape)
   renderGraduation(d.graduation)
+  renderSolana(d.solana)
 
   /* ---- limits ---- */
   const L = d.limits
@@ -1029,6 +1063,51 @@ function memoryLine(a) {
  * reference inside render() has presented as a layout problem rather than an error, so
  * it is a hoisted top-level function now and there is one of it.
  */
+/**
+ * The live experiment, stating its own basis.
+ *
+ * It shows the gate it passed and -- deliberately -- the horizon that FAILED it. The idea
+ * was pitched as day trading, and 1h is the one horizon where the median move does not
+ * clear the toll. A page that showed only the passing rows would quietly launder that
+ * correction away, which is how every artifact this project produced survived as long as
+ * it did.
+ */
+function renderSolana(s) {
+  const el = document.getElementById('solana')
+  if (!el) return
+  if (!s) { el.innerHTML = '<span class="dim">no Stage 0 measurement on disk</span>'; return }
+  const rows = s.horizons.map((h) => {
+    const passDeep = h.vsDeep > s.gateMultiple
+    const col = passDeep ? 'var(--green)' : 'var(--red)'
+    return '<tr>' +
+      '<td style="padding:2px 14px 2px 0"><code>' + h.h + '</code></td>' +
+      '<td style="padding:2px 14px 2px 0;text-align:right">' + num(h.medianAbsBps) + 'bp</td>' +
+      '<td style="padding:2px 14px 2px 0;text-align:right;color:' + col + '">' + h.vsDeep.toFixed(1) + 'x</td>' +
+      '<td style="padding:2px 0;text-align:right;color:' + (h.vsThin > s.gateMultiple ? 'var(--green)' : 'var(--red)') + '">' + h.vsThin.toFixed(1) + 'x</td>' +
+      '</tr>'
+  }).join('')
+  el.innerHTML =
+    '<div>Qualified <b>' + s.measuredAt + '</b> on ' + num(s.universe.tokens) + ' tokens · ' +
+    num(s.universe.bars) + ' hourly bars over ' + s.universe.days + ' days · <span class="dim">' +
+    s.universe.filter + '</span></div>' +
+    '<div style="margin-top:10px">Quoted round trip: ' +
+    s.toll.samples.map((x) => '<code>' + x.token + ' ' + x.bps.toFixed(1) + 'bp</code>').join(' · ') +
+    ' <span class="dim">vs pump.fun\u2019s ' + num(s.toll.comparisonPumpFunBps) + 'bp</span></div>' +
+    '<table style="margin-top:12px;border-collapse:collapse;font-size:13px">' +
+    '<tr style="color:var(--dimmer)"><td style="padding-right:14px">horizon</td>' +
+    '<td style="padding-right:14px;text-align:right">median |move|</td>' +
+    '<td style="padding-right:14px;text-align:right">vs ' + s.toll.deepBps + 'bp</td>' +
+    '<td style="text-align:right">vs ' + s.toll.thinBps + 'bp</td></tr>' + rows + '</table>' +
+    '<div style="margin-top:10px">' + s.verdict + '</div>' +
+    /*
+     * The toll is QUOTED, not filled. Saying so on the page is the same rule that made
+     * the graduation bar refuse a bonding-curve number: a measurement carries its own
+     * caveat or it gets quoted later as though it had none.
+     */
+    '<div class="dim" style="margin-top:8px">Toll is a lower bound — ' + s.toll.note + '.</div>' +
+    '<div class="dim" style="margin-top:6px">Next: ' + s.nextStep + '</div>'
+}
+
 function tokenQuery() {
   return (typeof authToken === 'string' && authToken) ? '?token=' + encodeURIComponent(authToken) : ''
 }
