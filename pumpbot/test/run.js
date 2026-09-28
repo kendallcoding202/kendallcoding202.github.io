@@ -7491,10 +7491,23 @@ console.log('\nStage 0 — prediction markets')
    * Kalshi quotes CENTS. A basket priced in cents against a $1 payout is a 100x error
    * that would make every market on the venue look like a colossal arbitrage.
    */
+  const leg = (ask) => ({ yes_ask_dollars: String(ask), notional_value_dollars: '1.0000' })
   const k = parseKalshiEvent({ event_ticker: 'E', mutually_exclusive: true, close_time: IN30,
-    markets: [{ yes_ask: 40 }, { yes_ask: 55 }] }, NOW)
-  check('kalshi cents are converted to dollars', Math.abs(k.outcomes[0].ask - 0.40) < 1e-12,
-    String(k.outcomes[0].ask))
+    markets: [leg('0.4000'), leg('0.5500')] }, NOW)
+  check('kalshi asks are read in dollars, as the live API quotes them',
+    Math.abs(k.outcomes[0].ask - 0.40) < 1e-12, String(k.outcomes[0].ask))
+  /**
+   * The payout must be $1 per leg or the identity is a different identity. An earlier
+   * version of this parser read a cents field the live API does not have, and would have
+   * valued a $0.11 leg at $11 -- it returned null instead of guessing, which is why that
+   * 100x error is a test here rather than a result.
+   */
+  check('a leg that does not pay $1 makes the basket ineligible',
+    parseKalshiEvent({ event_ticker: 'E', mutually_exclusive: true, close_time: IN30,
+      markets: [leg('0.40'), { yes_ask_dollars: '0.55', notional_value_dollars: '100' }] }, NOW) === null)
+  check('and a leg with no ask cannot be bought, so nor can the basket',
+    parseKalshiEvent({ event_ticker: 'E', mutually_exclusive: true, close_time: IN30,
+      markets: [leg('0.40'), { yes_ask_dollars: '0', notional_value_dollars: '1' }] }, NOW) === null)
   check('and the basket would cost 0.95, not 95',
     Math.abs(k.outcomes.reduce((s, o) => s + o.ask, 0) - 0.95) < 1e-12)
   check('days to resolution comes from the close time', Math.round(k.daysToResolution) === 30)
@@ -7502,9 +7515,36 @@ console.log('\nStage 0 — prediction markets')
    * Exclusivity is taken from the venue's own flag, never from the prices. A set summing
    * near one is exactly what a mispriced non-exhaustive market looks like.
    */
+  /**
+   * EXCLUSIVE IS NOT EXHAUSTIVE, and conflating them is a guaranteed loss rather than a
+   * missed opportunity.
+   *
+   * Kalshi's `mutually_exclusive` means AT MOST one leg resolves YES. This parser once
+   * copied that flag into `exhaustive`, and on a live sample it produced 21 "profitable"
+   * baskets that were every one a total loss -- "What will be the 51st state?" lists 8
+   * candidate states for $0.156 and pays nothing if no state joins. A set is complete
+   * only if something catches everything else.
+   */
+  check('exclusive alone does NOT make a basket, because at most one is not exactly one',
+    parseKalshiEvent({ event_ticker: 'E', mutually_exclusive: true, close_time: IN30,
+      markets: [leg('0.01'), leg('0.02')] }, NOW).exhaustive === false)
+  check('a catch-all leg is what completes the set',
+    parseKalshiEvent({ event_ticker: 'E', mutually_exclusive: true, close_time: IN30,
+      markets: [{ ...leg('0.40'), yes_sub_title: 'Alice' },
+        { ...leg('0.55'), yes_sub_title: 'No one' }] }, NOW).exhaustive === true)
+  /*
+   * The heuristic is deliberately conservative: it will miss baskets that are exhaustive
+   * by construction rather than wave through ones that are not. Under-counting costs
+   * opportunities; over-counting costs the stake.
+   */
+  check('and an unrelated leg name does not count as one',
+    parseKalshiEvent({ event_ticker: 'E', mutually_exclusive: true, close_time: IN30,
+      markets: [{ ...leg('0.40'), yes_sub_title: 'Nonesuch Corp' },
+        { ...leg('0.55'), yes_sub_title: 'Bob' }] }, NOW).exhaustive === false)
+
   check('without the venue saying so, a kalshi event is not eligible',
     parseKalshiEvent({ event_ticker: 'E', close_time: IN30,
-      markets: [{ yes_ask: 40 }, { yes_ask: 55 }] }, NOW).exclusive === false)
+      markets: [leg('0.40'), leg('0.55')] }, NOW).exclusive === false)
   check('a shape we do not recognise is null, not an empty market',
     parseKalshiEvent({ markets: [{ nope: 1 }, { nope: 2 }] }, NOW) === null)
 
@@ -7517,7 +7557,7 @@ console.log('\nStage 0 — prediction markets')
 
   check('a file of markets normalises for running before network access exists',
     fromFile([{ event_ticker: 'E', mutually_exclusive: true, close_time: IN30,
-      markets: [{ yes_ask: 40 }, { yes_ask: 55 }] }], 'kalshi', NOW).length === 1)
+      markets: [leg('0.40'), leg('0.55')] }], 'kalshi', NOW).length === 1)
   check('and an unknown venue is refused', fromFile([], 'nasdaq', NOW) === null)
 }
 
