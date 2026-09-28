@@ -167,3 +167,63 @@ the fee arithmetic afterwards.
 
 The addressable universe is the quieter finding and the more damning one: 7 baskets on
 Kalshi, 22 on Polymarket. Even a real dislocation would have almost nothing to trade.
+
+---
+
+# Result: liquid Solana tokens, measured 2026-09-28 — QUALIFIES
+
+The first venue to pass Stage 0. Measured on 8 Solana memecoins above $20M cap and $2M
+daily volume, 2,089 hourly bars each over 90 days, with the round trip QUOTED live through
+Jupiter rather than modelled.
+
+## The toll collapses
+
+Quoted SOL → token → SOL at 1 SOL, live:
+
+| token | round trip |
+|---|---|
+| fartcoin | **12.4 bp** |
+| dogwifcoin | **17.0 bp** |
+| popcat | **51.1 bp** |
+
+Against pump.fun's measured **1,155 bp**. A 20–90x reduction, and it is the same chain,
+the same wallet and the same infrastructure — the cost was never Solana, it was trading a
+bonding curve with no depth.
+
+## The opportunity is no longer zero
+
+Median ABSOLUTE move, pooled across the eight tokens:
+
+| horizon | median move | vs 17bp toll | vs 51bp toll |
+|---|---|---|---|
+| 1h | 44 bp | 2.6x — **fails** | 0.9x — **fails** |
+| 4h | 88 bp | 5.2x | 1.7x — fails |
+| 12h | 148 bp | 8.7x | 2.9x — fails |
+| 24h | 221 bp | 13.0x | 4.3x |
+| 72h | 404 bp | 23.8x | 7.9x |
+
+pump.fun's median 30-second move was **0 bp** against 1,155 bp. That is the whole
+difference between six dead hypotheses and a venue worth working on.
+
+## The correction the measurement makes to the idea
+
+The idea was pitched as DAY TRADING on momentum. **The intraday horizon is precisely the
+one that fails.** At 1h the median move is 44bp against a 17bp toll — 2.6x, under the
+pre-registered 3x — and against a 51bp toll it is 0.9x, which is paying more than the
+typical move is worth.
+
+The gate passes at **4h and beyond on deep tokens, 24h and beyond on thinner ones**. So
+the venue qualifies and the holding period does not: this is a multi-hour-to-multi-day
+strategy, not a day-trading one, and the difference is the entire result.
+
+## What this does NOT say
+
+It says the arithmetic now permits an edge to pay. It does not say momentum predicts
+anything — that is the next question and it has never once gone our way here. Crypto
+momentum is among the most heavily traded strategies in existence and we have no
+informational advantage.
+
+Also: the toll is QUOTED, not filled. Jupiter quotes carry price impact but not latency
+slip, priority fees or a transaction that fails to land, so it is a lower bound exactly as
+the code labels it. And none of the pump.fun features transfer — the signal search starts
+from zero.
