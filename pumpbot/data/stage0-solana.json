@@ -65,7 +65,7 @@
   "gateMultiple": 3,
   "qualifies": true,
   "verdict": "QUALIFIES at 4h+ on deep tokens, 24h+ on thin ones. 1h FAILS the gate on both.",
-  "nextStep": "momentum is rejected. The venue still qualifies on Stage 0 \u2014 the open question is whether any signal works here, not whether the venue does.",
+  "nextStep": "the chart is exhausted \u2014 4 families, 28 cells, nothing. Only on-chain flow data remains untested, and that is indexing work, not an afternoon.",
   "signalTests": [
     {
       "name": "momentum (long-only, 4/12/24/72h grid)",
@@ -73,6 +73,13 @@
       "result": "REJECTED",
       "detail": "1 of 16 cells positive out-of-sample, 0 of 16 intervals exclude zero; loses to buy-and-hold in 15 of 16",
       "prereg": "PREREG-MOMENTUM.md"
+    },
+    {
+      "name": "signal sweep (mean reversion, vol compression, cross-sectional)",
+      "testedAt": "2026-09-29",
+      "result": "REJECTED",
+      "detail": "0 of 12 testable cells survived; 2 of 5 families never fired and are untested, not negative",
+      "prereg": "PREREG-SIGNAL-SWEEP.md"
     }
   ]
 }

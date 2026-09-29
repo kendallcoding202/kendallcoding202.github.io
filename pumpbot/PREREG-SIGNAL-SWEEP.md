@@ -71,3 +71,60 @@ that is not in the chart.
 - **NO:** stop testing chart-derived signals on this venue. Either pursue on-chain flow
   data — which is real work and a genuinely different information source — or accept that
   seven hypotheses and one qualified venue have not produced an edge, and stop.
+
+---
+
+# Result, 2026-09-29: NO — with two families effectively untested
+
+| | |
+|---|---|
+| cells that produced enough trades to test | **12 of 20** |
+| positive out-of-sample | 3 |
+| **surviving the full bar** (positive OOS **and** corrected interval excluding zero **and** sign held in-sample) | **0** |
+
+Pre-registered bar was 3. The answer is **no**.
+
+## The honest limitation: two families never fired
+
+- **volume shock** (volume > 3x its 24h mean): **0 trades**. The threshold was too strict
+  and the family was never exercised.
+- **price down + volume up**: **15 trades**, below the 40-trade floor.
+
+Those are **untested, not negative**, and counting them as evidence of absence would be
+dishonest. Re-testing them means a dated amendment with a new threshold fixed *before*
+looking — loosening a threshold until trades appear, on data already seen, is precisely
+how a grid of noise becomes a finding.
+
+So the real claim is narrower than the headline: **three families were properly tested —
+mean reversion, volatility compression, cross-sectional relative strength — and none
+survived.**
+
+## The one that looked alive, and why it is not
+
+Mean reversion was the only family with a positive out-of-sample edge:
+
+| horizon | in-sample edge | out-of-sample edge | 99.75% CI |
+|---|---|---|---|
+| 24h | **−1.00%** | **+1.19%** | [−0.06%, +2.48%] |
+| 72h | **−0.22%** | **+1.64%** | [−1.33%, +4.44%] |
+
+**The sign flips between the halves** — negative in-sample, positive out-of-sample — which
+is a pre-registered falsification condition, written down precisely because a result that
+reverses across a time split is what noise does. Both intervals also contain zero, the 24h
+one only barely.
+
+It is the closest thing to a signal this project has produced, and it fails. Stating that
+plainly is the point: a +1.19% out-of-sample edge quoted without the −1.00% in-sample
+figure beside it would look like a strategy.
+
+## What this settles, and what it does not
+
+**Settled: the chart contains nothing we can extract.** Three structurally distinct
+families, out of sample, against the right benchmark, with correct intervals — nothing.
+Combined with momentum's rejection, that is four families and 28 cells.
+
+**Not settled: on-chain flow.** Wallet accumulation, LP additions and withdrawals, holder
+concentration, and pool creation are all public on Solana, none of them are in a price
+series, and none of them were tested here. That remains the only place a participant in
+our position could plausibly see something others ignore — and it is real indexing work
+rather than an afternoon.
