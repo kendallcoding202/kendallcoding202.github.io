@@ -1105,6 +1105,17 @@ function renderSolana(s) {
      * caveat or it gets quoted later as though it had none.
      */
     '<div class="dim" style="margin-top:8px">Toll is a lower bound — ' + s.toll.note + '.</div>' +
+    /*
+     * Signals TESTED, listed on the page including the failures. A venue section that
+     * showed only its Stage 0 pass would read as promise rather than as the record of
+     * what has actually been tried and rejected there.
+     */
+    (Array.isArray(s.signalTests) && s.signalTests.length
+      ? '<div style="margin-top:10px">Signals tested: ' + s.signalTests.map((x) =>
+          '<span style="color:' + (x.result === 'REJECTED' ? 'var(--red)' : 'var(--green)') + '">' +
+          x.name + ' — ' + x.result + '</span><br><span class="dim" style="font-size:12px">' +
+          x.detail + '</span>').join('<br>') + '</div>'
+      : '') +
     '<div class="dim" style="margin-top:6px">Next: ' + s.nextStep + '</div>'
 }
 

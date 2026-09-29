@@ -88,3 +88,53 @@ Any of these, stated now so none can be argued away later:
 - **Fails:** record it here with the numbers. That is six hypotheses and one venue
   qualified, and the next question is whether any signal works here — not whether this
   venue does, which is now settled.
+
+---
+
+# Result, 2026-09-29: REJECTED
+
+Run exactly as registered. 8 tokens, 2,089 hourly bars, 60/40 split by time, 17bp per
+round trip, long-only, benchmarked against buy-and-hold on the identical bars.
+
+| | |
+|---|---|
+| cells with a positive out-of-sample edge | **1 of 16** |
+| cells whose Bonferroni-corrected interval excludes zero | **0 of 16** |
+
+The single positive cell is 12h/12h at **+0.06%**, with an interval of [−0.73%, +0.71%]
+straddling zero. One cell in sixteen is what noise looks like across a grid, which is
+exactly what the pre-registration said in advance it would be.
+
+Every falsification condition fired:
+
+- the out-of-sample mean does not beat buy-and-hold — it loses in **15 of 16** cells
+- every corrected interval contains zero
+- only one cell is positive
+
+## The shape of the loss is the ordinary one
+
+Buy-and-hold returns +0.90% over 72h on this universe; the momentum strategy returns
++0.54% to +0.72% on the same bars. **The signal is not adding anything and the trading is
+subtracting.** That is what a strategy with no edge and real costs looks like, and it is
+the same conclusion the pump.fun replay reached by a completely different route.
+
+## The buy-and-hold number is not an opportunity
+
+It is worth saying plainly, because +0.90% per 72h looks like something: **that figure is
+the survivorship bias the pre-registration named.** The eight tokens were chosen from
+today's list of survivors, so holding them over the window they survived is guaranteed to
+look good. It is not tradeable and it is not a finding. It exists here only as the
+benchmark momentum had to beat, and did not.
+
+## What this does and does not kill
+
+**Momentum, on this universe, at these horizons, long-only: dead.**
+
+**The venue is not.** Stage 0 stands on its own: a 12–17bp round trip against a median
+88bp move at 4h is still an order of magnitude better than anything on pump.fun, and it
+was measured rather than assumed. What has been shown is that the most obvious signal does
+not work there — which was always the likely outcome for the most heavily traded idea in
+crypto, and is why it was tested first and cheaply rather than built first and discovered
+later.
+
+Seven hypotheses, one qualified venue, no edge yet.

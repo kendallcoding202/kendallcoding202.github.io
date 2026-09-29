@@ -1,29 +1,78 @@
 {
-  "venue": "solana · liquid tokens",
+  "venue": "solana \u00b7 liquid tokens",
   "measuredAt": "2026-09-28",
-  "universe": { "tokens": 8, "filter": "mcap > $20M, 24h volume > $2M", "bars": 2089, "barInterval": "1h", "days": 90 },
+  "universe": {
+    "tokens": 8,
+    "filter": "mcap > $20M, 24h volume > $2M",
+    "bars": 2089,
+    "barInterval": "1h",
+    "days": 90
+  },
   "toll": {
     "method": "quoted round trip through Jupiter at 1 SOL, live",
     "isLowerBound": true,
     "note": "quotes carry price impact but not latency slip, priority fees, or a transaction that fails to land",
     "samples": [
-      { "token": "fartcoin", "bps": 12.4 },
-      { "token": "dogwifcoin", "bps": 17.0 },
-      { "token": "popcat", "bps": 51.1 }
+      {
+        "token": "fartcoin",
+        "bps": 12.4
+      },
+      {
+        "token": "dogwifcoin",
+        "bps": 17.0
+      },
+      {
+        "token": "popcat",
+        "bps": 51.1
+      }
     ],
     "deepBps": 17.0,
     "thinBps": 51.1,
     "comparisonPumpFunBps": 1155
   },
   "horizons": [
-    { "h": "1h", "medianAbsBps": 44, "vsDeep": 2.6, "vsThin": 0.9 },
-    { "h": "4h", "medianAbsBps": 88, "vsDeep": 5.2, "vsThin": 1.7 },
-    { "h": "12h", "medianAbsBps": 148, "vsDeep": 8.7, "vsThin": 2.9 },
-    { "h": "24h", "medianAbsBps": 221, "vsDeep": 13.0, "vsThin": 4.3 },
-    { "h": "72h", "medianAbsBps": 404, "vsDeep": 23.8, "vsThin": 7.9 }
+    {
+      "h": "1h",
+      "medianAbsBps": 44,
+      "vsDeep": 2.6,
+      "vsThin": 0.9
+    },
+    {
+      "h": "4h",
+      "medianAbsBps": 88,
+      "vsDeep": 5.2,
+      "vsThin": 1.7
+    },
+    {
+      "h": "12h",
+      "medianAbsBps": 148,
+      "vsDeep": 8.7,
+      "vsThin": 2.9
+    },
+    {
+      "h": "24h",
+      "medianAbsBps": 221,
+      "vsDeep": 13.0,
+      "vsThin": 4.3
+    },
+    {
+      "h": "72h",
+      "medianAbsBps": 404,
+      "vsDeep": 23.8,
+      "vsThin": 7.9
+    }
   ],
   "gateMultiple": 3,
   "qualifies": true,
   "verdict": "QUALIFIES at 4h+ on deep tokens, 24h+ on thin ones. 1h FAILS the gate on both.",
-  "nextStep": "a signal. The gate says the arithmetic permits an edge to pay; it does not say momentum predicts anything."
+  "nextStep": "momentum is rejected. The venue still qualifies on Stage 0 \u2014 the open question is whether any signal works here, not whether the venue does.",
+  "signalTests": [
+    {
+      "name": "momentum (long-only, 4/12/24/72h grid)",
+      "testedAt": "2026-09-29",
+      "result": "REJECTED",
+      "detail": "1 of 16 cells positive out-of-sample, 0 of 16 intervals exclude zero; loses to buy-and-hold in 15 of 16",
+      "prereg": "PREREG-MOMENTUM.md"
+    }
+  ]
 }
