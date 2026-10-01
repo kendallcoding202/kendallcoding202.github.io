@@ -133,3 +133,58 @@ pre-registration, with the same instrument checks, before any of it is built.
 
 If Phase 1 is a YES, which would be surprising, the first thing to suspect is leakage,
 and the result is re-run on a fresh export before anything else is done with it.
+
+---
+
+## AMENDMENT 1 — 2026-10-01, after instrument checks 1–3, before any outcome was scored
+
+No journal row has been sent to the model. Everything below concerns the instrument.
+
+**Model pinned: `jev-latest`.** The registered `jev-1.13` is rejected by the API as an
+unknown model; `/v1/models` serves `jev-latest` and `jev-preview`. The stable one is used,
+and the response reports itself as `jev-1.13.0`. Chosen before any outcome query.
+
+### Instrument results
+
+| check | result | verdict |
+|---|---|---|
+| 1 · fair coin | 0.42–0.44; **0.43 even when told "exactly 50%"** | pass (band 0.40–0.60) |
+| 1 · six on a die | 0.17, 0.17 against a true 0.167 | pass |
+| 2 · determinism | 20 repeats: mean 0.438, **sd 0.007**, range 0.43–0.45, 3 distinct values | **fails as written** |
+| 3 · reads its input | outcome stated YES → 0.93–0.94; stated NO → 0.04 | pass |
+
+The reported "0.92 on a fair coin" did **not** reproduce. What did appear is a consistent
+lean of about six points below 0.5 at the midpoint — which is the reason the decision is
+taken on recalibrated probabilities rather than raw ones.
+
+### Check 2 — why the threshold, not the model, is wrong
+
+The registered tolerance was 0.01. **The API answers in 0.01 steps**, so that tolerance
+could only be met by a perfectly deterministic model: it tested for the absence of any
+noise rather than for noise large enough to matter. Its stated purpose was to stop
+"noise we have not measured" from contaminating downstream numbers. The noise is now
+measured — sd 0.007, never more than one step either side — and it is roughly two orders
+of magnitude below any Brier difference that could decide this test at n ≈ 2,000.
+
+Replacement: **one call per row, with the measured sd reported alongside every result.**
+Averaging repeated calls was considered and rejected; it would triple cost and time to
+remove noise already shown to be negligible.
+
+This amends a threshold that was demonstrably mis-specified, found before scoring. It
+does not move any threshold on outcomes.
+
+### Data
+
+`j2.csv` — the 2026-09-23 export, 40,380 rows, as registered. Already on disk.
+
+### Strategy check — a problem found before it could be run
+
+The strategy check compares Jev's top selection with the shipped filter's "at the same
+selection rate". The export caps rejected and explored rows at 20,000 each, so the share
+of `bought` rows in the file (~0.9%) is an artifact of the caps, not the filter's real
+pass rate, and a 5,000-row sample would hold only ~19 out-of-sample `bought` rows.
+
+The check is only reached if Jev first beats logistic regression on Brier — both are
+required for a YES. **If it is reached, its selection rate and comparison set will be
+fixed in a further dated amendment before it runs.** If Brier fails, the result is NO and
+the strategy check is moot.
