@@ -94,3 +94,14 @@ any live step. Kalshi is the regulated US alternative and would need its own run
 ## Budget
 
 About 3,000 Jev calls at well under 1k input tokens each: roughly **$0.10**. Hard cap $5.
+
+## Amendment 1 — 2026-10-01, before any outcome was joined to a Jev answer
+
+- **Fee formula confirmed** from Polymarket's documentation (via search; the docs site is
+  blocked from this environment): `fee = C × p × feeRate × (p × (1 − p))^exponent`, taker
+  only; makers pay nothing. This is the registered primary formula, unchanged. The
+  `feeSchedule` used per market is the one Polymarket reports for it now, which may
+  differ from what applied in August; the harsher bound is still reported alongside.
+- **Data access:** the paged listing's request parameter is `after_cursor` (the response
+  field is `next_cursor`). A first run used the wrong name and repeated page one; it was
+  stopped before any sample was drawn, and the runner now refuses a page that repeats.

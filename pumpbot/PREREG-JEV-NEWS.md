@@ -131,3 +131,17 @@ the checks comes to about **$0.30**. Hard cap **$5**. Outputs are free.
 - Faster decisions (hourly, or reacting to a headline within minutes). Being faster is a
   race against professional bots this setup cannot win, so it is left out on purpose.
 - On-chain flow data (wallets, liquidity moves). Still untested, and a separate question.
+
+## Amendment 1 — 2026-10-01, before any news was joined to any price
+
+- **Sources actually available:** CryptoPanic has no free tier left; Reddit refuses this
+  environment's address; CoinDesk's news API needs a (free) key the user would have to
+  create. **GDELT works without a key**, so it is used first. Its 3-month limit means the
+  **90-day window** applies (2026-07-05 to 2026-10-01).
+- **GDELT returns headlines only**, not first sentences, so Jev sees headlines with their
+  outlet and timestamp. Fetching article bodies would mean reaching hundreds of outlets
+  this environment does not allow.
+- **Search terms per coin**, fixed before any count was seen, are in
+  `research/gdelt-fetch.mjs` (`QUERIES`). Ambiguous names ("bonk", "Moo Deng", which is
+  also a real hippo) require a crypto term alongside them.
+- The coverage count and the go/no-go on the 50% rule follow in amendment 2.
