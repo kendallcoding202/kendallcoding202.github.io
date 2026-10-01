@@ -28,6 +28,14 @@ Runner: `pumpbot/research/jev-test.mjs` (key from env `JEV_API_KEY` — never pa
 commit it). Only phase 2 (unstructured inputs) remains untested, and it needs its own
 pre-registration first.
 
+**Next (registered 2026-10-01, not yet run):** `pumpbot/PREREG-JEV-NEWS.md` — Jev
+reading news on the ten liquid Solana coins, daily decisions, 24h holds. Blocked until a
+news source is on the network allowlist (`data-api.coindesk.com`, `api.gdeltproject.org`,
+`www.reddit.com`, `cryptopanic.com`). Step one is the coverage count and its dated
+amendment, before any outcome is joined. Other options, ranked:
+`pumpbot/OPTIONS-2026-10-01.md` (top: Jev forecasting prediction markets, which needs
+the Polymarket and Kalshi hosts added back).
+
 The live probe service should be `PAPER=1` or stopped — it spends real SOL.
 
 ## History (2026-09-21)
