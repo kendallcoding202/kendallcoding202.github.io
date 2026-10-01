@@ -39,6 +39,11 @@ pre-registration first.
   stations fetched before Open-Meteo's daily limit (shared egress IP) hit. Resume after
   00:00 UTC. No outcome has been joined to a forecast yet.
 
+- **Active: Polymarket sports paper test** (`pumpbot/PREREG-POLY-SPORTS.md`, amendment 1).
+  Tracker `pumpbot/src/polysports.js`; on Railway it is a separate service from this repo
+  with **`APP=polysports`**, a volume and `DATA_DIR=/data`. Places no orders. Profit is
+  hidden until the stop (400 settled bets and 7 days, or 28 days).
+
 The live probe service should be `PAPER=1` or stopped — it spends real SOL.
 
 ## History (2026-09-21)

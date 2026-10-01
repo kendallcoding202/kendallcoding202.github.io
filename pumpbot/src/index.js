@@ -37,6 +37,8 @@ const commands = {
   replay,
   adopt,
   reset,
+  // The Polymarket sports paper tracker (PREREG-POLY-SPORTS.md). Places no orders.
+  polysports: async () => (await import('./polysports.js')).run(),
 }
 
 /**
@@ -541,7 +543,13 @@ async function replay() {
   console.log('')
 }
 
-const name = process.argv[2] ?? 'run'
+/**
+ * APP=polysports turns this whole process into the sports paper tracker. Railway runs every
+ * service from railway.json's start command (`node src/index.js run`), and config in code
+ * overrides the dashboard's start command, so a variable is the reliable switch for a
+ * second service built from the same folder. It can never start the trading bot.
+ */
+const name = process.env.APP === 'polysports' ? 'polysports' : process.argv[2] ?? 'run'
 const handler = commands[name]
 
 if (!handler) {

@@ -219,7 +219,7 @@ function page(s) {
   return `<!doctype html><meta name=viewport content="width=device-width"><title>Sports paper test</title><body style="font:15px system-ui;margin:16px;max-width:640px"><h2>Polymarket sports paper test</h2><p>No real money. PREREG-POLY-SPORTS.md.</p><table>${rows}</table>${res}</body>`
 }
 
-async function run() {
+export async function run() {
   const state = load()
   const port = Number(process.env.PORT ?? process.env.DASHBOARD_PORT ?? 8080), token = process.env.DASHBOARD_TOKEN
   http.createServer((req, res) => {
