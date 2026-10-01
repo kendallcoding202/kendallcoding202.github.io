@@ -27,6 +27,24 @@ MAX_HISTORY = 104  # two years of weekly runs
 CANARY_MIN_FILES = 20
 CANARY_DISAPPEARED_FRAC = 0.6
 CANARY_REPLACED_FRAC = 0.5
+# Share of surviving files that must change size before it reads as a mass
+# rewrite. Set high on purpose: a working folder sees a handful of edits
+# between checks, and a false ransomware alarm at a dental practice costs
+# more trust than it saves.
+CANARY_RESIZED_FRAC = 0.6
+# Edits move a file by a few bytes; encryption adds a header, padding and
+# a tag. Ignore small changes so ordinary editing never accumulates into
+# an alert.
+CANARY_RESIZE_MIN_BYTES = 16
+CANARY_RESIZE_MIN_FRAC = 0.02
+
+
+def _materially_resized(before: int, after: int) -> bool:
+    """Whether a file's size moved by more than ordinary editing would."""
+    delta = abs(after - before)
+    if delta < CANARY_RESIZE_MIN_BYTES:
+        return False
+    return before == 0 or delta >= before * CANARY_RESIZE_MIN_FRAC
 
 
 @dataclass
@@ -92,6 +110,27 @@ def canary_check(prev_inventory: dict[str, int] | None,
                 f"{len(prev_inventory)} watched files disappeared and "
                 f"{len(appeared)} new files appeared since the last check"
             )
+
+        # The check above compares file NAMES, so it catches the common
+        # strain that renames as it goes (chart.pdf -> chart.pdf.locked).
+        # A strain that encrypts in place, keeping every name, leaves the
+        # path set identical and slips past it entirely. Encrypting a file
+        # does change its size, though, and ordinary work does not resize
+        # most of a folder at once — so a mass resize is the other half of
+        # the same signature.
+        survivors = set(prev_inventory) & set(curr_inventory)
+        if len(survivors) >= CANARY_MIN_FILES:
+            resized = [name for name in survivors
+                       if _materially_resized(prev_inventory[name],
+                                              curr_inventory[name])]
+            frac_resized = len(resized) / len(survivors)
+            if frac_resized >= CANARY_RESIZED_FRAC:
+                alerts.append(
+                    f"unusual mass file activity: {len(resized)} of "
+                    f"{len(survivors)} watched files changed size at once "
+                    f"while keeping their names — the footprint of files "
+                    f"being rewritten in place"
+                )
 
     if prev_blobs and curr_blobs is not None:
         missing = set(prev_blobs) - set(curr_blobs)
