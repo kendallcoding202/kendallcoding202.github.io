@@ -33,6 +33,47 @@ from .vault import generate_keyfile, Vault, VaultError
 
 NAVY = "#1e3a5f"
 NAVY_LIGHT = "#4a7ab2"
+NAVY_DEEP = "#13273f"      # the dark end of the logo's gradient
+ACCENT = "#5b9bd5"         # the blue hub at the centre of the vault dial
+ICE = "#eef3fa"            # the dial's off-white
+
+# Replaced at startup with a face that actually exists here. Hardcoding
+# "Segoe UI" meant macOS silently fell back to a generic serif-ish
+# default, which is most of why the app looked unfinished on a Mac.
+UI_FONT = "Segoe UI"
+
+_FONT_PREFERENCE = (
+    "Segoe UI",            # Windows
+    "SF Pro Text",         # macOS 11+
+    "Helvetica Neue",      # older macOS
+    ".AppleSystemUIFont",  # macOS system alias
+    "Ubuntu", "DejaVu Sans", "Arial",
+)
+
+
+def _resolve_ui_font(root) -> str:
+    """The best available UI face. Tk has no CSS-style fallback chain —
+    an unavailable family is silently swapped for a default — so the
+    family has to be chosen against what the machine actually has."""
+    try:
+        from tkinter import font as tkfont
+        available = set(tkfont.families(root))
+    except Exception:                       # noqa: BLE001
+        return "TkDefaultFont"
+    for family in _FONT_PREFERENCE:
+        if family in available:
+            return family
+    return "TkDefaultFont"
+
+
+def logo_path() -> Path:
+    """The app mark, whether running frozen or from a source checkout."""
+    bundled = getattr(sys, "_MEIPASS", None)
+    if bundled:
+        return Path(bundled) / "kovyr.png"
+    return Path(__file__).resolve().parent.parent / "packaging" / "kovyr.png"
+
+
 SURFACE = "#f5f7fa"
 TEXT = "#1c2733"
 MUTED = "#5a6b7b"
@@ -285,6 +326,36 @@ class App:
         except Exception:
             pass
 
+    def _install_logo(self) -> None:
+        """Load the app mark for the masthead and the window/dock icon.
+
+        Entirely optional: a missing or unreadable asset must never stop
+        the app from opening, so every failure just means no logo. Tk
+        garbage-collects images that nothing references, so the
+        PhotoImages are held on self rather than as locals.
+        """
+        self.logo_small = None
+        self.logo_full = None
+        try:
+            source = logo_path()
+            if not source.exists():
+                return
+            full = self.tk.PhotoImage(file=str(source))
+            # The asset is 1024px square; subsample is integer-only, so 28
+            # gives a ~36px mark that sits level with two lines of text.
+            self.logo_small = full.subsample(28, 28)
+            self.logo_full = full
+        except Exception:                   # noqa: BLE001
+            self.logo_small = self.logo_full = None
+            return
+        # Separate try: iconphoto is the flakiest of the three (macOS can
+        # refuse it), and failing it must not throw away the masthead mark
+        # we already loaded successfully.
+        try:
+            self.root.iconphoto(True, self.logo_full)
+        except Exception:                   # noqa: BLE001
+            pass
+
     def _reopen(self) -> None:
         try:
             self.root.deiconify()
@@ -302,7 +373,7 @@ class App:
         NAVY_HOVER = "#16283f"
         DISABLED_BG = "#9aa7b4"
         lbl = tk.Label(parent, text=text, bg=NAVY, fg="white", padx=14,
-                       pady=6, font=("Segoe UI", 10, "bold"),
+                       pady=6, font=(UI_FONT, 10, "bold"),
                        cursor="hand2")
         st = {"on": True}
 
@@ -334,7 +405,7 @@ class App:
         HOVER = "#eef2f7"
         border = tk.Frame(parent, bg=BORDER, cursor="hand2")
         lbl = tk.Label(border, text=text, bg="white", fg=NAVY, padx=13,
-                       pady=6, font=("Segoe UI", 10), cursor="hand2")
+                       pady=6, font=(UI_FONT, 10), cursor="hand2")
         lbl.pack(fill="both", expand=True, padx=1, pady=1)
         for widget in (border, lbl):
             widget.bind("<Button-1>", lambda _e: command())
@@ -377,22 +448,32 @@ class App:
         self.tk = tk
         self.ttk = ttk
         root = self.root
+        global UI_FONT
+        UI_FONT = _resolve_ui_font(root)
         root.title("Kovyr Vault")
         root.geometry("900x720")
         root.minsize(820, 620)
         root.configure(bg=CANVAS)
+        self._install_logo()
 
-        header = tk.Frame(root, bg=NAVY, padx=24, pady=16)
+        header = tk.Frame(root, bg=NAVY_DEEP, padx=24, pady=14)
         header.pack(fill="x")
-        tk.Label(header, text="KOVYR", fg="white", bg=NAVY,
-                 font=("Segoe UI", 15, "bold")).pack(side="left")
-        tk.Label(header, text="Data Protection", fg="#9fc0e8", bg=NAVY,
-                 font=("Segoe UI", 11)).pack(side="left", padx=(10, 0),
-                                             pady=(4, 0))
+        if self.logo_small is not None:
+            tk.Label(header, image=self.logo_small, bg=NAVY_DEEP,
+                     borderwidth=0).pack(side="left", padx=(0, 13))
+        wordmark = tk.Frame(header, bg=NAVY_DEEP)
+        wordmark.pack(side="left")
+        tk.Label(wordmark, text="KOVYR VAULT", fg="white", bg=NAVY_DEEP,
+                 font=(UI_FONT, 16, "bold")).pack(anchor="w")
+        tk.Label(wordmark, text="Encryption and protection monitoring",
+                 fg=ACCENT, bg=NAVY_DEEP,
+                 font=(UI_FONT, 10)).pack(anchor="w")
         self.header_client = tk.Label(
-            header, text="", fg="#c7d8ec", bg=NAVY,
-            font=("Segoe UI", 10))
-        self.header_client.pack(side="right", pady=(4, 0))
+            header, text="", fg=ICE, bg=NAVY_DEEP, font=(UI_FONT, 10))
+        self.header_client.pack(side="right", pady=(6, 0))
+        # A hairline in the logo's accent blue, so the navy block reads as
+        # a deliberate masthead rather than a slab that ran out of colour.
+        tk.Frame(root, bg=ACCENT, height=3).pack(fill="x")
 
         style = ttk.Style(root)
         try:
@@ -401,7 +482,7 @@ class App:
             pass
         style.configure("TNotebook", background=CANVAS, borderwidth=0)
         style.configure("TNotebook.Tab", padding=(18, 9),
-                        font=("Segoe UI", 10), background=CANVAS,
+                        font=(UI_FONT, 10), background=CANVAS,
                         foreground=MUTED, borderwidth=0)
         style.map("TNotebook.Tab",
                   background=[("selected", "white")],
@@ -414,7 +495,7 @@ class App:
                         rowheight=26, borderwidth=0)
         style.configure("Treeview.Heading", foreground=MUTED,
                         background=SURFACE, relief="flat", padding=(6, 5),
-                        font=("Segoe UI", 9, "bold"))
+                        font=(UI_FONT, 9, "bold"))
         style.map("Treeview.Heading", background=[("active", SURFACE)])
         # A soft selection instead of the OS default (which can be an
         # unreadable saturated blue depending on platform/theme).
@@ -445,7 +526,7 @@ class App:
 
         footer = tk.Label(root, text=f"Kovyr Vault v{__version__}   ·   "
                           "your passphrase is never stored by this app",
-                          fg=MUTED, bg=CANVAS, font=("Segoe UI", 8))
+                          fg=MUTED, bg=CANVAS, font=(UI_FONT, 8))
         footer.pack(pady=(6, 8))
         client = (self.config or {}).get("client")
         if client:
@@ -464,12 +545,19 @@ class App:
         banner_body = tk.Frame(self.banner, bg=SURFACE, padx=16, pady=13)
         banner_body.pack(side="left", fill="both", expand=True)
         self.banner_body = banner_body
+        # A state chip above the headline: colour and a word, so the
+        # overall verdict survives being read at arm's length or by
+        # someone who doesn't parse red-vs-green quickly.
+        self.banner_pill = tk.Label(banner_body, text="", bg=MUTED,
+                                    fg="white", padx=9, pady=2,
+                                    font=(UI_FONT, 8, "bold"))
+        self.banner_pill.pack(anchor="w", pady=(0, 7))
         self.headline = tk.Label(banner_body, text="", bg=SURFACE, fg=TEXT,
-                                 font=("Segoe UI", 15, "bold"),
+                                 font=(UI_FONT, 15, "bold"),
                                  justify="left", wraplength=740)
         self.headline.pack(anchor="w")
         self.subline = tk.Label(banner_body, text="", fg=MUTED, bg=SURFACE,
-                                font=("Segoe UI", 10), justify="left")
+                                font=(UI_FONT, 10), justify="left")
         self.subline.pack(anchor="w", pady=(2, 0))
 
         tiles = tk.Frame(tab, bg="white")
@@ -485,10 +573,10 @@ class App:
                        padx=(0 if col == 0 else 5,
                              0 if col == len(specs) - 1 else 5))
             tk.Label(frame, text=label.upper(), fg=MUTED, bg="white",
-                     font=("Segoe UI", 8, "bold")).pack(anchor="w")
+                     font=(UI_FONT, 8, "bold")).pack(anchor="w")
             var = tk.StringVar(value="—")
             tk.Label(frame, textvariable=var, fg=NAVY, bg="white",
-                     font=("Segoe UI", 24, "bold")).pack(anchor="w",
+                     font=(UI_FONT, 24, "bold")).pack(anchor="w",
                                                          pady=(6, 0))
             self.tile_vars[key] = var
 
@@ -500,11 +588,11 @@ class App:
                            highlightbackground=BORDER, highlightthickness=1)
         posture.pack(fill="x", pady=(10, 0))
         tk.Label(posture, text="DEVICE SECURITY", fg=MUTED, bg="white",
-                 font=("Segoe UI", 8, "bold")).pack(anchor="w")
+                 font=(UI_FONT, 8, "bold")).pack(anchor="w")
         self.posture_box = tk.Frame(posture, bg="white")
         self.posture_box.pack(fill="x", pady=(7, 0))
         tk.Label(self.posture_box, text="Checking…", fg=MUTED, bg="white",
-                 font=("Segoe UI", 10)).pack(anchor="w")
+                 font=(UI_FONT, 10)).pack(anchor="w")
         self._start_posture_check()
 
         # A plain-English "what's going on" panel so a status like
@@ -516,10 +604,10 @@ class App:
         detail.pack(fill="x", pady=(10, 0))
         self.detail_title = tk.Label(detail, text="WHAT'S GOING ON",
                                      fg=NAVY, bg=SURFACE,
-                                     font=("Segoe UI", 8, "bold"))
+                                     font=(UI_FONT, 8, "bold"))
         self.detail_title.pack(anchor="w")
         self.detail_text = tk.Label(detail, text="", fg=TEXT, bg=SURFACE,
-                                    font=("Segoe UI", 10), justify="left",
+                                    font=(UI_FONT, 10), justify="left",
                                     wraplength=750)
         self.detail_text.pack(anchor="w", pady=(5, 0))
 
@@ -540,7 +628,7 @@ class App:
             buttons, "Show flagged files", self.show_last_sensitive)
 
         self.activity = tk.Label(tab, text="", fg=MUTED, bg="white",
-                                 font=("Segoe UI", 9), justify="left",
+                                 font=(UI_FONT, 9), justify="left",
                                  wraplength=760)
         self.activity.pack(anchor="w", pady=(12, 0))
 
@@ -553,15 +641,15 @@ class App:
         self.unlock_frame.pack(anchor="w", fill="x")
         tk.Label(self.unlock_frame, text="Enter your passphrase to view "
                  "and restore your encrypted files.", bg="white",
-                 fg=TEXT, font=("Segoe UI", 10)).pack(anchor="w")
+                 fg=TEXT, font=(UI_FONT, 10)).pack(anchor="w")
         tk.Label(self.unlock_frame, text="Only you know this passphrase. "
                  "It is never stored, and Kovyr cannot recover it for you.",
                  fg=MUTED, bg="white",
-                 font=("Segoe UI", 9)).pack(anchor="w", pady=(2, 8))
+                 font=(UI_FONT, 9)).pack(anchor="w", pady=(2, 8))
         row = tk.Frame(self.unlock_frame, bg="white")
         row.pack(anchor="w")
         self.pass_entry = tk.Entry(row, show="•", width=32,
-                                   font=("Segoe UI", 11), bg="white",
+                                   font=(UI_FONT, 11), bg="white",
                                    fg=TEXT, insertbackground=TEXT,
                                    relief="flat", borderwidth=0,
                                    highlightthickness=1,
@@ -572,16 +660,16 @@ class App:
         self.unlock_btn = self._primary_button(row, "Unlock", self.unlock)
         self.unlock_btn.pack(side="left")
         self.unlock_msg = tk.Label(self.unlock_frame, text="", fg=BAD,
-                                   bg="white", font=("Segoe UI", 9))
+                                   bg="white", font=(UI_FONT, 9))
         self.unlock_msg.pack(anchor="w", pady=(6, 0))
 
         self.files_frame = tk.Frame(tab, bg="white")
         vault_head = tk.Frame(self.files_frame, bg="white")
         vault_head.pack(fill="x", pady=(0, 8))
         tk.Label(vault_head, text="Your encrypted files", bg="white", fg=TEXT,
-                 font=("Segoe UI", 12, "bold")).pack(side="left")
+                 font=(UI_FONT, 12, "bold")).pack(side="left")
         self.vault_summary = tk.Label(vault_head, text="", bg="white",
-                                      fg=MUTED, font=("Segoe UI", 9))
+                                      fg=MUTED, font=(UI_FONT, 9))
         self.vault_summary.pack(side="right")
         tree_row = tk.Frame(self.files_frame, bg="white",
                             highlightbackground=BORDER, highlightthickness=1)
@@ -612,7 +700,7 @@ class App:
         self._secondary_button(self.vault_buttons, "Lock",
                                self.lock).pack(side="left")
         self.vault_msg = tk.Label(self.vault_buttons, text="", fg=MUTED,
-                                  bg="white", font=("Segoe UI", 9))
+                                  bg="white", font=(UI_FONT, 9))
         self.vault_msg.pack(side="left", padx=(12, 0))
         self._sweeping = False
         self._backing_up = False
@@ -673,7 +761,7 @@ class App:
         header.pack(fill="x")
         tk.Label(header, text="Duplicate copies from the last check",
                  bg="white", fg=TEXT,
-                 font=("Segoe UI", 12, "bold")).pack(side="left")
+                 font=(UI_FONT, 12, "bold")).pack(side="left")
         self._secondary_button(header, "Refresh",
                                self.refresh_dupes).pack(side="right")
 
@@ -697,10 +785,10 @@ class App:
                              self.quarantine_selected).pack(side="left")
         tk.Label(tab, text="Nothing is deleted — quarantined files can "
                  "be restored from the list below.", fg=MUTED, bg="white",
-                 font=("Segoe UI", 8)).pack(anchor="w", pady=(6, 0))
+                 font=(UI_FONT, 8)).pack(anchor="w", pady=(6, 0))
 
         tk.Label(tab, text="Quarantine", bg="white", fg=TEXT,
-                 font=("Segoe UI", 12, "bold")).pack(anchor="w",
+                 font=(UI_FONT, 12, "bold")).pack(anchor="w",
                                                      pady=(18, 0))
         self.quarantine_tree = ttk.Treeview(tab, columns=("age",),
                                             selectmode="extended", height=4)
@@ -718,7 +806,7 @@ class App:
         self._secondary_button(qrow, "Empty quarantine…",
                                self.empty_quarantine).pack(side="left")
         self.dupes_msg = tk.Label(tab, text="", bg="white", fg=MUTED,
-                                  font=("Segoe UI", 9))
+                                  font=(UI_FONT, 9))
         self.dupes_msg.pack(anchor="w", pady=(8, 0))
 
         self.refresh_dupes()
@@ -910,17 +998,17 @@ class App:
         tk.Label(tab, text="Two kinds of folders: everyday folders we "
                  "watch, locked folders we encrypt. Move a file into a "
                  "locked folder to archive it securely.", fg=MUTED,
-                 bg="white", font=("Segoe UI", 9),
+                 bg="white", font=(UI_FONT, 9),
                  justify="left", wraplength=780).pack(anchor="w",
                                                       pady=(0, 10))
 
         tk.Label(tab, text="Everyday folders — watched, not encrypted",
                  fg=TEXT, bg="white",
-                 font=("Segoe UI", 11, "bold")).pack(anchor="w")
+                 font=(UI_FONT, 11, "bold")).pack(anchor="w")
         tk.Label(tab, text="For files in active use. Scanned for "
                  "duplicates and unusual changes (all subfolders); "
                  "files stay normal and editable.", fg=MUTED, bg="white",
-                 font=("Segoe UI", 9), justify="left",
+                 font=(UI_FONT, 9), justify="left",
                  wraplength=780).pack(anchor="w", pady=(0, 6))
 
         folders = tk.Frame(tab, bg="white")
@@ -928,7 +1016,7 @@ class App:
         # relief="flat" + a 1px highlight ring: the Tk default sunken
         # border renders as a harsh dark box on both platforms.
         self.folders_list = tk.Listbox(folders, height=4,
-                                       font=("Segoe UI", 10),
+                                       font=(UI_FONT, 10),
                                        bg="white", fg=TEXT,
                                        relief="flat", borderwidth=0,
                                        highlightthickness=1,
@@ -948,18 +1036,18 @@ class App:
 
         tk.Label(tab, text="Locked folders — encrypted into the vault",
                  fg=TEXT, bg="white",
-                 font=("Segoe UI", 11, "bold")).pack(anchor="w",
+                 font=(UI_FONT, 11, "bold")).pack(anchor="w",
                                                      pady=(14, 0))
         tk.Label(tab, text="For files you're storing, not using. Files "
                  "saved here (any subfolder) are encrypted when you "
                  "unlock and sweep — each is replaced by a small "
                  ".kovyr receipt.", fg=MUTED, bg="white",
-                 font=("Segoe UI", 9), justify="left",
+                 font=(UI_FONT, 9), justify="left",
                  wraplength=780).pack(anchor="w", pady=(0, 6))
         pfolders = tk.Frame(tab, bg="white")
         pfolders.pack(fill="x")
         self.protected_list = tk.Listbox(pfolders, height=3,
-                                         font=("Segoe UI", 10),
+                                         font=(UI_FONT, 10),
                                          bg="white", fg=TEXT,
                                          relief="flat", borderwidth=0,
                                          highlightthickness=1,
@@ -981,8 +1069,8 @@ class App:
         row = tk.Frame(tab, bg="white")
         row.pack(anchor="w", pady=(14, 0))
         tk.Label(row, text="Name on reports:", bg="white", fg=TEXT,
-                 font=("Segoe UI", 10)).pack(side="left")
-        self.client_entry = tk.Entry(row, width=28, font=("Segoe UI", 10),
+                 font=(UI_FONT, 10)).pack(side="left")
+        self.client_entry = tk.Entry(row, width=28, font=(UI_FONT, 10),
                                      bg="white", fg=TEXT,
                                      insertbackground=TEXT,
                                      relief="flat", borderwidth=0,
@@ -992,7 +1080,7 @@ class App:
         self.client_entry.pack(side="left", padx=8)
 
         self.vault_status = tk.Label(tab, text="", bg="white", fg=MUTED,
-                                     font=("Segoe UI", 9), justify="left",
+                                     font=(UI_FONT, 9), justify="left",
                                      wraplength=780)
         self.vault_status.pack(anchor="w", pady=(14, 0))
         self.create_vault_btn = self._secondary_button(
@@ -1003,10 +1091,10 @@ class App:
             tab, text="Check automatically every day",
             variable=self.auto_check, command=self.toggle_schedule,
             bg="white", fg=TEXT, selectcolor="white",
-            activebackground="white", font=("Segoe UI", 10))
+            activebackground="white", font=(UI_FONT, 10))
         self.auto_check_box.pack(anchor="w", pady=(14, 0))
         self.schedule_msg = tk.Label(tab, text="", bg="white", fg=MUTED,
-                                     font=("Segoe UI", 9), justify="left",
+                                     font=(UI_FONT, 9), justify="left",
                                      wraplength=780)
         self.schedule_msg.pack(anchor="w")
 
@@ -1021,7 +1109,7 @@ class App:
         self._secondary_button(actions, "Open Kovyr dashboard",
                                self.open_dashboard).pack(side="left")
         self.settings_msg = tk.Label(tab, text="", bg="white", fg=MUTED,
-                                     font=("Segoe UI", 9))
+                                     font=(UI_FONT, 9))
         self.settings_msg.pack(anchor="w", pady=(6, 0))
 
         self._load_settings_fields()
@@ -1327,33 +1415,33 @@ class App:
         dlg.transient(self.root)
         dlg.grab_set()
         tk.Label(dlg, text="Choose the vault passphrase", bg="white",
-                 fg=TEXT, font=("Segoe UI", 12, "bold")).pack(anchor="w")
+                 fg=TEXT, font=(UI_FONT, 12, "bold")).pack(anchor="w")
         tk.Label(dlg, text="Only you will know it. It is never stored, "
                  "and there is NO way to recover it —\na lost passphrase "
                  "means the encrypted files are gone forever.\nSave it in "
                  "a password manager now.", bg="white", fg=MUTED,
-                 justify="left", font=("Segoe UI", 9)).pack(
+                 justify="left", font=(UI_FONT, 9)).pack(
                      anchor="w", pady=(4, 8))
         tk.Label(dlg, text=passphrase_mod.HINT, bg="white", fg=NAVY,
                  justify="left", wraplength=330,
-                 font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 10))
-        p1 = tk.Entry(dlg, show="•", width=30, font=("Segoe UI", 11),
+                 font=(UI_FONT, 9)).pack(anchor="w", pady=(0, 10))
+        p1 = tk.Entry(dlg, show="•", width=30, font=(UI_FONT, 11),
                       bg="white", fg=TEXT, insertbackground=TEXT,
                       relief="flat", borderwidth=0,
                                    highlightthickness=1,
                                    highlightbackground=BORDER,
                                    highlightcolor=NAVY_LIGHT)
-        p2 = tk.Entry(dlg, show="•", width=30, font=("Segoe UI", 11),
+        p2 = tk.Entry(dlg, show="•", width=30, font=(UI_FONT, 11),
                       bg="white", fg=TEXT, insertbackground=TEXT,
                       relief="flat", borderwidth=0,
                                    highlightthickness=1,
                                    highlightbackground=BORDER,
                                    highlightcolor=NAVY_LIGHT)
         tk.Label(dlg, text="Passphrase:", bg="white", fg=TEXT,
-                 font=("Segoe UI", 9)).pack(anchor="w")
+                 font=(UI_FONT, 9)).pack(anchor="w")
         p1.pack(anchor="w", pady=(0, 6))
         tk.Label(dlg, text="Confirm:", bg="white", fg=TEXT,
-                 font=("Segoe UI", 9)).pack(anchor="w")
+                 font=(UI_FONT, 9)).pack(anchor="w")
         p2.pack(anchor="w", pady=(0, 10))
 
         use_keyfile = tk.BooleanVar(value=False)
@@ -1361,14 +1449,14 @@ class App:
             dlg, text="Also require a keyfile (two-factor)",
             variable=use_keyfile, bg="white", fg=TEXT,
             selectcolor="white", activebackground="white",
-            font=("Segoe UI", 9)).pack(anchor="w")
+            font=(UI_FONT, 9)).pack(anchor="w")
         tk.Label(dlg, text="Adds a second factor: a small file kept on a "
                  "USB drive, needed\nalongside the passphrase. Stronger — "
                  "but losing the keyfile also\nlocks the vault forever.",
                  bg="white", fg=MUTED, justify="left",
-                 font=("Segoe UI", 8)).pack(anchor="w", pady=(0, 8))
+                 font=(UI_FONT, 8)).pack(anchor="w", pady=(0, 8))
         msg = tk.Label(dlg, text="", bg="white", fg=BAD,
-                       font=("Segoe UI", 9))
+                       font=(UI_FONT, 9))
         msg.pack(anchor="w")
 
         def do_create() -> None:
@@ -1439,7 +1527,7 @@ class App:
             child.destroy()
         if not checks:
             tk.Label(self.posture_box, text="Couldn't run device checks.",
-                     fg=MUTED, bg="white", font=("Segoe UI", 10)).pack(
+                     fg=MUTED, bg="white", font=(UI_FONT, 10)).pack(
                          anchor="w")
             return
         for i, c in enumerate(checks):
@@ -1459,13 +1547,13 @@ class App:
             row = tk.Frame(self.posture_box, bg="white")
             row.pack(fill="x", pady=3)
             tk.Label(row, text=mark, fg=color, bg="white", width=2,
-                     font=("Segoe UI", 11, "bold")).pack(side="left",
+                     font=(UI_FONT, 11, "bold")).pack(side="left",
                                                          anchor="n")
-            name = tk.Label(row, bg="white", font=("Segoe UI", 10, "bold"),
+            name = tk.Label(row, bg="white", font=(UI_FONT, 10, "bold"),
                             text=c.name, fg=TEXT)
             name.pack(side="left", anchor="n")
             txt = tk.Label(row, bg="white", justify="left", wraplength=610,
-                           font=("Segoe UI", 10),
+                           font=(UI_FONT, 10),
                            text=f"  {c.detail}",
                            fg=(BAD if c.status is False else MUTED))
             txt.pack(side="left", anchor="w")
@@ -1536,10 +1624,10 @@ class App:
         win.configure(bg="white")
         win.geometry("640x420")
         tk.Label(win, text="Unencrypted sensitive files", bg="white", fg=TEXT,
-                 font=("Segoe UI", 13, "bold")).pack(anchor="w",
+                 font=(UI_FONT, 13, "bold")).pack(anchor="w",
                                                      padx=16, pady=(14, 0))
         tk.Label(win, bg="white", fg=MUTED, justify="left", wraplength=600,
-                 font=("Segoe UI", 9),
+                 font=(UI_FONT, 9),
                  text=f"{summary['ssns']} SSN(s) and {summary['cards']} card "
                  f"number(s) across {summary['files']} file(s), sitting "
                  "outside the vault. Only counts are shown — the actual "
@@ -1561,10 +1649,10 @@ class App:
         tree.pack(fill="both", expand=True, padx=16, pady=(0, 8))
         if coverage:
             tk.Label(win, bg="white", fg=MUTED, justify="left",
-                     wraplength=600, font=("Segoe UI", 9),
+                     wraplength=600, font=(UI_FONT, 9),
                      text=coverage).pack(anchor="w", padx=16, pady=(0, 4))
         tk.Label(win, bg="white", fg=MUTED, justify="left", wraplength=600,
-                 font=("Segoe UI", 9),
+                 font=(UI_FONT, 9),
                  text="Select the files you want protected and click "
                  "“Encrypt selected”. Each one is copied into your vault and "
                  "the original is replaced by a .kovyr receipt — retrieving it "
@@ -1574,7 +1662,7 @@ class App:
 
         row = tk.Frame(win, bg="white")
         row.pack(fill="x", padx=16, pady=(0, 12))
-        msg = tk.Label(row, bg="white", fg=MUTED, font=("Segoe UI", 9),
+        msg = tk.Label(row, bg="white", fg=MUTED, font=(UI_FONT, 9),
                        anchor="w")
         button = self._primary_button(
             row, "Encrypt selected",
@@ -1682,8 +1770,12 @@ class App:
         colored spine makes the overall state readable at a glance."""
         fills = {"good": (GOOD, GOOD_BG), "bad": (BAD, BAD_BG),
                  "neutral": (MUTED, SURFACE)}
+        words = {"good": "PROTECTED", "bad": "ATTENTION NEEDED",
+                 "neutral": "NOT SET UP"}
         spine, bg = fills.get(state, fills["neutral"])
         self.banner_spine.config(bg=spine)
+        self.banner_pill.config(bg=spine,
+                                text=words.get(state, words["neutral"]))
         for widget in (self.banner, self.banner_body, self.headline,
                        self.subline):
             widget.config(bg=bg)
