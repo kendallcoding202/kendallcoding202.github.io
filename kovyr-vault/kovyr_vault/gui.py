@@ -67,12 +67,12 @@ def _resolve_ui_font(root) -> str:
     return "TkDefaultFont"
 
 
-def logo_path() -> Path:
-    """The app mark, whether running frozen or from a source checkout."""
+def logo_path(name: str = "kovyr.png") -> Path:
+    """An app asset, whether running frozen or from a source checkout."""
     bundled = getattr(sys, "_MEIPASS", None)
     if bundled:
-        return Path(bundled) / "kovyr.png"
-    return Path(__file__).resolve().parent.parent / "packaging" / "kovyr.png"
+        return Path(bundled) / name
+    return Path(__file__).resolve().parent.parent / "packaging" / name
 
 
 SURFACE = "#f5f7fa"
@@ -337,17 +337,23 @@ class App:
         """
         self.logo_small = None
         self.logo_full = None
+        # The masthead mark is pre-rendered at display size with a proper
+        # resampling filter. Tk's subsample() is nearest-neighbour point
+        # sampling, so reducing the 1024px icon here shattered the spokes
+        # and tick marks — they lost the pixels they were made of.
+        try:
+            mark = logo_path("kovyr-mark.png")
+            if mark.exists():
+                self.logo_small = self.tk.PhotoImage(file=str(mark))
+        except Exception:                   # noqa: BLE001
+            self.logo_small = None
         try:
             source = logo_path()
             if not source.exists():
                 return
-            full = self.tk.PhotoImage(file=str(source))
-            # The asset is 1024px square; subsample is integer-only, so 28
-            # gives a ~36px mark that sits level with two lines of text.
-            self.logo_small = full.subsample(28, 28)
-            self.logo_full = full
+            self.logo_full = self.tk.PhotoImage(file=str(source))
         except Exception:                   # noqa: BLE001
-            self.logo_small = self.logo_full = None
+            self.logo_full = None
             return
         # Separate try: iconphoto is the flakiest of the three (macOS can
         # refuse it), and failing it must not throw away the masthead mark
