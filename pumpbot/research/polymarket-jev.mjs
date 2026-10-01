@@ -145,7 +145,8 @@ console.log(`  ${hindsightPass ? 'PASS — Jev does not beat the market where on
 
 // ---------------------------------------------------------------- check 2: reads its input
 const neg = mulberry32(SEED + 2), probe = [...rows].sort(() => neg() - 0.5).slice(0, 50)
-await pool(probe, async (m) => { m.jevNeg = await ask(`neg:${m.id}`, stateOf(m, `NEGATED — the opposite of: ${m.q}`), 'This question will resolve Yes.') })
+// Amendment 2: the first probe negated the question but not the rules beneath it, contradicting itself.
+await pool(probe, async (m) => { m.jevNeg = await ask(`no:${m.id}`, stateOf(m), 'This question will resolve No.') })
 const moved = probe.filter((m) => (m.jevNeg - 0.5) * (m.jev - 0.5) < 0 || Math.abs(m.jevNeg - (1 - m.jev)) < Math.abs(m.jevNeg - m.jev)).length
 console.log(`\nCHECK 2 — reads its input: negation moved the answer the other way on ${moved}/50 (need >= 45) → ${moved >= 45 ? 'PASS' : 'FAIL'}`)
 if (!hindsightPass || moved < 45) { console.log('\nInstrument failed — main result not computed.'); process.exit(2) }

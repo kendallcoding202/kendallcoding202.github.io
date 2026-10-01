@@ -105,3 +105,23 @@ About 3,000 Jev calls at well under 1k input tokens each: roughly **$0.10**. Har
 - **Data access:** the paged listing's request parameter is `after_cursor` (the response
   field is `next_cursor`). A first run used the wrong name and repeated page one; it was
   stopped before any sample was drawn, and the runner now refuses a page that repeats.
+
+## Amendment 2 — 2026-10-01, after the instrument checks, before the main result
+
+**Check 1 (hindsight) PASSED.** On 1,022 unforecastable markets (exact temperature
+buckets, exact scores) Jev's Brier was 0.1438 against the market's 0.1192 — Jev is
+*worse* there, so it is not remembering outcomes. The backtest is not void on hindsight.
+
+**Check 2 FAILED as built — and the probe, not Jev, was at fault.** The negated version
+put "NEGATED — the opposite of: {question}" above the market's resolution rules, but left
+those rules unchanged ("If CD Universidad Católica wins, this market will resolve to
+Yes"). The state therefore contradicted itself, and Jev followed the rules: 15/50. That
+tests nothing about whether Jev reads its input.
+
+**Replacement, fixed before rerunning:** the same 50 markets, the state left exactly as
+sent, and the question changed from "This question will resolve Yes." to "This question
+will resolve No." Same pass rule: the answer must land on the other side of 0.5, or
+closer to 1 − p than to p, on at least 45 of 50.
+
+The main comparison has not been computed. Neither outcome of this check changes any
+threshold on it.
