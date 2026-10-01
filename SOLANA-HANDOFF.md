@@ -21,19 +21,14 @@ Local clone: `/Users/kendallsorenson/kendallcoding202.github.io`
 edge, and six artifacts that each looked like a result. Do not restart any of it without
 reading why it stopped.
 
-**Active work: the Jev test.** `pumpbot/PREREG-JEV.md` is the pre-registration and is
-fixed — do not change thresholds; amend with a dated note if something is wrong.
+**The Jev test is finished: NO** (2026-10-01, results at the end of
+`pumpbot/PREREG-JEV.md`). Jev does not beat a free logistic regression on the same
+numbers; raw calibration fails; adding it to the regression adds nothing. Cost $0.23.
+Runner: `pumpbot/research/jev-test.mjs` (key from env `JEV_API_KEY` — never paste or
+commit it). Only phase 2 (unstructured inputs) remains untested, and it needs its own
+pre-registration first.
 
-- Key: env var **`JEV_API_KEY`**. Never paste it into chat or commit it.
-- Endpoint: `POST https://api.typesafe.ai/v1/systemone` (or `openrouter.ai/api/v1/systemone`
-  if the key is an OpenRouter key). Needs `model` (`jev-1.13`), `state`, `questions`.
-- **Run the four instrument checks FIRST** (fair coin, determinism, reads-its-input,
-  shuffled features). Any failure stops the test.
-- Data: the 2026-09-23 journal export. It is NOT in the repo — Kendall re-uploads it.
-- Expected outcome is a NO on numeric features; a YES is suspected leakage until re-run.
-
-**Live services:** the probe service (real SOL) should be on `PAPER=1` or stopped. The
-paper service can keep collecting; its journal is on the Railway volume.
+The live probe service should be `PAPER=1` or stopped — it spends real SOL.
 
 ## History (2026-09-21)
 

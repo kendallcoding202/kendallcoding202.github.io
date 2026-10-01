@@ -27,6 +27,7 @@ wallet list changes that arithmetic, which is why six different ideas failed the
 | 6 | Kalshi / Polymarket arbitrage | rejected in two hours, no capital risked |
 | 7 | momentum on liquid Solana | 1 of 16 cells positive, **0 significant** |
 | 7b | broad signal sweep | 3 families properly tested, **0 survived** |
+| 8 | Jev (TypeSafe AI) on launch features | does **not** beat a free regression; raw calibration fails; adds nothing on top — `PREREG-JEV.md` |
 
 ## The finding that reframed the rest
 

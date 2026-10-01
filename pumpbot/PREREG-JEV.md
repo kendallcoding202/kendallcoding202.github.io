@@ -188,3 +188,76 @@ The check is only reached if Jev first beats logistic regression on Brier — bo
 required for a YES. **If it is reached, its selection rate and comparison set will be
 fixed in a further dated amendment before it runs.** If Brier fails, the result is NO and
 the strategy check is moot.
+
+## Results — 2026-10-01
+
+**Verdict: NO.** Jev does not beat a free logistic regression on the same numbers. The
+strategy check was not reached and is moot.
+
+Run with `research/jev-test.mjs` (as registered plus amendment 1). Clean population
+39,007 rows; sample 5,000; in-sample 3,000, out-of-sample 2,000; in-sample base rate
+10.77%. 38 `f_*` features sent (`f_mayhem` dropped as constant after its exclusion).
+Total spend **$0.23** of the $5 cap.
+
+Leakage audit before any call: `f_subLaunchPrice` is set inside `Candidate.apply` from
+events during observation, and `f_mayhemLikely` is `mayhem || subLaunchPrice`; both are
+snapshotted by `featuresOf` inside `track()` at the decision. Both stayed in.
+
+### Instrument check 4 — PASS
+
+Features permuted across out-of-sample rows: Brier 0.12875 against climatology 0.09712,
+improvement −0.0316 [−0.0385, −0.0252]. Shuffled features do worse than the base rate, so
+nothing other than the features was carrying signal.
+
+### The registered comparison (out-of-sample, n = 2,000; lower is better)
+
+| model | Brier |
+|---|---|
+| climatology | 0.09712 |
+| logistic regression | 0.08655 |
+| Jev A, raw | 0.09806 |
+| Jev A, recalibrated | 0.08400 |
+| Jev B, decomposed | 0.08282 |
+
+| Jev vs logistic regression | improvement | interval (Bonferroni 0.025) | |
+|---|---|---|---|
+| A, recalibrated | +0.00256 | [−0.00329, +0.00801] | does not beat |
+| B, decomposed | +0.00373 | [−0.00323, +0.01160] | does not beat |
+
+Instrument noise sd 0.007 (amendment 1), well below these differences. The point
+estimates favour Jev by 3–4% of Brier; neither interval excludes zero.
+
+### Raw calibration — the vendor's claim fails here
+
+| Jev's raw probability (decile mean) | 6.5 | 9.1 | 11.7 | 14.8 | 18.7 | 22.7 | 26.8 | 32.2 | 38.2 | 46.6 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| what actually happened, % | 0.0 | 1.0 | 1.0 | 2.5 | 4.0 | 7.0 | 13.5 | 17.5 | 25.5 | 37.0 |
+
+Ordering is clean and monotone; the levels are not. Raw Jev is worse than predicting the
+base rate for every row (0.09806 vs 0.09712). It is only useful after recalibrating on
+our own labelled data — which is the step that makes it no better than fitting our own
+model.
+
+### Exploratory — not registered, does not change the verdict
+
+Computed from the cached responses at no further cost, to check the baseline was not a
+straw man:
+
+| model | Brier | AUC | hit rate, top 10% by score |
+|---|---|---|---|
+| LR as registered | 0.08655 | 0.821 | — |
+| LR, log-transformed features | 0.08773 | **0.854** | **42.5%** |
+| Jev A, recalibrated | 0.08400 | 0.823 | 38.0% |
+| Jev B | 0.08282 | 0.839 | 37.5% |
+| LR + Jev answers together | 0.08671 | 0.860 | 43.5% |
+
+- For **ranking** — which is what selection uses — a free regression with one obvious
+  transform ranks better than Jev (AUC 0.854 vs 0.839) and picks a better top decile.
+- **Adding Jev to the regression** gains 0.001 Brier, interval [−0.0005, +0.0027]: its
+  answers carry no information the numbers do not already carry.
+
+What this means: on structured numbers, Jev is a calibrated-looking wrapper around
+information a free model extracts as well or better. That was the expected result. The
+untested case is **phase 2**, unstructured inputs (text, social, news) that a regression
+cannot read — and even there, a better probability of hitting +50% does not by itself
+overcome the toll recorded in `FINDINGS.md`.
