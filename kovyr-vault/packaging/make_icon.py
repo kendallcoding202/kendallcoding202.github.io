@@ -67,6 +67,49 @@ def render() -> Image.Image:
     return img
 
 
+def render_mark(size: int = 40) -> Image.Image:
+    """The dial alone, on transparency, for the in-app masthead.
+
+    Not the app icon shrunk down. The icon's rounded navy square is there
+    to sit on a Dock or a desktop; dropped onto the app's own navy bar it
+    reads as a pasted-in app icon rather than a logotype. This draws the
+    mark by itself so it sits on the bar as part of the design.
+
+    Rendered large and resampled with Lanczos. Letting Tk's subsample()
+    do the reduction is what made the first attempt look shattered — it
+    is nearest-neighbour point sampling, so at a 28:1 reduction the
+    spokes and tick marks simply lost the pixels they were made of.
+    """
+    master = 1024
+    img = Image.new("RGBA", (master, master), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    cx = cy = master // 2
+
+    # Heavier strokes than the app icon: at 40px a hairline disappears,
+    # and a mark that reads at a glance beats one that is faithful.
+    ring_r, ring_w = 300, 76
+    draw.ellipse([cx - ring_r, cy - ring_r, cx + ring_r, cy + ring_r],
+                 outline=WHITE, width=ring_w)
+    for angle_deg in range(0, 360, 45):
+        a = math.radians(angle_deg)
+        r0, r1 = ring_r + 58, ring_r + 126
+        draw.line(
+            [(cx + r0 * math.cos(a), cy + r0 * math.sin(a)),
+             (cx + r1 * math.cos(a), cy + r1 * math.sin(a))],
+            fill=WHITE, width=52,
+        )
+    for angle_deg in (90, 210, 330):
+        a = math.radians(angle_deg)
+        r1 = ring_r - ring_w - 20
+        draw.line(
+            [(cx, cy), (cx + r1 * math.cos(a), cy + r1 * math.sin(a))],
+            fill=WHITE, width=58,
+        )
+    draw.ellipse([cx - 104, cy - 104, cx + 104, cy + 104], fill=WHITE)
+    draw.ellipse([cx - 58, cy - 58, cx + 58, cy + 58], fill=ACCENT)
+    return img.resize((size, size), Image.LANCZOS)
+
+
 def main() -> None:
     art = render()
     art.save("kovyr.png")
@@ -74,7 +117,8 @@ def main() -> None:
     art.save("kovyr.ico", sizes=ico_sizes)
     for s in (16, 32, 48, 128, 256, 512):
         art.resize((s, s), Image.LANCZOS).save(f"icon_{s}.png")
-    print("wrote kovyr.png, kovyr.ico, icon_*.png")
+    render_mark(40).save("kovyr-mark.png")
+    print("wrote kovyr.png, kovyr.ico, kovyr-mark.png, icon_*.png")
 
 
 if __name__ == "__main__":

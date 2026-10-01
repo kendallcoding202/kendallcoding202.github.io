@@ -227,6 +227,17 @@ def test_logo_resolves_from_a_frozen_bundle(monkeypatch, tmp_path):
     the source tree, so the frozen build needs the other branch."""
     monkeypatch.setattr(gui.sys, "_MEIPASS", str(tmp_path), raising=False)
     assert gui.logo_path() == tmp_path / "kovyr.png"
+    assert gui.logo_path("kovyr-mark.png") == tmp_path / "kovyr-mark.png"
+
+
+def test_masthead_mark_is_prerendered_at_display_size():
+    """It must NOT be the 1024px icon. Tk reduces with nearest-neighbour
+    point sampling, which shattered the spokes when this was done at
+    display time — the mark has to arrive already the right size."""
+    mark = gui.logo_path("kovyr-mark.png")
+    assert mark.exists(), mark
+    width = int.from_bytes(mark.read_bytes()[16:20], "big")   # PNG IHDR
+    assert width <= 64, f"mark is {width}px; it should ship at display size"
 
 
 def test_ui_font_falls_back_when_nothing_matches(monkeypatch):
