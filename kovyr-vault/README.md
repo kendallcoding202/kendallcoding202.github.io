@@ -106,6 +106,21 @@ their protection without Kovyr present:
   that opens the app monthly would notice an incident up to a month late.
   The scheduled job runs as the signed-in user, never as SYSTEM or root,
   because it needs exactly that person's file access and nothing more.
+- **Email alerts** — **off by default.** When switched on in Settings, a
+  check that finds something emails a one-line summary. The body is the
+  same text the desktop notification uses, which carries **counts only —
+  no file names, no paths, no matched values**, so the message is worth
+  nothing to whoever reads that mailbox next. The SMTP password goes to
+  the OS keystore (macOS keychain, Windows DPAPI) and never into
+  `config.json`; where neither exists, storing is refused rather than
+  written in plain text. Delivery is best effort — a mail server that is
+  down never turns a successful check into a failed one.
+
+  This is the **only** thing Kovyr Vault sends off the machine, and only
+  once you enable it. Everything else — scanning, encryption, sensitive-
+  data discovery, reporting — happens locally and transmits nothing. The
+  accurate claim is "nothing leaves this machine unless you turn on email
+  alerts", not "nothing leaves".
 
 Setup during the engagement is one `config.json` next to the exe:
 
