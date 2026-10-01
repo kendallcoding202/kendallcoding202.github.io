@@ -125,3 +125,27 @@ closer to 1 − p than to p, on at least 45 of 50.
 
 The main comparison has not been computed. Neither outcome of this check changes any
 threshold on it.
+
+## Result — 2026-10-01: VOID (instrument failed), and the evidence leans NO
+
+Population 82,190 markets; sample 3,000; dropped 333 with no price in the 6 hours before
+decision and 630 priced outside 0.02–0.98; **2,037 scored**. Spend **$0.05**.
+
+- **Check 1, hindsight: PASS.** Jev is worse than the market on unforecastable markets.
+- **Check 2, reads its input (amended probe): FAIL, 42/50 against 45 required.** Asked
+  "resolves Yes" and "resolves No" about the same market, Jev's two answers summed to
+  **0.88 on average**, not 1. Every miss was a sports market ("Will Newcastle United win":
+  Yes 0.36, No 0.49): with nothing to go on, Jev gives a hedge near 0.4–0.5 to *both*
+  framings instead of a probability. As registered, the main comparison is **void and was
+  not computed**. The check is not being amended a second time.
+
+**What the checks already show.** Check 1 scored Jev against the market on 1,022 of the
+2,037 markets (half the sample). Jev's Brier was 0.144 against the market's 0.119. On the
+638 temperature markets alone: Jev 0.163, market 0.121. The market prices in information
+(weather forecasts, team news) that Jev, reading only the question, does not have. Jev
+blind is not an edge on Polymarket.
+
+**What it points at instead.** Temperature markets are about 30% of the usable
+population and resolve every day. The market beats a blind forecaster because it uses
+weather forecasts. The open question, which needs no Jev, is whether a **proper
+forecast model beats the market's price after fees**. See `OPTIONS-2026-10-01.md`.

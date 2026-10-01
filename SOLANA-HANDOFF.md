@@ -28,13 +28,13 @@ Runner: `pumpbot/research/jev-test.mjs` (key from env `JEV_API_KEY` — never pa
 commit it). Only phase 2 (unstructured inputs) remains untested, and it needs its own
 pre-registration first.
 
-**Next (registered 2026-10-01, not yet run):** `pumpbot/PREREG-JEV-NEWS.md` — Jev
-reading news on the ten liquid Solana coins, daily decisions, 24h holds. Blocked until a
-news source is on the network allowlist (`data-api.coindesk.com`, `api.gdeltproject.org`,
-`www.reddit.com`, `cryptopanic.com`). Step one is the coverage count and its dated
-amendment, before any outcome is joined. Other options, ranked:
-`pumpbot/OPTIONS-2026-10-01.md` (top: Jev forecasting prediction markets, which needs
-the Polymarket and Kalshi hosts added back).
+**Later on 2026-10-01:**
+- `pumpbot/PREREG-JEV-POLYMARKET.md` — **void** (Jev gave incoherent Yes/No answers;
+  where scored, it lost to the market). Runner: `pumpbot/research/polymarket-jev.mjs`.
+- `pumpbot/PREREG-JEV-NEWS.md` — registered, **blocked on news**: GDELT is far too thin
+  for meme coins. Needs a free CoinDesk Data API key in env `COINDESK_API_KEY`.
+- **Best open lead: Polymarket temperature markets vs a real weather forecast** (no Jev),
+  `pumpbot/OPTIONS-2026-10-01.md` item 0. Needs the Open-Meteo hosts on the allowlist.
 
 The live probe service should be `PAPER=1` or stopped — it spends real SOL.
 
