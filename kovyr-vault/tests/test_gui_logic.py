@@ -209,3 +209,28 @@ def test_dashboard_url_refuses_non_https():
                 "javascript:alert(1)", "/Users/me/secrets", "", None, 42):
         assert gui.resolve_dashboard_url(
             {"dashboard_url": bad}) == gui.KOVYR_SITE
+
+
+# ---------- the app mark ----------
+
+def test_logo_resolves_from_a_source_checkout():
+    """From source the mark lives in packaging/. If this path drifts the
+    app still opens — logo loading is optional — so nothing else would
+    notice it had silently lost its branding."""
+    path = gui.logo_path()
+    assert path.name == "kovyr.png"
+    assert path.exists(), path
+
+
+def test_logo_resolves_from_a_frozen_bundle(monkeypatch, tmp_path):
+    """PyInstaller unpacks --add-data next to sys._MEIPASS, not beside
+    the source tree, so the frozen build needs the other branch."""
+    monkeypatch.setattr(gui.sys, "_MEIPASS", str(tmp_path), raising=False)
+    assert gui.logo_path() == tmp_path / "kovyr.png"
+
+
+def test_ui_font_falls_back_when_nothing_matches(monkeypatch):
+    """Tk silently swaps an unavailable family for a default, so a bad
+    choice looks like a styling bug rather than a missing font."""
+    monkeypatch.setattr(gui, "_FONT_PREFERENCE", ("No Such Face",))
+    assert gui._resolve_ui_font(None) == "TkDefaultFont"
