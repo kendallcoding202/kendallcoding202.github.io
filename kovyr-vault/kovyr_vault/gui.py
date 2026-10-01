@@ -21,13 +21,14 @@ import argparse
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import threading
 import webbrowser
 from pathlib import Path
 
-from . import __version__, crypto, monitor as monitor_mod, notify as notify_mod, passphrase as passphrase_mod, protect_folder as protect_mod, quarantine as quarantine_mod, report as report_mod, scanner, schedule as schedule_mod
+from . import __version__, crypto, mail as mail_mod, secrets as secrets_mod, monitor as monitor_mod, notify as notify_mod, passphrase as passphrase_mod, protect_folder as protect_mod, quarantine as quarantine_mod, report as report_mod, scanner, schedule as schedule_mod
 from .util import human_size, mirror_path, now_stamp
 from .vault import generate_keyfile, Vault, VaultError
 
@@ -1098,6 +1099,64 @@ class App:
                                      wraplength=780)
         self.schedule_msg.pack(anchor="w")
 
+        # ---- email alerts: the one thing that leaves this machine ----
+        tk.Label(tab, text="Email alerts", fg=TEXT, bg="white",
+                 font=(UI_FONT, 11, "bold")).pack(anchor="w", pady=(16, 0))
+        tk.Label(tab, text="Off by default. When on, a check that finds "
+                 "something emails you a one-line summary — counts only, "
+                 "never file names. This is the only thing Kovyr Vault "
+                 "sends off this computer.", fg=MUTED, bg="white",
+                 font=(UI_FONT, 9), justify="left",
+                 wraplength=780).pack(anchor="w", pady=(0, 6))
+
+        self.email_on = tk.BooleanVar(value=False)
+        tk.Checkbutton(tab, text="Email me when attention is needed",
+                       variable=self.email_on, bg="white", fg=TEXT,
+                       selectcolor="white", activebackground="white",
+                       font=(UI_FONT, 10)).pack(anchor="w")
+
+        self.email_fields = {}
+        grid = tk.Frame(tab, bg="white")
+        grid.pack(anchor="w", pady=(6, 0))
+        specs = (("host", "SMTP server", 26), ("port", "Port", 6),
+                 ("username", "Username", 26), ("recipient", "Send to", 26))
+        for row, (key, label, width) in enumerate(specs):
+            tk.Label(grid, text=label + ":", bg="white", fg=TEXT,
+                     font=(UI_FONT, 9)).grid(row=row, column=0, sticky="e",
+                                             padx=(0, 7), pady=2)
+            entry = tk.Entry(grid, width=width, font=(UI_FONT, 10),
+                             bg="white", fg=TEXT, insertbackground=TEXT,
+                             relief="flat", borderwidth=0,
+                             highlightthickness=1,
+                             highlightbackground=BORDER,
+                             highlightcolor=NAVY_LIGHT)
+            entry.grid(row=row, column=1, sticky="w", pady=2)
+            self.email_fields[key] = entry
+        tk.Label(grid, text="Password:", bg="white", fg=TEXT,
+                 font=(UI_FONT, 9)).grid(row=len(specs), column=0,
+                                         sticky="e", padx=(0, 7), pady=2)
+        self.email_password = tk.Entry(
+            grid, width=26, show="•", font=(UI_FONT, 10), bg="white",
+            fg=TEXT, insertbackground=TEXT, relief="flat", borderwidth=0,
+            highlightthickness=1, highlightbackground=BORDER,
+            highlightcolor=NAVY_LIGHT)
+        self.email_password.grid(row=len(specs), column=1, sticky="w",
+                                 pady=2)
+        tk.Label(grid, text="Stored in your keychain, never in a file. "
+                 "Use an app password, not your main one.",
+                 bg="white", fg=MUTED, font=(UI_FONT, 8),
+                 justify="left", wraplength=320).grid(
+                     row=len(specs) + 1, column=1, sticky="w")
+
+        email_actions = tk.Frame(tab, bg="white")
+        email_actions.pack(anchor="w", pady=(8, 0))
+        self._secondary_button(email_actions, "Send a test email",
+                               self.send_test_email).pack(side="left")
+        self.email_msg = tk.Label(tab, text="", bg="white", fg=MUTED,
+                                  font=(UI_FONT, 9), justify="left",
+                                  wraplength=780)
+        self.email_msg.pack(anchor="w", pady=(4, 0))
+
         actions = tk.Frame(tab, bg="white")
         actions.pack(anchor="w", pady=(18, 0))
         self._primary_button(actions, "Save settings",
@@ -1114,6 +1173,59 @@ class App:
 
         self._load_settings_fields()
 
+    def _email_settings(self) -> dict:
+        """The alert-email block for config.json. Never the password."""
+        values = {k: e.get().strip() for k, e in self.email_fields.items()}
+        try:
+            port = int(values.get("port") or 587)
+        except ValueError:
+            port = 587
+        return {"enabled": bool(self.email_on.get()),
+                "host": values.get("host", ""), "port": port,
+                "username": values.get("username", ""),
+                "sender": values.get("username", ""),
+                "recipient": values.get("recipient", ""),
+                "starttls": True}
+
+    def _load_email_fields(self) -> None:
+        stored = (self.config or {}).get("alerts_email") or {}
+        self.email_on.set(bool(stored.get("enabled")))
+        for key, entry in self.email_fields.items():
+            entry.delete(0, "end")
+            value = stored.get(key, "" if key != "port" else 587)
+            entry.insert(0, str(value) if value else "")
+
+    def _save_email_password(self) -> str | None:
+        """Move the typed password into the OS keystore and clear the box,
+        so it never sits in a widget or reaches config.json."""
+        typed = self.email_password.get()
+        if not typed:
+            return None
+        try:
+            secrets_mod.set_secret(mail_mod.SECRET_NAME, typed)
+        except secrets_mod.SecretError as exc:
+            return str(exc)
+        self.email_password.delete(0, "end")
+        return None
+
+    def send_test_email(self) -> None:
+        problem = self._save_email_password()
+        if problem:
+            self.email_msg.config(text=problem, fg=BAD)
+            return
+        settings = dict(self.config or {})
+        settings["alerts_email"] = dict(self._email_settings(), enabled=True)
+        failure = mail_mod.try_send(
+            settings,
+            "Test alert — Kovyr Vault is configured correctly.",
+            socket.gethostname())
+        if failure:
+            self.email_msg.config(text=failure, fg=BAD)
+        else:
+            self.email_msg.config(
+                text=f"Test email sent to "
+                     f"{settings['alerts_email']['recipient']}.", fg=GOOD)
+
     def _load_settings_fields(self) -> None:
         self.folders_list.delete(0, "end")
         for p in (self.config or {}).get("paths", []):
@@ -1125,6 +1237,7 @@ class App:
         self.client_entry.insert(0, (self.config or {}).get("client", ""))
         self._refresh_vault_status()
         self._refresh_schedule_state()
+        self._load_email_fields()
 
     def _scheduled_command(self) -> list[str]:
         """What the daily job should run: this app, headless.
@@ -1223,14 +1336,23 @@ class App:
         else:
             self.config = build_default_config(client, paths)
             self.config["protected"] = protected
+        self.config["alerts_email"] = self._email_settings()
+        # The password goes to the keychain, never into the file we are
+        # about to write.
+        password_problem = self._save_email_password()
         try:
             save_config(self.save_path, self.config)
         except OSError as exc:
             self.settings_msg.config(text=f"Could not save: {exc}", fg=BAD)
             return
         self.config_error = None
-        self.settings_msg.config(
-            text=f"Saved to {self.save_path}", fg=GOOD)
+        if password_problem:
+            self.settings_msg.config(
+                text=f"Settings saved, but the email password could not be "
+                     f"stored: {password_problem}", fg=BAD)
+        else:
+            self.settings_msg.config(
+                text=f"Saved to {self.save_path}", fg=GOOD)
         self._refresh_vault_status()
         self.refresh_status()
 
@@ -2114,6 +2236,10 @@ def run_protection_check(config: dict, on_progress=None) -> str:
     alert = notify_mod.compose_alert(snapshot, len(drift.new_groups))
     if alert:
         notify_mod.send(alert)
+        # The desktop notification is useless if nobody is at the machine,
+        # which is exactly when it matters most. Email is best effort and
+        # carries the same counts-only line — never a filename.
+        mail_mod.try_send(config, alert, socket.gethostname())
     if config.get("html"):
         Path(config["html"]).write_text(
             report_mod.render_monitor_report({
