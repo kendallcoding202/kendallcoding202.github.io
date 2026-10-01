@@ -74,3 +74,25 @@ your location.
 
 `src/polysports.js`: `npm run polysports` runs the scanner and status page;
 `npm run polysports:summary` prints the result. Data in `DATA_DIR/polysports/`.
+
+## Amendment 1 — 2026-10-01, after the first live scan, before any bet settled
+
+The first scan recorded 983 markets and 257 rule bets in one 4-hour window, roughly
+**1,500 rule bets a day**, far more than planned for. Two parts of the registration
+break at that rate and are fixed now, before any outcome exists:
+
+1. **The bootstrap unit becomes the event (match), not the settlement date.** 400 bets
+   would settle within about two days, so the result would rest on two date blocks.
+   Contracts on the same match are also linked (home win, away win and draw cannot all
+   pay), so the match is the honest unit to resample.
+2. **The stop becomes: 400 settled rule bets *and* at least 7 days**, or 28 days, whichever
+   comes first. One weekend of fixtures is not a sample of sports.
+
+Facts from the first scan, recorded because they bear on the artifacts. They are about
+prices only; no outcome is known:
+- For the 47 rule bets that had traded at all, the best ask was a median **1¢** above the
+  last trade. Artifact 1 (stale price) looks small.
+- The median volume at decision was **$0**; only 2.7% of rule bets had $1k of volume a day
+  out. The live population is mostly untraded contracts, unlike the backtest's.
+- A $2 order filled entirely at the best ask in every rule bet. The mean bid–ask spread
+  was 2.4¢.

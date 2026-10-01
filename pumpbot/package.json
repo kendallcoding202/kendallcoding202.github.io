@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "node src/index.js run",
-    "test": "node test/run.js",
+    "test": "node test/run.js && node test/polysports.test.js",
     "keygen": "node src/index.js keygen",
     "balance": "node src/index.js balance",
     "record": "node src/index.js record",
@@ -26,7 +26,9 @@
     "paper:reset": "PAPER=1 node src/index.js reset",
     "graduations": "node src/index.js graduations",
     "stage0": "node src/index.js stage0",
-    "prediction": "node src/index.js prediction"
+    "prediction": "node src/index.js prediction",
+    "polysports": "node src/polysports.js run",
+    "polysports:summary": "node src/polysports.js summary"
   },
   "dependencies": {
     "@solana/web3.js": "^1.99.0",
