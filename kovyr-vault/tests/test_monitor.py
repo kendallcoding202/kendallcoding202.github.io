@@ -72,3 +72,55 @@ def test_history_is_capped(tmp_path):
     for i in range(monitor.MAX_HISTORY + 5):
         monitor.record_run(state, result, f"t{i}")
     assert len(monitor.load_history(state)) == monitor.MAX_HISTORY
+
+
+# ---------- in-place encryption: the canary's old blind spot ----------
+
+def _inventory(count, size=10_000, prefix="/data/file"):
+    return {f"{prefix}{i}.pdf": size for i in range(count)}
+
+
+def test_canary_catches_encryption_that_keeps_filenames():
+    """The original canary compared file NAMES, so a strain that encrypts
+    in place — same names, different contents — left the path set
+    identical and slipped straight past it."""
+    before = _inventory(40)
+    after = {name: 10_000 + 2048 for name in before}   # same names, rewritten
+
+    alerts = monitor.canary_check(before, after, None, None)
+    assert alerts
+    assert any("changed size at once" in a for a in alerts)
+
+
+def test_canary_ignores_an_ordinary_working_day():
+    """A few files edited between checks must never read as ransomware."""
+    before = _inventory(40)
+    after = dict(before)
+    for i in range(6):                      # 15% of the folder edited
+        after[f"/data/file{i}.pdf"] = 11_500
+    assert monitor.canary_check(before, after, None, None) == []
+
+
+def test_canary_ignores_tiny_size_drift():
+    """Timestamps and metadata nudge sizes by a few bytes. If that counted,
+    every check on a busy folder would cry wolf."""
+    before = _inventory(40)
+    after = {name: size + 4 for name, size in before.items()}
+    assert monitor.canary_check(before, after, None, None) == []
+
+
+def test_canary_needs_enough_files_to_judge():
+    """Three files all changing is a person working, not an incident."""
+    before = _inventory(3)
+    after = {name: 99_000 for name in before}
+    assert monitor.canary_check(before, after, None, None) == []
+
+
+def test_rename_and_in_place_signatures_are_both_reported():
+    """A strain that renames some files and rewrites others should trip
+    both halves rather than hiding in between them."""
+    before = _inventory(40)
+    after = {f"/data/file{i}.pdf.locked": 12_500 for i in range(30)}
+    after.update({f"/data/file{i}.pdf": 12_500 for i in range(30, 40)})
+    alerts = monitor.canary_check(before, after, None, None)
+    assert any("disappeared" in a for a in alerts)

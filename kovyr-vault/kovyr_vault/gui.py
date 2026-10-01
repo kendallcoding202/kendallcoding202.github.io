@@ -27,7 +27,7 @@ import threading
 import webbrowser
 from pathlib import Path
 
-from . import __version__, crypto, monitor as monitor_mod, notify as notify_mod, passphrase as passphrase_mod, protect_folder as protect_mod, quarantine as quarantine_mod, report as report_mod, scanner
+from . import __version__, crypto, monitor as monitor_mod, notify as notify_mod, passphrase as passphrase_mod, protect_folder as protect_mod, quarantine as quarantine_mod, report as report_mod, scanner, schedule as schedule_mod
 from .util import human_size, mirror_path, now_stamp
 from .vault import generate_keyfile, Vault, VaultError
 
@@ -998,6 +998,18 @@ class App:
         self.create_vault_btn = self._secondary_button(
             tab, "Create vault…", self.create_vault_dialog)
 
+        self.auto_check = tk.BooleanVar(value=False)
+        self.auto_check_box = tk.Checkbutton(
+            tab, text="Check automatically every day",
+            variable=self.auto_check, command=self.toggle_schedule,
+            bg="white", fg=TEXT, selectcolor="white",
+            activebackground="white", font=("Segoe UI", 10))
+        self.auto_check_box.pack(anchor="w", pady=(14, 0))
+        self.schedule_msg = tk.Label(tab, text="", bg="white", fg=MUTED,
+                                     font=("Segoe UI", 9), justify="left",
+                                     wraplength=780)
+        self.schedule_msg.pack(anchor="w")
+
         actions = tk.Frame(tab, bg="white")
         actions.pack(anchor="w", pady=(18, 0))
         self._primary_button(actions, "Save settings",
@@ -1024,6 +1036,52 @@ class App:
         self.client_entry.delete(0, "end")
         self.client_entry.insert(0, (self.config or {}).get("client", ""))
         self._refresh_vault_status()
+        self._refresh_schedule_state()
+
+    def _scheduled_command(self) -> list[str]:
+        """What the daily job should run: this app, headless.
+
+        The CLI tool is not shipped in the macOS disk image, so the app is
+        the only binary guaranteed to exist on a client machine.
+        """
+        command = [sys.executable, "--check"]
+        if not getattr(sys, "frozen", False):
+            # Running from source: python needs the module to run.
+            command = [sys.executable, "-m", "kovyr_vault.gui", "--check"]
+        if self.save_path:
+            command += ["--config", str(self.save_path)]
+        return command
+
+    def _refresh_schedule_state(self) -> None:
+        if not schedule_mod.supported():
+            self.auto_check_box.config(state="disabled")
+            self.schedule_msg.config(
+                text="Automatic daily checks are available on macOS and "
+                     "Windows.")
+            return
+        try:
+            on = schedule_mod.installed()
+        except Exception:                      # noqa: BLE001
+            on = False
+        self.auto_check.set(on)
+        self.schedule_msg.config(
+            text=schedule_mod.describe() if on else
+            "Checks only run when you click “Run check now”. Turn this on "
+            "so problems are noticed without anyone remembering to look.")
+
+    def toggle_schedule(self) -> None:
+        want = self.auto_check.get()
+        try:
+            if want:
+                schedule_mod.install(self._scheduled_command())
+            else:
+                schedule_mod.uninstall()
+        except schedule_mod.ScheduleError as exc:
+            self.auto_check.set(not want)
+            self.schedule_msg.config(text=str(exc), fg=BAD)
+            return
+        self.schedule_msg.config(fg=MUTED)
+        self._refresh_schedule_state()
 
     def add_protected_folder(self) -> None:
         from tkinter import filedialog
@@ -1696,39 +1754,14 @@ class App:
 
     def _run_check_worker(self) -> None:
         try:
-            state_path = Path(self.config["state"])
-            cache = monitor_mod.load_hash_cache(state_path)
-
             def scan_progress(reads: int, current: str) -> None:
                 name = Path(current).name
                 self.root.after(0, lambda: self.activity.config(
                     text=f"Checking… {reads:,} files read · "
                          f"currently: {name}"))
 
-            result = scanner.scan(
-                [Path(p) for p in self.config["paths"]], cache=cache,
-                on_progress=scan_progress)
-            vault_path = self.config.get("vault")
-            _snap, drift, history = monitor_mod.record_run(
-                state_path, result, now_stamp(),
-                vault=Path(vault_path) if vault_path else None,
-                protected=self._protected_dirs() or None,
-                hash_cache=cache)
-            alert = notify_mod.compose_alert(_snap, len(drift.new_groups))
-            if alert:
-                notify_mod.send(alert)
-            if self.config.get("html"):
-                ctx = {
-                    "client": self.config.get("client"),
-                    "generated": now_stamp(),
-                    "version": __version__,
-                    "history": history,
-                    "new_groups": drift.new_groups,
-                    "resolved_groups": drift.resolved_groups,
-                }
-                Path(self.config["html"]).write_text(
-                    report_mod.render_monitor_report(ctx), encoding="utf-8")
-            message = "Check complete."
+            message = run_protection_check(self.config,
+                                           on_progress=scan_progress)
         except Exception as exc:  # surfaced in the UI, not a crash
             message = f"Check failed: {exc}"
         self.root.after(0, self._run_check_done, message)
@@ -1966,6 +1999,64 @@ class _SelftestFinding:
         self.path, self.ssn, self.card = path, ssn, card
 
 
+def run_protection_check(config: dict, on_progress=None) -> str:
+    """Perform one protection check and record it. Returns a status line.
+
+    Shared deliberately between the "Run check now" button and the daily
+    scheduled run, so a check that happens while nobody is watching does
+    exactly what a check they watched would have done — same snapshot,
+    same canary, same notification, same report. Touches no Tk, so the
+    scheduled run needs no display.
+    """
+    state_path = Path(config["state"])
+    cache = monitor_mod.load_hash_cache(state_path)
+    result = scanner.scan([Path(p) for p in config["paths"]],
+                          cache=cache, on_progress=on_progress)
+    vault_path = config.get("vault")
+    protected = [Path(p) for p in config.get("protected", [])]
+    snapshot, drift, history = monitor_mod.record_run(
+        state_path, result, now_stamp(),
+        vault=Path(vault_path) if vault_path else None,
+        protected=protected or None, hash_cache=cache)
+
+    alert = notify_mod.compose_alert(snapshot, len(drift.new_groups))
+    if alert:
+        notify_mod.send(alert)
+    if config.get("html"):
+        Path(config["html"]).write_text(
+            report_mod.render_monitor_report({
+                "client": config.get("client"),
+                "generated": now_stamp(),
+                "version": __version__,
+                "history": history,
+                "new_groups": drift.new_groups,
+                "resolved_groups": drift.resolved_groups,
+            }), encoding="utf-8")
+    return alert or "Check complete."
+
+
+def headless_check(config_path: Path | None = None) -> int:
+    """Run one check with no window at all — what the daily scheduled job
+    invokes. Exit codes mirror the CLI: 2 = attention needed, 0 = quiet,
+    1 = could not run."""
+    try:
+        config = load_config(config_path or default_config_path())
+    except (FileNotFoundError, ValueError, json.JSONDecodeError, OSError):
+        return 1
+    try:
+        run_protection_check(config)
+    except Exception:                       # noqa: BLE001 — never crash
+        return 1                            # a scheduled job loudly
+    try:
+        history = monitor_mod.load_history(Path(config["state"]))
+    except (OSError, ValueError, KeyError):
+        return 0
+    latest = history[-1] if history else {}
+    attention = (latest.get("canary_alerts")
+                 or latest.get("new_failed_unlocks"))
+    return 2 if attention else 0
+
+
 def run_app(config_path: Path | None = None, selftest: bool = False,
             receipt: str | None = None) -> int:
     import tkinter as tk
@@ -2009,10 +2100,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", help="path to config.json")
     parser.add_argument("--selftest", action="store_true",
                         help=argparse.SUPPRESS)
+    parser.add_argument("--check", action="store_true",
+                        help="run one protection check with no window "
+                             "(what the daily scheduled job runs)")
     parser.add_argument("receipt", nargs="?",
                         help="a .kovyr receipt to retrieve (Windows "
                              "passes double-clicked files this way)")
     args = parser.parse_args(argv)
+    if args.check:
+        return headless_check(Path(args.config) if args.config else None)
     return run_app(Path(args.config) if args.config else None,
                    selftest=args.selftest, receipt=args.receipt)
 

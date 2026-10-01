@@ -19,7 +19,7 @@ Kovyr Vault shrinks that exposure surface, then locks down what's left.
 | `list` | Show vault contents and how many unique encrypted blobs back them. |
 | `verify` | Decrypt every entry and check it against its recorded hash — proof for the client that the data is intact. |
 | `report` | Generate a branded, self-contained HTML engagement report from before/after scan data and vault stats (with a live integrity check). |
-| `monitor` | Recurring scan that records a snapshot and reports drift — new duplicate content appearing since the last run. With `--vault PATH` it also counts failed unlock attempts and checks the vault's immutable blobs for tamper evidence (no passphrase needed), and a conservative canary flags the mass-change footprint of ransomware. Captures the machine's baseline device-security controls into the snapshot so `--html` shows them in the report. Exit codes: 2 = alert (canary/failed unlocks), 1 = new drift, 0 = quiet. `--html` writes a branded monitoring report with an alert banner when attention is needed. |
+| `monitor` | Recurring scan that records a snapshot and reports drift — new duplicate content appearing since the last run. With `--vault PATH` it also counts failed unlock attempts and checks the vault's immutable blobs for tamper evidence (no passphrase needed), and a conservative canary flags the mass-change footprint of ransomware — **both** the strain that renames as it goes (files disappear, new ones appear) and the strain that encrypts in place keeping every filename, which a name-only comparison misses entirely and which is caught by a mass change in file *sizes*. Captures the machine's baseline device-security controls into the snapshot so `--html` shows them in the report. Exit codes: 2 = alert (canary/failed unlocks), 1 = new drift, 0 = quiet. `--html` writes a branded monitoring report with an alert banner when attention is needed. |
 | `disk-check` | Report whole-disk encryption (FileVault/BitLocker) on this machine. Read-only. `--json` for machine-readable output; exits non-zero when positively off. |
 | `device-check` | Report the baseline device-security controls on this machine — disk encryption, firewall, automatic screen lock, antivirus. Read-only. Always reports the same four controls on every platform: `on` / `off` / `unknown` (applies here, couldn't determine) / `n/a` (no meaning on this platform), so a report never confuses "doesn't apply" with "failed". `--json` supported; exits non-zero only if a check is positively off. |
 | `discover` | Scan files locally for unencrypted sensitive data — U.S. SSNs and payment-card numbers — sitting outside the vault. Strictly local; reports only counts, types, and paths (never the values), so the report can't leak what it flags. Reads text files **and Word, Excel, PowerPoint and PDF** documents, which is where this data actually lives in a dental, legal or tax office. Card matching requires a real issuer prefix and brand length (Visa/Mastercard/Amex/Discover) on top of the Luhn check — Luhn alone passes roughly one arbitrary digit run in ten, so equipment manuals and parts lists otherwise report dozens of "cards" that are serial numbers. Matching is still pattern-based, so review findings before acting; nothing is ever encrypted without an explicit choice. **States its own coverage** — how many files it read and how many it could not look inside — and separately counts **PDFs that are scans of paper**: those carry no text to search, so they are reported as unread with a prompt to check them by hand, never as clean. `--vault PATH` to exclude the vault; `--json` supported. |
@@ -97,6 +97,15 @@ their protection without Kovyr present:
 - **My encrypted files tab** — the client enters *their* passphrase to
   unlock the vault, browse their encrypted files, and restore any of
   them to a folder of their choice. Locking clears the key from memory.
+- **Automatic daily checks** — Settings has a "Check automatically every
+  day" switch that registers a per-user job with the OS (a LaunchAgent on
+  macOS, a Scheduled Task on Windows) running the app's own `--check`
+  mode: one protection check, no window, then it exits. Without it,
+  monitoring only happens when somebody remembers to click, and the
+  canary compares each scan against the *previous* one — so a practice
+  that opens the app monthly would notice an incident up to a month late.
+  The scheduled job runs as the signed-in user, never as SYSTEM or root,
+  because it needs exactly that person's file access and nothing more.
 
 Setup during the engagement is one `config.json` next to the exe:
 
