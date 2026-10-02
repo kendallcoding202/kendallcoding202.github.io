@@ -33,11 +33,8 @@ pre-registration first.
   where scored, it lost to the market). Runner: `pumpbot/research/polymarket-jev.mjs`.
 - `pumpbot/PREREG-JEV-NEWS.md` — registered, **blocked on news**: GDELT is far too thin
   for meme coins. Needs a free CoinDesk Data API key in env `COINDESK_API_KEY`.
-- **Active: Polymarket temperature markets vs a weather forecast** (no Jev). Registered in
-  `pumpbot/PREREG-WEATHER.md`, runner `pumpbot/research/weather-test.mjs`, data snapshot
-  in `pumpbot/data/weather/`. Prices are done (3,262 usable markets). Forecasts: 17 of 51
-  stations fetched before Open-Meteo's daily limit (shared egress IP) hit. Resume after
-  00:00 UTC. No outcome has been joined to a forecast yet.
+- `pumpbot/PREREG-WEATHER.md` — **NO** (2026-10-02): the market already prices the
+  forecast; the bets were not significant.
 
 - **Active: Polymarket sports paper test** (`pumpbot/PREREG-POLY-SPORTS.md`, amendment 1).
   Tracker `pumpbot/src/polysports.js`; on Railway it is a separate service from this repo

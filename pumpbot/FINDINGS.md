@@ -29,6 +29,7 @@ wallet list changes that arithmetic, which is why six different ideas failed the
 | 7b | broad signal sweep | 3 families properly tested, **0 survived** |
 | 8 | Jev (TypeSafe AI) on launch features | does **not** beat a free regression; raw calibration fails; adds nothing on top — `PREREG-JEV.md` |
 | 9 | Jev forecasting Polymarket (blind to price) | **void**: incoherent Yes/No answers; worse than the market where it was scored — `PREREG-JEV-POLYMARKET.md` |
+| 10 | weather forecast vs Polymarket temperature markets | **no**: the market already prices the forecast (model weight 0.08); bets not significant — `PREREG-WEATHER.md` |
 
 ## The finding that reframed the rest
 

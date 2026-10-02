@@ -107,3 +107,35 @@ lows; °C vs °F; bets per day; profit by city.
 ## Budget
 
 No paid APIs. Roughly 50 forecast requests and 5,000 price requests.
+
+## Result — 2026-10-02: NO
+
+All three instrument checks passed, so the result stands:
+- **Check 2 (no lookahead):** `previous_day2` differed from the stitched latest forecast
+  on all 20 station-days, by 2.5°C on average. It really is an older run.
+- **Check 1 (forecast works):** pooled σ for highs 1.60°C (registered bar: under 3).
+- **Check 3 (shuffle):** forecasts from the wrong date did not beat the market
+  (−0.0010 [−0.0033, +0.0013]).
+
+Sample: 26,452 temperature markets, 51 stations, none dropped; 5,000 priced, 3,262 kept
+(31 without a price, 1,707 outside 0.02–0.98). In-sample before 2026-09-06 (2,157 events
+fitted); out-of-sample 1,340 markets over 25 dates.
+
+| out of sample | Brier |
+|---|---|
+| market | 0.13282 |
+| model alone | 0.16175 |
+| market + model | 0.13262 |
+
+1. **Information: no.** The combination beats the market by 0.0002 [−0.0003, +0.0008].
+   Fitted in-sample, the combiner gave the model a weight of **0.08** against the market's
+   0.97: the market already contains everything the forecast knows.
+2. **Money: no.** 101 bets at the primary 2¢ half-spread, +21% per dollar, interval
+   [−3%, +49%], which includes zero. Not robust either: at 1¢ the same rule makes 439 bets
+   at −0.6%. The model alone loses 18–26% per dollar at every spread.
+
+**What it means.** A two-day-old forecast is far worse than the market (Brier 0.162 vs
+0.133). By a day out, traders are pricing newer forecasts. This used day-2 runs on purpose,
+to avoid lookahead, so the NO is precisely: *a forecast available before the decision does
+not beat these markets.* A bot using the newest forecast would be racing traders who
+already have it, which is the speed race this project avoids.
