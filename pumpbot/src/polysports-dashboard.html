@@ -118,6 +118,7 @@
     table.bets td { padding: 0; text-align: left; color: var(--dim); font-size: 11.5px; }
     table.bets td.q { grid-column: 1 / -1; min-width: 0; color: var(--text); }
     table.bets td:last-child { justify-self: end; }
+    table.bets .ph { display: inline; }
     table.bets td.empty { grid-column: 1 / -1; }
     table.bd td, table.bd th { padding: 7px 4px; font-size: 11.5px; }
     table.bd td:first-child { font-size: 12px; }
@@ -140,6 +141,13 @@
   table.bd tbody tr:hover td { background: rgba(77,216,255,.04); }
   table.bd tr.sel td { color: var(--cyan); }
   table.bd td:first-child { font-family: var(--sans); font-size: 13px; white-space: normal; }
+  .betchip { display: inline-block; font-family: var(--mono); font-weight: 700; font-size: 11px; letter-spacing: .03em;
+    color: #06121c; background: var(--cyan); border-radius: 6px; padding: 2px 7px; margin: 0 7px 3px 0; vertical-align: 1px; white-space: nowrap; }
+  .betchip.y { background: var(--violet); color: #fff; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: 10px; }
+  .seg button { background: none; border: 0; color: var(--dim); padding: 7px 14px; font-family: var(--mono); font-size: 11px; cursor: pointer; }
+  .seg button.on { background: var(--panel-2); color: var(--text); }
+  .ph { display: none; }
   .bm { display: block; font-family: var(--mono); font-size: 10.5px; color: var(--dimmer); margin-top: 3px; }
   .bm b { color: var(--amber); font-weight: 700; }
   .viewres { margin-top: 12px; padding: 10px 12px; border-radius: 11px; background: var(--panel-2); font-size: 12.5px; color: var(--dim); }
@@ -220,9 +228,12 @@
   </section>
 
   <section class="card">
-    <div class="panelhead"><h2>Latest paper bets</h2><span class="meta" id="latestMeta"></span></div>
+    <div class="panelhead"><h2 id="latestTitle">Latest paper bets</h2><span class="meta" id="latestMeta"></span></div>
+    <div class="seg" id="seg" hidden>
+      <button type="button" data-v="results">Results</button><button type="button" data-v="bets">Bets placed</button>
+    </div>
     <div class="scroll"><table class="bets">
-      <thead><tr><th>Bet</th><th>Paid</th><th>$2 buys</th><th>Kickoff</th><th>Status</th></tr></thead>
+      <thead><tr><th>Bet ($2 each)</th><th>Paid</th><th>Pays if it hits</th><th>Kickoff</th><th>Result</th></tr></thead>
       <tbody id="latest"></tbody>
     </table></div>
     <button class="more" id="more" hidden></button>
@@ -243,9 +254,13 @@
       <b>Test B</b> buys the cheap side of two-way markets: over/unders, spreads, team totals, corners and
       team-vs-team moneylines (NFL, NHL, soccer…).</p>
       <p>When the game is decided, each bet is marked settled. A share pays $1 if the side bought wins, nothing if it loses.</p>
-      <p><b>Why profit is hidden:</b> the test stops at <b>400 settled bets and at least 7 days</b>, or at 28 days.
-      Until then this page shows counts only, so a lucky or unlucky first few days cannot talk anyone into stopping early.
-      The rules were written down before the first bet (<b>PREREG-POLY-SPORTS.md</b>).</p>
+      <p><b>What each bet is:</b> the green-blue label says what was bought. <b>BET YES</b> means the question has to
+      come true; <b>BET OVER 61.5</b> means more than 61.5 points; <b>BET North Carolina −17.5</b> means they win by 18 or more;
+      <b>BET Wagner to win</b> means Wagner wins. A share costs the price shown and pays $1 if the bet hits, so $2 at 10¢
+      buys 20 shares and pays $20.</p>
+      <p><b>Running result and verdict:</b> profit is shown as it comes in. The test stops at <b>400 settled bets and at
+      least 7 days</b>, or at 28 days, and the verdict is taken then, once, from the bets settled by that moment. The rules
+      were written down before the first bet (<b>PREREG-POLY-SPORTS.md</b>) and do not change with the running number.</p>
       <p><b>The verdict is YES only if</b> profit per dollar is above zero and stays above zero across the plausible range
       (the 95% interval, resampling whole games). Otherwise it is NO. Each test has its own stop and its own verdict.</p>
       <p><b>Watch</b> follows hockey and college football games that kick off too soon for the tests
@@ -334,19 +349,22 @@
     if (!d.done) {
       card.className = 'card verdict'
       $('vBig').className = 'big'
-      $('vLabel').textContent = d.armInfo.name + ' · verdict'
-      $('vBig').textContent = d.finishing ? 'Stop reached' : d.recorded ? 'Locked until the stop' : 'Starting up'
+      const r0 = d.result
+      $('vLabel').textContent = d.armInfo.name + ' · running result'
+      $('vBig').className = 'big' + (r0 ? (r0.perDollar >= 0 ? ' pos' : ' neg') : '')
+      $('vBig').textContent = d.finishing ? 'Stop reached' : r0 ? pct(r0.perDollar) + ' per $1 so far' : d.recorded ? 'No results yet' : 'Starting up'
       $('vSub').textContent = d.finishing
-        ? 'The test has reached its fixed stop. The tracker freezes the result on its next round, within 15 minutes; this page will then show it.'
-        : d.recorded
-        ? 'Profit stays hidden until the test reaches its fixed stop, so a lucky or unlucky start cannot sway the decision.'
+        ? 'The test has reached its fixed stop. The verdict is frozen on its next round, within 15 minutes, from the bets settled by then.'
+        : r0 ? 'The running number moves a lot early on. The verdict is taken once, at the stop, from the bets settled by then — nothing you see before that changes the rules.'
+        : d.recorded ? 'Bets are placed about a day before kickoff, so the first results arrive about a day after the first bets.'
         : 'The first scan reads every order book; the first bets appear within a few minutes.'
       prog.append(progRow('Bets settled', d.settled, d.rule.stopBets, ''))
       prog.append(progRow('Days running', d.days, d.rule.minDays, 'minimum', d.days.toFixed(1)))
       // An estimate: if settlement runs late it can pass, and then the verdict is simply due.
       const due = d.eta && Date.parse(d.eta) <= Date.now()
-      $('eta').replaceChildren(...(d.eta ? [due ? 'Verdict due as soon as ' + fmtInt(d.rule.stopBets) + ' bets have settled' : 'Expected verdict ', due ? '' : el('b', null, dateLabel(d.eta)), ' · hard stop after ' + d.rule.stopDays + ' days'] : []))
-      rk.hidden = true
+      $('eta').replaceChildren(...(d.eta ? [due ? 'Verdict due as soon as ' + fmtInt(d.rule.stopBets) + ' bets have settled' : 'Verdict ', due ? '' : el('b', null, dateLabel(d.eta)), ' · hard stop after ' + d.rule.stopDays + ' days'] : []))
+      rk.hidden = !r0
+      if (r0) resultKvs(d, rk)
       return
     }
     const yes = d.result && d.result.lo > 0
@@ -359,12 +377,19 @@
       : !d.result ? 'No bet had settled when the test reached its stop, so there is nothing to judge.'
       : 'The bets did not reliably make money once the real asking price and fees were paid.'
     $('eta').textContent = ''
-    const r = d.result, s1 = d.withSlip1c, v1k = d.finalVolume1k
     rk.hidden = false
+    resultKvs(d, rk)
+  }
+
+  /** The numbers behind a result — the running one before the stop, the frozen one after. */
+  function resultKvs(d, rk) {
+    const r = d.result, s1 = d.withSlip1c, v1k = d.finalVolume1k
+    const wins = r ? Math.round((d.hitRate ?? 0) * r.n) : 0
     rk.append(
-      kv('Profit per $1', r ? pct(r.perDollar) : '—', r ? '95% range ' + pct(r.lo) + ' to ' + pct(r.hi) : null, r ? (r.perDollar >= 0 ? 'pos' : 'neg') : ''),
-      kv('Bets / games', r ? fmtInt(r.n) + ' / ' + fmtInt(r.events) : '—', r ? 'staked $' + r.cost.toFixed(0) + ', net $' + r.pnl.toFixed(2) : null),
-      kv('Won vs paid', plainPct(d.hitRate), 'average price paid ' + cents(d.avgFill)),
+      kv('Net (paper)', r ? (r.pnl >= 0 ? '+$' : '−$') + Math.abs(r.pnl).toFixed(2) : '—', r ? 'on $' + r.cost.toFixed(2) + ' staked, fees included' : null, r ? (r.pnl >= 0 ? 'pos' : 'neg') : ''),
+      kv('Record', r ? fmtInt(wins) + ' won · ' + fmtInt(r.n - wins) + ' lost' : '—', r ? fmtInt(r.n) + ' settled bets on ' + fmtInt(r.events) + ' games' : null),
+      kv('Profit per $1', r ? pct(r.perDollar) : '—', r ? 'plausible range ' + pct(r.lo) + ' to ' + pct(r.hi) : null, r ? (r.perDollar >= 0 ? 'pos' : 'neg') : ''),
+      kv('Won vs paid', plainPct(d.hitRate), 'hit rate vs average price paid ' + cents(d.avgFill) + ' — winning needs the first above the second plus fees'),
       kv('If fills were 1¢ worse', s1 ? pct(s1.perDollar) : '—', s1 ? 'range ' + pct(s1.lo) + ' to ' + pct(s1.hi) : null),
       kv('Ask above last trade', d.askMinusLastTrade === null ? '—' : cents(d.askMinusLastTrade), 'size of the stale-price effect'),
       kv('Busy markets only', v1k ? pct(v1k.perDollar) : '—', v1k ? fmtInt(v1k.n) + ' bets that reached $1k volume' : 'none'),
@@ -456,37 +481,60 @@
   let showAll = false
   $('more').addEventListener('click', () => { showAll = !showAll; if (last) renderLatest(last) })
   let last = null
+  const fmtLine = (n) => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n)
+  /** What was bought, in plain words: YES, OVER 61.5, North Carolina −17.5, Wagner to win. */
+  function betLabel(b) {
+    const q = b.question || '', o = b.outcome
+    if (!o || o === 'Yes') return 'YES'
+    if (o === 'No') return 'NO'
+    const line = q.match(/O\/U\s*([\d.]+)/i)
+    if (o === 'Over' || o === 'Under') return o.toUpperCase() + (line ? ' ' + line[1] : '')
+    const sp = q.match(/Spread:\s*(.+?)\s*\(([-+]?[\d.]+)\)/i)
+    if (sp) { const n = parseFloat(sp[2]); return o + ' ' + fmtLine(sp[1].trim() === o ? n : -n) }
+    if (/moneyline/i.test(b.type || '') || / vs\.? /i.test(q)) return o + (/\b1H\b|1st half/i.test(q) ? ' to win the 1st half' : ' to win')
+    return o
+  }
   const STATUS = { open: ['before kickoff', 'a'], waiting: ['awaiting result', 'c'], settled: ['settled', ''], stale: ['never resolved', 'r'] }
   // After the stop: won, lost, or a void/refund that paid part of the stake back.
-  const outcomeChip = (b) => b.resolved === 1 ? el('span', { class: 'chip g' }, 'won') : b.resolved === 0 ? el('span', { class: 'chip r' }, 'lost')
-    : el('span', { class: 'chip a' }, 'void · paid ' + Math.round((b.resolved ?? 0) * 100) + '%')
+  const money = (x) => (x >= 0 ? '+$' : '−$') + Math.abs(x).toFixed(2)
+  const outcomeChip = (b) => b.resolved === 1 ? el('span', { class: 'chip g' }, 'won ' + money(b.pnl)) : b.resolved === 0 ? el('span', { class: 'chip r' }, 'lost ' + money(b.pnl))
+    : el('span', { class: 'chip a' }, 'void ' + money(b.pnl))
+  // "Results" (latest settled first) or "Bets placed" (newest first). Results by default once there are any.
+  let listView = null
+  $('seg').addEventListener('click', (e) => { const v = e.target.dataset?.v; if (v) { listView = v; if (last) renderLatest(last) } })
   function renderLatest(d) {
     last = d
-    const rows = showAll ? d.latest : d.latest.slice(0, 12)
-    $('latestMeta').textContent = !d.latest.length ? '' : d.done && !d.watch
-      ? 'newest ' + rows.length + ' counted in the verdict'
+    const hasResults = (d.results || []).length > 0
+    const view = listView ?? (hasResults ? 'results' : 'bets')
+    $('seg').hidden = !hasResults
+    for (const b of $('seg').querySelectorAll('button')) b.className = b.dataset.v === view ? 'on' : ''
+    const list = view === 'results' ? d.results : d.latest
+    $('latestTitle').textContent = view === 'results' ? 'Latest results' : 'Latest paper bets'
+    const rows = showAll ? list : list.slice(0, 12)
+    $('latestMeta').textContent = !list.length ? '' : view === 'results'
+      ? 'newest ' + rows.length + ' of ' + fmtInt(d.view.settled) + ' settled'
       : 'newest ' + rows.length + ' of ' + fmtInt(d.view.bets)
-    $('more').hidden = d.latest.length <= 12
-    $('more').textContent = showAll ? 'Show fewer' : 'Show the newest ' + d.latest.length
-    if (!d.latest.length) return $('latest').replaceChildren(el('tr', null, el('td', { colspan: 5, class: 'empty' }, 'No paper bets yet')))
+    $('more').hidden = list.length <= 12
+    $('more').textContent = showAll ? 'Show fewer' : 'Show the newest ' + list.length
+    if (!list.length) return $('latest').replaceChildren(el('tr', null, el('td', { colspan: 5, class: 'empty' }, 'No paper bets yet')))
     $('latest').replaceChildren(...rows.map((b) => {
       let chip
-      if (d.done && b.status === 'settled' && b.counted) chip = outcomeChip(b)
+      if (b.status === 'settled' && b.counted) chip = outcomeChip(b)
       else { const [t, c] = STATUS[b.status] ?? [b.status, '']; chip = el('span', { class: 'chip ' + c }, t) }
-      const meta = el('span', { class: 'bm' })
-      if (d.arm !== 'A' && b.outcome && b.outcome !== 'Yes') meta.append(el('b', null, 'bought ' + b.outcome), ' · ')
-      meta.append([b.sport, b.league && b.league !== b.sport ? b.league : null, b.type].filter(Boolean).join(' · ') || 'tagging…')
+      const label = betLabel(b)
+      const meta = el('span', { class: 'bm' }, [b.sport, b.league && b.league !== b.sport ? b.league : null, b.type].filter(Boolean).join(' · ') || 'tagging…')
       return el('tr', null,
-        el('td', { class: 'q' }, b.question ?? '', meta),
+        el('td', { class: 'q', title: 'Bought ' + label + ' at ' + cents(b.price) + ' a share: $2 buys ' + b.shares.toFixed(1) + ' shares, each paying $1 if it happens' },
+          el('span', { class: 'betchip' + (label === 'YES' ? ' y' : '') }, 'BET ' + label), b.question ?? '', meta),
         el('td', null, cents(b.price)),
-        el('td', null, b.shares.toFixed(1) + ' sh'),
+        el('td', null, el('span', { class: 'ph' }, '→ pays '), '$' + b.shares.toFixed(2)),
         el('td', { title: new Date(b.endDate).toLocaleString() }, until(b.endDate)),
         el('td', null, chip))
     }))
   }
 
   function renderCalibration(d) {
-    const rows = d.done ? d.calibration || [] : []
+    const rows = d.calibration || []
     $('calCard').hidden = !rows.length
     $('cal').replaceChildren(...rows.map((b) => el('tr', null,
       el('td', null, Math.round(b.lo * 100) + '–' + Math.round(b.hi * 100) + '¢'),
@@ -539,12 +587,12 @@
     const keyName = which === 'bySport' ? 'sport' : 'type'
     // Sports and bet types that were scanned but never cheap enough to bet are left out.
     const rows = all.filter((r) => r.bets > 0 || sel[keyName] === r.name)
-    const done = d.done, head = $(which + 'Head'), body = $(which), key = which === 'bySport' ? 'sport' : 'type'
+    const done = all.some((r) => 'wins' in r), head = $(which + 'Head'), body = $(which), key = which === 'bySport' ? 'sport' : 'type'
     const first = which === 'bySport' ? 'Sport' : 'Bet type'
     head.replaceChildren(el('tr', null, ...(done
       ? [first, 'Bets', 'Record', 'Won / paid', 'Per $1']
       : [first, 'Bets', 'Games', 'Settled', 'Waiting']).map((h) => el('th', null, h))))
-    $(which + 'Meta').textContent = d.watch ? 'record so far' : done ? 'record from the counted bets' : 'records show at the stop'
+    $(which + 'Meta').textContent = d.done && !d.watch ? 'record from the bets the verdict counted' : 'record so far'
     if (!rows.length) return body.replaceChildren(el('tr', null, el('td', { colspan: 5, class: 'empty' }, 'Nothing yet')))
     body.replaceChildren(...rows.map((r) => {
       const cells = done

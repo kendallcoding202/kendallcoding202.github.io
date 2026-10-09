@@ -35,8 +35,8 @@ export const ALL_ARMS = ['A', 'B', 'W']    // plus the watch list, which has nei
 export const WATCH_SPORTS = (process.env.POLY_WATCH_SPORTS ?? 'Hockey,College football').split(',').map((x) => x.trim()).filter(Boolean)
 export const WATCH_WINDOW_H = [0.25, 22]   // kickoff too soon for the tests' 22–26h window
 export const ARM_INFO = {
-  A: { name: 'Test A · Yes/No', blurb: 'Buys YES at 2–20¢ on Yes/No sports markets (today these are all soccer).', prereg: 'PREREG-POLY-SPORTS.md' },
-  B: { name: 'Test B · Two-way', blurb: 'Buys the cheap side, 2–20¢, of two-outcome sports markets: over/unders, spreads, team vs team.', prereg: 'PREREG-POLY-SPORTS-B.md' },
+  A: { name: 'Test A · Yes/No', blurb: 'Always bets YES, at 2–20¢, on Yes/No sports markets — mostly soccer (exact scores, who wins), plus baseball, golf and others.', prereg: 'PREREG-POLY-SPORTS.md' },
+  B: { name: 'Test B · Two-way', blurb: 'Bets the cheaper side, at 2–20¢, of two-way markets: Over or Under a line, a team to cover a spread, or a team to win.', prereg: 'PREREG-POLY-SPORTS-B.md' },
   W: { name: 'Watch · soon', blurb: 'Games kicking off too soon for the tests (hockey and college football): the same 2–20¢ rule at the same real prices and fees, with wins and losses shown as they come in. Not part of either test.', prereg: 'PREREG-POLY-SPORTS-B.md, Watch list' },
 }
 const SCAN_MS = 15 * 60_000
@@ -324,16 +324,16 @@ export function summarise(state, nowMs = Date.now(), { arm = 'A', reveal = false
 }
 
 /** Everything that depends on outcomes, for a set of settled rule bets. */
-function outcomeSummary(settled, recs) {
+function outcomeSummary(settled, recs, { iters = 4000 } = {}) {
   const gap = settled.filter((r) => r.lastTrade !== null && r.lastTrade !== undefined && r.bestAsk !== null).map((r) => r.bestAsk - r.lastTrade)
-  const result = profitPerDollar(settled)
+  const result = profitPerDollar(settled, { iters })
   return {
     result,
-    withSlip1c: profitPerDollar(settled, { slip: 0.01 }),
+    withSlip1c: profitPerDollar(settled, { slip: 0.01, iters }),
     hitRate: settled.length ? settled.filter((r) => r.settle.yesPrice === 1).length / settled.length : null,
     avgFill: settled.length ? settled.reduce((a, r) => a + r.fill.avgPrice, 0) / settled.length : null,
     askMinusLastTrade: gap.length ? gap.reduce((a, b) => a + b, 0) / gap.length : null,
-    finalVolume1k: profitPerDollar(settled.filter((r) => r.settle.finalVolume >= 1000)),
+    finalVolume1k: profitPerDollar(settled.filter((r) => r.settle.finalVolume >= 1000), { iters }),
     verdict: result && result.lo > 0 ? 'YES — profitable at real asks' : 'NO — not profitable at real asks',
     calibration: recs ? calibration(recs) : undefined,
   }
@@ -371,6 +371,17 @@ export function calibration(recs) {
  * set of counted bets — before a test's stop there is no such set, so none leave here.
  */
 const resultCache = new Map()
+/**
+ * Live readings are recomputed only when the data has changed (state.version moves each
+ * round). One cache per state object, so two states can never share a reading.
+ */
+const liveCaches = new WeakMap()
+function liveMemo(state, key, build) {
+  let c = liveCaches.get(state)
+  if (!c || c.version !== (state.version ?? 0)) { c = { version: state.version ?? 0, map: new Map() }; liveCaches.set(state, c) }
+  if (!c.map.has(key)) c.map.set(key, build())
+  return c.map.get(key)
+}
 export function breakdown(recs, key, nowMs, counted = null, cacheKey = null) {
   const rows = new Map()
   for (const r of recs) {
@@ -389,14 +400,15 @@ export function breakdown(recs, key, nowMs, counted = null, cacheKey = null) {
     if (!counted) return out
     const ck = cacheKey ? `${cacheKey}|${key}|${row.name}` : null
     if (ck && resultCache.has(ck)) return { ...out, ...resultCache.get(ck) }
+    const iters = cacheKey && cacheKey.startsWith('live') ? 1000 : 2000
     const n = row.counted.length, wins = row.counted.filter((r) => r.settle.yesPrice === 1).length
-    const res = n ? profitPerDollar(row.counted, { iters: 2000 }) : null
+    const res = n ? profitPerDollar(row.counted, { iters }) : null
     const extra = {
       counted: n, wins, losses: n - wins, hitRate: n ? wins / n : null,
       avgPrice: n ? row.counted.reduce((a, r) => a + r.fill.avgPrice, 0) / n : null,
       perDollar: res?.perDollar ?? null, profitLo: res?.lo ?? null, profitHi: res?.hi ?? null,
     }
-    if (ck) resultCache.set(ck, extra)
+    if (ck && !ck.startsWith('live')) resultCache.set(ck, extra)
     return { ...out, ...extra }
   })
 }
@@ -416,11 +428,15 @@ export function dashboardData(state, nowMs = Date.now(), { arm = 'A', sport = nu
   // A test's outcomes are shown only from its frozen result. Between the stop being reached
   // and the tracker freezing it (at most one scan interval) the page says "finishing".
   // The watch list is no test: its results are shown as they come in.
+  // Amendment 3 (A) / 2 (B): at the user's request the running result is shown before the
+  // stop. The verdict is still taken once, at the stop, from the frozen set of bets.
   const { settledIds, ...frozen } = final ?? {}
-  const s = watch ? { ...summarise(state, nowMs, { arm, reveal: true }), done: true, watch: true }
-    : final ? frozen : { ...live, done: false, finishing: live.done }
-  const counted = watch ? new Set(armRecords(state, arm).filter((r) => r.rule && r.settle).map((r) => r.id))
-    : final ? new Set(settledIds ?? []) : null
+  const v = state.version ?? 0
+  const settledBets = () => armRecords(state, arm).filter((r) => r.rule && r.settle)
+  const running = () => liveMemo(state, `${arm}|main`, () => { const { verdict: _v, ...o } = outcomeSummary(settledBets(), armRecords(state, arm), { iters: 1000 }); return o })
+  const s = watch ? { ...summarise(state, nowMs, { arm, withhold: true }), ...running(), done: true, watch: true }
+    : final ? frozen : { ...live, ...running(), done: false, finishing: live.done, running: true }
+  const counted = final ? new Set(settledIds ?? []) : new Set(settledBets().map((r) => r.id))
   const armRecs = armRecords(state, arm)
   const sportOk = (r) => !sport || (r.sport ?? 'Untagged') === sport
   const typeOk = (r) => !type || (r.type ?? 'Untagged') === type
@@ -465,7 +481,7 @@ export function dashboardData(state, nowMs = Date.now(), { arm = 'A', sport = nu
 
   const row = (r) => {
     const out = {
-      question: r.question ?? null, outcome: r.outcome ?? null, sport: r.sport ?? null, league: r.league ?? null, type: r.type ?? null,
+      arm: r.arm ?? 'A', question: r.question ?? null, outcome: r.outcome ?? (r.side ? null : 'Yes'), sport: r.sport ?? null, league: r.league ?? null, type: r.type ?? null,
       price: r.fill.avgPrice, shares: r.fill.shares, cost: r.fill.spent + r.fee, endDate: r.endDate, recordedAt: r.recordedAt,
       status: r.settle ? 'settled' : isStale(r, nowMs) ? 'stale' : Date.parse(r.endDate) > nowMs ? 'open' : 'waiting',
     }
@@ -474,16 +490,22 @@ export function dashboardData(state, nowMs = Date.now(), { arm = 'A', sport = nu
   }
   const newest = (list) => [...list].sort((a, b) => Date.parse(b.recordedAt) - Date.parse(a.recordedAt)).slice(0, 40).map(row)
   // After the stop, the list shows the bets the verdict was computed from, newest first.
-  const latest = counted && !watch ? newest(rule.filter((r) => counted.has(r.id))) : newest(rule)
+  // After a test's stop the list shows the bets its verdict was computed from; before it,
+  // and on the watch list, every bet with its result as it comes in.
+  const latest = final ? newest(rule.filter((r) => counted.has(r.id))) : newest(rule)
+  // The latest results: settled bets that count, the most recently settled first.
+  const results = rule.filter((r) => r.settle && counted.has(r.id)).sort((a, b) => Date.parse(b.settle.settledAt) - Date.parse(a.settle.settledAt)).slice(0, 40).map(row)
 
-  const ck = final ? `${arm}|${final.frozenAt}` : null
-  const bySport = breakdown(armRecs.filter(typeOk), 'sport', nowMs, counted, ck && `${ck}|t=${type}`)
-  const byType = breakdown(armRecs.filter(sportOk), 'type', nowMs, counted, ck && `${ck}|s=${sport}`)
+  const ck = final ? `${arm}|${final.frozenAt}` : `live|${arm}|v${v}`
+  const table = (list, key, k) => (final ? breakdown(list, key, nowMs, counted, k) : liveMemo(state, k, () => breakdown(list, key, nowMs, counted, k)))
+  const bySport = table(armRecs.filter(typeOk), 'sport', `${ck}|t=${type}|sport`)
+  const byType = table(armRecs.filter(sportOk), 'type', `${ck}|s=${sport}|type`)
   let viewResult
-  if (counted && (sport || type)) {
-    const k = ck ? `${ck}|view|${sport}|${type}` : null
-    if (!k) viewResult = outcomeSummary(rule.filter((r) => counted.has(r.id)), null)
-    else { if (!resultCache.has(k)) resultCache.set(k, outcomeSummary(rule.filter((r) => counted.has(r.id)), null)); viewResult = resultCache.get(k) }
+  if (sport || type) {
+    const build = () => outcomeSummary(rule.filter((r) => counted.has(r.id)), null, { iters: final ? 4000 : 1000 })
+    const k = `${ck}|view|${sport}|${type}`
+    if (!final) viewResult = liveMemo(state, k, build)
+    else { if (!resultCache.has(k)) resultCache.set(k, build()); viewResult = resultCache.get(k) }
   }
 
   return {
@@ -503,7 +525,7 @@ export function dashboardData(state, nowMs = Date.now(), { arm = 'A', sport = nu
     },
     oldestWaitingAt: oldestWaitingMs ? new Date(oldestWaitingMs).toISOString() : null,
     untagged: armRecs.filter((r) => !r.sport).length,
-    perDay: [...perDay.values()].sort((a, b) => a.day.localeCompare(b.day)).slice(-35), priceBins, latest,
+    perDay: [...perDay.values()].sort((a, b) => a.day.localeCompare(b.day)).slice(-35), priceBins, latest, results,
     bySport, byType, viewResult,
   }
 }
@@ -795,6 +817,7 @@ export async function run() {
           lastSettle = Date.now(); console.log(`settled ${n} · tagged ${t}`)
         }
         store.saveMeta(state)
+        state.version = (state.version ?? 0) + 1
         cache.clear()
         console.log([...active, 'W'].map((a) => { const s = summarise(state, Date.now(), { arm: a, withhold: true }); return `${a === 'W' ? 'watch' : 'test ' + a}: +${added.filter((r) => r.arm === a).length} · recorded ${s.recorded} · bets ${s.ruleBets} · settled ${s.settled}` }).join(' | '))
       }

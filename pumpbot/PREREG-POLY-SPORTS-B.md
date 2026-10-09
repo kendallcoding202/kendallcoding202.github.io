@@ -102,3 +102,9 @@ dashboard):
   split are re-labelled from their league on load. Reporting only; the rule is unchanged.
 - The first pass on live data recorded 8,123 two-way markets and 795 bets in one window,
   mostly soccer and **college football** (the NFL games, on Sunday, were outside the window).
+
+## Amendment 2 — 2026-10-09 ~20:00 UTC, before any Test B bet settled
+
+Test B's running result is shown before the stop, exactly as Test A's Amendment 3 sets out:
+the rule, the stop and the verdict test are unchanged; the verdict is taken once, at the
+stop, and frozen; nothing seen before then changes them.

@@ -148,3 +148,23 @@ changes the rule, the stop or the verdict.
    detect, so the wrong formula could have turned a losing rule into a YES. Every record
    already on disk is corrected exactly on load (the old fee was the true fee × p).
    Found by independent review on 2026-10-09 and confirmed by a second reviewer.
+
+## Amendment 3 — 2026-10-09 ~20:00 UTC, before any Test A bet settled
+
+**The running result is shown on the dashboard before the stop**, at the user's request
+("we won't change it either way but I want to be able to see it"). Until now profit was
+hidden until the stop, to remove the temptation to stop on a lucky run. What changes and
+what does not:
+
+- **Shown live:** profit per dollar so far with its plausible range, the record, each
+  bet's result in dollars, the breakdowns by sport and bet type, and calibration.
+- **Unchanged:** the rule, the stop (400 settled bets and 7 days, or 28 days) and the
+  verdict test. The verdict is still taken **once, at the stop**, from the bets settled at
+  that moment, and frozen; the page shows "running result" before it and "verdict" after.
+- **The commitment that replaces the blinding:** nothing seen before the stop changes the
+  rule, the stop or the verdict. Stopping early, or changing anything on the strength of the
+  running number, would void the test.
+
+Decided before any Test A outcome existed (its first bets settle around 2026-10-10 08:00
+UTC). The dashboard now also says in plain words what each bet bought (BET YES, BET OVER
+61.5, BET North Carolina −17.5, BET Wagner to win) and what it pays if it hits.

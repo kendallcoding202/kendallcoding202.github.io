@@ -124,26 +124,29 @@ function stateWith(n, { settledEvery = 1, startMs = now } = {}) {
   return { records, lastScanAt: new Date(startMs).toISOString(), lastSettleAt: null, errors: 0 }
 }
 
-t('the dashboard carries no outcome before the registered stop', () => {
+t('before the stop the dashboard shows the running result, but never a verdict', () => {
+  // Amendment 3: the running result is shown at the user's request; the verdict waits for the stop.
   const st = stateWith(450)                                    // 450 settled, but only day 2
   const d = dashboardData(st, now + 2 * 86400_000)
-  assert.equal(d.done, false)
-  // Every filter combination, including the breakdown tables.
-  const views = [d, dashboardData(st, now + 2 * 86400_000, { sport: 'Soccer' }), dashboardData(st, now + 2 * 86400_000, { type: 'Exact score' }),
-    dashboardData(st, now + 2 * 86400_000, { sport: 'Hockey', type: 'Moneyline' }), dashboardData(st, now + 2 * 86400_000, { arm: 'B' })]
-  const text = JSON.stringify(views)
-  for (const k of OUTCOME_KEYS) assert.ok(!text.includes(`"${k}"`), `leaked ${k} before the stop`)
+  assert.equal(d.done, false); assert.equal(d.running, true)
+  assert.equal(d.verdict, undefined)
+  assert.equal(d.result.n, 450); assert.ok(d.result.lo <= d.result.perDollar && d.result.perDollar <= d.result.hi)
+  assert.equal(d.hitRate, 45 / 450)                                                    // every 10th bet won
   assert.equal(d.settled, 450); assert.equal(d.ruleBets, 450)
   assert.equal(d.latest.length, 40)
-  assert.ok(d.latest.every((b) => !('won' in b) && !('pnl' in b)))
+  assert.ok(d.latest.every((b) => typeof b.won === 'boolean' && typeof b.pnl === 'number'))
+  assert.ok(d.latest.every((b) => b.arm === 'A' && b.outcome === 'Yes'))              // what was bought, always
+  const f = dashboardData(st, now + 2 * 86400_000, { sport: 'Soccer', type: 'Exact score' })
+  assert.equal(f.viewResult.result.n, f.view.settled)
+  // Every filter combination works, the empty test B included, and none carries a verdict.
+  for (const o of [{ sport: 'Hockey', type: 'Moneyline' }, { arm: 'B' }, { arm: 'W' }]) assert.equal(dashboardData(st, now + 2 * 86400_000, o).verdict, undefined)
 })
 
-t('reaching the stop shows "finishing", still without outcomes, until the result is frozen', () => {
+t('reaching the stop shows "finishing", with the running result but no verdict, until it is frozen', () => {
   const st = stateWith(450)
   const d = dashboardData(st, now + (RULE.minDays + 1) * 86400_000)
   assert.equal(d.done, false); assert.equal(d.finishing, true)
-  const text = JSON.stringify(d)
-  for (const k of OUTCOME_KEYS) assert.ok(!text.includes(`"${k}"`), `leaked ${k} while finishing`)
+  assert.equal(d.verdict, undefined); assert.equal(d.result.n, 450)
 })
 
 t('after the stop the dashboard carries the result, each outcome and calibration', () => {
@@ -288,20 +291,21 @@ t('each test stops and freezes on its own', () => {
   freeze(st, at, 'A')
   assert.ok(st.finalByArm.A && !st.finalByArm.B)
   const b = dashboardData(st, at, { arm: 'B' })
-  const text = JSON.stringify(b)
-  for (const k of OUTCOME_KEYS) assert.ok(!text.includes(`"${k}"`), `test B leaked ${k} while test A is finished`)
+  assert.equal(b.done, false); assert.equal(b.verdict, undefined)                     // B keeps running, no verdict
+  assert.equal(b.result.n, 30)                                                        // its own bets only, none of A's
   assert.equal(b.view.bets, 30)
   assert.deepEqual(b.arms.map((x) => [x.key, x.done]), [['A', true], ['B', false]])
   assert.equal(dashboardData(st, at, { arm: 'A' }).done, true)
   assert.equal(dashboardData(st, at, { arm: 'nonsense' }).arm, 'A')
 })
 
-t('breakdowns by sport and bet type: counts before the stop, records after', () => {
+t('breakdowns by sport and bet type: running records before the stop, frozen ones after', () => {
   const st = stateWith(450)
   const before = dashboardData(st, now + 2 * 86400_000)
   assert.deepEqual(before.bySport.map((x) => [x.name, x.bets]).sort(), [['Hockey', 225], ['Soccer', 225]])
   assert.deepEqual(before.byType.map((x) => [x.name, x.bets]).sort(), [['Exact score', 150], ['Moneyline', 300]])
-  assert.ok(before.bySport.every((x) => !('wins' in x) && !('perDollar' in x)))
+  assert.equal(before.bySport.reduce((a, x) => a + x.wins, 0), 45)
+  // A bet settling after the stop moves the running numbers before it, never the frozen ones after.
   const at = now + (RULE.minDays + 1) * 86400_000
   freeze(st, at, 'A')
   const after = dashboardData(st, at)
@@ -317,6 +321,11 @@ t('breakdowns by sport and bet type: counts before the stop, records after', () 
   assert.equal(f.settled, after.settled)                                          // the stop and verdict stay the whole test's
   assert.deepEqual(f.byType.map((x) => x.name).sort(), ['Exact score', 'Moneyline'])   // the other dimension stays visible
   assert.ok(f.byType.every((x) => x.bets <= soccer.bets))
+  const frozenSoccer = JSON.stringify(soccer)
+  const late = decide(mkt({ id: 'late2', events: [{ id: 'x', title: 'Late', series: [{ id: 'S2' }] }] }), bookAt(0.05), at, INDEX)
+  late.settle = { ...settle(late, { closed: true, outcomePrices: '["1","0"]' }), settledAt: new Date(at + 3600_000).toISOString() }
+  st.records.late2 = late; st.version = (st.version ?? 0) + 1
+  assert.equal(JSON.stringify(dashboardData(st, at + 7200_000).bySport.find((x) => x.name === 'Soccer')), frozenSoccer)
 })
 
 // ---------------------------------------------------------------- the watch list
@@ -356,10 +365,10 @@ t('the watch list shows results as they come in, and never moves a test', () => 
   assert.equal(w.latest.filter((b) => b.won).length, 1)
   assert.ok(w.bySport.find((x) => x.name === 'Hockey').wins === 1)
   assert.equal(w.eta, null)
-  // The tests are untouched: still counts only, and the watch bets are not in them.
+  // The tests are untouched: the watch bets are in neither their counts nor their results.
   const a = dashboardData(st, now + 2 * 86400_000)
-  for (const k of OUTCOME_KEYS) assert.ok(!JSON.stringify(a).includes(`"${k}"`), `test A leaked ${k}`)
-  assert.equal(a.ruleBets, 450)
+  assert.equal(a.ruleBets, 450); assert.equal(a.result.n, 450); assert.equal(a.verdict, undefined)
+  assert.ok(a.latest.every((b) => b.arm === 'A'))
   assert.deepEqual(a.arms.map((x) => x.key), ['A', 'B', 'W'])
   assert.equal(summarise(st, now + 30 * 86400_000, { arm: 'A', withhold: true }).ruleBets, 450)
 })
