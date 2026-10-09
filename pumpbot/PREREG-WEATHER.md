@@ -139,3 +139,12 @@ fitted); out-of-sample 1,340 markets over 25 dates.
 to avoid lookahead, so the NO is precisely: *a forecast available before the decision does
 not beat these markets.* A bot using the newest forecast would be racing traders who
 already have it, which is the speed race this project avoids.
+
+## Correction — 2026-10-09: fees were understated
+
+The cost model used `fee = C × p × rate × (p(1 − p))^exponent`. Polymarket's own clients
+charge `fee = C × rate × (p(1 − p))^exponent` (see `PREREG-POLY-SPORTS.md`, Amendment 2
+item 8), so every bet's fee was too small by a factor of 1/p. The verdict was NO on the
+information test, which uses no fees, and the bets' interval already included zero.
+Correct fees only lower the bets' profit, so the result stands and is, if anything,
+stronger.

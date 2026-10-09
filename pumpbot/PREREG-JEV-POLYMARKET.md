@@ -149,3 +149,10 @@ blind is not an edge on Polymarket.
 population and resolve every day. The market beats a blind forecaster because it uses
 weather forecasts. The open question, which needs no Jev, is whether a **proper
 forecast model beats the market's price after fees**. See `OPTIONS-2026-10-01.md`.
+
+## Correction — 2026-10-09: the fee formula in amendment 1 was wrong
+
+Amendment 1 recorded `fee = C × p × feeRate × (p × (1 − p))^exponent`. Polymarket's own
+clients charge `fee = C × feeRate × (p × (1 − p))^exponent` (see `PREREG-POLY-SPORTS.md`,
+Amendment 2 item 8), so fees were understated by a factor of 1/p. This test was void on
+its instrument checks and its main comparison was never computed, so no result changes.

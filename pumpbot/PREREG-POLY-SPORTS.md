@@ -96,3 +96,55 @@ prices only; no outcome is known:
   out. The live population is mostly untraded contracts, unlike the backtest's.
 - A $2 order filled entirely at the best ask in every rule bet. The mean bid–ask spread
   was 2.4¢.
+
+## Amendment 2 — 2026-10-09, before any Test A bet settled
+
+The tracker went live on Railway on 2026-10-09 at about 10:21 UTC. Its first bets end
+around 2026-10-10 08:00 UTC, so no outcome existed when this was written. Nothing here
+changes the rule, the stop or the verdict.
+
+1. **Every record is tagged** with its sport, league and bet type (definitions in
+   `PREREG-POLY-SPORTS-B.md`). Records from before tagging are tagged after the fact,
+   from Polymarket's own market data.
+2. **Breakdowns by sport and by bet type are reported, not deciding.** Before the stop
+   they show counts only; at the stop, each slice's record and profit per dollar is shown
+   from the frozen set of counted bets. They are exploratory: a slice that looks good is a
+   new hypothesis to test forward, not a result.
+3. **What Test A actually covers.** A scan on 2026-10-09 found every Yes/No sports market
+   on offer was soccer: roughly 70% exact score, then win/draw, half results, first to
+   score and both teams to score. Over/unders, spreads and all NFL/NHL markets are
+   two-outcome markets and are outside Test A. They are covered by **Test B**
+   (`PREREG-POLY-SPORTS-B.md`), registered separately with its own stop and verdict.
+4. **Storage is now append-only** (`records.jsonl`, `settles.jsonl`, `tags.jsonl`,
+   `meta.json`), migrated once from the first version's `state.json`. At ~20,000 markets a
+   day across both tests, rewriting one JSON file every 15 minutes would have reached
+   hundreds of MB. Records that are not bets keep only what calibration needs.
+5. **The bootstrap unit was coded wrong, and is fixed before any settlement.** Amendment 1
+   made the match the unit, but the code grouped by Polymarket's `event` id. Polymarket
+   splits one match into up to six events (result, halftime, exact score, corners, …), so
+   linked contracts on one match were resampled as if independent, which would have made
+   the interval too narrow. The code now groups by a **match key**: the event title before
+   " - " plus the event date. Checked on a live window, every `gameId` mapped to exactly
+   one key and no key to two `gameId`s, including the events (such as corners) that carry
+   no `gameId`. Found by independent review on 2026-10-09.
+6. **`endDate` is kickoff, not the end of the game** (on every candidate checked, `endDate`
+   equals `gameStartTime`). The rule is unchanged — bets are still decided 22–26 hours
+   before `endDate`, i.e. about a day before kickoff — but the dashboard now says
+   "kickoff" where it said "game ends".
+7. **Each record keeps its market's fee schedule** (`feeRate`, `feeExp`), so fees can be
+   recomputed exactly if the fee formula is ever shown to be wrong. Schedules differ by
+   market: most sports markets carry rate 0.05, but American football markets carry 0.03
+   (both exponent 1), so the fee is always taken from the market's own schedule.
+8. **The fee formula was wrong, and is corrected before any outcome exists.** The
+   registration copied `fee = shares × p × rate × (p(1 − p))^exponent` from a search of the
+   docs (the docs site is blocked from this environment). Polymarket's own clients
+   (`@polymarket/clob-client-v2` 1.2.0, published 2026-09-25 by Polymarket; and
+   `py_clob_client_v2` 1.2.0, `fees.py`) compute **`fee = shares × rate × (p(1 − p))^exponent`**,
+   fed by the market's `fd.r`/`fd.e`, which equal Gamma's `feeSchedule`. The docs' own table
+   agrees (100 shares at 10¢, rate 0.07 → $0.63), and so do 26 real fills measured by a
+   separate project. The leading `× p` was Polymarket's original early-2026 form, since
+   dropped. With rate 0.05, exponent 1, the real fee on a $2 bet is **4.0–4.85% of the
+   stake** across 2–20¢, not 0.15–0.8% — about the size of the edge this test exists to
+   detect, so the wrong formula could have turned a losing rule into a YES. Every record
+   already on disk is corrected exactly on load (the old fee was the true fee × p).
+   Found by independent review on 2026-10-09 and confirmed by a second reviewer.

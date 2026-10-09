@@ -36,10 +36,14 @@ pre-registration first.
 - `pumpbot/PREREG-WEATHER.md` — **NO** (2026-10-02): the market already prices the
   forecast; the bets were not significant.
 
-- **Active: Polymarket sports paper test** (`pumpbot/PREREG-POLY-SPORTS.md`, amendment 1).
-  Tracker `pumpbot/src/polysports.js`; on Railway it is a separate service from this repo
-  with **`APP=polysports`**, a volume and `DATA_DIR=/data`. Places no orders. Profit is
-  hidden until the stop (400 settled bets and 7 days, or 28 days).
+- **Active: Polymarket sports paper tests A and B.** Test A (`pumpbot/PREREG-POLY-SPORTS.md`,
+  amendments 1–2): YES at 2–20¢ on Yes/No markets (in practice all soccer). Test B
+  (`pumpbot/PREREG-POLY-SPORTS-B.md`): the cheap side of two-way markets (over/unders,
+  spreads, team vs team). Tracker `pumpbot/src/polysports.js`, dashboard at `/` with tabs
+  and sport / bet-type filters. On Railway: its own service from this repo with
+  **`APP=polysports`**, a volume and `DATA_DIR=/data`, optional `DASHBOARD_TOKEN`. Places
+  no orders. Each test's result is hidden, then frozen, at its own stop (400 settled
+  bets and 7 days, or 28 days). Test A started 2026-10-09 ~10:21 UTC.
 
 The live probe service should be `PAPER=1` or stopped — it spends real SOL.
 
