@@ -76,3 +76,29 @@ to be registered and tested forward on bets not yet seen.
 
 `src/polysports.js` (arm `B`), dashboard tab "Test B · Two-way". Data in
 `DATA_DIR/polysports/` (append-only files shared with Test A).
+
+## Watch list — not a test (added 2026-10-09, the evening Test B went live)
+
+The user wanted to see the rule at work on that night's hockey and college football. The
+tests cannot take those games: they decide 22–26 hours before kickoff, and the games were
+hours away. So the tracker also keeps a **watch list** (`W` in the code, "Watch" on the
+dashboard):
+
+- **What:** markets of the watch sports (`POLY_WATCH_SPORTS`, default Hockey and College
+  football) whose kickoff is **15 minutes to 22 hours** away and that no test has recorded.
+  Because every later game passes through the tests' 22–26h window first, and a market is
+  recorded only once, in practice these are the games the tests never saw.
+- **How:** the same rule, the same real asks, the same fees — YES on a Yes/No market, the
+  cheaper side of any other two-outcome market, at 2–20¢ for a full $2 fill.
+- **Shown live:** its wins, losses and profit are on the dashboard as they settle, because
+  it decides nothing. It has **no stop and no verdict**, and its bets never enter Test A or
+  Test B, nor their counts. Read it as a window onto the rule, not as evidence: a handful of
+  games is luck.
+
+## Amendment 1 — 2026-10-09, before any Test B bet settled
+
+- **College football and the NFL are separate sports** in the breakdowns (they were both
+  "American football"; Polymarket's directory tags neither). Records filed before the
+  split are re-labelled from their league on load. Reporting only; the rule is unchanged.
+- The first pass on live data recorded 8,123 two-way markets and 795 bets in one window,
+  mostly soccer and **college football** (the NFL games, on Sunday, were outside the window).

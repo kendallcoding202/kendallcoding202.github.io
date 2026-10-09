@@ -119,14 +119,12 @@
     table.bets td.q { grid-column: 1 / -1; min-width: 0; color: var(--text); }
     table.bets td:last-child { justify-self: end; }
     table.bets td.empty { grid-column: 1 / -1; }
-    .tab { flex: 1 1 0; min-width: 0; padding: 8px 10px; font-size: 10px; }
-    .tab b { font-size: 11.5px; }
     table.bd td, table.bd th { padding: 7px 4px; font-size: 11.5px; }
     table.bd td:first-child { font-size: 12px; }
   }
   /* tests (tabs) and filters */
   .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
-  .tab { flex: 1 0 auto; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 9px 13px;
+  .tab { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 9px 13px;
     color: var(--dim); cursor: pointer; font-family: var(--mono); font-size: 11px; letter-spacing: .06em; }
   .tab b { display: block; color: var(--text); font-size: 12.5px; letter-spacing: .04em; margin-bottom: 2px; }
   .tab.on { border-color: rgba(77,216,255,.55); background: linear-gradient(180deg, rgba(77,216,255,.08), var(--panel)); }
@@ -146,6 +144,10 @@
   .bm b { color: var(--amber); font-weight: 700; }
   .viewres { margin-top: 12px; padding: 10px 12px; border-radius: 11px; background: var(--panel-2); font-size: 12.5px; color: var(--dim); }
   .viewres b { color: var(--text); }
+  @media (max-width: 640px) {
+    .tab { padding: 8px 9px; font-size: 10px; letter-spacing: .02em; }
+    .tab b { font-size: 11px; letter-spacing: .01em; }
+  }
   .banner { border-radius: 12px; padding: 11px 14px; margin-bottom: 14px; font-family: var(--mono); font-size: 12px;
     background: rgba(255,92,114,.1); border: 1px solid rgba(255,92,114,.35); color: var(--red); }
   .note { font-size: 13px; line-height: 1.7; color: var(--dim); }
@@ -246,6 +248,9 @@
       The rules were written down before the first bet (<b>PREREG-POLY-SPORTS.md</b>).</p>
       <p><b>The verdict is YES only if</b> profit per dollar is above zero and stays above zero across the plausible range
       (the 95% interval, resampling whole games). Otherwise it is NO. Each test has its own stop and its own verdict.</p>
+      <p><b>Watch</b> follows hockey and college football games that kick off too soon for the tests
+      (less than 22 hours away) — in practice the day's games the tests never saw. Same rule, same real
+      prices and fees; its wins and losses show as they come in because it decides nothing.</p>
       <p><b>By sport and bet type:</b> counts show from the start; each slice's record shows at its test's stop.
       These slices are a breakdown, not separate verdicts — with a dozen slices, one will look good by luck alone.
       A slice that looks good becomes a new idea to test forward, on bets not seen yet.</p>
@@ -260,7 +265,7 @@
   // The address carries the token (forwarded to the data feed) and the chosen test and filters.
   const params = new URLSearchParams(location.search)
   const token = params.get('token')
-  const sel = { arm: params.get('arm') === 'B' ? 'B' : 'A', sport: params.get('sport') || '', type: params.get('type') || '' }
+  const sel = { arm: ['A', 'B', 'W'].includes(params.get('arm')) ? params.get('arm') : 'A', sport: params.get('sport') || '', type: params.get('type') || '' }
   function feedUrl() {
     const q = new URLSearchParams({ arm: sel.arm })
     if (token) q.set('token', token)
@@ -325,6 +330,7 @@
   function renderVerdict(d) {
     const card = $('verdict'), prog = $('prog'), rk = $('resultKv')
     prog.replaceChildren(); rk.replaceChildren()
+    if (d.watch) return renderWatch(d, card, rk)
     if (!d.done) {
       card.className = 'card verdict'
       $('vBig').className = 'big'
@@ -369,14 +375,36 @@
       ' · ' + fmtInt(vr.result.n) + ' bets, ' + plainPct(vr.hitRate) + ' won at ' + cents(vr.avgFill) + ' average. A breakdown, not a verdict.'))
   }
 
+  /** The watch list: results as they come in, and plainly not a verdict. */
+  function renderWatch(d, card, rk) {
+    const r = d.result
+    card.className = 'card verdict'
+    $('vBig').className = 'big' + (r ? (r.perDollar >= 0 ? ' pos' : ' neg') : '')
+    $('vLabel').textContent = d.armInfo.name + ' · results as they come in'
+    $('vBig').textContent = r ? pct(r.perDollar) + ' per $1 so far' : d.view.bets ? 'Waiting for the first result' : 'No bets yet'
+    $('vSub').textContent = 'Not part of either test. ' + (r && r.n < 100
+      ? 'With ' + fmtInt(r.n) + ' settled bet' + (r.n === 1 ? '' : 's') + ' this is luck, not evidence — it is here so you can watch the rule at work.'
+      : 'It is here so you can watch the rule at work on the games the tests never saw.')
+    $('eta').textContent = d.watchSports ? 'Following: ' + d.watchSports.join(', ') + ' — games kicking off in the next 22 hours' : ''
+    rk.hidden = !r
+    if (!r) return
+    const wins = Math.round((d.hitRate ?? 0) * r.n)
+    rk.append(
+      kv('Settled bets', fmtInt(r.n), fmtInt(d.view.bets - d.view.settled) + ' still to play or resolve'),
+      kv('Record', fmtInt(wins) + '–' + fmtInt(r.n - wins), plainPct(d.hitRate) + ' won at ' + cents(d.avgFill) + ' average'),
+      kv('Net', (r.pnl >= 0 ? '+$' : '−$') + Math.abs(r.pnl).toFixed(2), 'on $' + r.cost.toFixed(2) + ' staked (paper)', r.pnl >= 0 ? 'pos' : 'neg'),
+      kv('Plausible range', pct(r.lo) + ' to ' + pct(r.hi), 'per $1, resampling whole games'),
+    )
+  }
+
   function renderTiles(d) {
     const v = d.view
     $('tiles').replaceChildren(
-      tile(fmtInt(v.scanned), 'Markets scanned', d.arm === 'A' ? 'yes/no, ~1 day out' : 'two-way, ~1 day out', 'var(--dim)'),
+      tile(fmtInt(v.scanned), 'Markets scanned', d.arm === 'A' ? 'yes/no, ~1 day out' : d.arm === 'B' ? 'two-way, ~1 day out' : 'kicking off within 22h', 'var(--dim)'),
       tile(fmtInt(v.bets), 'Paper bets', '2¢–20¢, $2 each', 'var(--violet)'),
       tile(fmtInt(v.games), 'Games', 'bets grouped by match', 'var(--cyan)'),
-      tile(fmtInt(v.upcoming), d.done ? 'Not counted' : 'Before kickoff', d.done ? 'still to play at the stop' : 'game not started', 'var(--amber)'),
-      tile(fmtInt(v.waiting), d.done ? 'Not counted' : 'Awaiting result', d.done ? 'unresolved at the stop' : 'kicked off, not resolved yet', 'var(--amber)'),
+      tile(fmtInt(v.upcoming), d.done && !d.watch ? 'Not counted' : 'Before kickoff', d.done && !d.watch ? 'still to play at the stop' : 'game not started', 'var(--amber)'),
+      tile(fmtInt(v.waiting), d.done && !d.watch ? 'Not counted' : 'Awaiting result', d.done && !d.watch ? 'unresolved at the stop' : 'kicked off, not resolved yet', 'var(--amber)'),
       tile(fmtInt(v.settled), 'Settled', v.stale ? fmtInt(v.stale) + ' never resolved' : 'result known', 'var(--green)'),
     )
   }
@@ -435,7 +463,7 @@
   function renderLatest(d) {
     last = d
     const rows = showAll ? d.latest : d.latest.slice(0, 12)
-    $('latestMeta').textContent = !d.latest.length ? '' : d.done
+    $('latestMeta').textContent = !d.latest.length ? '' : d.done && !d.watch
       ? 'newest ' + rows.length + ' counted in the verdict'
       : 'newest ' + rows.length + ' of ' + fmtInt(d.view.bets)
     $('more').hidden = d.latest.length <= 12
@@ -446,7 +474,7 @@
       if (d.done && b.status === 'settled' && b.counted) chip = outcomeChip(b)
       else { const [t, c] = STATUS[b.status] ?? [b.status, '']; chip = el('span', { class: 'chip ' + c }, t) }
       const meta = el('span', { class: 'bm' })
-      if (d.arm === 'B' && b.outcome) meta.append(el('b', null, 'bought ' + b.outcome), ' · ')
+      if (d.arm !== 'A' && b.outcome && b.outcome !== 'Yes') meta.append(el('b', null, 'bought ' + b.outcome), ' · ')
       meta.append([b.sport, b.league && b.league !== b.sport ? b.league : null, b.type].filter(Boolean).join(' · ') || 'tagging…')
       return el('tr', null,
         el('td', { class: 'q' }, b.question ?? '', meta),
@@ -469,7 +497,7 @@
   function renderHealth(d) {
     const scanAge = d.lastScanAt ? (Date.now() - Date.parse(d.lastScanAt)) / 60000 : Infinity
     $('health').replaceChildren(
-      kv('Last scan', ago(d.lastScanAt), d.done ? 'finished: no longer scanning' : 'every ' + d.scanEveryMin + ' min', !d.done && scanAge > d.scanEveryMin * 2.5 ? 'amb' : ''),
+      kv('Last scan', ago(d.lastScanAt), d.done && !d.watch ? 'finished: no longer scanning' : 'every ' + d.scanEveryMin + ' min', !(d.done && !d.watch) && scanAge > d.scanEveryMin * 2.5 ? 'amb' : ''),
       kv('Last settlement check', ago(d.lastSettleAt), 'hourly'),
       kv('Oldest result pending', d.oldestWaitingAt ? ago(d.oldestWaitingAt).replace(' ago', '') : '—', 'since kickoff'),
       kv('Errors', fmtInt(d.errors), 'failed requests, retried next round', d.errors ? 'amb' : ''),
@@ -481,7 +509,7 @@
   function renderTabs(d) {
     $('tabs').replaceChildren(...d.arms.map((a) => {
       const b = el('button', { class: 'tab' + (a.key === d.arm ? ' on' : ''), type: 'button', 'aria-pressed': String(a.key === d.arm) },
-        el('b', null, a.name), a.done ? 'finished' : fmtInt(a.ruleBets) + ' bets · ' + fmtInt(a.settled) + ' settled')
+        el('b', null, a.name), a.done ? 'finished' : fmtInt(a.ruleBets) + ' bets · ' + fmtInt(a.settled) + (a.watch ? ' results' : ' settled'))
       b.addEventListener('click', () => { if (a.key !== sel.arm) choose({ arm: a.key, sport: '', type: '' }) })
       return b
     }))
@@ -516,7 +544,7 @@
     head.replaceChildren(el('tr', null, ...(done
       ? [first, 'Bets', 'Record', 'Won / paid', 'Per $1']
       : [first, 'Bets', 'Games', 'Settled', 'Waiting']).map((h) => el('th', null, h))))
-    $(which + 'Meta').textContent = done ? 'record from the counted bets' : 'records show at the stop'
+    $(which + 'Meta').textContent = d.watch ? 'record so far' : done ? 'record from the counted bets' : 'records show at the stop'
     if (!rows.length) return body.replaceChildren(el('tr', null, el('td', { colspan: 5, class: 'empty' }, 'Nothing yet')))
     body.replaceChildren(...rows.map((r) => {
       const cells = done
@@ -533,7 +561,7 @@
   function renderState(d) {
     const scanAge = d.lastScanAt ? (Date.now() - Date.parse(d.lastScanAt)) / 60000 : Infinity
     const pill = $('state')
-    if (d.done) { pill.className = 'pill live'; $('stateText').textContent = 'FINISHED' }
+    if (d.done && !d.watch) { pill.className = 'pill live'; $('stateText').textContent = 'FINISHED' }
     else if (scanAge <= d.scanEveryMin * 2.5) { pill.className = 'pill live'; $('stateText').textContent = 'LIVE · scanned ' + ago(d.lastScanAt) }
     else if (d.lastScanAt) { pill.className = 'pill stale'; $('stateText').textContent = 'STALE · last scan ' + ago(d.lastScanAt) }
     else { pill.className = 'pill stale'; $('stateText').textContent = 'FIRST SCAN RUNNING' }

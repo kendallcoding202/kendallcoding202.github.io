@@ -43,7 +43,9 @@ pre-registration first.
   and sport / bet-type filters. On Railway: its own service from this repo with
   **`APP=polysports`**, a volume and `DATA_DIR=/data`, optional `DASHBOARD_TOKEN`. Places
   no orders. Each test's result is hidden, then frozen, at its own stop (400 settled
-  bets and 7 days, or 28 days). Test A started 2026-10-09 ~10:21 UTC.
+  bets and 7 days, or 28 days). Test A started 2026-10-09 ~10:21 UTC; Test B with the
+  next deploy. A **Watch** tab (not a test) follows hockey and college football kicking off
+  within 22h, with results shown live (`POLY_WATCH_SPORTS`).
 
 The live probe service should be `PAPER=1` or stopped — it spends real SOL.
 

@@ -29,10 +29,15 @@ export const RULE = {
   stopDays: 28,
   unsettledAfterDays: 14,
 }
-export const ARMS = ['A', 'B']
+export const ARMS = ['A', 'B']             // the registered tests: each has a stop and a verdict
+export const ALL_ARMS = ['A', 'B', 'W']    // plus the watch list, which has neither
+/** Sports the watch list follows. Change with POLY_WATCH_SPORTS="Hockey,College football". */
+export const WATCH_SPORTS = (process.env.POLY_WATCH_SPORTS ?? 'Hockey,College football').split(',').map((x) => x.trim()).filter(Boolean)
+export const WATCH_WINDOW_H = [0.25, 22]   // kickoff too soon for the tests' 22–26h window
 export const ARM_INFO = {
   A: { name: 'Test A · Yes/No', blurb: 'Buys YES at 2–20¢ on Yes/No sports markets (today these are all soccer).', prereg: 'PREREG-POLY-SPORTS.md' },
   B: { name: 'Test B · Two-way', blurb: 'Buys the cheap side, 2–20¢, of two-outcome sports markets: over/unders, spreads, team vs team.', prereg: 'PREREG-POLY-SPORTS-B.md' },
+  W: { name: 'Watch · soon', blurb: 'Games kicking off too soon for the tests (hockey and college football): the same 2–20¢ rule at the same real prices and fees, with wins and losses shown as they come in. Not part of either test.', prereg: 'PREREG-POLY-SPORTS-B.md, Watch list' },
 }
 const SCAN_MS = 15 * 60_000
 const SETTLE_MS = 60 * 60_000
@@ -110,11 +115,27 @@ export function armOf(m) {
   return o[0] === 'Yes' && o[1] === 'No' ? 'A' : 'B'
 }
 
-export function isCandidate(m, nowMs, arms = ARMS) {
-  const arm = armOf(m)
-  if (!arm || !arms.includes(arm)) return false
+/**
+ * Which list a market goes to now, or null. The tests take markets 22–26h before kickoff.
+ * The watch list takes markets of its sports kicking off sooner than that — in practice the
+ * day's games the tests never saw, since every later game passes through the tests' window
+ * first (and a market is only ever recorded once).
+ */
+export function armFor(m, nowMs, arms = ARMS, index = null) {
+  const kind = armOf(m)
+  if (!kind) return null
   const h = (Date.parse(m.endDate) - nowMs) / 3600_000
-  return h >= RULE.windowMinH && h < RULE.windowMaxH
+  if (h >= RULE.windowMinH && h < RULE.windowMaxH) return arms.includes(kind) ? kind : null
+  if (arms.includes('W') && h >= WATCH_WINDOW_H[0] && h < WATCH_WINDOW_H[1] && WATCH_SPORTS.includes(tagsOf(m, index).sport)) return 'W'
+  return null
+}
+export function isCandidate(m, nowMs, arms = ARMS, index = null) { return armFor(m, nowMs, arms, index) !== null }
+
+/** The first version filed college football and the NFL together; split them by league. */
+export function refineSport(r) {
+  if (r.sport === 'American football' && r.league === 'College Football') r.sport = 'College football'
+  else if (r.sport === 'American football' && r.league === 'NFL') r.sport = 'NFL'
+  return r
 }
 
 // ---------------------------------------------------------------- sport and bet type
@@ -131,7 +152,7 @@ export const SPORT_TAGS = {
   102471: 'Pickleball', 683: 'Combat sports',
 }
 export const SPORT_CODES = {
-  nfl: 'American football', cfb: 'American football', nba: 'Basketball', wnba: 'Basketball', nbasl: 'Basketball',
+  nfl: 'NFL', cfb: 'College football', nba: 'Basketball', wnba: 'Basketball', nbasl: 'Basketball',
   ncaab: 'Basketball', cbb: 'Basketball', euroleague: 'Basketball', mlb: 'Baseball', wbc: 'Baseball',
   ufc: 'Combat sports', powerslap: 'Combat sports', f1: 'Motorsport', indycar: 'Motorsport', acn: 'Soccer',
   afl: 'Australian football', aflw: 'Australian football', chess: 'Chess', poker: 'Poker', rodeo: 'Rodeo', cycling: 'Cycling',
@@ -199,12 +220,14 @@ export function matchKeyOf(m) {
  * reads both books and buys the side whose $2 fill is cheaper. `books` is one book (A) or
  * one per outcome (B). Records that are not bets keep only what calibration needs.
  */
-export function decide(m, books, nowMs, index = null) {
-  const arm = armOf(m) ?? 'A'
+export function decide(m, books, nowMs, index = null, arm = armOf(m) ?? 'A') {
+  // Which side is bought depends on the market's shape, whichever list records it:
+  // YES on a Yes/No market, the cheaper side of any other two-outcome market.
+  const kind = armOf(m) ?? 'A'
   const list = Array.isArray(books) ? books : [books]
   const sides = list.map((book, i) => { const asks = sortedAsks(book); return { i, book, asks, fill: walkAsks(asks, RULE.stakeUsd) } })
   let pick = sides[0]
-  if (arm === 'B' && sides.length > 1) {
+  if (kind === 'B' && sides.length > 1) {
     const priceOf = (s) => (s.fill.filled ? s.fill.avgPrice : Infinity)
     pick = sides.reduce((a, b) => (priceOf(b) < priceOf(a) ? b : a))
     if (!Number.isFinite(priceOf(pick))) pick = sides.reduce((a, b) => ((b.asks[0]?.price ?? Infinity) < (a.asks[0]?.price ?? Infinity) ? b : a))
@@ -386,14 +409,18 @@ export function breakdown(recs, key, nowMs, counted = null, cacheKey = null) {
  * outcome are included.
  */
 export function dashboardData(state, nowMs = Date.now(), { arm = 'A', sport = null, type = null } = {}) {
-  if (!ARMS.includes(arm)) arm = 'A'
-  const final = state.finalByArm?.[arm] ?? null
+  if (!ALL_ARMS.includes(arm)) arm = 'A'
+  const watch = arm === 'W'
+  const final = watch ? null : state.finalByArm?.[arm] ?? null
   const live = summarise(state, nowMs, { arm, withhold: true })
-  // Outcomes are shown only from the frozen result. Between the stop being reached and the
-  // tracker freezing it (at most one scan interval) the page says "finishing" instead.
+  // A test's outcomes are shown only from its frozen result. Between the stop being reached
+  // and the tracker freezing it (at most one scan interval) the page says "finishing".
+  // The watch list is no test: its results are shown as they come in.
   const { settledIds, ...frozen } = final ?? {}
-  const s = final ? frozen : { ...live, done: false, finishing: live.done }
-  const counted = final ? new Set(settledIds ?? []) : null
+  const s = watch ? { ...summarise(state, nowMs, { arm, reveal: true }), done: true, watch: true }
+    : final ? frozen : { ...live, done: false, finishing: live.done }
+  const counted = watch ? new Set(armRecords(state, arm).filter((r) => r.rule && r.settle).map((r) => r.id))
+    : final ? new Set(settledIds ?? []) : null
   const armRecs = armRecords(state, arm)
   const sportOk = (r) => !sport || (r.sport ?? 'Untagged') === sport
   const typeOk = (r) => !type || (r.type ?? 'Untagged') === type
@@ -447,29 +474,29 @@ export function dashboardData(state, nowMs = Date.now(), { arm = 'A', sport = nu
   }
   const newest = (list) => [...list].sort((a, b) => Date.parse(b.recordedAt) - Date.parse(a.recordedAt)).slice(0, 40).map(row)
   // After the stop, the list shows the bets the verdict was computed from, newest first.
-  const latest = counted ? newest(rule.filter((r) => counted.has(r.id))) : newest(rule)
+  const latest = counted && !watch ? newest(rule.filter((r) => counted.has(r.id))) : newest(rule)
 
   const ck = final ? `${arm}|${final.frozenAt}` : null
   const bySport = breakdown(armRecs.filter(typeOk), 'sport', nowMs, counted, ck && `${ck}|t=${type}`)
   const byType = breakdown(armRecs.filter(sportOk), 'type', nowMs, counted, ck && `${ck}|s=${sport}`)
   let viewResult
   if (counted && (sport || type)) {
-    const k = `${ck}|view|${sport}|${type}`
-    if (!resultCache.has(k)) resultCache.set(k, outcomeSummary(rule.filter((r) => counted.has(r.id)), null))
-    viewResult = resultCache.get(k)
+    const k = ck ? `${ck}|view|${sport}|${type}` : null
+    if (!k) viewResult = outcomeSummary(rule.filter((r) => counted.has(r.id)), null)
+    else { if (!resultCache.has(k)) resultCache.set(k, outcomeSummary(rule.filter((r) => counted.has(r.id)), null)); viewResult = resultCache.get(k) }
   }
 
   return {
     ...s, armInfo: ARM_INFO[arm], filter: { sport, type },
-    arms: ARMS.map((a) => {
-      const f = state.finalByArm?.[a], l = f ?? summarise(state, nowMs, { arm: a, withhold: true })
-      return { key: a, name: ARM_INFO[a].name, ruleBets: l.ruleBets, settled: l.settled, done: Boolean(f) }
-    }),
+    arms: ALL_ARMS.map((a) => {
+      const f = a === 'W' ? null : state.finalByArm?.[a], l = f ?? summarise(state, nowMs, { arm: a, withhold: true })
+      return { key: a, name: ARM_INFO[a].name, ruleBets: l.ruleBets, settled: l.settled, recorded: l.recorded, done: Boolean(f), watch: a === 'W' }
+    }).filter((a) => !a.watch || a.recorded > 0 || arm === 'W'),
     sports: breakdown(armRecs, 'sport', nowMs).map((x) => ({ name: x.name, bets: x.bets })),
     types: breakdown(armRecs, 'type', nowMs).map((x) => ({ name: x.name, bets: x.bets })),
     generatedAt: new Date(nowMs).toISOString(), firstRecordAt: first ? new Date(first).toISOString() : null,
     rule: { stakeUsd: RULE.stakeUsd, minPrice: RULE.minPrice, maxPrice: RULE.maxPrice, stopBets: RULE.stopBets, minDays: RULE.minDays, stopDays: RULE.stopDays },
-    scanEveryMin: SCAN_MS / 60_000, eta,
+    scanEveryMin: SCAN_MS / 60_000, eta: watch ? null : eta, watchSports: WATCH_SPORTS,
     view: {
       scanned: recs.length, bets: rule.length, games: new Set(rule.map((r) => r.game ?? r.event)).size,
       settled: rule.filter((r) => r.settle).length, waiting, upcoming, stale,
@@ -518,7 +545,7 @@ export function openStore(dir) {
       const bad = lines('records.jsonl', (r) => { state.records[r.id] = { arm: 'A', side: 0, ...r } })
         + lines('tags.jsonl', (t) => { const r = state.records[t.id]; if (r) { const { id: _i, ...tags } = t; Object.assign(r, tags) } })
         + lines('settles.jsonl', (x) => { const r = state.records[x.id]; if (r) r.settle = x.settle })
-      for (const r of Object.values(state.records)) correctFee(r)   // records from before the fee correction
+      for (const r of Object.values(state.records)) refineSport(correctFee(r))   // records from before the fee correction / sport split
       if (fs.existsSync(f('meta.json'))) Object.assign(state, JSON.parse(fs.readFileSync(f('meta.json'), 'utf8')))
       if (state.final) { state.finalByArm = { A: state.final, ...(state.finalByArm ?? {}) }; delete state.final }
       state.finalByArm ??= {}
@@ -557,31 +584,65 @@ async function scan(state, index, arms, onRecords) {
     const first = page.markets?.[0]?.id
     if (first && first === lastFirst) throw new Error('keyset cursor did not advance')
     lastFirst = first
-    for (const m of page.markets ?? []) if (!state.records[m.id] && isCandidate(m, now, arms)) todo.push(m)
+    for (const m of page.markets ?? []) if (!state.records[m.id] && isCandidate(m, now, arms, index)) todo.push(m)
     cursor = page.next_cursor
   } while (cursor)
-  // Books are read 8 at a time: one by one, a busy window takes longer than the scan interval.
+  const added = await decideAll(state, todo, arms, index)
+  onRecords(added)
+  state.lastScanAt = new Date().toISOString()
+  return added
+}
+
+/** Reads the books for each market and records the decision. 8 at a time. */
+async function decideAll(state, todo, arms, index) {
   const added = []
   let next = 0
   await Promise.all(Array.from({ length: 8 }, async () => {
     while (next < todo.length) {
       const m = todo[next++]
-      // A long first pass can take many minutes: the 22–26h window is re-checked at the
-      // moment of the decision, not only when the market was listed.
-      if (!isCandidate(m, Date.now(), arms)) continue
+      // A long pass can take many minutes: the window is re-checked at the moment of the
+      // decision, not only when the market was listed.
+      const arm = armFor(m, Date.now(), arms, index)
+      if (!arm || state.records[m.id]) continue
       try {
         const tokens = JSON.parse(m.clobTokenIds)
-        const want = armOf(m) === 'B' ? tokens : tokens.slice(0, 1)
+        const twoWay = armOf(m) === 'B'
         const books = []
-        for (const t of want) books.push(await getJson('https://clob.polymarket.com/book?token_id=' + t))
-        const r = decide(m, armOf(m) === 'B' ? books : books[0], Date.now(), index)
+        for (const t of twoWay ? tokens : tokens.slice(0, 1)) books.push(await getJson('https://clob.polymarket.com/book?token_id=' + t))
+        const r = decide(m, twoWay ? books : books[0], Date.now(), index, arm)
         state.records[r.id] = r
         added.push(r)
       } catch (e) { state.errors = (state.errors ?? 0) + 1; console.error('book', m.id, e.message) }
     }
   }))
+  return added
+}
+
+/**
+ * The watch list's own listing: the watch sports' leagues, games kicking off in the next
+ * 15 minutes to 22 hours. Read per league from /events, whose markets come without their
+ * event, so the event (title, date, league) is attached to each market before deciding.
+ */
+async function scanWatch(state, index, onRecords) {
+  if (!index) return []
+  const series = [...index.entries()].filter(([, v]) => WATCH_SPORTS.includes(v.sport)).map(([id]) => id)
+  const now = Date.now(), todo = []
+  for (const sid of series) {
+    for (let offset = 0; offset < 2000; offset += 100) {
+      const q = new URLSearchParams({ series_id: sid, closed: 'false', limit: '100', offset: String(offset),
+        end_date_min: iso(now + WATCH_WINDOW_H[0] * 3600_000), end_date_max: iso(now + WATCH_WINDOW_H[1] * 3600_000) })
+      let events
+      try { events = await getJson('https://gamma-api.polymarket.com/events?' + q) } catch (e) { state.errors = (state.errors ?? 0) + 1; console.error('watch', sid, e.message); break }
+      if (!Array.isArray(events) || !events.length) break
+      for (const ev of events) for (const m of ev.markets ?? []) {
+        const full = { ...m, events: [{ id: ev.id, title: ev.title, eventDate: ev.eventDate, gameId: ev.gameId, series: ev.series ?? [{ id: sid }] }] }
+        if (!state.records[full.id] && full.active !== false && armFor(full, now, ['W'], index) === 'W') todo.push(full)
+      }
+      if (events.length < 100) break
+    }
+  }
+  const added = await decideAll(state, todo, ['W'], index)
   onRecords(added)
-  state.lastScanAt = new Date().toISOString()
   return added
 }
 
@@ -700,11 +761,11 @@ export async function run() {
     }
     const send = (body) => { res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(body) }
     if (u.pathname === '/api/status') {
-      const arm = ARMS.includes(u.searchParams.get('arm')) ? u.searchParams.get('arm') : 'A'
+      const arm = ALL_ARMS.includes(u.searchParams.get('arm')) ? u.searchParams.get('arm') : 'A'
       const sport = u.searchParams.get('sport') || null, type = u.searchParams.get('type') || null
       return send(cached(`${arm}|${sport}|${type}`, () => dashboardData(state, Date.now(), { arm, sport, type })))
     }
-    if (u.pathname === '/json') return send(cached('json', () => Object.fromEntries(ARMS.map((a) => [a, publicSummary(state, a)]))))
+    if (u.pathname === '/json') return send(cached('json', () => ({ ...Object.fromEntries(ARMS.map((a) => [a, publicSummary(state, a)])), W: summarise(state, Date.now(), { arm: 'W', reveal: true }) })))
     if (u.pathname === '/') { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); return res.end(html) }
     res.writeHead(404); res.end('not found')
   }
@@ -725,16 +786,17 @@ export async function run() {
         try { index = sportsIndex(await getJson('https://gamma-api.polymarket.com/sports')); indexAt = Date.now() }
         catch (e) { state.errors = (state.errors ?? 0) + 1; console.error('sports index', e.message) }
       }
-      if (active.length) {
-        const added = await scan(state, index, active, store.addRecords)
+      {
+        const added = active.length ? await scan(state, index, active, store.addRecords) : []
+        added.push(...await scanWatch(state, index, store.addRecords))
         if (Date.now() - lastSettle > SETTLE_MS) {
-          const n = await settleAll(state, getJson, Date.now(), store.addSettles, active)
+          const n = await settleAll(state, getJson, Date.now(), store.addSettles, [...active, 'W'])
           const t = await tagMissing(state, index, getJson, store.addTags)
           lastSettle = Date.now(); console.log(`settled ${n} · tagged ${t}`)
         }
         store.saveMeta(state)
         cache.clear()
-        console.log(active.map((a) => { const s = summarise(state, Date.now(), { arm: a, withhold: true }); return `test ${a}: +${added.filter((r) => r.arm === a).length} · recorded ${s.recorded} · bets ${s.ruleBets} · settled ${s.settled}` }).join(' | '))
+        console.log([...active, 'W'].map((a) => { const s = summarise(state, Date.now(), { arm: a, withhold: true }); return `${a === 'W' ? 'watch' : 'test ' + a}: +${added.filter((r) => r.arm === a).length} · recorded ${s.recorded} · bets ${s.ruleBets} · settled ${s.settled}` }).join(' | '))
       }
     } catch (e) { state.errors = (state.errors ?? 0) + 1; console.error('loop', e.message) }
     await new Promise((r) => setTimeout(r, SCAN_MS))

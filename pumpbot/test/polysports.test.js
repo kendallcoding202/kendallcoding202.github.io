@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { sortedAsks, walkAsks, takerFee, isCandidate, armOf, matchKeyOf, decide, settle, profitPerDollar, summarise, dashboardData, firstRecordMs, calibration, settleAll, freeze,
-  sportsIndex, betTypeOf, tagsOf, tagMissing, breakdown, openStore, correctFee, RULE } from '../src/polysports.js'
+  sportsIndex, betTypeOf, tagsOf, tagMissing, breakdown, openStore, correctFee, armFor, refineSport, WATCH_SPORTS, RULE } from '../src/polysports.js'
 
 let passed = 0
 const t = (name, fn) => { fn(); passed++ }
@@ -223,7 +223,7 @@ t('sports come from directory tags, or the league code when a big league has non
     { sport: 'mystery', name: 'Mystery', tags: '1', series: '9' },
   ])
   assert.deepEqual(ix.get('10292'), { sport: 'Soccer', league: 'Süper Lig' })
-  assert.equal(ix.get('10187').sport, 'American football')
+  assert.equal(ix.get('10187').sport, 'NFL')
   assert.equal(ix.get('20002').sport, 'Basketball')
   assert.equal(ix.get('9').sport, 'Other')
   const m = mkt({ events: [{ id: 'e', series: [{ id: '10292', title: 'Süper Lig 2025' }] }], sportsMarketType: 'soccer_exact_score' })
@@ -317,6 +317,58 @@ t('breakdowns by sport and bet type: counts before the stop, records after', () 
   assert.equal(f.settled, after.settled)                                          // the stop and verdict stay the whole test's
   assert.deepEqual(f.byType.map((x) => x.name).sort(), ['Exact score', 'Moneyline'])   // the other dimension stays visible
   assert.ok(f.byType.every((x) => x.bets <= soccer.bets))
+})
+
+// ---------------------------------------------------------------- the watch list
+const WIX = sportsIndex([{ sport: 'nhl', name: 'NHL', tags: '1,899', series: 'NHL' }, { sport: 'cfb', name: 'College Football', tags: '1,100351', series: 'CFB' },
+  { sport: 'epl', name: 'Premier League', tags: '1,100350', series: 'EPL' }])
+const at = (h, over = {}) => mkt({ endDate: new Date(now + h * 3600_000).toISOString(), ...over })
+const nhl = (h, over = {}) => at(h, { outcomes: '["Over", "Under"]', events: [{ id: 'n', title: 'Rangers vs. Capitals', series: [{ id: 'NHL' }] }], ...over })
+t('the watch list takes the watch sports kicking off too soon for the tests, and nothing else', () => {
+  assert.deepEqual(WATCH_SPORTS, ['Hockey', 'College football'])
+  assert.equal(WIX.get('CFB').sport, 'College football')
+  assert.equal(armFor(nhl(5), now, ['A', 'B', 'W'], WIX), 'W')                        // tonight's hockey
+  assert.equal(armFor(nhl(23), now, ['A', 'B', 'W'], WIX), 'B')                       // tomorrow's: the test, not the watch list
+  assert.equal(armFor(nhl(0.1), now, ['A', 'B', 'W'], WIX), null)                     // too close to the puck drop
+  assert.equal(armFor(nhl(5), now, ['A', 'B'], WIX), null)                            // only when the watch list is scanning
+  const cfb = at(8, { outcomes: '["BYU", "Iowa State"]', events: [{ id: 'c', title: 'Iowa State vs. BYU', series: [{ id: 'CFB' }] }] })
+  assert.equal(armFor(cfb, now, ['A', 'B', 'W'], WIX), 'W')
+  const soccer = at(5, { events: [{ id: 's', title: 'A vs. B', series: [{ id: 'EPL' }] }] })
+  assert.equal(armFor(soccer, now, ['A', 'B', 'W'], WIX), null)                       // not a watch sport
+  assert.equal(armFor(nhl(5), now, ['A', 'B', 'W'], null), null)                      // no directory yet: cannot tell the sport
+  // A watch bet is decided by the market's shape: the cheap side of a two-way market.
+  const r = decide(nhl(5), [bookAt(0.80), bookAt(0.19)], now, WIX, 'W')
+  assert.equal(r.arm, 'W'); assert.equal(r.outcome, 'Under'); assert.equal(r.rule, true); assert.equal(r.sport, 'Hockey')
+})
+
+t('the watch list shows results as they come in, and never moves a test', () => {
+  const st = stateWith(450)                                                           // test A, day 2: still hidden
+  for (let i = 0; i < 6; i++) {
+    const r = decide(nhl(5, { id: 'w' + i, events: [{ id: 'n' + i, title: 'Game ' + i, series: [{ id: 'NHL' }] }] }), [bookAt(0.85), bookAt(0.15)], now, WIX, 'W')
+    if (i < 4) r.settle = { ...settle(r, { closed: true, outcomePrices: i === 0 ? '["0","1"]' : '["1","0"]' }), settledAt: new Date(now + 6 * 3600_000).toISOString() }
+    st.records[r.id] = r
+  }
+  const w = dashboardData(st, now + 2 * 86400_000, { arm: 'W' })
+  assert.equal(w.watch, true); assert.equal(w.done, true)
+  assert.equal(w.result.n, 4)                                                         // settled watch bets, live
+  assert.equal(w.latest.length, 6)                                                    // pending ones listed too
+  assert.equal(w.latest.filter((b) => b.counted).length, 4)
+  assert.equal(w.latest.filter((b) => b.won).length, 1)
+  assert.ok(w.bySport.find((x) => x.name === 'Hockey').wins === 1)
+  assert.equal(w.eta, null)
+  // The tests are untouched: still counts only, and the watch bets are not in them.
+  const a = dashboardData(st, now + 2 * 86400_000)
+  for (const k of OUTCOME_KEYS) assert.ok(!JSON.stringify(a).includes(`"${k}"`), `test A leaked ${k}`)
+  assert.equal(a.ruleBets, 450)
+  assert.deepEqual(a.arms.map((x) => x.key), ['A', 'B', 'W'])
+  assert.equal(summarise(st, now + 30 * 86400_000, { arm: 'A', withhold: true }).ruleBets, 450)
+})
+
+t('college football and the NFL are told apart, including records filed before the split', () => {
+  assert.equal(refineSport({ sport: 'American football', league: 'College Football' }).sport, 'College football')
+  assert.equal(refineSport({ sport: 'American football', league: 'NFL' }).sport, 'NFL')
+  assert.equal(refineSport({ sport: 'American football', league: 'UFL' }).sport, 'American football')
+  assert.equal(refineSport({ sport: 'Soccer', league: 'NFL' }).sport, 'Soccer')
 })
 
 // ---------------------------------------------------------------- storage and tagging
