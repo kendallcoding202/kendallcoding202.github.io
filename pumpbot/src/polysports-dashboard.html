@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sports paper test</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Same palette and type as the pumpbot dashboard, so the two read as one family. */
+  :root {
+    --bg: #080b14; --panel: #0e1422; --panel-2: #131b2e; --line: #1e2942;
+    --text: #e8edf7; --dim: #6b7a99; --dimmer: #46536e;
+    --green: #2ee88a; --red: #ff5c72; --amber: #ffb347; --violet: #a97bff; --cyan: #4dd8ff;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { background: var(--bg); }
+  body {
+    margin: 0; color: var(--text); font-family: var(--sans); font-size: 14px; line-height: 1.5;
+    padding: 16px 16px 56px;
+    background-image: radial-gradient(900px 400px at 82% -8%, rgba(77,216,255,.13), transparent 60%);
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+
+  header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 10px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 14px; padding: 9px 15px; }
+  .mark { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--cyan), var(--violet)); font-size: 14px; }
+  .brand h1 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: .1em; }
+  .brand h1 span { color: var(--cyan); }
+  .pill { display: inline-flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 10.5px;
+    letter-spacing: .08em; padding: 7px 11px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--dim); white-space: nowrap; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dimmer); flex: none; }
+  .pill.live { color: var(--green); border-color: rgba(46,232,138,.35); }
+  .pill.live .dot { background: var(--green); box-shadow: 0 0 0 4px rgba(46,232,138,.14); }
+  .pill.stale { color: var(--amber); border-color: rgba(255,179,71,.35); }
+  .pill.stale .dot { background: var(--amber); }
+  .pill.down { color: var(--red); border-color: rgba(255,92,114,.35); }
+  .pill.down .dot { background: var(--red); }
+  .hstat { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--dimmer); text-align: right; }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; margin-bottom: 14px; }
+  .label { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+  .big { font-family: var(--mono); font-size: 26px; font-weight: 700; letter-spacing: -.02em; line-height: 1.2; margin: 4px 0 6px; }
+  .sub { font-size: 13px; color: var(--dim); }
+  .pos { color: var(--green); } .neg { color: var(--red); } .amb { color: var(--amber); }
+
+  .verdict { border-left: 3px solid var(--violet); }
+  .verdict.yes { border-left-color: var(--green); } .verdict.no { border-left-color: var(--red); }
+  .prog { margin-top: 14px; display: grid; gap: 12px; }
+  .prog .row { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: baseline;
+    font-family: var(--mono); font-size: 11.5px; color: var(--dim); }
+  .prog .row b { color: var(--text); font-weight: 700; }
+  .bar { grid-column: 1 / -1; height: 8px; border-radius: 4px; background: var(--panel-2); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; border-radius: 4px;
+    background: linear-gradient(90deg, var(--violet), var(--cyan)); transition: width .6s ease; }
+  .bar i.full { background: linear-gradient(90deg, var(--green), var(--cyan)); }
+  .eta { margin-top: 12px; font-family: var(--mono); font-size: 11.5px; color: var(--dim); }
+  .eta b { color: var(--text); }
+
+  .kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 14px; }
+  .kv div { background: var(--panel-2); border-radius: 11px; padding: 10px 12px; }
+  .kv .v { font-family: var(--mono); font-size: 17px; font-weight: 700; }
+  .kv .k { font-family: var(--mono); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+  .kv .x { font-size: 11.5px; color: var(--dimmer); margin-top: 2px; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; position: relative; overflow: hidden; }
+  .tile::before { content: ''; position: absolute; top: 0; left: 14px; right: 14px; height: 2px; border-radius: 0 0 2px 2px; background: var(--accentc, var(--violet)); }
+  .tile .n { font-family: var(--mono); font-size: 21px; font-weight: 700; }
+  .tile .k { font-family: var(--mono); font-size: 9.5px; letter-spacing: .13em; text-transform: uppercase; color: var(--dim); margin-top: 2px; }
+  .tile .x { font-size: 11px; color: var(--dimmer); margin-top: 4px; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr; gap: 14px; }
+  @media (min-width: 820px) { .grid2 { grid-template-columns: 3fr 2fr; } }
+  .grid2 .card { margin-bottom: 0; }
+  .grid2 { margin-bottom: 14px; }
+  .panelhead { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .panelhead h2 { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+  .panelhead .meta { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--dimmer); }
+  .legend { display: flex; gap: 14px; font-family: var(--mono); font-size: 10.5px; color: var(--dim); margin-top: 8px; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  svg { display: block; width: 100%; height: auto; }
+  svg text { font-family: var(--mono); font-size: 10px; fill: var(--dimmer); }
+  .empty { padding: 28px 10px; text-align: center; color: var(--dimmer); font-family: var(--mono); font-size: 12px; }
+
+  .scroll { overflow-x: auto; margin: 0 -16px; padding: 0 16px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-family: var(--mono); }
+  th, td { padding: 9px 8px; text-align: right; white-space: nowrap; vertical-align: top; }
+  th:first-child, td:first-child { text-align: left; padding-left: 0; }
+  th:last-child, td:last-child { padding-right: 0; }
+  th { font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); font-weight: 500; border-bottom: 1px solid var(--line); }
+  tbody tr + tr td { border-top: 1px solid rgba(30,41,66,.55); }
+  td.q { white-space: normal; min-width: 210px; font-family: var(--sans); font-size: 13px; line-height: 1.35; }
+  .chip { display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: .07em; padding: 2px 6px; border-radius: 5px;
+    background: rgba(169,123,255,.16); color: var(--violet); text-transform: uppercase; }
+  .chip.g { background: rgba(46,232,138,.14); color: var(--green); }
+  .chip.a { background: rgba(255,179,71,.15); color: var(--amber); }
+  .chip.r { background: rgba(255,92,114,.15); color: var(--red); }
+  .chip.c { background: rgba(77,216,255,.13); color: var(--cyan); }
+
+  .more { margin-top: 10px; width: 100%; background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 10px; padding: 9px; font-family: var(--mono); font-size: 11.5px; cursor: pointer; }
+  /* On a phone each bet is two lines: the question, then price · shares · end · status. */
+  @media (max-width: 640px) {
+    table.bets, table.bets tbody { display: block; }
+    table.bets thead { display: none; }
+    table.bets tr { display: grid; grid-template-columns: auto auto 1fr auto; gap: 4px 12px; align-items: center; padding: 10px 0; }
+    table.bets tbody tr + tr { border-top: 1px solid rgba(30,41,66,.55); }
+    table.bets tbody tr + tr td { border-top: none; }
+    table.bets td { padding: 0; text-align: left; color: var(--dim); font-size: 11.5px; }
+    table.bets td.q { grid-column: 1 / -1; min-width: 0; color: var(--text); }
+    table.bets td:last-child { justify-self: end; }
+    table.bets td.empty { grid-column: 1 / -1; }
+  }
+  .banner { border-radius: 12px; padding: 11px 14px; margin-bottom: 14px; font-family: var(--mono); font-size: 12px;
+    background: rgba(255,92,114,.1); border: 1px solid rgba(255,92,114,.35); color: var(--red); }
+  .note { font-size: 13px; line-height: 1.7; color: var(--dim); }
+  .note b { color: var(--text); font-weight: 600; }
+  details.card summary { cursor: pointer; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; list-style: none; }
+  details.card summary::-webkit-details-marker { display: none; }
+  details.card summary::after { content: ' +'; color: var(--dim); }
+  details[open].card summary::after { content: ' −'; }
+  details .note { margin-top: 10px; }
+  footer { font-family: var(--mono); font-size: 10.5px; color: var(--dimmer); text-align: center; margin-top: 18px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><div class="mark">⚽</div><h1>SPORTS<span>·PAPER</span></h1></div>
+    <span class="pill" id="state"><span class="dot"></span><span id="stateText">connecting…</span></span>
+    <span class="pill">NO REAL MONEY</span>
+    <div class="hstat" id="updated"></div>
+  </header>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <section class="card verdict" id="verdict">
+    <div class="label" id="vLabel">Verdict</div>
+    <div class="big" id="vBig">—</div>
+    <div class="sub" id="vSub"></div>
+    <div class="prog" id="prog"></div>
+    <div class="eta" id="eta"></div>
+    <div class="kv" id="resultKv" hidden></div>
+  </section>
+
+  <section class="tiles" id="tiles"></section>
+
+  <div class="grid2">
+    <section class="card">
+      <div class="panelhead"><h2>Activity by day</h2><span class="meta">UTC</span></div>
+      <div id="daily"></div>
+      <div class="legend"><span><i style="background:var(--violet)"></i>paper bets placed</span><span><i style="background:var(--cyan)"></i>bets settled</span></div>
+    </section>
+    <section class="card">
+      <div class="panelhead"><h2>Price paid</h2><span class="meta">per $1 share</span></div>
+      <div id="prices"></div>
+      <div class="legend"><span>How many bets were placed at each price, 2¢–20¢</span></div>
+    </section>
+  </div>
+
+  <section class="card" id="calCard" hidden>
+    <div class="panelhead"><h2>Did prices match reality?</h2><span class="meta">every market scanned, at the real $2 fill</span></div>
+    <div class="scroll"><table><thead><tr><th>Price range</th><th>Markets</th><th>Avg price</th><th>Came true</th></tr></thead><tbody id="cal"></tbody></table></div>
+  </section>
+
+  <section class="card">
+    <div class="panelhead"><h2>Latest paper bets</h2><span class="meta" id="latestMeta"></span></div>
+    <div class="scroll"><table class="bets">
+      <thead><tr><th>Bet</th><th>Paid</th><th>$2 buys</th><th>Game ends</th><th>Status</th></tr></thead>
+      <tbody id="latest"></tbody>
+    </table></div>
+    <button class="more" id="more" hidden></button>
+  </section>
+
+  <section class="card">
+    <div class="panelhead"><h2>Health</h2></div>
+    <div class="kv" id="health" style="margin-top:0"></div>
+  </section>
+
+  <details class="card">
+    <summary>How this test works</summary>
+    <div class="note">
+      <p>Every 15 minutes the tracker reads every Polymarket sports market that ends in about a day.
+      When the YES side costs between <b>2¢ and 20¢</b> and the order book can fill a <b>$2</b> order,
+      it records a paper bet at the real asking price, plus Polymarket's fee. No order is ever sent.</p>
+      <p>When the game is decided, each bet is marked settled. A share pays $1 if the answer is yes, nothing if it is no.</p>
+      <p><b>Why profit is hidden:</b> the test stops at <b>400 settled bets and at least 7 days</b>, or at 28 days.
+      Until then this page shows counts only, so a lucky or unlucky first few days cannot talk anyone into stopping early.
+      The rules were written down before the first bet (<b>PREREG-POLY-SPORTS.md</b>).</p>
+      <p><b>The verdict is YES only if</b> profit per dollar is above zero and stays above zero across the plausible range
+      (the 95% interval, resampling whole games). Otherwise it is NO.</p>
+    </div>
+  </details>
+
+  <footer id="foot">refreshes every minute</footer>
+</div>
+
+<script>
+(() => {
+  // The token in this page's address is forwarded to the data feed; nothing else is read from it.
+  const token = new URLSearchParams(location.search).get('token')
+  const feed = '/api/status' + (token ? '?token=' + encodeURIComponent(token) : '')
+  const $ = (id) => document.getElementById(id)
+
+  // Every value that came from Polymarket (bet questions) goes in through textContent, never innerHTML.
+  function el(tag, attrs, ...kids) {
+    const n = document.createElement(tag)
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (k === 'class') n.className = v
+      else if (k === 'style') n.setAttribute('style', v)
+      else n.setAttribute(k, v)
+    }
+    for (const k of kids) if (k !== null && k !== undefined) n.append(k instanceof Node ? k : document.createTextNode(String(k)))
+    return n
+  }
+  const svgEl = (tag, attrs) => { const n = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); return n }
+  const fmtInt = (n) => (n ?? 0).toLocaleString('en-US')
+  const cents = (p) => (p === null || p === undefined ? '—' : (p * 100).toFixed(1) + '¢')
+  const pct = (x, d = 1) => (x === null || x === undefined ? '—' : (x >= 0 ? '+' : '') + (x * 100).toFixed(d) + '%')
+  const plainPct = (x, d = 1) => (x === null || x === undefined ? '—' : (x * 100).toFixed(d) + '%')
+  function ago(iso) {
+    if (!iso) return 'never'
+    const m = Math.round((Date.now() - Date.parse(iso)) / 60000)
+    if (m < 1) return 'just now'
+    if (m < 60) return m + ' min ago'
+    const h = Math.round(m / 60); if (h < 48) return h + ' h ago'
+    return Math.round(h / 24) + ' days ago'
+  }
+  function until(iso) {
+    const m = Math.round((Date.parse(iso) - Date.now()) / 60000)
+    if (m <= 0) return 'ended ' + ago(iso)
+    if (m < 60) return 'in ' + m + ' min'
+    const h = Math.round(m / 60); if (h < 48) return 'in ' + h + ' h'
+    return 'in ' + Math.round(h / 24) + ' days'
+  }
+  const dateLabel = (iso) => new Date(iso).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+
+  function progRow(label, have, need, unit) {
+    const frac = need > 0 ? Math.min(1, have / need) : 0
+    const bar = el('div', { class: 'bar' }, el('i', { class: frac >= 1 ? 'full' : '', style: 'width:' + (frac * 100).toFixed(1) + '%' }))
+    return el('div', { class: 'row' }, el('span', null, label), el('span', null, el('b', null, have), ' / ' + need + (unit ? ' ' + unit : '')), bar)
+  }
+  const kv = (k, v, x, cls) => el('div', null, el('div', { class: 'k' }, k), el('div', { class: 'v' + (cls ? ' ' + cls : '') }, v), x ? el('div', { class: 'x' }, x) : null)
+  const tile = (n, k, x, color) => el('div', { class: 'tile', style: '--accentc:' + color }, el('div', { class: 'n' }, n), el('div', { class: 'k' }, k), x ? el('div', { class: 'x' }, x) : null)
+
+  function renderVerdict(d) {
+    const card = $('verdict'), prog = $('prog'), rk = $('resultKv')
+    prog.replaceChildren(); rk.replaceChildren()
+    if (!d.done) {
+      card.className = 'card verdict'
+      $('vBig').className = 'big'
+      $('vLabel').textContent = 'Verdict'
+      $('vBig').textContent = d.finishing ? 'Stop reached' : d.recorded ? 'Locked until the stop' : 'Starting up'
+      $('vSub').textContent = d.finishing
+        ? 'The test has reached its fixed stop. The tracker freezes the result on its next round, within 15 minutes; this page will then show it.'
+        : d.recorded
+        ? 'Profit stays hidden until the test reaches its fixed stop, so a lucky or unlucky start cannot sway the decision.'
+        : 'The first scan reads every order book; the first bets appear within a few minutes.'
+      prog.append(progRow('Bets settled', fmtInt(d.settled), d.rule.stopBets, ''))
+      prog.append(progRow('Days running', d.days.toFixed(1), d.rule.minDays, 'minimum'))
+      $('eta').replaceChildren(...(d.eta ? ['Expected verdict ', el('b', null, dateLabel(d.eta)), ' · hard stop after ' + d.rule.stopDays + ' days'] : []))
+      rk.hidden = true
+      return
+    }
+    const yes = d.result && d.result.lo > 0
+    card.className = 'card verdict ' + (yes ? 'yes' : 'no')
+    $('vLabel').textContent = 'Verdict · test finished'
+    $('vBig').textContent = yes ? 'YES — profitable at real prices' : 'NO — not profitable at real prices'
+    $('vBig').className = 'big ' + (yes ? 'pos' : 'neg')
+    $('vSub').textContent = yes
+      ? 'Profit stayed above zero across the plausible range. Next step per the plan: a fixed live rule, then $50 at $1–2 per bet.'
+      : 'The bets did not reliably make money once the real asking price and fees were paid.'
+    $('eta').textContent = ''
+    const r = d.result, s1 = d.withSlip1c, v1k = d.finalVolume1k
+    rk.hidden = false
+    rk.append(
+      kv('Profit per $1', r ? pct(r.perDollar) : '—', r ? '95% range ' + pct(r.lo) + ' to ' + pct(r.hi) : null, r ? (r.perDollar >= 0 ? 'pos' : 'neg') : ''),
+      kv('Bets / games', r ? fmtInt(r.n) + ' / ' + fmtInt(r.events) : '—', r ? 'staked $' + r.cost.toFixed(0) + ', net $' + r.pnl.toFixed(2) : null),
+      kv('Won vs paid', plainPct(d.hitRate), 'average price paid ' + cents(d.avgFill)),
+      kv('If fills were 1¢ worse', s1 ? pct(s1.perDollar) : '—', s1 ? 'range ' + pct(s1.lo) + ' to ' + pct(s1.hi) : null),
+      kv('Ask above last trade', d.askMinusLastTrade === null ? '—' : cents(d.askMinusLastTrade), 'size of the stale-price effect'),
+      kv('Busy markets only', v1k ? pct(v1k.perDollar) : '—', v1k ? fmtInt(v1k.n) + ' bets that reached $1k volume' : 'none'),
+    )
+  }
+
+  function renderTiles(d) {
+    $('tiles').replaceChildren(
+      tile(fmtInt(d.recorded), 'Markets scanned', 'sports yes/no, ~1 day out', 'var(--dim)'),
+      tile(fmtInt(d.ruleBets), 'Paper bets', '2¢–20¢, $2 each', 'var(--violet)'),
+      tile(fmtInt(d.games), 'Games', 'bets grouped by match', 'var(--cyan)'),
+      tile(fmtInt(d.upcoming), 'Before kickoff', 'game not over yet', 'var(--amber)'),
+      tile(fmtInt(d.waiting), 'Awaiting result', 'game over, not resolved', 'var(--amber)'),
+      tile(fmtInt(d.settled), 'Settled', d.unsettledStale ? fmtInt(d.unsettledStale) + ' never resolved' : 'result known', 'var(--green)'),
+    )
+  }
+
+  function renderDaily(days) {
+    const box = $('daily')
+    if (!days.length) return box.replaceChildren(el('div', { class: 'empty' }, 'No data yet'))
+    const W = 560, H = 190, pad = { l: 34, r: 6, t: 10, b: 24 }
+    const max = Math.max(1, ...days.map((x) => Math.max(x.bets, x.settled)))
+    const step = (W - pad.l - pad.r) / days.length, bw = Math.max(2, Math.min(16, step / 2 - 2))
+    const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Paper bets placed and settled per day' })
+    for (const f of [0, 0.5, 1]) {
+      const y = pad.t + (H - pad.t - pad.b) * (1 - f)
+      svg.append(svgEl('line', { x1: pad.l, x2: W - pad.r, y1: y, y2: y, stroke: '#1e2942', 'stroke-width': 1 }))
+      const t = svgEl('text', { x: pad.l - 6, y: y + 3, 'text-anchor': 'end' }); t.textContent = Math.round(max * f); svg.append(t)
+    }
+    const every = Math.ceil(days.length / 7)
+    days.forEach((x, i) => {
+      const cx = pad.l + step * i + step / 2, base = H - pad.b, h = (v) => (H - pad.t - pad.b) * (v / max)
+      const a = svgEl('rect', { x: cx - bw - 1, y: base - h(x.bets), width: bw, height: h(x.bets), rx: 2, fill: '#a97bff' })
+      const b = svgEl('rect', { x: cx + 1, y: base - h(x.settled), width: bw, height: h(x.settled), rx: 2, fill: '#4dd8ff' })
+      const tip = svgEl('title', {}); tip.textContent = `${x.day}: ${x.bets} bets placed, ${x.settled} settled, ${x.scanned} markets scanned`
+      a.append(tip); svg.append(a, b)
+      if (i % every === 0) { const t = svgEl('text', { x: cx, y: H - 7, 'text-anchor': 'middle' }); t.textContent = x.day.slice(5); svg.append(t) }
+    })
+    box.replaceChildren(svg)
+  }
+
+  function renderPrices(bins) {
+    const box = $('prices')
+    if (!bins.some((b) => b.n)) return box.replaceChildren(el('div', { class: 'empty' }, 'No bets yet'))
+    const W = 360, H = 190, pad = { l: 34, r: 6, t: 10, b: 24 }
+    const max = Math.max(1, ...bins.map((b) => b.n)), step = (W - pad.l - pad.r) / bins.length
+    const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Number of bets at each price' })
+    for (const f of [0, 0.5, 1]) {
+      const y = pad.t + (H - pad.t - pad.b) * (1 - f)
+      svg.append(svgEl('line', { x1: pad.l, x2: W - pad.r, y1: y, y2: y, stroke: '#1e2942', 'stroke-width': 1 }))
+      const t = svgEl('text', { x: pad.l - 6, y: y + 3, 'text-anchor': 'end' }); t.textContent = Math.round(max * f); svg.append(t)
+    }
+    bins.forEach((b, i) => {
+      const h = (H - pad.t - pad.b) * (b.n / max), x = pad.l + step * i + 3
+      const r = svgEl('rect', { x, y: H - pad.b - h, width: step - 6, height: h, rx: 3, fill: '#a97bff' })
+      const tip = svgEl('title', {}); tip.textContent = `${Math.round(b.lo * 100)}–${Math.round(b.hi * 100)}¢: ${b.n} bets`; r.append(tip); svg.append(r)
+      const t = svgEl('text', { x: x + (step - 6) / 2, y: H - 7, 'text-anchor': 'middle' }); t.textContent = Math.round(b.lo * 100) + '¢'; svg.append(t)
+    })
+    box.replaceChildren(svg)
+  }
+
+  let showAll = false
+  $('more').addEventListener('click', () => { showAll = !showAll; if (last) renderLatest(last) })
+  let last = null
+  const STATUS = { open: ['before kickoff', 'a'], waiting: ['awaiting result', 'c'], settled: ['settled', ''], stale: ['never resolved', 'r'] }
+  function renderLatest(d) {
+    last = d
+    const rows = showAll ? d.latest : d.latest.slice(0, 12)
+    $('latestMeta').textContent = !d.latest.length ? '' : d.done
+      ? 'newest ' + rows.length + ' of the ' + fmtInt(d.settled) + ' counted in the verdict'
+      : 'newest ' + rows.length + ' of ' + fmtInt(d.ruleBets)
+    $('more').hidden = d.latest.length <= 12
+    $('more').textContent = showAll ? 'Show fewer' : 'Show the newest ' + d.latest.length
+    if (!d.latest.length) return $('latest').replaceChildren(el('tr', null, el('td', { colspan: 5, class: 'empty' }, 'No paper bets yet')))
+    $('latest').replaceChildren(...rows.map((b) => {
+      let chip
+      if (d.done && b.status === 'settled') chip = el('span', { class: 'chip ' + (b.won ? 'g' : 'r') }, b.won ? 'won' : 'lost')
+      else { const [t, c] = STATUS[b.status] ?? [b.status, '']; chip = el('span', { class: 'chip ' + c }, t) }
+      return el('tr', null,
+        el('td', { class: 'q' }, b.question),
+        el('td', null, cents(b.price)),
+        el('td', null, b.shares.toFixed(1) + ' sh'),
+        el('td', { title: new Date(b.endDate).toLocaleString() }, until(b.endDate)),
+        el('td', null, chip))
+    }))
+  }
+
+  function renderCalibration(d) {
+    const rows = d.done ? d.calibration || [] : []
+    $('calCard').hidden = !rows.length
+    $('cal').replaceChildren(...rows.map((b) => el('tr', null,
+      el('td', null, Math.round(b.lo * 100) + '–' + Math.round(b.hi * 100) + '¢'),
+      el('td', null, fmtInt(b.n)), el('td', null, cents(b.avgPrice)),
+      el('td', { class: b.yesRate > b.avgPrice ? 'pos' : 'neg' }, plainPct(b.yesRate)))))
+  }
+
+  function renderHealth(d) {
+    const scanAge = d.lastScanAt ? (Date.now() - Date.parse(d.lastScanAt)) / 60000 : Infinity
+    $('health').replaceChildren(
+      kv('Last scan', ago(d.lastScanAt), 'every ' + d.scanEveryMin + ' min', scanAge > d.scanEveryMin * 2.5 ? 'amb' : ''),
+      kv('Last settlement check', ago(d.lastSettleAt), 'hourly'),
+      kv('Oldest result pending', d.oldestWaitingAt ? ago(d.oldestWaitingAt).replace(' ago', '') : '—', 'since that game ended'),
+      kv('Errors', fmtInt(d.errors), 'failed requests, retried next round', d.errors ? 'amb' : ''),
+      kv('Running since', d.firstRecordAt ? dateLabel(d.firstRecordAt) : '—', d.days.toFixed(1) + ' days'),
+    )
+  }
+
+  function renderState(d) {
+    const scanAge = d.lastScanAt ? (Date.now() - Date.parse(d.lastScanAt)) / 60000 : Infinity
+    const pill = $('state')
+    if (d.done) { pill.className = 'pill live'; $('stateText').textContent = 'FINISHED' }
+    else if (scanAge <= d.scanEveryMin * 2.5) { pill.className = 'pill live'; $('stateText').textContent = 'LIVE · scanned ' + ago(d.lastScanAt) }
+    else if (d.lastScanAt) { pill.className = 'pill stale'; $('stateText').textContent = 'STALE · last scan ' + ago(d.lastScanAt) }
+    else { pill.className = 'pill stale'; $('stateText').textContent = 'FIRST SCAN RUNNING' }
+  }
+
+  async function refresh() {
+    try {
+      const r = await fetch(feed, { cache: 'no-store' })
+      if (r.status === 401) throw new Error('This dashboard needs its token: open it as …/?token=YOUR_DASHBOARD_TOKEN')
+      if (!r.ok) throw new Error('The tracker answered ' + r.status)
+      const d = await r.json()
+      $('banner').hidden = true
+      renderState(d); renderVerdict(d); renderTiles(d); renderDaily(d.perDay); renderPrices(d.priceBins)
+      renderCalibration(d); renderLatest(d); renderHealth(d)
+      $('updated').textContent = 'updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    } catch (e) {
+      $('banner').hidden = false
+      $('banner').textContent = e.message.startsWith('This dashboard') || e.message.startsWith('The tracker') ? e.message : 'Cannot reach the tracker (' + e.message + '). Retrying every minute.'
+      const pill = $('state'); pill.className = 'pill down'; $('stateText').textContent = 'UNREACHABLE'
+    }
+  }
+  refresh()
+  setInterval(refresh, 60_000)
+})()
+</script>
+</body>
+</html>

@@ -120,11 +120,21 @@ export function profitPerDollar(bets, { slip = 0, iters = 4000 } = {}) {
   return { n: rows.length, events: groups.length, pnl, cost, perDollar: pnl / cost, lo: out[Math.floor(iters * 0.025)], hi: out[Math.floor(iters * 0.975)] }
 }
 
-export function summarise(state, nowMs = Date.now(), { reveal = false } = {}) {
+/**
+ * Earliest record time. A loop, not Math.min(...all): spreading ~120k records (about
+ * 20 days of scanning) into one call exceeds V8's argument limit and throws.
+ */
+export function firstRecordMs(recs) {
+  let first = Infinity
+  for (const r of recs) { const t = Date.parse(r.recordedAt); if (t < first) first = t }
+  return Number.isFinite(first) ? first : null
+}
+
+export function summarise(state, nowMs = Date.now(), { reveal = false, withhold = false } = {}) {
   const recs = Object.values(state.records)
   const rule = recs.filter((r) => r.rule)
   const settled = rule.filter((r) => r.settle)
-  const first = recs.length ? Math.min(...recs.map((r) => Date.parse(r.recordedAt))) : null
+  const first = firstRecordMs(recs)
   const days = first ? (nowMs - first) / 86400_000 : 0
   const stale = rule.filter((r) => !r.settle && nowMs - Date.parse(r.endDate) > RULE.unsettledAfterDays * 86400_000).length
   const done = (settled.length >= RULE.stopBets && days >= RULE.minDays) || days >= RULE.stopDays
@@ -133,7 +143,7 @@ export function summarise(state, nowMs = Date.now(), { reveal = false } = {}) {
     days: +days.toFixed(1), stop: `${RULE.stopBets} settled bets and ${RULE.minDays} days, or ${RULE.stopDays} days`, done,
     lastScanAt: state.lastScanAt ?? null, lastSettleAt: state.lastSettleAt ?? null, errors: state.errors ?? 0,
   }
-  if (!(done || reveal)) return s
+  if (withhold || !(done || reveal)) return s   // withhold: counts only, whatever the stop says
   const gap = rule.filter((r) => r.lastTrade !== null && r.bestAsk !== null).map((r) => r.bestAsk - r.lastTrade)
   s.result = profitPerDollar(settled)
   s.withSlip1c = profitPerDollar(settled, { slip: 0.01 })
@@ -142,7 +152,117 @@ export function summarise(state, nowMs = Date.now(), { reveal = false } = {}) {
   s.askMinusLastTrade = gap.length ? gap.reduce((a, b) => a + b, 0) / gap.length : null
   s.finalVolume1k = profitPerDollar(settled.filter((r) => r.settle.finalVolume >= 1000))
   s.verdict = s.result && s.result.lo > 0 ? 'YES — profitable at real asks' : 'NO — not profitable at real asks'
+  s.calibration = calibration(recs)
   return s
+}
+
+/**
+ * The registered stop, made permanent. The result is computed once, from the bets settled
+ * at that moment, and stored: bets that settle afterwards cannot move it, and scanning
+ * stops. Idempotent — a second call keeps the first result.
+ */
+export function freeze(state, nowMs = Date.now()) {
+  if (state.final) return state.final
+  const at = new Date(nowMs).toISOString()
+  const full = summarise(state, nowMs, { reveal: true })
+  const settledIds = Object.values(state.records).filter((r) => r.rule && r.settle).map((r) => r.id)
+  state.final = { ...full, done: true, frozenAt: at, settledIds }
+  return state.final
+}
+
+/** Reported, not deciding: how often each price level actually paid, at the real $2 fill. */
+export const CAL_EDGES = [0.02, 0.05, 0.10, 0.20, 0.35, 0.50, 0.65, 0.80, 0.90, 0.98]
+export function calibration(recs) {
+  const bins = CAL_EDGES.slice(0, -1).map((lo, i) => ({ lo, hi: CAL_EDGES[i + 1], n: 0, priceSum: 0, yes: 0 }))
+  for (const r of recs) {
+    const p = r.fill?.avgPrice
+    if (!r.settle || !r.fill?.filled || !(p >= CAL_EDGES[0]) || p > CAL_EDGES.at(-1)) continue
+    const b = bins.find((x) => p < x.hi) ?? bins.at(-1)
+    b.n++; b.priceSum += p; b.yes += r.settle.yesPrice
+  }
+  return bins.filter((b) => b.n).map((b) => ({ lo: b.lo, hi: b.hi, n: b.n, avgPrice: b.priceSum / b.n, yesRate: b.yes / b.n }))
+}
+
+const DAY_MS = 86400_000
+const dayOf = (ms) => new Date(ms).toISOString().slice(0, 10)
+const isStale = (r, nowMs) => nowMs - Date.parse(r.endDate) > RULE.unsettledAfterDays * DAY_MS
+
+/**
+ * Everything the dashboard shows. Before the registered stop it carries counts, prices and
+ * timings only: no outcome of any bet (won, lost, payout, profit) leaves this function,
+ * so the page cannot tempt anyone into stopping on a lucky run. After the stop, the full
+ * result and each bet's outcome are included.
+ */
+export function dashboardData(state, nowMs = Date.now()) {
+  const live = summarise(state, nowMs, { withhold: true })
+  // Outcomes are shown only from the frozen result. Between the stop being reached and the
+  // tracker freezing it (at most one scan interval) the page says "finishing" instead.
+  const { settledIds, ...frozen } = state.final ?? {}
+  const s = state.final ? frozen : { ...live, done: false, finishing: live.done }
+  const counted = new Set(settledIds ?? [])
+  const recs = Object.values(state.records)
+  const rule = recs.filter((r) => r.rule)
+  const first = firstRecordMs(recs)
+
+  const perDay = new Map()
+  const bump = (day, k) => { if (!perDay.has(day)) perDay.set(day, { day, scanned: 0, bets: 0, settled: 0 }); perDay.get(day)[k]++ }
+  for (const r of recs) {
+    bump(dayOf(Date.parse(r.recordedAt)), 'scanned')
+    if (r.rule) bump(dayOf(Date.parse(r.recordedAt)), 'bets')
+    if (r.rule && r.settle) bump(r.settle.settledAt.slice(0, 10), 'settled')
+  }
+  if (first) for (let t = first; t <= nowMs; t += DAY_MS) if (!perDay.has(dayOf(t))) perDay.set(dayOf(t), { day: dayOf(t), scanned: 0, bets: 0, settled: 0 })
+
+  const priceBins = Array.from({ length: 9 }, (_, i) => ({ lo: 0.02 + i * 0.02, hi: 0.04 + i * 0.02, n: 0 }))
+  for (const r of rule) priceBins[Math.min(8, Math.max(0, Math.floor((r.fill.avgPrice - 0.02) / 0.02 + 1e-9)))].n++
+
+  let waiting = 0, upcoming = 0, oldestWaitingMs = null
+  for (const r of rule) {
+    if (r.settle || isStale(r, nowMs)) continue
+    const end = Date.parse(r.endDate)
+    if (end > nowMs) upcoming++
+    else { waiting++; if (oldestWaitingMs === null || end < oldestWaitingMs) oldestWaitingMs = end }
+  }
+
+  const settledBets = rule.filter((r) => r.settle).length
+  let eta = null
+  if (first) {
+    // The 400th bet settles about a day after it is recorded (games are 22–26h out).
+    const sorted = rule.map((r) => Date.parse(r.recordedAt)).sort((a, b) => a - b)
+    const ratePerMs = rule.length / Math.max(nowMs - first, 3600_000)
+    const t400 = settledBets >= RULE.stopBets ? nowMs
+      : sorted.length >= RULE.stopBets ? sorted[RULE.stopBets - 1] + 30 * 3600_000
+      : ratePerMs > 0 ? nowMs + (RULE.stopBets - sorted.length) / ratePerMs + 30 * 3600_000 : Infinity
+    eta = new Date(Math.min(first + RULE.stopDays * DAY_MS, Math.max(first + RULE.minDays * DAY_MS, t400))).toISOString()
+  }
+
+  const latest = [...rule].sort((a, b) => Date.parse(b.recordedAt) - Date.parse(a.recordedAt)).slice(0, 40).map((r) => {
+    const row = {
+      question: r.question, price: r.fill.avgPrice, shares: r.fill.shares, cost: r.fill.spent + r.fee,
+      endDate: r.endDate, recordedAt: r.recordedAt,
+      status: r.settle ? 'settled' : isStale(r, nowMs) ? 'stale' : Date.parse(r.endDate) > nowMs ? 'open' : 'waiting',
+    }
+    if (s.done && counted.has(r.id)) { row.won = r.settle.yesPrice === 1; row.pnl = r.settle.pnl; row.counted = true }
+    return row
+  })
+  // After the stop, the list shows the bets the verdict was computed from, newest first.
+  const listed = s.done ? latestCounted(rule, counted, s, nowMs) : latest
+
+  return {
+    ...s, generatedAt: new Date(nowMs).toISOString(), firstRecordAt: first ? new Date(first).toISOString() : null,
+    rule: { stakeUsd: RULE.stakeUsd, minPrice: RULE.minPrice, maxPrice: RULE.maxPrice, stopBets: RULE.stopBets, minDays: RULE.minDays, stopDays: RULE.stopDays },
+    scanEveryMin: SCAN_MS / 60_000, games: new Set(rule.map((r) => r.event)).size,
+    waiting, upcoming, oldestWaitingAt: oldestWaitingMs ? new Date(oldestWaitingMs).toISOString() : null,
+    settledAll: recs.filter((r) => r.settle).length, eta,
+    perDay: [...perDay.values()].sort((a, b) => a.day.localeCompare(b.day)).slice(-35), priceBins, latest: listed,
+  }
+}
+
+function latestCounted(rule, counted, s, nowMs) {
+  return rule.filter((r) => counted.has(r.id)).sort((a, b) => Date.parse(b.recordedAt) - Date.parse(a.recordedAt)).slice(0, 40).map((r) => ({
+    question: r.question, price: r.fill.avgPrice, shares: r.fill.shares, cost: r.fill.spent + r.fee,
+    endDate: r.endDate, recordedAt: r.recordedAt, status: 'settled', won: r.settle.yesPrice === 1, pnl: r.settle.pnl, counted: true,
+  }))
 }
 
 // ---------------------------------------------------------------- I/O
@@ -192,15 +312,24 @@ async function scan(state) {
   return added
 }
 
-async function settleAll(state) {
+/**
+ * Settles every recorded market whose game has ended — rule bets decide the result, the
+ * rest give calibration at real asks (registered as reported, not deciding). Gamma returns
+ * up to 50 markets per request when asked for closed ones by id; markets still open are
+ * simply absent from the reply and tried again next hour, until they go stale.
+ */
+export async function settleAll(state, fetchJson = getJson, now = Date.now()) {
+  const due = Object.values(state.records).filter((r) => !r.settle && Date.parse(r.endDate) <= now && !isStale(r, now))
   let n = 0
-  for (const r of Object.values(state.records)) {
-    if (!r.rule || r.settle || Date.parse(r.endDate) > Date.now()) continue
+  for (let i = 0; i < due.length; i += 50) {
+    const chunk = due.slice(i, i + 50)
     try {
-      const m = await getJson(`https://gamma-api.polymarket.com/markets/${r.id}`)
-      const s = settle(r, m)
-      if (s) { r.settle = s; n++ }
-    } catch (e) { state.errors = (state.errors ?? 0) + 1; console.error('settle', r.id, e.message) }
+      const q = new URLSearchParams({ closed: 'true', limit: '100' })
+      for (const r of chunk) q.append('id', r.id)
+      const markets = await fetchJson('https://gamma-api.polymarket.com/markets?' + q)
+      const byId = new Map((Array.isArray(markets) ? markets : []).map((m) => [String(m.id), m]))
+      for (const r of chunk) { const s = settle(r, byId.get(r.id)); if (s) { r.settle = s; n++ } }
+    } catch (e) { state.errors = (state.errors ?? 0) + 1; console.error('settle', e.message) }
   }
   state.lastSettleAt = new Date().toISOString()
   return n
@@ -212,37 +341,41 @@ async function telegram(text) {
   try { await fetch(`https://api.telegram.org/bot${t}/sendMessage`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: c, text }) }) } catch {}
 }
 
-function page(s) {
-  const rows = Object.entries(s).filter(([, v]) => typeof v !== 'object' || v === null).map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('')
-  const res = s.result ? `<pre>${JSON.stringify({ result: s.result, withSlip1c: s.withSlip1c, hitRate: s.hitRate, avgFill: s.avgFill, askMinusLastTrade: s.askMinusLastTrade, finalVolume1k: s.finalVolume1k, verdict: s.verdict }, null, 2)}</pre>`
-    : '<p>Profit stays hidden until the registered stop, so nobody is tempted to stop early on a lucky run.</p>'
-  return `<!doctype html><meta name=viewport content="width=device-width"><title>Sports paper test</title><body style="font:15px system-ui;margin:16px;max-width:640px"><h2>Polymarket sports paper test</h2><p>No real money. PREREG-POLY-SPORTS.md.</p><table>${rows}</table>${res}</body>`
-}
+const DASHBOARD_HTML = path.join(path.dirname(fileURLToPath(import.meta.url)), 'polysports-dashboard.html')
 
 export async function run() {
   const state = load()
   const port = Number(process.env.PORT ?? process.env.DASHBOARD_PORT ?? 8080), token = process.env.DASHBOARD_TOKEN
+  const html = fs.readFileSync(DASHBOARD_HTML, 'utf8')
   http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x')
-    if (token && u.searchParams.get('token') !== token) { res.writeHead(401); return res.end('token required') }
-    const s = summarise(state)
-    if (u.pathname === '/json') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify(s)) }
-    res.writeHead(200, { 'content-type': 'text/html' }); res.end(page(s))
-  }).listen(port, () => console.log(`polysports status on :${port}`))
-  await telegram('Sports paper test started (no real money). Profit is reported only at the registered stop.')
-  let lastSettle = 0, announced = Boolean(state.announced)
+    if (token && u.searchParams.get('token') !== token) {
+      res.writeHead(401, { 'content-type': 'text/plain; charset=utf-8' })
+      return res.end('This dashboard needs its token: add ?token=YOUR_DASHBOARD_TOKEN to the address.')
+    }
+    const json = (body) => { res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)) }
+    if (u.pathname === '/api/status') return json(dashboardData(state))
+    if (u.pathname === '/json') { const { settledIds, ...f } = state.final ?? {}; return json(state.final ? f : summarise(state, Date.now(), { withhold: true })) }
+    if (u.pathname === '/') { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); return res.end(html) }
+    res.writeHead(404); res.end('not found')
+  }).listen(port, () => console.log(`polysports dashboard on :${port}`))
+  if (!state.final) await telegram('Sports paper test started (no real money). Profit is reported only at the registered stop.')
+  let lastSettle = 0
   for (;;) {
     try {
+      // The stop is checked FIRST each round, so the result is frozen on exactly the bets
+      // that were settled when it was reached, before this round could settle any more.
+      if (!state.final && summarise(state, Date.now(), { withhold: true }).done) {
+        const f = freeze(state); save(state)
+        console.log(`STOP reached — ${f.verdict} · ${f.settled} settled bets, profit per $1 ${f.result?.perDollar.toFixed(4)} [${f.result?.lo.toFixed(4)}, ${f.result?.hi.toFixed(4)}]`)
+        await telegram(`Sports paper test finished: ${f.verdict}\n${f.settled} bets, profit per $1 ${f.result?.perDollar.toFixed(3)} (95% ${f.result?.lo.toFixed(3)} to ${f.result?.hi.toFixed(3)})`)
+      }
+      if (state.final) { await new Promise((r) => setTimeout(r, SCAN_MS)); continue }   // finished: serve the page only
       const added = await scan(state)
       if (Date.now() - lastSettle > SETTLE_MS) { const n = await settleAll(state); lastSettle = Date.now(); console.log(`settled ${n}`) }
       save(state)
-      const s = summarise(state)
+      const s = summarise(state, Date.now(), { withhold: true })
       console.log(`scan +${added} · recorded ${s.recorded} · rule bets ${s.ruleBets} · settled ${s.settled}`)
-      if (s.done && !announced) {
-        const full = summarise(state, Date.now(), { reveal: true })
-        await telegram(`Sports paper test finished: ${full.verdict}\n${full.settled} bets, profit per $1 ${full.result?.perDollar.toFixed(3)} (95% ${full.result?.lo.toFixed(3)} to ${full.result?.hi.toFixed(3)})`)
-        state.announced = announced = true; save(state)
-      }
     } catch (e) { state.errors = (state.errors ?? 0) + 1; console.error('loop', e.message) }
     await new Promise((r) => setTimeout(r, SCAN_MS))
   }
@@ -251,7 +384,10 @@ export async function run() {
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   const cmd = process.argv[2] ?? 'run'
   if (cmd === 'run') run()
-  else if (cmd === 'summary') console.log(JSON.stringify(summarise(load(), Date.now(), { reveal: process.argv.includes('--reveal') }), null, 2))
+  else if (cmd === 'summary') {
+    const st = load(), { settledIds, ...f } = st.final ?? {}
+    console.log(JSON.stringify(st.final ? f : summarise(st, Date.now(), { reveal: process.argv.includes('--reveal') }), null, 2))
+  }
   else if (cmd === 'scan-once') { const s = load(); scan(s).then((n) => { save(s); console.log(`recorded ${n}`, JSON.stringify(summarise(s), null, 2)) }) }
   else { console.error('usage: node src/polysports.js run|summary|scan-once'); process.exit(1) }
 }
