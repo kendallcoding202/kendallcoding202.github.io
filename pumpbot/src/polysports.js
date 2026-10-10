@@ -493,6 +493,9 @@ export function dashboardData(state, nowMs = Date.now(), { arm = 'A', sport = nu
   // After a test's stop the list shows the bets its verdict was computed from; before it,
   // and on the watch list, every bet with its result as it comes in.
   const latest = final ? newest(rule.filter((r) => counted.has(r.id))) : newest(rule)
+  // Bets still to be decided, soonest kickoff first: games under way or about to start lead,
+  // whenever the bet was placed (most are placed a day ahead, so "newest" buries today's games).
+  const upcomingList = rule.filter((r) => !r.settle && !isStale(r, nowMs)).sort((a, b) => Date.parse(a.endDate) - Date.parse(b.endDate)).slice(0, 40).map(row)
   // The latest results: settled bets that count, the most recently settled first.
   const results = rule.filter((r) => r.settle && counted.has(r.id)).sort((a, b) => Date.parse(b.settle.settledAt) - Date.parse(a.settle.settledAt)).slice(0, 40).map(row)
 
@@ -525,7 +528,7 @@ export function dashboardData(state, nowMs = Date.now(), { arm = 'A', sport = nu
     },
     oldestWaitingAt: oldestWaitingMs ? new Date(oldestWaitingMs).toISOString() : null,
     untagged: armRecs.filter((r) => !r.sport).length,
-    perDay: [...perDay.values()].sort((a, b) => a.day.localeCompare(b.day)).slice(-35), priceBins, latest, results,
+    perDay: [...perDay.values()].sort((a, b) => a.day.localeCompare(b.day)).slice(-35), priceBins, latest, results, upcoming: upcomingList,
     bySport, byType, viewResult,
   }
 }

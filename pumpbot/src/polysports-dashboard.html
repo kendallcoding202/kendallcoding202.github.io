@@ -112,12 +112,12 @@
   @media (max-width: 640px) {
     table.bets, table.bets tbody { display: block; }
     table.bets thead { display: none; }
-    table.bets tr { display: grid; grid-template-columns: auto auto 1fr auto; gap: 4px 12px; align-items: center; padding: 10px 0; }
+    table.bets tr { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; padding: 10px 0; }
     table.bets tbody tr + tr { border-top: 1px solid rgba(30,41,66,.55); }
     table.bets tbody tr + tr td { border-top: none; }
     table.bets td { padding: 0; text-align: left; color: var(--dim); font-size: 11.5px; }
-    table.bets td.q { grid-column: 1 / -1; min-width: 0; color: var(--text); }
-    table.bets td:last-child { justify-self: end; }
+    table.bets td.q { flex: 1 0 100%; min-width: 0; color: var(--text); }
+    table.bets td:last-child { margin-left: auto; }
     table.bets .ph { display: inline; }
     table.bets td.empty { grid-column: 1 / -1; }
     table.bd td, table.bd th { padding: 7px 4px; font-size: 11.5px; }
@@ -230,7 +230,7 @@
   <section class="card">
     <div class="panelhead"><h2 id="latestTitle">Latest paper bets</h2><span class="meta" id="latestMeta"></span></div>
     <div class="seg" id="seg" hidden>
-      <button type="button" data-v="results">Results</button><button type="button" data-v="bets">Bets placed</button>
+      <button type="button" data-v="upcoming">Upcoming</button><button type="button" data-v="results">Results</button><button type="button" data-v="bets">Just placed</button>
     </div>
     <div class="scroll"><table class="bets">
       <thead><tr><th>Bet ($2 each)</th><th>Paid</th><th>Pays if it hits</th><th>Kickoff</th><th>Result</th></tr></thead>
@@ -499,24 +499,26 @@
   const money = (x) => (x >= 0 ? '+$' : '−$') + Math.abs(x).toFixed(2)
   const outcomeChip = (b) => b.resolved === 1 ? el('span', { class: 'chip g' }, 'won ' + money(b.pnl)) : b.resolved === 0 ? el('span', { class: 'chip r' }, 'lost ' + money(b.pnl))
     : el('span', { class: 'chip a' }, 'void ' + money(b.pnl))
-  // "Results" (latest settled first) or "Bets placed" (newest first). Results by default once there are any.
+  // "Upcoming" (soonest kickoff first — today's games on top), "Results" (latest settled first)
+  // or "Just placed" (newest first). Upcoming by default while there is anything to come.
   let listView = null
   $('seg').addEventListener('click', (e) => { const v = e.target.dataset?.v; if (v) { listView = v; if (last) renderLatest(last) } })
   function renderLatest(d) {
     last = d
-    const hasResults = (d.results || []).length > 0
-    const view = listView ?? (hasResults ? 'results' : 'bets')
-    $('seg').hidden = !hasResults
+    const lists = { upcoming: d.upcoming || [], results: d.results || [], bets: d.latest || [] }
+    const view = listView ?? (lists.upcoming.length ? 'upcoming' : lists.results.length ? 'results' : 'bets')
+    $('seg').hidden = !(lists.upcoming.length || lists.results.length)
     for (const b of $('seg').querySelectorAll('button')) b.className = b.dataset.v === view ? 'on' : ''
-    const list = view === 'results' ? d.results : d.latest
-    $('latestTitle').textContent = view === 'results' ? 'Latest results' : 'Latest paper bets'
+    const list = lists[view]
+    $('latestTitle').textContent = { upcoming: 'Upcoming bets', results: 'Latest results', bets: 'Just placed' }[view]
     const rows = showAll ? list : list.slice(0, 12)
     $('latestMeta').textContent = !list.length ? '' : view === 'results'
       ? 'newest ' + rows.length + ' of ' + fmtInt(d.view.settled) + ' settled'
+      : view === 'upcoming' ? 'soonest ' + rows.length + ' of ' + fmtInt(d.view.upcoming + d.view.waiting) + ' to be decided'
       : 'newest ' + rows.length + ' of ' + fmtInt(d.view.bets)
     $('more').hidden = list.length <= 12
-    $('more').textContent = showAll ? 'Show fewer' : 'Show the newest ' + list.length
-    if (!list.length) return $('latest').replaceChildren(el('tr', null, el('td', { colspan: 5, class: 'empty' }, 'No paper bets yet')))
+    $('more').textContent = showAll ? 'Show fewer' : 'Show ' + list.length
+    if (!list.length) return $('latest').replaceChildren(el('tr', null, el('td', { colspan: 5, class: 'empty' }, view === 'upcoming' ? 'Nothing waiting to be decided' : 'No paper bets yet')))
     $('latest').replaceChildren(...rows.map((b) => {
       let chip
       if (b.status === 'settled' && b.counted) chip = outcomeChip(b)

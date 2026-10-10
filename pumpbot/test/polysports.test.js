@@ -186,6 +186,10 @@ t('dashboard counts: price bins, games, waiting vs before kickoff, stale', () =>
   assert.deepEqual(d.priceBins.map((b) => b.n), [4, 4, 4, 3, 3, 3, 3, 3, 3])   // prices 2¢…18¢ in turn
   assert.equal(d.view.games, 10)
   assert.equal(d.view.upcoming, 29); assert.equal(d.view.waiting, 0)
+  // The upcoming list is every unsettled bet, soonest kickoff first, whenever it was placed.
+  assert.equal(d.upcoming.length, 29)
+  assert.ok(d.upcoming.every((b) => b.status !== 'settled'))
+  assert.ok(d.upcoming.every((b, i, a) => i === 0 || Date.parse(a[i - 1].endDate) <= Date.parse(b.endDate)))
   const later = dashboardData(st, now + 2 * 86400_000)
   assert.equal(later.view.waiting, 29); assert.equal(later.view.upcoming, 0)
   assert.ok(later.oldestWaitingAt)
