@@ -168,3 +168,31 @@ what does not:
 Decided before any Test A outcome existed (its first bets settle around 2026-10-10 08:00
 UTC). The dashboard now also says in plain words what each bet bought (BET YES, BET OVER
 61.5, BET North Carolina −17.5, BET Wagner to win) and what it pays if it hits.
+
+## Running result — 2026-10-15, day 5.8 (before the stop; from the dashboard)
+
+Recorded for the file, not as the verdict (that is frozen at the stop, 2026-10-16).
+
+| | Test A | Test B |
+|---|---|---|
+| settled bets / matches | 10,650 / 551 | 5,642 / 534 |
+| won | 530 (5.0%) | 507 (9.0%) |
+| average price paid | 7.8¢ | 12.4¢ |
+| net (paper) | −$9,040.90 on $22,270.47 | −$3,784.54 on $11,727.55 |
+| per $1 after fees | **−40.6%** [−44.0%, −37.0%] | **−32.3%** [−43.2%, −20.9%] |
+| per $1 with fills 1¢ worse | — | −38.4% |
+| ask above last trade | — | 0.3¢ |
+
+**Read.** The cheap side won far *less* often than its price: 5.0% at 7.8¢ (A), 9.0% at
+12.4¢ (B) — about −36% and −27% per dollar before fees, and the 3–5% fee on top. Both
+intervals lie wholly and far below zero; no plausible final day reverses either. The
+backtest lead (`OPTIONS-2026-10-01.md`) was the selection artifact this test was built to
+catch: it kept only markets whose *final* volume reached $1,000, which favours long shots
+that came alive. Live, at the ask, a day ahead — mostly untraded books priced by market
+makers — long shots are overpriced (the favourite–long-shot bias).
+
+**Not tested, and not to be read as a finding:** the mirror rule (buy the favourite side,
+i.e. bet against the long shot). The same numbers suggest a small pre-fee gain, but the
+idea comes from this data and must be registered and tested forward on new bets. Its
+cost depends on the bid side, which the records keep (`bestBid`), so the export can price
+it before any new test is designed.

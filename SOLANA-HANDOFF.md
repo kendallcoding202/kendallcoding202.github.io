@@ -46,6 +46,11 @@ pre-registration first.
   bets and 7 days, or 28 days). Test A started 2026-10-09 ~10:21 UTC; Test B with the
   next deploy. A **Watch** tab (not a test) follows hockey and college football kicking off
   within 22h, with results shown live (`POLY_WATCH_SPORTS`).
+  **2026-10-15, day 5.8: both tests are failing decisively** — A −40.6% per $1 [−44%, −37%],
+  B −32.3% [−43%, −21%]; long shots won less often than priced (5.0% at 7.8¢, 9.0% at
+  12.4¢). Verdicts freeze 2026-10-16 (expected NO). Next: price the mirror rule (bet
+  against the long shot) from the export (`research/polysports-eval.mjs`), and register it
+  as a new forward test only if the numbers justify it.
 
 The live probe service should be `PAPER=1` or stopped — it spends real SOL.
 
