@@ -3,65 +3,78 @@
  *
  *   node research/polymaker-eval.mjs <polysports-export.jsonl.gz>
  *
- * Prints a markdown report: the deciding numbers (calibration-corrected markout per $1, per
- * side and fill rule, with the registered 98.75% intervals over matches), real outcome
- * profit, the "one tick dearer" and "second in line" sensitivities, results by fill source,
- * time to kickoff and price, prices after the fill, the rebate bound, data health and the
- * startup feed check. Calibration results come from the export's meta line.
+ * Rebuilds the test's state from the export and runs the tracker's own makerSummary with the
+ * registered 4,000 draws, so these numbers are computed exactly as the stop computes them
+ * (as of the export's time). If the test has stopped, the frozen result is printed first: it
+ * is the verdict, and the recomputation is only a check. Then the breakdowns (never a
+ * verdict), prices after the fill, the rebate bound, data health and the startup feed check.
  */
 import fs from 'node:fs'
 import zlib from 'node:zlib'
-import { ratioBoot, SIDES, WORLDS } from '../src/polymaker.js'
+import { MAKER, SIDES, newMakerState, makerSummary, markoutBoot, calGroupsOf, ratioBoot, sideOf } from '../src/polymaker.js'
 
 const file = process.argv[2]
 if (!file) { console.error('usage: node research/polymaker-eval.mjs <export.jsonl.gz>'); process.exit(1) }
 const raw = fs.readFileSync(file)
 const lines = (file.endsWith('.gz') ? zlib.gunzipSync(raw) : raw).toString('utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
 const meta = lines.find((l) => l.kind === 'maker-meta') ?? {}
-const fills = lines.filter((l) => l.kind === 'fill')
-const replayed = lines.filter((l) => l.kind === 'replayed')
-const calRows = meta.calibration ?? meta.final?.calibration ?? null
+const fills = lines.filter((l) => l.kind === 'fill').map(({ kind: _k, ...f }) => f)
+const replayed = lines.filter((l) => l.kind === 'replayed').map(({ kind: _k, ...r }) => r)
+const cals = lines.filter((l) => l.kind === 'cal').map(({ kind: _k, ...c }) => c)
+
+// The test's state as the tracker held it at export time (only what the summary reads).
+const mk = newMakerState()
+mk.firstEnrolledAt = meta.firstEnrolledAt ?? null
+Object.assign(mk.stats, meta.stats ?? {})
+for (const f of fills) { mk.fills[`${f.world}|${f.id}`] = f; mk.markets[f.marketId] ??= { id: f.marketId } }
+for (const r of replayed) if (r.status) mk.replayed[r.id] = r
+for (const c of cals) mk.cal[c.id] = c
+const nowMs = meta.exportedAt ? Date.parse(meta.exportedAt) : Date.now()
+const s = makerSummary(mk, nowMs, { iters: MAKER.stopIters })
+const calList = Object.values(mk.cal), calGroups = calGroupsOf(calList)
 
 const out = []
-const say = (s = '') => out.push(s)
+const say = (x = '') => out.push(x)
 const pct = (x) => (x === null || x === undefined || !Number.isFinite(x) ? '—' : (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + '%')
-const c = (p) => (p === null || p === undefined ? '—' : (p * 100).toFixed(1) + '¢')
-const range = (r) => (r ? `${pct(r.perDollar)} [${pct(r.lo)}, ${pct(r.hi)}] · ${r.n} fills, ${r.matches} matches` : '—')
-const cOf = (mid) => {
-  if (!calRows) return 0
-  const b = calRows.find((x) => mid >= x.lo && mid < x.lo + 0.05 - 1e-12) ?? calRows.at(-1)
-  return b?.c ?? 0
-}
-const markRows = (list, adj = (f) => ({ sh: f.shares, p: f.price })) => list.filter((f) => f.mark !== null && f.mark !== undefined).map((f) => {
-  const { sh, p } = adj(f)
-  return { cluster: f.game ?? f.marketId, value: sh * (f.mark - p + cOf(f.mark)), cost: sh * p }
-}).filter((r) => r.cost > 0)
+const range = (r) => (r ? `${pct(r.perDollar)} [${pct(r.lo)}, ${pct(r.hi)}] · ${r.n} fills${r.byMark !== undefined ? ` (${r.byMark} by kickoff price)` : ''}, ${r.matches} matches` : '—')
 const outcomeRows = (list) => list.filter((f) => f.settle).map((f) => ({ cluster: f.game ?? f.marketId, value: f.settle.pnl, cost: f.settle.cost }))
-const sideOf = (f) => (f.price < 0.5 ? 'cheaper' : 'dearer')
-const L = 0.9875
+
+const table = (sum, title) => {
+  say(`## ${title}`)
+  say('Corrected markout per $1 (98.75% over matches) under each fill rule; the real outcome and the guard at 95%.')
+  say('| side | trade rule (sellers decide) | touch rule (picked off) | real outcome, trade rule | guard (fills vs their own kickoff price) |\n|---|---|---|---|---|')
+  for (const side of SIDES) {
+    const t = sum.sides?.[side]?.trade, h = sum.sides?.[side]?.touch
+    say(`| ${side} | ${range(t?.markout)} | ${range(h?.markout)} | ${range(t?.outcome)} | ${range(t?.guard)} |`)
+  }
+  say()
+  say('Sensitivities (live, a visible order can be jumped), trade rule, 98.75%:')
+  say('| side | one tick dearer | second in line |\n|---|---|---|')
+  for (const side of SIDES) { const t = sum.sides?.[side]?.trade; say(`| ${side} | ${range(t?.tickDearer)} | ${range(t?.secondInLine)} |`) }
+  say()
+  say(`- Days ${sum.days} · matches with a settled trade-rule fill ${sum.matches} · paired games ${sum.pairs ?? '—'} · stop reason ${sum.reason ?? 'not yet'}${sum.futile ? ' · futility met' : ''}`)
+  say(`- Gates: ${sum.gate ?? 'all met'} (settled trade-rule fills ${sum.pooled?.trade?.settled ?? '—'} of ${MAKER.minSettledFills} needed · void games ${pct(sum.voidShare)} · downtime ${pct(sum.downShare)})`)
+  say()
+}
 
 say('# Test C (maker) — evaluation')
-say(`Export ${meta.exportedAt ?? '?'} · rule ${meta.rule ? 'C1' : '?'} · first enrolment ${meta.firstEnrolledAt ?? '?'} · ${fills.length} fill records · ${replayed.length} games replayed`)
-if (meta.final) say(`**Frozen verdict (${meta.final.frozenAt}): ${meta.final.verdict}**`)
+say(`Export ${meta.exportedAt ?? '?'} · rule ${meta.ruleVersion ?? meta.final?.ruleVersion ?? '?'} · first enrolment ${meta.firstEnrolledAt ?? '?'} · ${fills.length} fill records · ${replayed.length} replay log lines · ${cals.length} calibration games`)
 say()
-
-say('## The deciding numbers — corrected markout per $1 (98.75% over matches)')
-say('| side | trade rule (sellers decide) | touch rule (picked off) | real outcome, trade rule (95%) |\n|---|---|---|---|')
-for (const side of SIDES) {
-  const t = fills.filter((f) => f.world === 'trade' && sideOf(f) === side), h = fills.filter((f) => f.world === 'touch' && sideOf(f) === side)
-  say(`| ${side} | ${range(ratioBoot(markRows(t), { level: L }))} | ${range(ratioBoot(markRows(h), { level: L }))} | ${range(ratioBoot(outcomeRows(t)))} |`)
+if (meta.final) {
+  say(`**Frozen verdict (${meta.final.frozenAt}, stop: ${meta.final.reason}): ${meta.final.verdict}**`)
+  say()
+  table(meta.final, 'The frozen result (this is the verdict)')
+  say(`Recomputed from this export: ${s.verdict ?? 'not done'} — a check only; fills settled after the freeze do not count.`)
+  say()
+} else {
+  say(`**Not stopped yet** — ${s.done ? `the stop is met (${s.reason}) and will freeze at the next daily check: ${s.verdict}` : 'no verdict can be given before the stop (YES only at the stop).'}`)
+  say()
 }
-say(calRows ? '' : '\n_No calibration table in this export: markouts are uncorrected._')
-say()
+table(s, meta.final ? 'Recomputed as of the export (a check)' : 'As of the export (progress, not a verdict)')
 
-say('## Sensitivities (a live order is visible and can be jumped)')
-say('| side | one tick dearer | second in line |\n|---|---|---|')
-for (const side of SIDES) {
-  const t = fills.filter((f) => f.world === 'trade' && sideOf(f) === side)
-  const dear = ratioBoot(markRows(t, (f) => ({ sh: f.shares, p: f.price + 0.01 })), { level: L })
-  const second = ratioBoot(markRows(t, (f) => ({ sh: Math.min(f.orderShares ?? f.shares, Math.max(0, (f.evidence ?? f.shares) - (f.orderShares ?? f.shares))), p: f.price })), { level: L })
-  say(`| ${side} | ${range(dear)} | ${range(second)} |`)
-}
+say('## Calibration correction c(mid) (bands with 30+ outcomes)')
+const bands = (s.calibration ?? []).filter((b) => b.n >= MAKER.calMin)
+say(bands.length ? bands.map((b) => `${Math.round(b.lo * 100)}–${Math.round(b.lo * 100) + 5}¢: ${pct(b.c)} (${b.n})`).join(' · ') : '_No band has 30 outcomes yet: markouts are uncorrected._')
 say()
 
 const slice = (title, key) => {
@@ -69,9 +82,10 @@ const slice = (title, key) => {
   say('| slice | corrected markout (95%) | real outcome (95%) |\n|---|---|---|')
   const g = new Map()
   for (const f of fills.filter((x) => x.world === 'trade')) { const k = key(f); if (!g.has(k)) g.set(k, []); g.get(k).push(f) }
-  for (const [k, v] of [...g].sort((a, b) => b[1].length - a[1].length)) say(`| ${k} | ${range(ratioBoot(markRows(v)))} | ${range(ratioBoot(outcomeRows(v)))} |`)
+  for (const [k, v] of [...g].sort((a, b) => b[1].length - a[1].length)) say(`| ${k} | ${range(markoutBoot(v, calList, { iters: 1000, calGroups }))} | ${range(ratioBoot(outcomeRows(v)))} |`)
   say()
 }
+slice('side', sideOf)
 slice('fill source', (f) => f.source)
 slice('time to kickoff at the fill', (f) => { const h = (Date.parse(f.kickoff) - Date.parse(f.filledAt)) / 3600_000; return h > 6 ? 'over 6 h' : h > 1 ? '1–6 h' : 'under 1 h' })
 slice('price', (f) => (f.price < 0.1 ? '2–10¢' : f.price < 0.3 ? '10–30¢' : f.price < 0.5 ? '30–50¢' : f.price < 0.7 ? '50–70¢' : f.price < 0.9 ? '70–90¢' : '90–98¢'))
@@ -93,11 +107,12 @@ say()
 const st = meta.stats ?? {}
 say('## Data health')
 say(`- Orders placed ${st.orders ?? '?'} · crossings ${st.crossings ?? 0} · touches ${st.touches ?? 0} · late ${st.late ?? 0} · lost to an early replay ${st.lostOrders ?? 0}`)
-say(`- Price reads ${st.reads ?? 0} · failed requests ${st.readFails ?? 0} · unread ${st.unread ?? 0}`)
-say(`- Trade requests ${st.tradeCalls ?? 0} · failed ${st.tradeFails ?? 0} · trades read ${st.tradesRead ?? 0} · bad records ${st.badRecords ?? 0} · last error ${st.lastTradesError ?? 'none'}`)
-const statusN = (s) => replayed.filter((r) => r.status === s).length
+say(`- Price reads ${st.reads ?? 0} · failed requests ${st.readFails ?? 0} · unread ${st.unread ?? 0} · slow reads asked again ${st.slowReads ?? 0}`)
+say(`- Trade requests ${st.tradeCalls ?? 0} · failed ${st.tradeFails ?? 0} · trades read ${st.tradesRead ?? 0} · bad records ${st.badRecords ?? 0} · storage errors ${st.storageErrors ?? 0} · last error ${st.lastTradesError ?? 'none'}`)
+const statusN = (x) => replayed.filter((r) => r.status === x).length
 say(`- Games replayed: ${statusN('ok')} ok · ${statusN('void')} void · ${statusN('no orders')} with no orders · re-read audit ${JSON.stringify(st.audit ?? null)}`)
-say(`- Restarts ${st.restarts ?? 0} · downtime ${((st.downMs ?? 0) / 3600_000).toFixed(1)} h · enrolled by sport ${JSON.stringify(st.enrolledBy?.sport ?? {})}`)
+say(`- Restarts ${st.restarts ?? 0} · downtime ${((st.downMs ?? 0) / 3600_000).toFixed(1)} h · loop errors ${st.loopErrors ?? 0} · last stop check ${JSON.stringify(st.lastStopCheck ?? null)}`)
+say(`- Enrolled by sport ${JSON.stringify(st.enrolledBy?.sport ?? {})}`)
 say()
 
 say('## Feed check (what the trade feed returned on the server)')
@@ -114,3 +129,4 @@ else {
 }
 
 console.log(out.join('\n'))
+

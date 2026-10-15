@@ -21,7 +21,7 @@ import http from 'node:http'
 import zlib from 'node:zlib'
 import { execFile } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { MAKER, MAKER_INFO, openMakerStore, liveRound, enroll, refreshGames, replayDue, settleCal, markFills, makerSummary, freezeMaker, closeAll, settleFills, pruneMarkets, makerDashboard, makerExportLines, feedCheck } from './polymaker.js'
+import { MAKER, MAKER_INFO, openMakerStore, liveRound, enroll, refreshGames, replayDue, settleCal, markFills, makerSummary, freezeMaker, closeAll, settleFills, pruneMarkets, makerDashboard, makerExportLines, feedCheck, appendLines } from './polymaker.js'
 
 // ---------------------------------------------------------------- the registered rules
 export const RULE = {
@@ -577,7 +577,7 @@ export function exportLines(state, nowMs = Date.now()) {
  *   settles.jsonl  one line per settlement
  *   tags.jsonl     sport / league / bet type filled in after the fact
  *   meta.json      small: timestamps, error count, each test's frozen result
- * A torn last line (a crash mid-write) is skipped on load. A state.json from the first
+ * A torn last line (a crash mid-write) is skipped on load, and closed before the next append. A state.json from the first
  * version is migrated once and kept as state.json.migrated.
  */
 export function openStore(dir) {
@@ -589,7 +589,7 @@ export function openStore(dir) {
     for (const l of fs.readFileSync(f(name), 'utf8').split('\n')) { if (!l.trim()) continue; try { fn(JSON.parse(l)) } catch { bad++ } }
     return bad
   }
-  const append = (name, objs) => { if (objs.length) fs.appendFileSync(f(name), objs.map((o) => JSON.stringify(o)).join('\n') + '\n') }
+  const append = (name, objs) => appendLines(f(name), objs)   // closes a torn last line first
   const metaOf = (state) => ({ lastScanAt: state.lastScanAt ?? null, lastSettleAt: state.lastSettleAt ?? null, errors: state.errors ?? 0, finalByArm: state.finalByArm ?? {} })
   const store = {
     load() {
@@ -623,18 +623,36 @@ export function openStore(dir) {
 }
 
 // ---------------------------------------------------------------- I/O
+// Errors carry the HTTP status and the service's Retry-After (ms), so callers can tell a
+// rate limit or an outage (back off, do not split) from a request the service rejected.
+export function httpError(r, url) {
+  const e = new Error(`${r.status} ${url}`.slice(0, 300))
+  e.status = r.status
+  const ra = r.headers?.get?.('retry-after')
+  if (ra) { const sec = Number(ra), ms = Number.isFinite(sec) ? sec * 1000 : Date.parse(ra) - Date.now(); if (ms >= 0) e.retryAfterMs = ms }
+  return e
+}
+const CURL_NET = { 6: 'ENOTFOUND', 7: 'ECONNREFUSED', 35: 'ECONNRESET', 52: 'ECONNRESET', 56: 'ECONNRESET' }
+export function curlError(e, stderr) {
+  const err = new Error(String(stderr || e.message).trim().slice(0, 300))
+  const m = /returned error:? (\d{3})/.exec(stderr ?? '')
+  if (m) err.status = Number(m[1])
+  if (e.code === 28) err.timeout = true
+  if (CURL_NET[e.code]) err.code = CURL_NET[e.code]
+  return err
+}
 function getJson(url) {
   // POLY_HTTP=curl for environments whose proxy refuses Node's fetch.
-  if (process.env.POLY_HTTP === 'curl') return new Promise((ok, fail) => execFile('curl', ['-sS', '--fail', '--max-time', '30', url], { encoding: 'utf8', maxBuffer: 64 << 20 }, (e, out) => { if (e) return fail(e); try { ok(JSON.parse(out)) } catch (err) { fail(err) } }))
-  return fetch(url, { signal: AbortSignal.timeout(30_000) }).then((r) => { if (!r.ok) throw new Error(`${r.status} ${url}`); return r.json() })
+  if (process.env.POLY_HTTP === 'curl') return new Promise((ok, fail) => execFile('curl', ['-sS', '--fail', '--max-time', '30', url], { encoding: 'utf8', maxBuffer: 64 << 20 }, (e, out, err) => { if (e) return fail(curlError(e, err)); try { ok(JSON.parse(out)) } catch (x) { fail(x) } }))
+  return fetch(url, { signal: AbortSignal.timeout(30_000) }).then((r) => { if (!r.ok) throw httpError(r, url); return r.json() })
 }
 function postJson(url, body) {
   const data = JSON.stringify(body)
   if (process.env.POLY_HTTP === 'curl') return new Promise((ok, fail) => {
-    const p = execFile('curl', ['-sS', '--fail', '--max-time', '60', '-X', 'POST', '-H', 'content-type: application/json', '--data-binary', '@-', url], { encoding: 'utf8', maxBuffer: 256 << 20 }, (e, out) => { if (e) return fail(e); try { ok(JSON.parse(out)) } catch (err) { fail(err) } })
+    const p = execFile('curl', ['-sS', '--fail', '--max-time', '60', '-X', 'POST', '-H', 'content-type: application/json', '--data-binary', '@-', url], { encoding: 'utf8', maxBuffer: 256 << 20 }, (e, out, err) => { if (e) return fail(curlError(e, err)); try { ok(JSON.parse(out)) } catch (x) { fail(x) } })
     p.stdin.end(data)
   })
-  return fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: data, signal: AbortSignal.timeout(60_000) }).then((r) => { if (!r.ok) throw new Error(`${r.status} ${url}`); return r.json() })
+  return fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: data, signal: AbortSignal.timeout(60_000) }).then((r) => { if (!r.ok) throw httpError(r, url); return r.json() })
 }
 const iso = (ms) => new Date(ms).toISOString().slice(0, 19) + 'Z'
 
@@ -785,7 +803,7 @@ export async function tagMissing(state, index, fetchJson = getJson, onTags = () 
 async function telegram(text) {
   const t = process.env.TELEGRAM_BOT_TOKEN, c = process.env.TELEGRAM_CHAT_ID
   if (!t || !c) return
-  try { await fetch(`https://api.telegram.org/bot${t}/sendMessage`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: c, text }) }) } catch {}
+  try { await fetch(`https://api.telegram.org/bot${t}/sendMessage`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: c, text }), signal: AbortSignal.timeout(10_000) }) } catch {}
 }
 
 const DASHBOARD_HTML = path.join(path.dirname(fileURLToPath(import.meta.url)), 'polysports-dashboard.html')
@@ -798,16 +816,42 @@ function publicSummary(state, arm) {
   return rest
 }
 
-/** The tabs: Test C first (the live test), then the finished ones. */
+/** The tabs: Test C first (the live test), then the finished ones. Counts only: no statistics run here. */
 export function armTabs(state, mk, nowMs = Date.now()) {
-  const c = makerSummary(mk, nowMs, { iters: 50 })
+  // The same counts as the summary's pooled trade-rule figures: fills not yet 14 days unsettled, and settled ones.
+  const trade = Object.values(mk.fills).filter((f) => f.world === 'trade' && (f.settle || nowMs - Date.parse(f.kickoff) <= MAKER.unsettledAfterDays * 86400_000))
+  const c = mk.final?.pooled?.trade ?? { fills: trade.length, settled: trade.filter((f) => f.settle).length }
   return [
-    { key: 'C', name: MAKER_INFO.name, ruleBets: c.pooled.trade.fills, settled: c.pooled.trade.settled, done: Boolean(mk.final), live: !mk.final, unit: 'fills' },
+    { key: 'C', name: MAKER_INFO.name, ruleBets: c.fills, settled: c.settled, done: Boolean(mk.final), live: !mk.final, unit: 'fills' },
     ...ALL_ARMS.map((a) => {
       const f = a === 'W' ? null : state.finalByArm?.[a], l = f ?? summarise(state, nowMs, { arm: a, withhold: true })
       return { key: a, name: ARM_INFO[a].name, ruleBets: l.ruleBets, settled: l.settled, recorded: l.recorded, done: true, early: Boolean(f?.stoppedEarly), watch: a === 'W' }
     }).filter((a) => !a.watch || a.recorded > 0),
   ]
+}
+
+/**
+ * Test C's stop: one check a day, at the first price round after 00:00 UTC, with the
+ * registered bootstrap; the summary that decides is the one frozen, and every resting order
+ * ends. The day checked is saved at once, so a restart or deploy the same day does not check again.
+ */
+export function makeStopCheck(mk, makerStore, onStop = () => {}) {
+  let lastDay = mk.stats.lastStopCheck?.day ?? mk.stats.lastStopCheck?.at?.slice(0, 10) ?? null
+  return (nowMs) => {
+    const today = new Date(nowMs).toISOString().slice(0, 10)
+    if (mk.final || lastDay === today) return null
+    lastDay = today
+    const s = makerSummary(mk, nowMs, { iters: MAKER.stopIters })
+    mk.stats.lastStopCheck = { day: today, at: new Date(nowMs).toISOString(), days: s.days, matches: s.matches, done: s.done, reason: s.reason }
+    makerStore.saveMeta(mk)
+    if (!s.done) return s
+    const f = freezeMaker(mk, nowMs, s)
+    const ended = []
+    closeAll(mk, nowMs, (o) => ended.push(o))   // Test C stops quoting
+    makerStore.addOrders(ended); makerStore.saveOpen(mk, nowMs); makerStore.saveMeta(mk)
+    onStop(f)
+    return s
+  }
 }
 
 export async function run() {
@@ -821,6 +865,15 @@ export async function run() {
   // The feed is rebuilt at most once a minute per view, and after each round of work:
   // computing it walks every record, so on demand it would cost ~1 s per refresh at a week's scale.
   const cache = new Map()
+  // Test C's summary (a bootstrap: seconds at scale) is rebuilt only when its data changes, or
+  // each hour for its age-dependent parts, and warmed straight after a price round, so a
+  // dashboard view does not run it on the price loop's time.
+  const memo = {}
+  const summaryOf = (iters = 200) => {
+    const key = `${mk.statsVersion ?? 0}|${Math.floor(Date.now() / 3600_000)}`
+    if (memo[iters]?.key !== key) memo[iters] = { key, s: makerSummary(mk, Date.now(), { iters }) }
+    return memo[iters].s
+  }
   const cached = (key, build) => {
     const hit = cache.get(key)
     if (hit && Date.now() - hit.at < 60_000) return hit.body
@@ -850,7 +903,7 @@ export async function run() {
       const sport = u.searchParams.get('sport') || null, type = u.searchParams.get('type') || null
       return send(cached(`${arm}|${sport}|${type}`, () => {
         const now = Date.now()
-        const d = arm === 'C' ? makerDashboard(mk, now, { sport, type }) : dashboardData(state, now, { arm, sport, type })
+        const d = arm === 'C' ? makerDashboard(mk, now, { sport, type, summary: mk.final ? null : summaryOf() }) : dashboardData(state, now, { arm, sport, type })
         return { ...d, arms: armTabs(state, mk, now), earlyStop: arm === 'C' || !d.stoppedEarly ? null : { at: EARLY_STOP.at, note: EARLY_STOP.note(d.days ?? 0) } }
       }))
     }
@@ -871,7 +924,7 @@ export async function run() {
       return res.end(body)
     }
     if (u.pathname === '/json') return send(cached('json', () => {
-      const { stats: _s, ...c } = makerSummary(mk, Date.now())
+      const { stats: _s, ...c } = mk.final ? {} : summaryOf()
       return { C: mk.final ? { ...mk.final, settledIds: undefined } : c, ...Object.fromEntries(ARMS.map((a) => [a, publicSummary(state, a)])), W: summarise(state, Date.now(), { arm: 'W', reveal: true }) }
     }))
     if (u.pathname === '/') { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); return res.end(html) }
@@ -879,10 +932,17 @@ export async function run() {
   }
   const io = { getJson, postJson, store: makerStore, log: (...a) => console.error(...a) }
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
-  if (!mk.final) await telegram('Sports paper test C (maker) running — no real money.')
+  if (!mk.final) telegram('Sports paper test C (maker) running — no real money.')   // not awaited: never holds back the first read
   let index = null, indexAt = 0
 
-  // The live loop: prices every minute, nothing else, so slow work elsewhere never stretches an order's life.
+  const stopCheck = makeStopCheck(mk, makerStore, (f) => {
+    cache.clear()
+    console.log(`STOP reached (${f.reason}), test C — ${f.verdict}`)
+    telegram(`Sports paper test C (maker) finished: ${f.verdict}`)
+  })
+
+  // The live loop: prices every minute, nothing else, so slow work elsewhere never stretches an
+  // order's life. The statistics run straight after a round, in the wait before the next.
   const live = async () => {
     for (;;) {
       const started = Date.now()
@@ -891,15 +951,17 @@ export async function run() {
         makerStore.saveMeta(mk)
         state.version = (state.version ?? 0) + 1
         cache.clear()
+        stopCheck(Date.now())
+        if (!mk.final) summaryOf()
       } catch (e) { mk.stats.loopErrors = (mk.stats.loopErrors ?? 0) + 1; console.error('live', e.message) }
       await sleep(Math.max(5_000, MAKER.readMs - (Date.now() - started)))
     }
   }
 
   // Everything else, on its own clock: enrolment and kickoff refresh, replaying finished games,
-  // settlement, the calibration results, the stop.
+  // settlement, the calibration results (the stop is checked in the live loop).
   const background = async () => {
-    let lastEnroll = 0, lastReplay = 0, lastSettle = 0, lastStopDay = null, checked = false
+    let lastEnroll = 0, lastReplay = 0, lastSettle = 0, checked = false
     for (;;) {
       try {
         // Tests A and B: stopped early at the user's request (EARLY_STOP), each frozen once.
@@ -908,22 +970,6 @@ export async function run() {
           const f = freeze(state, Date.now(), arm, { stoppedEarly: true, earlyStopAt: EARLY_STOP.at })
           store.saveMeta(state); cache.clear()
           console.log(`Test ${arm} stopped early — ${f.verdict} · ${f.settled} settled bets, profit per $1 ${f.result?.perDollar.toFixed(4)} [${f.result?.lo.toFixed(4)}, ${f.result?.hi.toFixed(4)}]`)
-        }
-        // Test C's stop: one check a day, at the first pass after 00:00 UTC, with the registered
-        // bootstrap; the summary that decides is the one frozen.
-        const today = new Date().toISOString().slice(0, 10)
-        if (!mk.final && lastStopDay !== today) {
-          lastStopDay = today
-          const s = makerSummary(mk, Date.now(), { iters: MAKER.stopIters })
-          mk.stats.lastStopCheck = { at: new Date().toISOString(), days: s.days, matches: s.matches, done: s.done, reason: s.reason }
-          if (s.done) {
-            const f = freezeMaker(mk, Date.now(), s)
-            const ended = []
-            closeAll(mk, Date.now(), (o) => ended.push(o))   // Test C stops quoting
-            makerStore.addOrders(ended); makerStore.saveOpen(mk); makerStore.saveMeta(mk); cache.clear()
-            console.log(`STOP reached (${f.reason}), test C — ${f.verdict}`)
-            await telegram(`Sports paper test C (maker) finished: ${f.verdict}`)
-          }
         }
         if (!index || Date.now() - indexAt > INDEX_MS) {
           try { index = sportsIndex(await getJson('https://gamma-api.polymarket.com/sports')); indexAt = Date.now() }

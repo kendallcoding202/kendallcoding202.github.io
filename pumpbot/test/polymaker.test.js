@@ -5,7 +5,9 @@ import os from 'node:os'
 import path from 'node:path'
 import { MAKER, RULE_VERSION, mil, bandOf, kickoffOf, ineligible, readOf, quote, sharesFor, pickoffMil, evidenceAt, crossSize, applyRead, closeAtKickoff, moveKickoff, refreshGame,
   newMakerState, tradesOf, classify, replayGame, settleFill, freshMark, calibrationTable, markoutBoot, makerSummary, verdictOf, freezeMaker,
-  eachLine, openMakerStore, liveRound, enroll, fetchTrades, replayDue, settleFills, settleCal, pruneMarkets, makerDashboard, makerExportLines } from '../src/polymaker.js'
+  eachLine, openMakerStore, liveRound, enroll, fetchTrades, replayDue, settleFills, settleCal, pruneMarkets, makerDashboard, makerExportLines,
+  readPrices, refreshGames, isSystemic, calGroupsOf } from '../src/polymaker.js'
+import { openStore, makeStopCheck, httpError, curlError } from '../src/polysports.js'
 
 let passed = 0
 const tests = []
@@ -354,6 +356,169 @@ t('a full day against fake Polymarket endpoints: enrol, quote, end at kickoff, r
   const back = openMakerStore(dir).load(now)
   assert.equal(back.fills['trade|77:0'].settle.yesPrice, 1); assert.equal(back.cal['77'].r0, 1); assert.ok(back.enrolled.has('77'))
   assert.equal(RULE_VERSION, 'C2')
+})
+
+const isoAt = (ms) => new Date(ms).toISOString()
+const gammaTime = (ms) => isoAt(ms).replace('T', ' ').replace('.000Z', '+00')
+const sell = (cid, ms, price = '0.05', size = '25') => ({ token_id: '11', condition_id: cid, price, size, side: 'SELL', timestamp: Math.floor(ms / 1000), transaction_hash: '0x' + ms })
+// A trade feed: the newest trade (the watermark) is `water`; each game's trades by condition id.
+const feed = (water, byCid) => async (url) => {
+  const cid = new URL(url).searchParams.get('condition_id')
+  if (!cid) return { data: [sell('0xz', water)], pagination: { has_more: false } }
+  return { data: cid.split(',').flatMap((c) => byCid[c] ?? []), pagination: { has_more: false } }
+}
+
+t('kickoff prices survive a restart, before kickoff (kept midpoints) and after it (the calibration record)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'maker-')), st = openMakerStore(dir)
+  const kick = T0 + 3600_000, mk = stateWith(kick), ended = []
+  st.addMarkets([{ ...mk.markets.M, enrolledAt: isoAt(T0) }]); st.saveMeta(mk)
+  every(mk, kick - 30 * MIN, kick - 2 * MIN, 40, 90, ended)                 // last read 3 minutes before kickoff
+  st.addOrders(ended.splice(0)); st.saveOpen(mk, kick - 3 * MIN)
+  // Down across kickoff: the first round after the restart records the kickoff price from the kept midpoints.
+  let back = st.load(kick + 20 * MIN)
+  assert.equal(back.markets.M.marks.at(-1)[0], kick - 3 * MIN)
+  const io = { store: st, clock: () => kick + 20 * MIN, postJson: async () => { throw new Error('no reads after kickoff') }, getJson: async () => { throw new Error('none') } }
+  await liveRound(back, io, kick + 20 * MIN)
+  assert.equal(back.cal.M.fresh, true); assert.equal(back.cal.M.mid, 0.065); assert.equal(back.cal.M.at, isoAt(kick - 3 * MIN))
+  // Down again before the replay: the midpoints are gone, the calibration record still gives the fill its kickoff price.
+  back = st.load(kick + 60 * MIN)
+  assert.equal(back.markets.M.marks, undefined); assert.equal(back.closed.M.length, 2)
+  const now = kick + MAKER.tradesAfterMs
+  await replayDue(back, { store: st, log() {}, clock: () => now, getJson: feed(now, { '0xm': [sell('0xm', kick - 20 * MIN)] }) }, now)
+  const f = back.fills['trade|M:0']
+  assert.equal(f.mark, 0.065); assert.equal(f.markAt, isoAt(kick - 3 * MIN)); assert.ok(freshMark(f))
+})
+
+t('an earlier kickoff found by a refresh is still applied after a restart: in-play evidence never fills', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'maker-')), st = openMakerStore(dir)
+  const K = T0 + 3600_000, early = K - 20 * MIN, mk = stateWith(K), ended = []
+  st.addMarkets([{ ...mk.markets.M, enrolledAt: isoAt(T0) }])
+  every(mk, early - 30 * MIN, early + 10 * MIN, 40, 90, ended)               // still quoting after the true (unannounced) start
+  applyRead(mk, 'M', 30, 50, early + 10 * MIN, (o) => ended.push(o))      // an in-play crossing
+  assert.ok(mk.retired['M:0'])
+  st.addOrders(ended.splice(0)); st.saveOpen(mk, early + 10 * MIN)
+  refreshGame(mk, mk.markets.M, { gameStartTime: gammaTime(early) }, early + 11 * MIN, (o) => ended.push(o))
+  st.addOrders(ended.splice(0)); st.addGameEvents(mk.events.splice(0)); st.saveOpen(mk, early + 11 * MIN)
+  const back = st.load(early + 12 * MIN)
+  assert.equal(back.markets.M.kickoff, isoAt(early)); assert.equal(back.retired['M:0'], undefined); assert.equal(Object.keys(back.open).length, 0)
+  assert.ok(back.closed.M.length > 0 && back.closed.M.every((o) => o.from < early && o.to <= early && !o.cross))
+  assert.ok(back.needSize.every((x) => x.at < early))
+  const r = replayGame(back.markets.M, back.closed.M, [], MAKER.lagMs, null)
+  assert.equal(r.trade.length + r.touch.length, 0)
+})
+
+t('a refresh still reaches a stopped game, so an unannounced early start moves its kickoff back', async () => {
+  const K = T0 + 3600_000, early = K - 30 * MIN, mk = stateWith(K)
+  applyRead(mk, 'M', 40, 90, T0, () => {}); applyRead(mk, 'M', null, null, T0 + MIN, () => {})
+  assert.equal(mk.markets.M.stopped.why, 'book cleared')
+  const writes = []
+  const io = { store: { addOrders: (l) => writes.push(...l), addGameEvents: (l) => writes.push(...l) }, getJson: async (url) => (url.includes('closed=false') ? [{ id: 'M', gameStartTime: gammaTime(early) }] : []) }
+  assert.equal(await refreshGames(mk, io, T0 + 2 * MIN), 1)
+  assert.equal(mk.markets.M.kickoff, isoAt(early)); assert.ok(writes.some((e) => e.kickoffMoved))
+})
+
+t('an append after a torn last line starts on its own line, so the new record is kept (both tests\' stores)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'maker-')), st = openMakerStore(dir)
+  fs.writeFileSync(path.join(dir, 'maker-fills.jsonl'), '{"world":"trade","id":"A:0"}\n{"world":"tra')
+  st.addFills([{ world: 'trade', id: 'B:0', price: 0.05 }])
+  st.addFills([{ world: 'trade', id: 'C:0', price: 0.05 }])
+  const back = st.load(T0)
+  assert.ok(back.fills['trade|A:0'] && back.fills['trade|B:0'] && back.fills['trade|C:0'])
+  const old = openStore(dir)
+  fs.writeFileSync(path.join(dir, 'records.jsonl'), JSON.stringify({ id: 'r1', arm: 'A', fill: { avgPrice: 0.5, spent: 1 }, fee: 0.02, feeVersion: 2 }) + '\n')
+  fs.writeFileSync(path.join(dir, 'settles.jsonl'), '{"id":"r0","sett')
+  old.addSettles([{ id: 'r1', settle: { payout: 2, cost: 1.02, pnl: 0.98 } }])
+  assert.equal(old.load().records.r1.settle.payout, 2)
+})
+
+t('a stop landing while prices are being read places no new order', async () => {
+  const mk = stateWith(T0 + 3600_000)
+  const io = { store: { addCal() {}, addOrders() {}, addGameEvents() {}, saveOpen() {} }, clock: () => T0,
+    postJson: async () => { mk.final = { verdict: 'stopped' }; return { 11: { BUY: '0.04', SELL: '0.09' } } } }
+  await liveRound(mk, io, T0)
+  assert.equal(Object.keys(mk.open).length, 0); assert.equal(mk.stats.orders, 0)
+})
+
+t('a rate limit or outage is not split into more requests; a rate limit pauses reading for as long as asked', async () => {
+  const mk = newMakerState()
+  for (let i = 0; i < 300; i++) mk.markets[`G${i}`] = { id: `G${i}`, tokens: [`t${i}`, `u${i}`] }
+  const ids = Object.keys(mk.markets)
+  let posts = 0
+  const fail = (status, extra = {}) => ({ clock: () => T0, log() {}, postJson: async () => { posts++; throw Object.assign(new Error(String(status)), { status, ...extra }) } })
+  await readPrices(mk, fail(429, { retryAfterMs: 2 * MIN }), ids)
+  assert.equal(posts, 2); assert.equal(mk.stats.unread, 300); assert.equal(mk.backoffUntil, T0 + 2 * MIN)
+  posts = 0; await readPrices(mk, fail(503), ids); assert.equal(posts, 2)
+  posts = 0; await readPrices(mk, fail(400), ids.slice(0, 4)); assert.equal(posts, 7)   // rejected on its own: halves down to single games
+  assert.ok(isSystemic({ status: 502 }) && isSystemic({ timeout: true }) && isSystemic({ code: 'ECONNRESET' }) && !isSystemic({ status: 400 }))
+  // liveRound reads nothing while the pause lasts.
+  const one = stateWith(T0 + 3600_000)
+  one.backoffUntil = T0 + MIN; posts = 0
+  await liveRound(one, { store: { addCal() {}, addOrders() {}, addGameEvents() {}, saveOpen() {} }, clock: () => T0 + 30_000, postJson: async () => { posts++; return {} } }, T0 + 30_000)
+  assert.equal(posts, 0)
+  // The HTTP helpers carry what the callers need.
+  const e = httpError({ status: 429, headers: { get: (h) => (h === 'retry-after' ? '30' : null) } }, 'https://x')
+  assert.equal(e.status, 429); assert.equal(e.retryAfterMs, 30_000)
+  assert.equal(curlError({ code: 22 }, 'curl: (22) The requested URL returned error: 503').status, 503)
+  assert.ok(curlError({ code: 28 }, 'curl: (28) Operation timed out').timeout); assert.equal(curlError({ code: 7 }, '').code, 'ECONNREFUSED')
+})
+
+t('replay: a write that fails leaves the game unreplayed, then it is replayed once; a rate limit stops the pass, unsplit', async () => {
+  const kick = T0 + 3600_000, now = kick + MAKER.tradesAfterMs
+  const mk = stateWith(kick)
+  mk.closed.M = [order(0, 50, T0, kick)]
+  const written = { fills: [], replayed: [] }
+  let full = true
+  const store = { addTrades() {}, addFills(l) { if (full) throw new Error('no space left'); written.fills.push(...l) }, addReplayed(l) { written.replayed.push(...l) } }
+  const getJson = feed(now, { '0xm': [sell('0xm', kick - 30 * MIN)] })
+  await replayDue(mk, { store, getJson, log() {}, clock: () => now }, now)
+  assert.equal(mk.replayed.M, undefined); assert.equal(Object.keys(mk.fills).length, 0); assert.equal(written.replayed.length, 0); assert.equal(mk.stats.storageErrors, 1)
+  full = false
+  await replayDue(mk, { store, getJson, log() {}, clock: () => now + 15 * MIN }, now + 15 * MIN)
+  assert.equal(mk.replayed.M.status, 'ok'); assert.equal(written.fills.length, 2); assert.equal(written.replayed.length, 1)
+  await replayDue(mk, { store, getJson, log() {}, clock: () => now + 30 * MIN }, now + 30 * MIN)
+  assert.equal(written.replayed.length, 1)
+  // Two games in one request, rate-limited: one request, no halves, and the next pass waits.
+  const mk2 = stateWith(kick)
+  mk2.markets.N = { ...mk2.markets.M, id: 'N', cid: '0xn' }
+  mk2.closed.M = [order(0, 50, T0, kick)]; mk2.closed.N = [{ ...order(0, 50, T0, kick), id: 'N' }]
+  let asked = 0
+  const limited = async (url) => { if (!new URL(url).searchParams.get('condition_id')) return getJson(url); asked++; throw Object.assign(new Error('429'), { status: 429, retryAfterMs: 20 * MIN }) }
+  await replayDue(mk2, { store, getJson: limited, log() {}, clock: () => now }, now)
+  assert.equal(asked, 1); assert.equal(mk2.replayBackoffUntil, now + 20 * MIN)
+  await replayDue(mk2, { store, getJson: limited, log() {}, clock: () => now + 10 * MIN }, now + 10 * MIN)
+  assert.equal(asked, 1); assert.equal(mk2.replayed.M, undefined)
+})
+
+t('the daily stop check runs once a UTC day, also across a restart; at the stop it freezes and ends every order', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'maker-')), st = openMakerStore(dir)
+  const mk = stateWith(T0 + 3600_000)
+  st.addMarkets([{ ...mk.markets.M, enrolledAt: isoAt(T0) }])
+  let check = makeStopCheck(mk, st)
+  assert.equal(check(T0).done, false); assert.equal(mk.stats.lastStopCheck.day, '2026-10-15')
+  assert.equal(check(T0 + 3600_000), null)
+  const back = st.load(T0 + 2 * 3600_000)
+  check = makeStopCheck(back, st)
+  assert.equal(check(T0 + 2 * 3600_000), null)                       // the day's check is not repeated after a restart
+  const old = { ...back.stats.lastStopCheck }; delete old.day        // a check saved before "day" was recorded
+  assert.equal(makeStopCheck({ ...back, stats: { ...back.stats, lastStopCheck: old } }, st)(T0 + 3 * 3600_000), null)
+  // Day 28: the stop. Every resting order ends, and the frozen result is saved.
+  applyRead(back, 'M', 40, 90, T0 + 28 * 86400_000 - 3600_000, () => {})
+  back.markets.M.kickoff = isoAt(T0 + 29 * 86400_000)
+  applyRead(back, 'M', 40, 90, T0 + 28 * 86400_000, () => {})
+  assert.ok(Object.keys(back.open).length)
+  let stopped = null
+  const s = makeStopCheck(back, st, (f) => { stopped = f })(T0 + 28 * 86400_000 + MIN)
+  assert.equal(s.reason, '28 days'); assert.ok(stopped && back.final); assert.equal(Object.keys(back.open).length, 0)
+  const again = st.load(T0 + 28 * 86400_000 + 2 * MIN)
+  assert.ok(again.final); assert.equal(Object.keys(again.open).length, 0)
+})
+
+t('the bootstrap\'s calibration groups give the same draws when passed in', () => {
+  const cal = Array.from({ length: 200 }, (_, i) => ({ id: `c${i}`, game: `g${i % 70}`, quoted: true, fresh: true, mid: ((i * 37) % 90 + 5) / 100, r0: i % 3 === 0 ? 1 : 0 }))
+  const fills = Array.from({ length: 40 }, (_, i) => ({ id: `f${i}:0`, game: `g${i % 15}`, price: 0.3, shares: 10, filledAt: isoAt(T0), kickoff: isoAt(T0 + 3600_000),
+    mark: 0.32, markAt: isoAt(T0 + 3600_000 - MIN), settle: { pnl: i % 3 ? -3 : 7, cost: 3 } }))
+  assert.deepEqual(markoutBoot(fills, cal, { iters: 300 }), markoutBoot(fills, cal, { iters: 300, calGroups: calGroupsOf(cal) }))
+  assert.equal(calGroupsOf(cal).G, 70)
 })
 
 for (const [name, fn] of tests) {

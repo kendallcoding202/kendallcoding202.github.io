@@ -264,13 +264,25 @@ export function closeAll(mk, nowMs, onClosed) {
 export function moveKickoff(mk, m, k, onClosed) {
   if (!(k < Date.parse(m.kickoff))) return
   gameEvent(mk, m, { kickoff: isoOf(k), kickoffMoved: m.kickoffMoved ?? m.kickoff })
-  const trim = (o) => {
-    if (o.to === null || o.to > k) o.to = k
-    if (o.cross && o.cross.at >= k) o.cross = null
-    if (o.touch && o.touch.at >= k) o.touch = null
-  }
   for (const side of [0, 1]) { const o = mk.open[`${m.id}:${side}`]; if (o) { if (o.from >= k) delete mk.open[`${m.id}:${side}`]; else endOrder(mk, o, k, onClosed) } }
-  if (mk.closed[m.id]) { mk.closed[m.id] = mk.closed[m.id].filter((o) => o.from < k); mk.closed[m.id].forEach(trim) }
+  trimAfter(mk, m, k)
+}
+
+/**
+ * Cuts a game's ended orders and evidence back to before k: orders that started at or
+ * after k go, lives end at k, crossings and touches at or after k are dropped (so a crossing
+ * after k no longer retires its outcome), and so are midpoints read at or after k. Runs
+ * when a kickoff moves earlier, and again on load, since the order log keeps the original lines.
+ */
+export function trimAfter(mk, m, k) {
+  if (mk.closed[m.id]) {
+    mk.closed[m.id] = mk.closed[m.id].filter((o) => o.from < k)
+    for (const o of mk.closed[m.id]) {
+      if (o.to === null || o.to > k) o.to = k
+      if (o.cross && o.cross.at >= k) o.cross = null
+      if (o.touch && o.touch.at >= k) o.touch = null
+    }
+  }
   for (const side of [0, 1]) if (!(mk.closed[m.id] ?? []).some((o) => o.side === side && o.cross)) delete mk.retired[`${m.id}:${side}`]
   mk.needSize = mk.needSize.filter((x) => x.id !== m.id || x.at < k)
   m.marks = (m.marks ?? []).filter(([t]) => t < k)
@@ -318,12 +330,17 @@ export function classify(t, tokens, side, pm) {
  * print counts only when the whole of [time − L, time] lies inside the order's life. Under the
  * touch rule a pick-off anywhere in the order's life fills the whole order.
  */
-export function replayGame(m, orders, trades, L = MAKER.lagMs) {
+export function replayGame(m, orders, trades, L = MAKER.lagMs, cal = null) {
   const out = { trade: [], touch: [] }
   const kick = Date.parse(m.kickoff)
   const pre = trades.filter((t) => t.ms < kick)
+  // The kickoff price: the last two-sided read before kickoff, or (after a restart) the one kept on disk.
+  const mark = markBefore(m, kick) ?? (cal && cal.mid !== null && cal.mid !== undefined && cal.at && cal.kickoff === m.kickoff ? { mid: cal.mid, at: Date.parse(cal.at) } : null)
   for (const side of [0, 1]) {
-    const list = orders.filter((o) => o.side === side && o.to > o.from).sort((a, b) => a.from - b.from)
+    // Nothing at or after kickoff counts, wherever the orders came from.
+    const list = orders.filter((o) => o.side === side && o.from < kick)
+      .map((o) => ({ ...o, to: Math.min(o.to, kick), cross: o.cross && o.cross.at < kick ? o.cross : null, touch: o.touch && o.touch.at < kick ? o.touch : null }))
+      .filter((o) => o.to > o.from).sort((a, b) => a.from - b.from)
     // Each seller print belongs to the dearest order it overlaps and qualifies for.
     const owner = pre.map((t) => {
       let best = -1
@@ -347,7 +364,6 @@ export function replayGame(m, orders, trades, L = MAKER.lagMs) {
         if (!(shares > 0) && !touch) continue
         if (touch) { sources.add('touch'); at = Math.min(at, touch.at) }
         const got = touch ? o.shares : Math.min(o.shares, shares)
-        const mark = markBefore(m, kick)
         out[world].push({
           world, id: `${m.id}:${side}`, marketId: m.id, side, outcome: m.outcomes[side], question: m.question, token: m.tokens[side],
           price: o.pm / 1000, shares: +got.toFixed(4), cost: +(got * o.pm / 1000).toFixed(6), source: [...sources].sort().join('+'), touchWhy: touch?.why ?? null, prints,
@@ -416,13 +432,23 @@ export function calibrationTable(cal) {
   return { table: c.map((v, b) => ({ lo: (b * MAKER.calBandMil) / 1000, n: n[b], c: v })), c: (mid) => c[bandOf(mid)] }
 }
 
+/** The calibration games grouped by match, as flat per-match band totals (outcomes, Σ(result − mid)). */
+export function calGroupsOf(calList) {
+  const cg = new Map()
+  for (const x of calGames(calList)) { const k = x.game ?? x.id; if (!cg.has(k)) cg.set(k, []); cg.get(k).push(x) }
+  const lists = [...cg.values()], G = lists.length, n = new Float64Array(G * BANDS), sum = new Float64Array(G * BANDS)
+  lists.forEach((list, g) => { const t = calTotals(list); n.set(t.n, g * BANDS); sum.set(t.sum, g * BANDS) })
+  return { G, n, sum }
+}
+
 /**
  * The primary statistic and its interval. Markout-scored fills (fresh kickoff price)
  * contribute shares × (m − p + c(m)); the others, once settled, shares × (result − p).
  * Each bootstrap replicate resamples matches of the fills AND of the calibration games, and
  * re-estimates the c table from the latter, so its error is in the interval.
+ * `calGroups` (from calGroupsOf) can be passed in to save regrouping; the draws are the same.
  */
-export function markoutBoot(fills, calList, { iters = 1000, level = 0.95 } = {}) {
+export function markoutBoot(fills, calList, { iters = 1000, level = 0.95, calGroups = null } = {}) {
   const groups = new Map()
   let byMark = 0, byResult = 0
   for (const f of fills) {
@@ -434,45 +460,47 @@ export function markoutBoot(fills, calList, { iters = 1000, level = 0.95 } = {})
   }
   const fg = [...groups.values()].filter((g) => g.cost > 0)
   if (!fg.length) return null
-  const cg = new Map()
-  for (const x of calGames(calList)) { const k = x.game ?? x.id; if (!cg.has(k)) cg.set(k, []); cg.get(k).push(x) }
-  const calGroups = [...cg.values()].map(calTotals)
-  const stat = (picks, cpicks) => {
-    const n = new Float64Array(BANDS), sum = new Float64Array(BANDS), S = new Float64Array(BANDS)
-    for (const t of cpicks) for (let b = 0; b < BANDS; b++) { n[b] += t.n[b]; sum[b] += t.sum[b] }
+  const { G, n: cn, sum: cs } = calGroups ?? calGroupsOf(calList)
+  const F = fg.length, fv = Float64Array.from(fg, (g) => g.v0), fc = Float64Array.from(fg, (g) => g.cost), fS = new Float64Array(F * BANDS)
+  fg.forEach((g, i) => fS.set(g.S, i * BANDS))
+  const n = new Float64Array(BANDS), sum = new Float64Array(BANDS), S = new Float64Array(BANDS), pick = new Int32Array(F)
+  // One replicate: fills by `pick`, calibration matches by calAt(j). Draw order and addition order are those of the registered code.
+  const stat = (calAt) => {
+    n.fill(0); sum.fill(0); S.fill(0)
+    for (let j = 0; j < G; j++) { const o = calAt(j) * BANDS; for (let b = 0; b < BANDS; b++) { n[b] += cn[o + b]; sum[b] += cs[o + b] } }
     const c = cFrom(n, sum)
     let v = 0, cost = 0
-    for (const g of picks) { v += g.v0; cost += g.cost; for (let b = 0; b < BANDS; b++) S[b] += g.S[b] }
+    for (let i = 0; i < F; i++) { const g = pick[i], o = g * BANDS; v += fv[g]; cost += fc[g]; for (let b = 0; b < BANDS; b++) S[b] += fS[o + b] }
     for (let b = 0; b < BANDS; b++) v += c[b] * S[b]
     return { v, cost }
   }
-  const full = stat(fg, calGroups)
+  for (let i = 0; i < F; i++) pick[i] = i
+  const full = stat((j) => j)
   const rnd = mulberry32(4242), out = []
   for (let k = 0; k < iters; k++) {
-    const p = Array.from(fg, () => fg[Math.floor(rnd() * fg.length)])
-    const q = calGroups.length ? Array.from(calGroups, () => calGroups[Math.floor(rnd() * calGroups.length)]) : []
-    const s = stat(p, q); out.push(s.cost > 0 ? s.v / s.cost : 0)
+    for (let i = 0; i < F; i++) pick[i] = Math.floor(rnd() * F)
+    const s = stat(() => Math.floor(rnd() * G)); out.push(s.cost > 0 ? s.v / s.cost : 0)
   }
   out.sort((a, b) => a - b)
   const tail = (1 - level) / 2
-  return { n: byMark + byResult, byMark, byResult, matches: fg.length, value: full.v, cost: full.cost, perDollar: full.v / full.cost, lo: quant(out, tail), hi: quant(out, 1 - tail) }
+  return { n: byMark + byResult, byMark, byResult, matches: F, value: full.v, cost: full.cost, perDollar: full.v / full.cost, lo: quant(out, tail), hi: quant(out, 1 - tail) }
 }
 
 /** Per side and rule: the corrected markout (deciding), real outcome, the guard and the sensitivities. */
-export function sideResult(fills, calList, cal, { iters = 1000, level = 0.95 } = {}) {
-  const markout = markoutBoot(fills, calList, { iters, level })
+export function sideResult(fills, calList, cal, { iters = 1000, level = 0.95, calGroups = calGroupsOf(calList) } = {}) {
+  const markout = markoutBoot(fills, calList, { iters, level, calGroups })
   const settled = fills.filter((f) => f.settle)
   const outcome = ratioBoot(settled.map((f) => ({ cluster: f.game ?? f.marketId, value: f.settle.pnl, cost: f.settle.cost })), { iters, level: 0.95 })
   // Guard: markout-scored fills must not reliably lose against their own kickoff price.
   const guard = ratioBoot(settled.filter(freshMark).map((f) => ({ cluster: f.game ?? f.marketId, value: f.shares * (f.settle.yesPrice - f.mark - cal.c(f.mark)), cost: f.shares * f.price })), { iters: Math.min(iters, 1000), level: 0.95 })
   // Live, a visible order can be jumped: what if every fill cost a tick more, or we were second in line?
-  const tickDearer = markoutBoot(fills.map((f) => ({ ...f, price: f.price + 0.01, settle: f.settle ? { ...f.settle, pnl: f.settle.pnl - 0.01 * f.shares, cost: f.settle.cost + 0.01 * f.shares } : f.settle })), calList, { iters: 200, level })
+  const tickDearer = markoutBoot(fills.map((f) => ({ ...f, price: f.price + 0.01, settle: f.settle ? { ...f.settle, pnl: f.settle.pnl - 0.01 * f.shares, cost: f.settle.cost + 0.01 * f.shares } : f.settle })), calList, { iters: 200, level, calGroups })
   const secondInLine = markoutBoot(fills.map((f) => {
     if (f.source.includes('touch')) return f
     const sh = Math.min(f.orderShares ?? f.shares, Math.max(0, (f.evidence ?? f.shares) - (f.orderShares ?? f.shares)))
     const k = f.shares > 0 ? sh / f.shares : 0
     return { ...f, shares: sh, settle: f.settle ? { ...f.settle, pnl: f.settle.pnl * k, cost: f.settle.cost * k } : f.settle }
-  }).filter((f) => f.shares > 0), calList, { iters: 200, level })
+  }).filter((f) => f.shares > 0), calList, { iters: 200, level, calGroups })
   const wins = settled.filter((f) => f.settle.yesPrice === 1).length
   return {
     fills: fills.length, settled: settled.length, wins, losses: settled.filter((f) => f.settle.yesPrice === 0).length,
@@ -508,14 +536,14 @@ export function verdictOf(s) {
  */
 export function makerSummary(mk, nowMs, { iters = 1000 } = {}) {
   const calList = Object.values(mk.cal ?? {})
-  const cal = calibrationTable(calList)
+  const cal = calibrationTable(calList), calGroups = calGroupsOf(calList)
   const live = (w) => fillsOf(mk, w).filter((f) => !isStale(f, nowMs))
   const sides = {}
   for (const side of SIDES) {
     sides[side] = {}
-    for (const w of WORLDS) sides[side][w] = sideResult(live(w).filter((f) => sideOf(f) === side), calList, cal, { iters, level: 0.9875 })
+    for (const w of WORLDS) sides[side][w] = sideResult(live(w).filter((f) => sideOf(f) === side), calList, cal, { iters, level: 0.9875, calGroups })
   }
-  const pooled = Object.fromEntries(WORLDS.map((w) => [w, sideResult(live(w), calList, cal, { iters: Math.min(iters, 1000), level: 0.95 })]))
+  const pooled = Object.fromEntries(WORLDS.map((w) => [w, sideResult(live(w), calList, cal, { iters: Math.min(iters, 1000), level: 0.95, calGroups })]))
   const first = mk.firstEnrolledAt ? Date.parse(mk.firstEnrolledAt) : null
   const days = first !== null ? (nowMs - first) / DAY_MS : 0
   const matches = pooled.trade.matches
@@ -540,10 +568,26 @@ export function freezeMaker(mk, nowMs, summary = null) {
   const { stats: _s, ...s } = summary ?? makerSummary(mk, nowMs, { iters: MAKER.stopIters })
   if (!s.done) return null
   mk.final = { ...s, frozenAt: isoOf(nowMs), commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? null, settledIds: Object.values(mk.fills).filter((f) => f.settle).map((f) => `${f.world}|${f.id}`) }
+  mk.statsVersion = (mk.statsVersion ?? 0) + 1
   return mk.final
 }
 
 // ---------------------------------------------------------------- storage
+/**
+ * Appends JSON lines. A torn last line (a crash or a full disk mid-append, before or within
+ * this run) is closed with a newline first, so the new record starts on its own line instead
+ * of joining the fragment and being lost with it.
+ */
+export function appendLines(file, objs) {
+  if (!objs.length) return
+  let lead = ''
+  try {
+    const { size } = fs.statSync(file)
+    if (size > 0) { const fd = fs.openSync(file, 'r'), b = Buffer.alloc(1); try { fs.readSync(fd, b, 0, 1, size - 1) } finally { fs.closeSync(fd) } if (b[0] !== 0x0a) lead = '\n' }
+  } catch (e) { if (e.code !== 'ENOENT') throw e }
+  fs.appendFileSync(file, lead + objs.map((o) => JSON.stringify(o)).join('\n') + '\n')
+}
+
 /** Calls fn on each line of a file, reading it in 1 MiB pieces (a whole-file string can exceed Node's limit). */
 export function eachLine(file, fn) {
   if (!fs.existsSync(file)) return 0
@@ -579,7 +623,7 @@ export function eachLine(file, fn) {
 export function openMakerStore(dir) {
   fs.mkdirSync(dir, { recursive: true })
   const f = (n) => path.join(dir, n)
-  const append = (name, objs) => { if (objs.length) fs.appendFileSync(f(name), objs.map((o) => JSON.stringify(o)).join('\n') + '\n') }
+  const append = (name, objs) => appendLines(f(name), objs)
   const writeAtomic = (name, obj) => { fs.writeFileSync(f(name + '.tmp'), JSON.stringify(obj)); fs.renameSync(f(name + '.tmp'), f(name)) }
   return {
     load(nowMs = Date.now()) {
@@ -606,15 +650,22 @@ export function openMakerStore(dir) {
       bad += eachLine(f('maker-after.jsonl'), (x) => { if (mk.fills[x.key]) mk.fills[x.key].after = x.after })
       if (fs.existsSync(f('maker-open.json'))) {
         const o = JSON.parse(fs.readFileSync(f('maker-open.json'), 'utf8'))
-        for (const [k, x] of Object.entries(o.open ?? {})) if (mk.markets[x.id] && !mk.replayed[x.id]) mk.open[k] = x
+        // An order already in the order log (written by a refresh before the next round rewrote this file) is not reloaded twice.
+        for (const [k, x] of Object.entries(o.open ?? {})) if (mk.markets[x.id] && !mk.replayed[x.id] && !(mk.closed[x.id] ?? []).some((c) => c.side === x.side && c.from === x.from)) mk.open[k] = x
         for (const x of o.needSize ?? []) mk.needSize.push(x)
+        for (const [id, ms] of Object.entries(o.marks ?? {})) if (mk.markets[id] && !mk.cal[id]) mk.markets[id].marks = ms
+      }
+      // Kickoffs moved earlier: the order log keeps the original lines, so the cut is made again.
+      for (const m of Object.values(mk.markets)) {
+        if (!m.kickoffMoved) continue
+        const k = Date.parse(m.kickoff)
+        for (const side of [0, 1]) { const o = mk.open[`${m.id}:${side}`]; if (o && o.from >= k) delete mk.open[`${m.id}:${side}`]; else if (o && o.touch && o.touch.at >= k) o.touch = null }
+        trimAfter(mk, m, k)
       }
       if (fs.existsSync(f('maker-meta.json'))) {
         const meta = JSON.parse(fs.readFileSync(f('maker-meta.json'), 'utf8'))
         Object.assign(mk.stats, meta.stats ?? {}); mk.final = meta.final ?? null
-        mk.stats.restarts = (mk.stats.restarts ?? 0) + 1
-        // Downtime: from the last live round before the restart to now.
-        if (mk.stats.lastReadAt && !mk.final) mk.stats.downMs = (mk.stats.downMs ?? 0) + Math.max(0, nowMs - Date.parse(mk.stats.lastReadAt) - MAKER.readMs)
+        mk.stats.restarts = (mk.stats.restarts ?? 0) + 1   // the downtime is booked by the first round that reads
       }
       // Replayed games with no fill and no audit pending are only counts now.
       for (const id of Object.keys(mk.markets)) if (mk.replayed[id] && !pendingAudit(id) && !WORLDS.some((w) => mk.fills[`${w}|${id}:0`] || mk.fills[`${w}|${id}:1`])) delete mk.markets[id]
@@ -630,7 +681,13 @@ export function openMakerStore(dir) {
     addReplayed: (list) => append('maker-replayed.jsonl', list),
     addFills: (list) => append('maker-fills.jsonl', list.map(({ settle: _s, after: _a, ...r }) => r)),
     addSettles: (list) => append('maker-settles.jsonl', list.map((r) => ({ key: `${r.world}|${r.id}`, settle: r.settle }))),
-    saveOpen(mk) { writeAtomic('maker-open.json', { open: mk.open, needSize: mk.needSize }) },
+    // Also the recent midpoints of games within two hours of kickoff with no kickoff price recorded yet,
+    // so a restart across kickoff still has the last read before it.
+    saveOpen(mk, nowMs = Date.now()) {
+      const marks = {}
+      for (const m of Object.values(mk.markets)) if (m.marks?.length && !mk.cal[m.id] && !mk.replayed[m.id] && Date.parse(m.kickoff) - nowMs <= 2 * 3600_000) marks[m.id] = m.marks.slice(-15)
+      writeAtomic('maker-open.json', { open: mk.open, needSize: mk.needSize, marks })
+    },
     saveMeta(mk) { writeAtomic('maker-meta.json', { ruleVersion: RULE_VERSION, stats: mk.stats, final: mk.final }) },
   }
 }
@@ -681,10 +738,21 @@ export async function enroll(mk, io, nowMs, index) {
   return { added: added.length, list }
 }
 
+/** A failure of the service rather than of one request (rate limit, server error, timeout, network): retrying smaller will not help. */
+export function isSystemic(e) {
+  const code = e?.code ?? e?.cause?.code
+  return e?.status === 429 || e?.status >= 500 || Boolean(e?.timeout) || e?.name === 'TimeoutError' || e?.name === 'AbortError'
+    || ['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT'].includes(code)
+}
+
 /**
  * Best bid and ask of outcome 0 for each game, 250 per request, 4 requests at a time, in
- * shuffled batches. A failed batch is retried in halves down to single games; a game still
- * unread is counted, and its orders rest on until the next read. Returns id → { bm, am, tau }.
+ * shuffled batches, within 45 seconds a round. A batch rejected on its own is retried in
+ * halves down to single games; a service failure (rate limit, server error, timeout) is not
+ * split, and a rate limit pauses reading for as long as the service asks (a minute by
+ * default). A read whose round trip took over 10 s is not trusted for timing and is asked
+ * again once. Games left unread keep their orders resting until the next read.
+ * Returns id → { bm, am, tau }.
  */
 export async function readPrices(mk, io, ids) {
   const out = new Map(), byToken = new Map()
@@ -692,10 +760,13 @@ export async function readPrices(mk, io, ids) {
   const tokens = [...byToken.keys()]
   for (let i = tokens.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [tokens[i], tokens[j]] = [tokens[j], tokens[i]] }
   const clock = io.clock ?? Date.now
-  const read = async (chunk) => {
+  const start = clock()
+  let halt = false
+  const read = async (chunk, retried = false) => {
     const sent = clock()
     try {
       const res = await io.postJson('https://clob.polymarket.com/prices', chunk.flatMap((t) => [{ token_id: t, side: 'BUY' }, { token_id: t, side: 'SELL' }]))
+      if (clock() - sent > 10_000 && !retried) { mk.stats.slowReads = (mk.stats.slowReads ?? 0) + 1; return read(chunk, true) }
       const tau = Math.round((sent + clock()) / 2)   // the book as of the middle of the request
       for (const t of chunk) {
         if (res?.[t]) out.set(byToken.get(t), { ...readOf(res[t]), tau })
@@ -704,14 +775,21 @@ export async function readPrices(mk, io, ids) {
       mk.stats.reads += chunk.length
     } catch (e) {
       mk.stats.readFails++
-      if (chunk.length > 1) { const h = Math.ceil(chunk.length / 2); await read(chunk.slice(0, h)); await read(chunk.slice(h)) }
+      if (isSystemic(e)) {
+        mk.stats.unread += chunk.length
+        if (e.status === 429) { halt = true; mk.backoffUntil = clock() + Math.min(e.retryAfterMs ?? 60_000, 10 * 60_000) }
+        io.log?.('maker prices', e.message)
+      } else if (chunk.length > 1) { const h = Math.ceil(chunk.length / 2); await read(chunk.slice(0, h)); await read(chunk.slice(h)) }
       else { mk.stats.unread++; io.log?.('maker prices', e.message) }
     }
   }
   const chunks = []
   for (let i = 0; i < tokens.length; i += 250) chunks.push(tokens.slice(i, i + 250))
   let next = 0
-  await Promise.all(Array.from({ length: Math.min(4, chunks.length) }, async () => { while (next < chunks.length) await read(chunks[next++]) }))
+  await Promise.all(Array.from({ length: Math.min(4, chunks.length) }, async () => {
+    while (next < chunks.length && !halt && clock() - start < 45_000) await read(chunks[next++])
+  }))
+  for (; next < chunks.length; next++) mk.stats.unread += chunks[next].length
   return out
 }
 
@@ -742,24 +820,31 @@ export async function liveRound(mk, io, nowMs) {
     const k = Date.parse(m.kickoff), mark = markBefore(m, k)
     mk.cal[id] = { id, game: m.game, mid: mark?.mid ?? null, at: mark ? isoOf(mark.at) : null, kickoff: m.kickoff, quoted: Boolean(m.quoted), fresh: Boolean(mark && mark.at >= k - MAKER.freshBeforeKickoffMs) }
     marks.push(mk.cal[id])
+    m.marks = mark ? [[mark.at, mark.mid]] : []; delete m.book   // only the kickoff price is needed from here on
   }
   io.store.addCal(marks)
   const ids = Object.entries(mk.markets).filter(([id, m]) => !m.stopped && Date.parse(m.kickoff) > nowMs && !mk.replayed[id]).map(([id]) => id)
-  const reads = await readPrices(mk, io, ids)
-  for (const [id, r] of reads) applyRead(mk, id, r.bm, r.am, r.tau, (o) => ended.push(o))
+  const reads = (io.clock ?? Date.now)() < (mk.backoffUntil ?? 0) ? new Map() : await readPrices(mk, io, ids)
+  // The stop can land while the reads are in flight (the background loop freezes and ends every order): place no more.
+  if (!mk.final) for (const [id, r] of reads) applyRead(mk, id, r.bm, r.am, r.tau, (o) => ended.push(o))
   await sizeCrossings(mk, io)
   io.store.addOrders(ended)
   io.store.addGameEvents(mk.events.splice(0))
-  io.store.saveOpen(mk)
-  // A round that read nothing (the price service down) is downtime, and does not count as a read.
-  if (reads.size || !ids.length) mk.stats.lastReadAt = isoOf(nowMs)
-  else mk.stats.downMs = (mk.stats.downMs ?? 0) + MAKER.readMs
+  io.store.saveOpen(mk, nowMs)
+  // Downtime is the gap between rounds that read something (or had nothing to read), beyond the
+  // normal minute: it covers restarts, outages and stalls alike.
+  if (reads.size || !ids.length) {
+    const last = mk.stats.lastReadAt ? Date.parse(mk.stats.lastReadAt) : null
+    if (last !== null && nowMs - last > 2 * MAKER.readMs) mk.stats.downMs = (mk.stats.downMs ?? 0) + (nowMs - last - MAKER.readMs)
+    mk.stats.lastReadAt = isoOf(nowMs)
+  }
   return { read: reads.size, of: ids.length, resting: Object.keys(mk.open).length, ended: ended.length }
 }
 
 /** Refreshes kickoff and status of every enrolled game still before kickoff (Gamma, 50 per request). */
 export async function refreshGames(mk, io, nowMs) {
-  const ids = Object.values(mk.markets).filter((m) => !m.stopped && Date.parse(m.kickoff) > nowMs && !mk.replayed[m.id]).map((m) => m.id)
+  // Stopped games too: a book cleared by an unannounced early start must still have its kickoff moved back.
+  const ids = Object.values(mk.markets).filter((m) => Date.parse(m.kickoff) > nowMs && !mk.replayed[m.id]).map((m) => m.id)
   const ended = []
   let n = 0
   for (let i = 0; i < ids.length; i += 50) {
@@ -773,6 +858,8 @@ export async function refreshGames(mk, io, nowMs) {
         for (const id of left) q.append('id', id)
         const list = await io.getJson('https://gamma-api.polymarket.com/markets?' + q)
         for (const g of Array.isArray(list) ? list : []) { const m = mk.markets[String(g.id)]; if (m) { seen.add(m.id); refreshGame(mk, m, g, nowMs, (o) => ended.push(o)); n++ } }
+        // Written before the next request: the live loop may rewrite the open-order file meanwhile.
+        io.store.addOrders(ended.splice(0)); io.store.addGameEvents(mk.events.splice(0))
       }
     } catch (e) { mk.stats.refreshFails = (mk.stats.refreshFails ?? 0) + 1; io.log?.('maker refresh', e.message) }
   }
@@ -832,70 +919,90 @@ async function feedWatermark(io) {
 
 /**
  * Reads the trades of every game whose kickoff was at least two hours ago, once the feed
- * shows trades from 30 minutes after that kickoff, and replays its orders. 20 games per
- * request; a failing request is split in halves down to single games; a game still
- * unreadable (or the feed still behind) a day after kickoff is void. 5% of replayed games
- * are read again a day later, and any difference is counted.
+ * shows trades from 30 minutes after that kickoff, and replays its orders, oldest kickoff
+ * first. 20 games per request; a request the feed rejects is split in halves down to single
+ * games. Each pass makes at most 200 requests in 5 minutes, and stops early on a rate limit
+ * or five service failures in a row (backing off before the next pass). A game still
+ * unreadable, or the feed still behind, a day after kickoff is void. Every write for a game
+ * happens before memory changes, its "replayed" line last, so a crash cannot replay it twice.
+ * 5% of replayed games are read again a day later, and any difference is counted.
  */
 export async function replayDue(mk, io, nowMs) {
-  const due = Object.values(mk.markets).filter((m) => !mk.replayed[m.id] && Date.parse(m.kickoff) + MAKER.tradesAfterMs <= nowMs)
-  const fills = [], done = []
-  const finish = (m, rec) => { mk.replayed[m.id] = { id: m.id, at: isoOf(nowMs), ...rec }; done.push(mk.replayed[m.id]) }
+  const clock = io.clock ?? Date.now
+  const fills = [], logged = []
+  let replayedNow = 0, requests = 0, failsInRow = 0, broken = false
+  const passStart = clock()
+  const budgetLeft = () => !broken && requests < 200 && clock() - passStart < 5 * 60_000 && clock() >= (mk.replayBackoffUntil ?? 0)
+  const finish = (m, rec) => { const r = { id: m.id, at: isoOf(nowMs), ...rec }; io.store.addReplayed([r]); mk.replayed[m.id] = r; logged.push(r) }
+  const due = Object.values(mk.markets).filter((m) => !mk.replayed[m.id] && Date.parse(m.kickoff) + MAKER.tradesAfterMs <= nowMs).sort((x, y) => Date.parse(x.kickoff) - Date.parse(y.kickoff))
   for (const m of due.filter((x) => !(mk.closed[x.id] ?? []).length)) finish(m, { status: 'no orders' })
   const todo = due.filter((x) => (mk.closed[x.id] ?? []).length)
   const water = todo.length ? await feedWatermark(io) : null
   if (water !== null) mk.stats.feedWatermark = isoOf(water)
-  const ready = []
-  for (const m of todo) {
-    if (water !== null && water >= Date.parse(m.kickoff) + 30 * 60_000) ready.push(m)
-    else if (nowMs - Date.parse(m.kickoff) > MAKER.giveUpMs) { finish(m, { status: 'void', why: 'feed behind', orders: mk.closed[m.id].length }); mk.stats.voidGames++; delete mk.closed[m.id] }
-  }
+  const ready = todo.filter((m) => water !== null && water >= Date.parse(m.kickoff) + 30 * 60_000)
   const replay = (m, trades) => {
-    const r = replayGame(m, mk.closed[m.id], trades)
+    const r = replayGame(m, mk.closed[m.id], trades, MAKER.lagMs, mk.cal[m.id])
     const add = []
     for (const w of WORLDS) for (const f of r[w]) add.push({ ...f, ruleVersion: RULE_VERSION, commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? null })
-    io.store.addTrades(m.id, trades)
-    io.store.addFills(add)   // written first: a fill in memory is always on disk
-    for (const f of add) { mk.fills[`${f.world}|${f.id}`] = f; fills.push(f); if (f.world === 'trade') bumpDay(mk, Date.parse(f.filledAt), 'fills') }
     const audit = Math.random() < 0.05
-    finish(m, { status: 'ok', trades: trades.length, orders: mk.closed[m.id].length, ...(audit ? { auditAt: nowMs + DAY_MS } : {}) })
+    const rec = { id: m.id, at: isoOf(nowMs), status: 'ok', trades: trades.length, orders: mk.closed[m.id].length, ...(audit ? { auditAt: nowMs + DAY_MS } : {}) }
+    io.store.addTrades(m.id, trades); io.store.addFills(add); io.store.addReplayed([rec])   // every write first, the replayed line last
+    for (const f of add) { mk.fills[`${f.world}|${f.id}`] = f; fills.push(f); if (f.world === 'trade') bumpDay(mk, Date.parse(f.filledAt), 'fills') }
+    mk.replayed[m.id] = rec; replayedNow++
     if (!audit) delete mk.closed[m.id]
+    mk.statsVersion = (mk.statsVersion ?? 0) + 1
   }
   const attempt = async (group) => {
+    group = group.filter((m) => !mk.replayed[m.id] && (mk.closed[m.id] ?? []).length)
+    if (!group.length || !budgetLeft()) return
     const start = Math.min(...group.map((m) => Math.min(...mk.closed[m.id].map((o) => o.from)))) - MAKER.lagMs
     const end = Math.max(...group.map((m) => Date.parse(m.kickoff)))
-    try {
-      const got = await fetchTrades(io, mk, group.map((m) => m.cid), start, end)
-      mk.stats.tradesRead += got.length; mk.stats.lastTradesOkAt = new Date().toISOString()
-      for (const m of group) replay(m, got.filter((t) => t.cid === String(m.cid).toLowerCase()))
-    } catch (e) {
+    let got
+    try { requests++; got = await fetchTrades(io, mk, group.map((m) => m.cid), start, end); failsInRow = 0 }
+    catch (e) {
       mk.stats.tradeFails++; mk.stats.lastTradesError = `${new Date().toISOString()} ${e.message}`.slice(0, 200); io.log?.('maker trades', e.message)
-      if (group.length > 1) { const h = Math.ceil(group.length / 2); await attempt(group.slice(0, h)); await attempt(group.slice(h)); return }
-      const m = group[0]
-      if (nowMs - Date.parse(m.kickoff) > MAKER.giveUpMs) { finish(m, { status: 'void', why: 'unreadable', orders: mk.closed[m.id].length }); mk.stats.voidGames++; delete mk.closed[m.id] }
+      if (isSystemic(e)) {
+        failsInRow++
+        if (e.status === 429 || failsInRow >= 5) { broken = true; mk.replayBackoffUntil = clock() + Math.min(e.retryAfterMs ?? 15 * 60_000, 60 * 60_000) }
+        return
+      }
+      if (group.length > 1) { const h = Math.ceil(group.length / 2); await attempt(group.slice(0, h)); await attempt(group.slice(h)) }
+      return
+    }
+    mk.stats.tradesRead += got.length; mk.stats.lastTradesOkAt = new Date().toISOString()
+    for (const m of group) {
+      try { replay(m, got.filter((t) => t.cid === String(m.cid).toLowerCase())) }
+      catch (e) { mk.stats.storageErrors = (mk.stats.storageErrors ?? 0) + 1; io.log?.('maker replay write', e.message); broken = true; return }
     }
   }
-  for (let i = 0; i < ready.length; i += 20) await attempt(ready.slice(i, i + 20))
+  for (let i = 0; i < ready.length && budgetLeft(); i += 20) await attempt(ready.slice(i, i + 20))
+  // Games past the registered day, whatever stopped them (unreadable, feed behind, a pass cut short), are void.
+  for (const m of todo) {
+    if (mk.replayed[m.id] || nowMs - Date.parse(m.kickoff) <= MAKER.giveUpMs) continue
+    finish(m, { status: 'void', why: ready.includes(m) ? 'unreadable' : 'feed behind', orders: mk.closed[m.id].length })
+    mk.stats.voidGames++; delete mk.closed[m.id]
+  }
   // The re-read audit: the same game, a day later. Fills are not changed; differences are counted.
   for (const r of Object.values(mk.replayed)) {
-    if (!r.auditAt || r.auditAt > nowMs || r.audited) continue
+    if (!r.auditAt || r.auditAt > nowMs || r.audited || !budgetLeft()) continue
     const m = mk.markets[r.id]
     mk.stats.audit ??= { games: 0, changed: 0, skipped: 0, tradesBefore: 0, tradesAfter: 0 }
-    if (!m || !mk.closed[r.id]) { r.audited = 'skipped'; mk.stats.audit.skipped++; done.push({ id: r.id, audited: 'skipped' }); continue }
+    if (!m || !mk.closed[r.id]) { r.audited = 'skipped'; mk.stats.audit.skipped++; io.store.addReplayed([{ id: r.id, audited: 'skipped' }]); continue }
     try {
+      requests++
       const got = await fetchTrades(io, mk, [m.cid], Math.min(...mk.closed[r.id].map((o) => o.from)) - MAKER.lagMs, Date.parse(m.kickoff))
-      const again = replayGame(m, mk.closed[r.id], got)
+      const again = replayGame(m, mk.closed[r.id], got, MAKER.lagMs, mk.cal[r.id])
       const before = WORLDS.flatMap((w) => [0, 1].map((side) => mk.fills[`${w}|${r.id}:${side}`]?.shares ?? 0)).join(',')
       const after = WORLDS.flatMap((w) => [0, 1].map((side) => again[w].find((f) => f.side === side)?.shares ?? 0)).join(',')
+      const audited = before === after ? 'same' : 'changed'
+      io.store.addReplayed([{ id: r.id, audited }])
       mk.stats.audit.games++; mk.stats.audit.tradesBefore += r.trades ?? 0; mk.stats.audit.tradesAfter += got.length
-      if (before !== after) mk.stats.audit.changed++
-      r.audited = before === after ? 'same' : 'changed'
-      done.push({ id: r.id, audited: r.audited })
+      if (audited === 'changed') mk.stats.audit.changed++
+      r.audited = audited
     } catch { continue }
     delete mk.closed[r.id]
   }
-  io.store.addReplayed(done)
-  return { replayed: done.length, fills: fills.length, waiting: todo.length - ready.length }
+  return { replayed: logged.length + replayedNow, fills: fills.length, waiting: todo.filter((m) => !mk.replayed[m.id]).length }
 }
 
 /** Settles fills whose game has been decided (Gamma, 50 games per request). */
@@ -916,6 +1023,7 @@ export async function settleFills(mk, io, nowMs) {
   }
   io.store.addSettles(done.map(([f, s]) => ({ ...f, settle: s })))   // written first
   for (const [f, s] of done) { f.settle = s; if (f.world === 'trade') bumpDay(mk, nowMs, 'settled') }
+  if (done.length) mk.statsVersion = (mk.statsVersion ?? 0) + 1
   return done.length
 }
 
@@ -938,6 +1046,7 @@ export async function settleCal(mk, io, nowMs) {
   }
   io.store.addCal(done.map(([c, r0]) => ({ id: c.id, r0 })))
   for (const [c, r0] of done) c.r0 = r0
+  if (done.length) mk.statsVersion = (mk.statsVersion ?? 0) + 1
   return done.length
 }
 
@@ -988,10 +1097,10 @@ function sliceTable(fills, key, counted) {
 }
 
 /** Everything the dashboard shows for Test C, for an optional sport / bet-type filter. */
-export function makerDashboard(mk, nowMs, { sport = null, type = null, iters = 200 } = {}) {
+export function makerDashboard(mk, nowMs, { sport = null, type = null, iters = 200, summary = null } = {}) {
   const final = mk.final
   const { settledIds, ...frozen } = final ?? {}
-  const s = final ? { ...frozen, stats: mk.stats } : makerSummary(mk, nowMs, { iters })
+  const s = final ? { ...frozen, stats: mk.stats } : summary ?? makerSummary(mk, nowMs, { iters })
   const counted = new Set(final ? settledIds : Object.values(mk.fills).filter((f) => f.settle).map((f) => `${f.world}|${f.id}`))
   const okTags = (x) => (!sport || (x.sport ?? 'Untagged') === sport) && (!type || (x.type ?? 'Untagged') === type)
   const trade = fillsOf(mk, 'trade'), tradeView = trade.filter(okTags)

@@ -118,14 +118,16 @@ whole of [feed time − L, feed time] lies inside the order's life.
 
 **Data failures.** A trade read that could silently mean "no trades" is an error, not an
 empty answer: a reply without data, `has_more` without a cursor, a full page with no way to
-page on, a trade from a game not asked for. Failing requests of 20 games are split down to
-single games and retried; a game still unreadable a day after kickoff is **void** (excluded
-and counted). The trade reader waits until the feed shows trades from at least 30 minutes
+page on, a trade from a game not asked for. A request of 20 games the feed rejects is split
+down to single games and retried; a rate limit or a service failure is not split (the pass
+stops and backs off), and a pass makes at most 200 requests in 5 minutes. A game still
+unreadable a day after kickoff, for any of these reasons, is **void** (excluded and counted). The trade reader waits until the feed shows trades from at least 30 minutes
 after the game's kickoff; if the feed cannot show that, it keeps waiting (and a game still
 waiting a day after kickoff is void). A full page without a clear `has_more` is an error too.
 5% of games are re-read a day later and any difference (or skipped re-read) is counted.
 Open orders and ended orders are written to disk at once, so they rest through a restart,
-as live orders would. Downtime is counted.
+as live orders would. Downtime is counted: the time between price rounds that read, beyond
+the normal minute (restarts, outages and stalls alike).
 
 **Feed validation, before the first replay.** The tracker records what the feed returns on
 its first start (raw records with `taker_only` true and false, records per transaction,
@@ -175,7 +177,7 @@ estimates the same expected profit with far less noise.
 - **A check on the touch rule:** it must not score a side better than the trade rule. If it
   does, it is mis-specified and that result is INCONCLUSIVE.
 - **The stop:** at least **7 days** and at least **300 matches** with a settled fill, or **28
-  days**. **It is checked once a day**, at the first pass after 00:00 UTC, with the
+  days**. **It is checked once a day**, at the first price round after 00:00 UTC, with the
   registered 4,000-draw bootstrap; the summary that decides is the one frozen. The data gates
   below are applied at the freeze whatever triggered it, and the trigger is recorded. Test C
   then stops quoting and its resting orders end.
@@ -269,6 +271,28 @@ needs a dated amendment here, and results are reported by rule version.
 (`src/polysports.js`, `APP=polysports`): a live loop every minute and a background loop for
 enrolment, kickoff refresh, replay, settlement and the stop. Dashboard tab "Test C · Maker".
 Data in `DATA_DIR/polysports/maker-*`.
+
+## Implementation fixes under C2 (2026-10-15, before any fill)
+
+A second code review found places where the code did not do what C2 says. Fixed before the
+first replay; the rule version stays C2 because no fill existed.
+
+- **The daily stop check runs once per UTC day, also across restarts** (it ran again at
+  every deploy), right after a price round.
+- **Kickoff prices survive a restart:** the last midpoints before kickoff are kept on disk,
+  and after kickoff the calibration record gives the fill its kickoff price.
+- **An earlier kickoff is re-applied after a restart**, so in-play evidence can never fill.
+- **A replayed game's writes all happen before it counts as replayed**, so a failed write
+  means it is replayed whole later, never twice or in part.
+- **Rate limits and outages are not split into more requests**, price reads pause when the
+  service asks, and a round stops starting requests after 45 seconds.
+- **Downtime is the gap between reading rounds** (it missed time spent starting up).
+- **A refresh still reaches a game whose book was cleared**, so an unannounced early start
+  moves its kickoff back.
+- **A torn last line in a data file is closed before the next append**, so the next record
+  is not lost with it.
+- **The bootstrap is about twice as fast with identical draws and results**; the dashboard
+  rebuilds Test C's statistics only when its data change.
 
 ## What the critic and the code review changed (C1 → C2, 2026-10-15, before any fill)
 
