@@ -1,9 +1,11 @@
 # Pre-registration: Test C — does posting prices (making) on Polymarket sports earn the spread?
 
-Written 2026-10-15, before Test C's first record. Revised the same day, still before any
-record, after an independent five-lens design review (fill-model optimism, Polymarket
-mechanics, statistics, failure modes, live relevance). The review's main changes are listed
-at the end. Rule version **C1** (`RULE_VERSION` in `src/polymaker.js`).
+Written 2026-10-15, before Test C's first record. Revised the same day after an independent
+five-lens design review (fill-model optimism, Polymarket mechanics, statistics, failure
+modes, live relevance), a completeness critic and a five-part code review. Rule version
+**C2** (`RULE_VERSION` in `src/polymaker.js`). Version C1 ran on Railway for about an hour on
+2026-10-15 with no fill possible (games are replayed two hours after kickoff, a day out); its
+data is archived unread and **C2 starts clean**. The changes are listed at the end.
 
 ## Why
 
@@ -80,11 +82,13 @@ At every read, for each resting order at price p:
   0's bid ≥ 1 − p). Someone posted a sell that would have traded with us: the order is
   **filled** under both rules below, for the size offered at or below p (read from the full
   book), and that outcome is never quoted again;
-- **touch** — the outcome's midpoint reaches p, its best bid vanishes, or the spread blows
-  out past 10¢: the market moved to or past the order, or thinned out.
+- **touch (a pick-off)** — the outcome's best bid is gone (including a cleared book), or the
+  outcome's midpoint is below p by more than **1¢ plus the taker fee** (rate × p × (1 − p)),
+  so that a seller would profit by selling to us. A spread that widens only on the other
+  side (for a buy, the ask rising) is not a touch.
 
-Each game's **midpoint at the last read before kickoff** is also kept, for every enrolled
-game (the markout and the calibration correction below).
+Each game's **midpoint at the last two-sided read before kickoff** is also kept, for every
+enrolled game (the markout and the calibration correction below).
 
 ## When a paper order counts as filled — two rules
 
@@ -101,11 +105,15 @@ evidence is filled; that outcome's later orders never existed.
   - a **crossing** seen live.
   Size = min(order size, the total shown); price = p (a maker gets its own price).
 - **Touch rule** (assumes every stale order is picked off): the trade rule, plus any
-  **touch**, which fills the whole order at p.
+  **touch** during the order's life, which fills the whole order at p.
+
+**No trade stamped at or after kickoff counts**, and nothing seen after kickoff counts. If
+kickoff is found to have been earlier, orders and evidence after the true kickoff are cut
+retroactively (a crossing after it no longer retires the outcome).
 
 **Timing.** A trade's feed time can trail its match by a few seconds. With L = 60 s, a seller
 print counts for an order whose life overlaps [feed time − L, feed time]; if it qualifies for
-two neighbouring orders, it goes to the **dearer** one. A crossing print counts only if the
+more than one such order, it goes to the **dearest**. A crossing print counts only if the
 whole of [feed time − L, feed time] lies inside the order's life.
 
 **Data failures.** A trade read that could silently mean "no trades" is an error, not an
@@ -113,7 +121,9 @@ empty answer: a reply without data, `has_more` without a cursor, a full page wit
 page on, a trade from a game not asked for. Failing requests of 20 games are split down to
 single games and retried; a game still unreadable a day after kickoff is **void** (excluded
 and counted). The trade reader waits until the feed shows trades from at least 30 minutes
-after the game's kickoff. 5% of games are re-read a day later and any difference is counted.
+after the game's kickoff; if the feed cannot show that, it keeps waiting (and a game still
+waiting a day after kickoff is void). A full page without a clear `has_more` is an error too.
+5% of games are re-read a day later and any difference (or skipped re-read) is counted.
 Open orders and ended orders are written to disk at once, so they rest through a restart,
 as live orders would. Downtime is counted.
 
@@ -137,35 +147,57 @@ excluded and counted.
 
   Σ shares × (m − p + c(m)) ÷ Σ shares × p
 
-where m is the outcome's midpoint at the last read before kickoff and c(m) the calibration
-correction: the average (result − m) in m's 5¢ band, over **every enrolled game's** two
-outcomes once resolved (0 where a band has fewer than 30). Profit = markout + (result − m);
-the second part averages c(m) and is mostly luck, so the corrected markout estimates the
-same expected profit with far less noise (about 11× less variance per fill on A/B's data).
+where m is the outcome's midpoint at the last two-sided read before kickoff and c(m) the
+calibration correction: the average (result − m) in m's 5¢ band (bands on whole thousandths),
+over the two outcomes of every enrolled game that **had at least one order and a fresh
+kickoff read**, once resolved (0 where a band has fewer than 30). Profit = markout +
+(result − m); the second part averages c(m) and is mostly luck, so the corrected markout
+estimates the same expected profit with far less noise.
+
+- **A fill is scored on m only if m is fresh:** read at least 5 minutes after the fill's
+  earliest evidence and no more than 10 minutes before kickoff (a game's last read is
+  usually the minute before kickoff). Otherwise — for example a seller took the only bid and
+  the book stayed one-sided — the fill is scored on its **result**, shares × (result − p),
+  with no correction, once settled. The share of fills scored each way is reported.
+- **The interval includes the calibration's own error:** each bootstrap replicate resamples
+  matches of the fills **and** of the calibration games, and re-estimates c from the latter.
+- Fills unresolved 14 days after kickoff are excluded from every figure, and counted.
 
 - **By side, decided separately:** the **cheap side** (orders under 50¢) and the **dear
   side** (50¢ and up). They behave differently (long shots carry nearly all the variance;
   favourites carry most of the dollars), so pooling would let one hide the other.
 - **A side is YES only if**, at the stop: under **both** fill rules its corrected markout
   per $1 has the lower end of its **98.75%** bootstrap interval over **matches** above zero
-  (95% split over two sides), **and** its real outcome profit per $1 under the trade rule is
-  not negative. A match is the event title before " - " plus the date, as in Test A.
+  (95% split over two sides); its real outcome profit per $1 under the trade rule is not
+  negative; and its markout-scored fills do not reliably lose against their own kickoff price
+  (the 97.5th percentile of the mean of (result − m − c(m)) per $1 is not below zero). A
+  match is the event title before " - " plus the date, as in Test A.
+- **A check on the touch rule:** it must not score a side better than the trade rule. If it
+  does, it is mis-specified and that result is INCONCLUSIVE.
 - **The stop:** at least **7 days** and at least **300 matches** with a settled fill, or **28
-  days**. At the stop the result is computed once and frozen; Test C stops quoting.
-- **Futility:** from day 3, with at least 150 matches, if neither side's corrected markout
-  under the trade rule can plausibly be above zero (the top of its interval is below zero),
-  the test stops and records **NO (stopped for futility)**.
+  days**. **It is checked once a day**, at the first pass after 00:00 UTC, with the
+  registered 4,000-draw bootstrap; the summary that decides is the one frozen. The data gates
+  below are applied at the freeze whatever triggered it, and the trigger is recorded. Test C
+  then stops quoting and its resting orders end.
+- **Futility:** in that same daily check, from day 3, with at least 150 matches, if neither
+  side's corrected markout under the trade rule can plausibly be above zero (the top of its
+  interval is below zero), the test stops and records **NO (stopped for futility)**.
 - **INCONCLUSIVE, not NO,** if at the stop there are fewer than 100 settled fills, more than
   10% of games with orders are void, or the tracker was down more than 10% of the time.
 - **YES can be given only at the registered stop.** Any other early stop, for any reason,
   records INCONCLUSIVE. Neither INCONCLUSIVE nor a voided test opens the live step.
-- The running result is shown on the dashboard (as for Tests A and B, at the user's request).
-  Nothing seen before the stop changes the rule, the stop or the verdict.
+- **What the dashboard shows before the stop:** the headline is progress (days, matches)
+  and data health, not a profit figure; the per-side table shows estimates and ranges in a
+  neutral colour, labelled "not a verdict: during a run some range will clear zero by
+  chance"; real profit appears in the detail, labelled "mostly luck at this size". No stop,
+  change or live step may be based on the running display; the only early end is futility.
 
-**Power (from simulation on A/B's data, rough).** With the markout as the statistic, an edge
-of about 1¢ per share should be detected with high probability by the stop, and about 0.5¢
-a share perhaps two times in three. A NO therefore means **no edge of about 1¢ a share or
-more was found**, not that making can never pay.
+**Power (rough).** A simulation on A/B's data, before the calibration's own error was added
+to the interval, put an edge of about 1¢ per share as likely to be found by the stop and
+about 0.5¢ a share perhaps two times in three. With that error included (about 0.2–1.2¢ per
+band on a week of games) and four checks per side (two rules, the outcome and the guard),
+power is lower, and lowest for the cheap side's dearer bands. A NO therefore means **no edge
+of about 1¢ a share or more was found**, not that making can never pay.
 
 ## Reported, not deciding
 
@@ -237,6 +269,25 @@ needs a dated amendment here, and results are reported by rule version.
 (`src/polysports.js`, `APP=polysports`): a live loop every minute and a background loop for
 enrolment, kickoff refresh, replay, settlement and the stop. Dashboard tab "Test C · Maker".
 Data in `DATA_DIR/polysports/maker-*`.
+
+## What the critic and the code review changed (C1 → C2, 2026-10-15, before any fill)
+
+- **The touch rule is a real pick-off rule.** C1 counted any spread blowing out past 10¢ as a
+  touch on both outcomes; on live books three-quarters of touches were such widenings, in no
+  direction, which made the "cautious" reading close to "every order fills". C2's touch is
+  the bid gone or the price below us by 1¢ plus the fee; a check bars a touch rule that
+  scores better than the trade rule.
+- **The kickoff price must be fresh**, or the fill is scored on its result; no trade after
+  kickoff counts; an earlier kickoff applies retroactively.
+- **The calibration's own error is in the interval**; c comes only from quoted games with a
+  fresh read; bands on whole thousandths; a guard against fills that lose to their own
+  kickoff price.
+- **One daily stop check** with the registered bootstrap, frozen as decided.
+- **The outage rule applies on every path** (kickoff, cleared book, Gamma stop); per-game
+  stops survive restarts; every game is read every minute and refreshed every 15 minutes;
+  a sick trade feed means waiting, not replaying; audits keep their games; files are read
+  line by line.
+- **The dashboard** shows progress, not profit, before the stop.
 
 ## What the design review changed (2026-10-15, before any record)
 

@@ -4,48 +4,56 @@
  *
  * Nothing is ever placed. Live, every minute, each enrolled game's best bid and ask are read
  * and its paper orders re-priced (best bid + 1¢, both outcomes, when the spread is 3–10¢);
- * what the book did while each order rested (a sell offered at or below it, or the midpoint
- * reaching it) is recorded as it happens. Two hours after kickoff the game's public trades
- * are read and every order is replayed under two fill rules:
+ * what the book did while each order rested (a sell offered at or below it, its bids gone,
+ * or the price falling far enough below it that a seller would pick it off) is recorded as
+ * it happens. Two hours after kickoff the game's public trades are read and every order is
+ * replayed under two fill rules:
  *   trade rule — filled only when a real seller reached its price (or a sell crossed it);
- *   touch rule — also filled whenever the market's midpoint came down to its price.
- * The first is what a paper test can see; the second assumes every stale order is picked off.
+ *   touch rule — also filled whenever it was picked off as above.
  *
  * Run by the sports tracker (src/polysports.js). Pure functions first (tested), then I/O.
  */
 import fs from 'node:fs'
 import path from 'node:path'
+import { StringDecoder } from 'node:string_decoder'
 import { profitPerDollar, armOf, tagsOf, matchKeyOf } from './polysports.js'
 
 // ---------------------------------------------------------------- the registered rule
 export const MAKER = {
   enrollMinH: 22, enrollMaxH: 26,      // enrolled when kickoff is this far away (as Tests A/B)
   kickoffSlackMs: 15 * 60_000,         // gameStartTime must lie this close to endDate (games, not tournaments)
-  readMs: 60_000,                      // best bid/ask read every minute for markets with orders
-  idleReadMs: 5 * 60_000,              // and every 5 minutes for the rest
-  enrollMs: 15 * 60_000,
+  readMs: 60_000,                      // every enrolled game's best bid/ask, every minute
+  enrollMs: 15 * 60_000,               // enrolment and kickoff refresh
   minSpread: 30, maxSpread: 100,       // in thousandths: 3¢ to 10¢ (1¢-tick books only)
   stakeUsd: 2, minShares: 5,
+  lateMs: 3 * 60_000,                  // reads further apart than this end an order 1 minute after the last one
   lagMs: 60_000,                       // a trade's feed time may trail its match by up to this
   tradesAfterMs: 2 * 3600_000,         // a game's trades are read this long after kickoff
   giveUpMs: 24 * 3600_000,             // a game whose trades cannot be read by then is void
-  lateMs: 3 * 60_000,                  // reads further apart than this end the order 1 minute after the last one
+  freshAfterFillMs: 5 * 60_000,        // the kickoff price must be read at least this long after the fill…
+  freshBeforeKickoffMs: 10 * 60_000,   // …and no longer than this before kickoff, or the fill is scored on its result
   stopMatches: 300, minDays: 7, stopDays: 28, unsettledAfterDays: 14,
   futilityFromDays: 3, futilityMatches: 150,
   minSettledFills: 100, maxVoidShare: 0.10, maxDowntimeShare: 0.10,
-  calBand: 0.05, calMin: 30,           // calibration correction per 5¢ band of the kickoff midpoint
+  calBandMil: 50, calMin: 30,          // calibration correction per 5¢ band of the kickoff midpoint
+  stopIters: 4000,
 }
-export const RULE_VERSION = 'C1'
+export const RULE_VERSION = 'C2'
 export const MAKER_INFO = {
   name: 'Test C · Maker',
   blurb: 'Rests paper buy orders 1¢ above the best bid on both sides of sports games, re-priced every minute. A fill counts only when a real seller reaches the price. Makers pay no fee.',
   prereg: 'PREREG-POLY-MAKER.md',
 }
 export const WORLDS = ['trade', 'touch']
+export const SIDES = ['cheaper', 'dearer']
 const DAY_MS = 86400_000
+const BANDS = 1000 / MAKER.calBandMil
 const num = (x) => (x === null || x === undefined || x === '' ? null : Number(x))
+const isoOf = (ms) => new Date(ms).toISOString()
 /** Prices are compared in whole thousandths, so 0.06 + 0.01 is exactly 0.07. */
 export const mil = (x) => Math.round(Number(x) * 1000)
+/** The 5¢ calibration band of a price, on whole thousandths (0.15 is band 3, not 2). */
+export const bandOf = (p) => Math.min(BANDS - 1, Math.max(0, Math.floor(mil(p) / MAKER.calBandMil)))
 
 // ---------------------------------------------------------------- enrolment
 /** Kickoff from gameStartTime ("2026-10-16 00:15:00+00"), in ms, or null. */
@@ -75,7 +83,7 @@ export function enrollRecord(m, nowMs, tags, game) {
   if (!Array.isArray(tokens) || tokens.length !== 2 || !Array.isArray(outcomes) || outcomes.length !== 2) return null
   return {
     id: String(m.id), cid: m.conditionId, tokens: tokens.map(String), outcomes: outcomes.map(String), question: m.question,
-    kickoff: new Date(kickoffOf(m)).toISOString(), endDate: m.endDate, enrolledAt: new Date(nowMs).toISOString(),
+    kickoff: isoOf(kickoffOf(m)), endDate: m.endDate, enrolledAt: isoOf(nowMs),
     event: String(m.events?.[0]?.id ?? m.id), game, minShares: Math.max(MAKER.minShares, num(m.orderMinSize) ?? 0),
     rebateRate: num(m.feeSchedule?.rebateRate), feeRate: num(m.feeSchedule?.rate), rewardsMinSize: num(m.rewardsMinSize), rewardsMaxSpread: num(m.rewardsMaxSpread),
     ...tags,
@@ -106,20 +114,22 @@ export function quote(bm, am) {
 }
 export const sharesFor = (pm, minShares = MAKER.minShares) => Math.ceil(Math.max(minShares, MAKER.stakeUsd / (pm / 1000)) * 100 - 1e-6) / 100
 
+/** How far below an order's price the market must fall before selling to it pays a taker: 1¢ plus the taker fee. */
+export const pickoffMil = (pm, feeRate) => 10 + Math.round(1000 * (feeRate ?? 0.05) * (pm / 1000) * (1 - pm / 1000))
+
 /**
- * What a read says about an order resting at pm (thousandths):
- *   cross — a sell was offered at or below its price (it would have traded with us);
- *   touch — the midpoint came down to its price, its outcome's bid vanished, or the spread
- *           blew out past 10¢ (the market moved or thinned; a stale order gets picked off).
+ * What a read says about an order to buy outcome `side` at pm (thousandths):
+ *   cross — a sell of its outcome is offered at or below pm (it would have traded with us);
+ *   touch — a pick-off: the crossing, its outcome's bids are all gone, or its outcome's
+ *           midpoint is below pm by more than 1¢ plus the taker fee (a seller would profit).
+ * A spread that widens only on the other side is not a touch.
  */
-export function evidenceAt(side, pm, bm, am) {
-  if (side === 0) {
-    const cross = am !== null && am <= pm
-    const touch = cross || bm === null || (am !== null && (bm + am) / 2 <= pm) || (am !== null && am - bm > MAKER.maxSpread)
-    return { cross, touch }
-  }
-  const cross = bm !== null && bm >= 1000 - pm
-  const touch = cross || am === null || (bm !== null && 1000 - (bm + am) / 2 <= pm) || (bm !== null && am - bm > MAKER.maxSpread)
+export function evidenceAt(side, pm, bm, am, feeRate) {
+  const ownBid = side === 0 ? bm : am === null ? null : 1000 - am
+  const ownAsk = side === 0 ? am : bm === null ? null : 1000 - bm
+  const cross = ownAsk !== null && ownAsk <= pm
+  const touch = cross ? 'cross' : ownBid === null ? 'bid gone'
+    : ownAsk !== null && (ownBid + ownAsk) / 2 < pm - pickoffMil(pm, feeRate) ? 'price fell' : null
   return { cross, touch }
 }
 
@@ -136,61 +146,83 @@ export function newMakerState() {
   return {
     markets: {},      // id → enrolled game
     open: {},         // `${id}:${side}` → the order resting now
-    closed: {},       // id → orders that have ended, kept until the game is replayed
+    closed: {},       // id → orders that have ended, kept until the game is replayed (and audited)
     retired: {},      // `${id}:${side}` → true once a crossing filled it (no more orders)
     needSize: [],     // crossings whose size still has to be read from the full book
     fills: {},        // `${world}|${id}:${side}` → fill
-    replayed: {},     // id → { at, trades, status }
-    cal: {},          // id → { mid, at, kickoff, r0 } for every enrolled game: the calibration correction
+    replayed: {},     // id → { at, trades, status, auditAt?, audited? }
+    cal: {},          // id → { mid, at, kickoff, game, quoted, fresh, r0 } for every enrolled game
     enrolled: new Set(),  // every id ever enrolled: a market is enrolled once
-    stats: { reads: 0, readFails: 0, orders: 0, crossings: 0, touches: 0, tradeCalls: 0, tradeFails: 0, tradesRead: 0, voidGames: 0, lastReadAt: null, lastTradesOkAt: null, lastTradesError: null, restarts: 0, byDay: {} },
+    events: [],       // per-game state changes waiting to be written (two-sided, quoted, stopped, kickoff moved)
+    stats: { reads: 0, readFails: 0, unread: 0, orders: 0, crossings: 0, touches: 0, late: 0, tradeCalls: 0, tradeFails: 0, tradesRead: 0, voidGames: 0,
+      lastReadAt: null, lastTradesOkAt: null, lastTradesError: null, restarts: 0, downMs: 0, byDay: {} },
     firstEnrolledAt: null,
     final: null,
   }
 }
 const day = (ms) => new Date(ms).toISOString().slice(0, 10)
 function bumpDay(mk, ms, k, by = 1) { const d = day(ms); mk.stats.byDay[d] ??= { orders: 0, fills: 0, settled: 0 }; mk.stats.byDay[d][k] = (mk.stats.byDay[d][k] ?? 0) + by }
+function gameEvent(mk, m, change) { Object.assign(m, change); mk.events.push({ id: m.id, ...change }) }
 
-function closeOrder(mk, o, to, onClosed) {
-  o.to = Math.max(o.from, to)
+/**
+ * Ends an order at `cutoff`. If its game was not read for longer than lateMs before then
+ * (an outage), it ends instead one minute after the last read that saw it, as "late".
+ */
+function endOrder(mk, o, cutoff, onClosed) {
+  const seen = o.seen ?? o.from
+  if (cutoff - seen > MAKER.lateMs) { o.late = true; mk.stats.late++; o.to = Math.max(o.from, seen + MAKER.readMs) }
+  else o.to = Math.max(o.from, cutoff)
   delete mk.open[`${o.id}:${o.side}`]
   if (mk.replayed[o.id]) { mk.stats.lostOrders = (mk.stats.lostOrders ?? 0) + 1; return }   // its game was already replayed
   ;(mk.closed[o.id] ??= []).push(o)
   onClosed?.(o)
 }
+function stopGame(mk, m, at, why, onClosed) {
+  if (m.stopped) return
+  gameEvent(mk, m, { stopped: { at, why } })
+  for (const side of [0, 1]) { const o = mk.open[`${m.id}:${side}`]; if (o) endOrder(mk, o, at, onClosed) }
+}
+function pushMark(m, tau, mid) {
+  m.marks ??= []
+  m.marks.push([tau, mid])
+  if (m.marks.length > 90) m.marks.splice(0, m.marks.length - 90)
+}
+/** The last two-sided midpoint read strictly before `t`, or null. */
+export function markBefore(m, t) {
+  for (let i = (m.marks ?? []).length - 1; i >= 0; i--) if (m.marks[i][0] < t) return { mid: m.marks[i][1], at: m.marks[i][0] }
+  return null
+}
 
 /**
- * One read of one game at time tau: records evidence against its resting orders, then
- * re-prices them. An order whose price is unchanged keeps resting (its life continues);
- * a new price ends it and starts another. A crossing fills the order under both rules, so
- * that outcome is never quoted again.
+ * One read of one game at time tau: ends orders after an outage, records evidence against
+ * resting orders, then re-prices them. An order whose price is unchanged keeps resting; a
+ * new price ends it and starts another. A crossing fills the order under both rules, so that
+ * outcome is never quoted again. A book emptied on both sides after being two-sided has been
+ * cleared (the game started or was pulled): its orders are touched and quoting stops.
  */
 export function applyRead(mk, id, bm, am, tau, onClosed) {
   const m = mk.markets[id]
   if (!m || m.stopped || tau >= Date.parse(m.kickoff)) return
   m.lastRead = tau
-  // A book emptied on both sides after being two-sided has been cleared (the game started,
-  // or was pulled): quoting stops for good.
+  for (const side of [0, 1]) { const o = mk.open[`${id}:${side}`]; if (o && tau - (o.seen ?? o.from) > MAKER.lateMs) endOrder(mk, o, tau, onClosed) }
   if (bm === null && am === null && m.twoSided) {
-    m.stopped = { at: tau, why: 'book cleared' }
-    for (const side of [0, 1]) { const o = mk.open[`${id}:${side}`]; if (o) closeOrder(mk, o, tau, onClosed) }
+    for (const side of [0, 1]) { const o = mk.open[`${id}:${side}`]; if (o && !o.touch) { o.touch = { at: tau, why: 'bid gone' }; mk.stats.touches++ } }
+    stopGame(mk, m, tau, 'book cleared', onClosed)
     return
   }
-  if (bm !== null && am !== null) { m.mark = { mid: (bm + am) / 2000, at: tau }; m.twoSided = true }   // the markout's reference
+  m.book = [bm, am]
+  if (bm !== null && am !== null) { pushMark(m, tau, (bm + am) / 2000); if (!m.twoSided) gameEvent(mk, m, { twoSided: true }) }
   for (const side of [0, 1]) {
-    const key = `${id}:${side}`
-    let o = mk.open[key]
-    // Reads too far apart (an outage): the order is judged only up to a minute after the last read that saw it.
-    if (o && tau - (o.seen ?? o.from) > MAKER.lateMs) { o.late = true; mk.stats.late = (mk.stats.late ?? 0) + 1; closeOrder(mk, o, (o.seen ?? o.from) + MAKER.readMs, onClosed); o = null }
+    const key = `${id}:${side}`, o = mk.open[key]
     if (!o) continue
     o.seen = tau
-    const ev = evidenceAt(side, o.pm, bm, am)
-    if (ev.touch && o.touch === null) { o.touch = tau; mk.stats.touches++ }
+    const ev = evidenceAt(side, o.pm, bm, am, m.feeRate)
+    if (ev.touch && !o.touch) { o.touch = { at: tau, why: ev.touch }; mk.stats.touches++ }
     if (ev.cross) {
       o.cross = { at: tau, size: null }
       mk.retired[key] = true; mk.stats.crossings++
       mk.needSize.push({ id, side, pm: o.pm, at: tau })
-      closeOrder(mk, o, tau, onClosed)
+      endOrder(mk, o, tau, onClosed)
     }
   }
   const q = quote(bm, am)
@@ -198,36 +230,58 @@ export function applyRead(mk, id, bm, am, tau, onClosed) {
     const key = `${id}:${side}`
     if (mk.retired[key]) continue
     const o = mk.open[key], pm = q.pm ? q.pm[side] : null
-    if (o && o.pm === pm) { o.seen = tau; continue }
-    if (o) closeOrder(mk, o, tau, onClosed)
+    if (o && o.pm === pm) continue
+    if (o) endOrder(mk, o, tau, onClosed)
     if (pm === null) continue
     const own = side === 0 ? [bm, am] : [1000 - am, 1000 - bm]
     mk.open[key] = { id, side, pm, price: pm / 1000, shares: sharesFor(pm, m.minShares), from: tau, seen: tau, to: null, bid: own[0] / 1000, ask: own[1] / 1000, spread: q.spread, cross: null, touch: null }
     mk.stats.orders++; bumpDay(mk, tau, 'orders')
+    if (!m.quoted) gameEvent(mk, m, { quoted: true })
   }
-  m.active = Boolean(q.pm) || Boolean(mk.open[`${id}:0`] || mk.open[`${id}:1`])
 }
 
-/** Orders still resting at kickoff end there: Polymarket clears sports books at the start. */
+/** Orders still resting at kickoff (or at a stop) end there; Polymarket clears sports books at the start. */
 export function closeAtKickoff(mk, nowMs, onClosed) {
   for (const o of Object.values(mk.open)) {
     const m = mk.markets[o.id]
-    const k = Date.parse(m?.kickoff ?? 0)
-    if (k <= nowMs) closeOrder(mk, o, Math.min(k, (o.seen ?? o.from) + MAKER.lateMs), onClosed)
-    else if (m?.stopped) closeOrder(mk, o, m.stopped.at, onClosed)
+    if (!m) { delete mk.open[`${o.id}:${o.side}`]; continue }
+    const k = Date.parse(m.kickoff)
+    if (k <= nowMs) endOrder(mk, o, k, onClosed)
+    else if (m.stopped) endOrder(mk, o, m.stopped.at, onClosed)
   }
 }
 
+/** At the stop every resting order ends: Test C stops quoting. */
+export function closeAll(mk, nowMs, onClosed) {
+  for (const o of Object.values(mk.open)) endOrder(mk, o, nowMs, onClosed)
+}
+
 /**
- * Applies a fresh Gamma record of an enrolled game: an earlier kickoff ends quoting then
- * (a later one does not extend it); a closed market, or one not accepting orders, stops it.
+ * Brings a game's kickoff forward to k, retroactively: orders and evidence at or after k
+ * are cut or dropped (a crossing after k no longer retires its outcome), and the reference
+ * midpoint becomes the last read before k. A later kickoff never extends quoting.
  */
-export function refreshGame(m, g, nowMs) {
+export function moveKickoff(mk, m, k, onClosed) {
+  if (!(k < Date.parse(m.kickoff))) return
+  gameEvent(mk, m, { kickoff: isoOf(k), kickoffMoved: m.kickoffMoved ?? m.kickoff })
+  const trim = (o) => {
+    if (o.to === null || o.to > k) o.to = k
+    if (o.cross && o.cross.at >= k) o.cross = null
+    if (o.touch && o.touch.at >= k) o.touch = null
+  }
+  for (const side of [0, 1]) { const o = mk.open[`${m.id}:${side}`]; if (o) { if (o.from >= k) delete mk.open[`${m.id}:${side}`]; else endOrder(mk, o, k, onClosed) } }
+  if (mk.closed[m.id]) { mk.closed[m.id] = mk.closed[m.id].filter((o) => o.from < k); mk.closed[m.id].forEach(trim) }
+  for (const side of [0, 1]) if (!(mk.closed[m.id] ?? []).some((o) => o.side === side && o.cross)) delete mk.retired[`${m.id}:${side}`]
+  mk.needSize = mk.needSize.filter((x) => x.id !== m.id || x.at < k)
+  m.marks = (m.marks ?? []).filter(([t]) => t < k)
+}
+
+/** Applies a fresh Gamma record: an earlier gameStartTime moves kickoff; a closed market, or one not accepting orders, stops quoting. */
+export function refreshGame(mk, m, g, nowMs, onClosed) {
   if (!g) return
-  const k = kickoffOf(g), end = Date.parse(g.endDate)
-  const earliest = Math.min(...[k, end].filter((x) => Number.isFinite(x)), Date.parse(m.kickoff))
-  if (earliest < Date.parse(m.kickoff)) { m.kickoffMoved = m.kickoffMoved ?? m.kickoff; m.kickoff = new Date(earliest).toISOString() }
-  if (!m.stopped && (g.closed || g.acceptingOrders === false)) m.stopped = { at: nowMs, why: g.closed ? 'closed' : 'not accepting orders' }
+  const k = kickoffOf(g)
+  if (k !== null && k < Date.parse(m.kickoff)) moveKickoff(mk, m, k, onClosed)
+  if (!m.stopped && (g.closed || g.acceptingOrders === false)) stopGame(mk, m, nowMs, g.closed ? 'closed' : 'not accepting orders', onClosed)
 }
 
 // ---------------------------------------------------------------- replay
@@ -257,45 +311,50 @@ export function classify(t, tokens, side, pm) {
 
 /**
  * Replays one game's orders against its trades and returns its fills under each rule.
- * Per outcome, orders are taken in time order and the first with any evidence fills;
- * later orders of that outcome never existed. A trade's feed time may trail its match by
- * up to L, so a seller print counts for an order whose life overlaps [time − L, time]; if
- * it qualifies for two neighbouring orders, it goes to the dearer one. Crossing prints
- * count only when the whole of [time − L, time] lies inside the order's life.
+ * No trade at or after kickoff counts. Per outcome, orders are taken in time order and the
+ * first with any evidence fills; later orders of that outcome never existed. A trade's feed
+ * time may trail its match by up to L, so a seller print counts for an order whose life
+ * overlaps [time − L, time], and goes to the dearest such order it qualifies for. A crossing
+ * print counts only when the whole of [time − L, time] lies inside the order's life. Under the
+ * touch rule a pick-off anywhere in the order's life fills the whole order.
  */
 export function replayGame(m, orders, trades, L = MAKER.lagMs) {
   const out = { trade: [], touch: [] }
-  const seen = new Set(), uniq = []
-  for (const t of trades) { const k = `${t.tx}|${t.token}|${t.pmil}|${t.size}|${t.ms}|${t.side}`; if (t.tx && seen.has(k)) continue; seen.add(k); uniq.push(t) }
+  const kick = Date.parse(m.kickoff)
+  const pre = trades.filter((t) => t.ms < kick)
   for (const side of [0, 1]) {
-    const list = orders.filter((o) => o.side === side).sort((a, b) => a.from - b.from)
+    const list = orders.filter((o) => o.side === side && o.to > o.from).sort((a, b) => a.from - b.from)
+    // Each seller print belongs to the dearest order it overlaps and qualifies for.
+    const owner = pre.map((t) => {
+      let best = -1
+      for (let i = 0; i < list.length; i++) {
+        const o = list[i]
+        if (t.ms - L < o.to && t.ms >= o.from && classify(t, m.tokens, side, o.pm) === 'seller' && (best < 0 || o.pm > list[best].pm)) best = i
+      }
+      return best
+    })
     for (const world of WORLDS) {
       for (let i = 0; i < list.length; i++) {
-        const o = list[i], next = list[i + 1]
-        let shares = 0, at = Infinity, sources = new Set(), prints = 0
-        for (const t of uniq) {
-          const c = classify(t, m.tokens, side, o.pm)
-          if (!c) continue
-          if (c === 'seller') {
-            if (!(t.ms - L < o.to && t.ms >= o.from)) continue
-            // Also within the next order's life and qualifying there at a higher price: it is the next one's.
-            if (next && next.pm > o.pm && t.ms - L < next.to && t.ms >= next.from && classify(t, m.tokens, side, next.pm) === 'seller') continue
-          } else if (!(t.ms - L >= o.from && t.ms < o.to)) continue
-          shares += t.size; prints++; sources.add(c === 'seller' ? 'trade' : 'crossprint')
-          at = Math.min(at, Math.max(o.from, t.ms - L))
-        }
-        if (o.cross) { shares += o.cross.size ?? o.shares; sources.add('cross'); at = Math.min(at, o.cross.at) }
-        let touched = false
-        if (world === 'touch' && o.touch !== null && o.touch !== undefined && (!Number.isFinite(at) || o.touch <= at)) { touched = true; at = o.touch }
-        if (!(shares > 0) && !touched) continue
-        const got = touched ? o.shares : Math.min(o.shares, shares)
+        const o = list[i]
+        let shares = 0, at = Infinity, prints = 0
+        const sources = new Set()
+        pre.forEach((t, j) => {
+          if (owner[j] === i) { shares += t.size; prints++; sources.add('trade'); at = Math.min(at, Math.max(o.from, t.ms - L)); return }
+          if (classify(t, m.tokens, side, o.pm) === 'cross' && t.ms - L >= o.from && t.ms < o.to) { shares += t.size; prints++; sources.add('crossprint'); at = Math.min(at, t.ms) }
+        })
+        if (o.cross && o.cross.at <= o.to) { shares += o.cross.size ?? o.shares; sources.add('cross'); at = Math.min(at, o.cross.at) }
+        const touch = world === 'touch' && o.touch && o.touch.at >= o.from && o.touch.at <= o.to ? o.touch : null
+        if (!(shares > 0) && !touch) continue
+        if (touch) { sources.add('touch'); at = Math.min(at, touch.at) }
+        const got = touch ? o.shares : Math.min(o.shares, shares)
+        const mark = markBefore(m, kick)
         out[world].push({
           world, id: `${m.id}:${side}`, marketId: m.id, side, outcome: m.outcomes[side], question: m.question, token: m.tokens[side],
-          price: o.pm / 1000, shares: +got.toFixed(4), cost: +(got * o.pm / 1000).toFixed(6), source: touched ? 'touch' : [...sources].sort().join('+'), prints,
-          orderShares: o.shares, evidence: +shares.toFixed(4), feeRate: m.feeRate ?? null,
-          orderFrom: new Date(o.from).toISOString(), filledAt: new Date(at).toISOString(), bid: o.bid, ask: o.ask, spread: o.spread,
+          price: o.pm / 1000, shares: +got.toFixed(4), cost: +(got * o.pm / 1000).toFixed(6), source: [...sources].sort().join('+'), touchWhy: touch?.why ?? null, prints,
+          orderShares: o.shares, evidence: +shares.toFixed(4), feeRate: m.feeRate ?? null, late: Boolean(o.late),
+          orderFrom: isoOf(o.from), orderTo: isoOf(o.to), filledAt: isoOf(at), bid: o.bid, ask: o.ask, spread: o.spread,
           kickoff: m.kickoff, endDate: m.endDate, game: m.game, event: m.event, sport: m.sport ?? null, league: m.league ?? null, type: m.type ?? null,
-          mark: m.mark ? (side === 0 ? m.mark.mid : 1 - m.mark.mid) : null, rebateRate: m.rebateRate ?? null,
+          mark: mark ? (side === 0 ? mark.mid : +(1 - mark.mid).toFixed(4)) : null, markAt: mark ? isoOf(mark.at) : null, rebateRate: m.rebateRate ?? null,
           fill: { shares: +got.toFixed(4), spent: +(got * o.pm / 1000).toFixed(6), avgPrice: o.pm / 1000, filled: true }, fee: 0,
         })
         break
@@ -320,9 +379,13 @@ export function settleFill(f, m) {
 const isStale = (f, nowMs) => !f.settle && nowMs - Date.parse(f.kickoff) > MAKER.unsettledAfterDays * DAY_MS
 export const fillsOf = (mk, world) => Object.values(mk.fills).filter((f) => f.world === world)
 export const sideOf = (f) => (f.price < 0.5 ? 'cheaper' : 'dearer')
-export const SIDES = ['cheaper', 'dearer']
+/** A fill is scored on its kickoff price only if that price was read after the fill had settled in and close to kickoff. */
+export const freshMark = (f) => f.mark !== null && f.mark !== undefined && f.markAt
+  && Date.parse(f.markAt) >= Date.parse(f.filledAt) + MAKER.freshAfterFillMs && Date.parse(f.markAt) >= Date.parse(f.kickoff) - MAKER.freshBeforeKickoffMs
 
 function mulberry32(a) { return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296 } }
+const quant = (sorted, q) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(sorted.length * q)))]
+
 /** Σvalue / Σcost with a bootstrap over matches; lo/hi at the given two-sided level. */
 export function ratioBoot(rows, { iters = 2000, level = 0.95 } = {}) {
   if (!rows.length) return null
@@ -332,56 +395,106 @@ export function ratioBoot(rows, { iters = 2000, level = 0.95 } = {}) {
   for (let k = 0; k < iters; k++) { let v = 0, c = 0; for (let j = 0; j < groups.length; j++) { const g = groups[Math.floor(rnd() * groups.length)]; v += g[0]; c += g[1] } out.push(c > 0 ? v / c : 0) }
   out.sort((x, y) => x - y)
   const v = rows.reduce((a, r) => a + r.value, 0), c = rows.reduce((a, r) => a + r.cost, 0), tail = (1 - level) / 2
-  return { n: rows.length, matches: groups.length, value: v, cost: c, perDollar: v / c, lo: out[Math.floor(iters * tail)], hi: out[Math.min(iters - 1, Math.floor(iters * (1 - tail)))] }
+  return { n: rows.length, matches: groups.length, value: v, cost: c, perDollar: c > 0 ? v / c : 0, lo: quant(out, tail), hi: quant(out, 1 - tail) }
 }
 
-/**
- * The calibration correction: for every enrolled game whose result is known, each outcome's
- * midpoint just before kickoff against how it resolved, by 5¢ band. c(mid) is the average
- * (result − midpoint) in that band, or 0 where the band has fewer than 30 outcomes.
- */
+/** The games the calibration correction is estimated from: quoted, resolved, with a fresh two-sided read before kickoff. */
+export const calGames = (cal) => cal.filter((x) => x.quoted && x.fresh && x.mid !== null && x.mid !== undefined && x.r0 !== null && x.r0 !== undefined)
+
+/** Per-band totals of (result − kickoff midpoint) over both outcomes of each game. */
+function calTotals(list) {
+  const n = new Float64Array(BANDS), sum = new Float64Array(BANDS)
+  for (const x of list) for (const [mid, r] of [[x.mid, x.r0], [1 - x.mid, 1 - x.r0]]) { const b = bandOf(mid); n[b]++; sum[b] += r - mid }
+  return { n, sum }
+}
+const cFrom = (n, sum) => Array.from(n, (k, b) => (k >= MAKER.calMin ? sum[b] / k : 0))
+
+/** The calibration table: c(mid) = average (result − midpoint) in mid's 5¢ band, 0 below 30 outcomes. */
 export function calibrationTable(cal) {
-  const n = Math.round(1 / MAKER.calBand), bins = Array.from({ length: n }, () => ({ n: 0, sum: 0 }))
-  for (const x of cal) {
-    if (x.r0 === null || x.r0 === undefined || x.mid === null || x.mid === undefined) continue
-    for (const [mid, r] of [[x.mid, x.r0], [1 - x.mid, 1 - x.r0]]) { const b = bins[Math.min(n - 1, Math.floor(mid / MAKER.calBand))]; b.n++; b.sum += r - mid }
-  }
-  const table = bins.map((b, i) => ({ lo: i * MAKER.calBand, n: b.n, c: b.n >= MAKER.calMin ? b.sum / b.n : 0 }))
-  return { table, c: (mid) => table[Math.min(n - 1, Math.max(0, Math.floor(mid / MAKER.calBand)))].c }
+  const { n, sum } = calTotals(calGames(cal))
+  const c = cFrom(n, sum)
+  return { table: c.map((v, b) => ({ lo: (b * MAKER.calBandMil) / 1000, n: n[b], c: v })), c: (mid) => c[bandOf(mid)] }
 }
 
 /**
- * The primary statistic: calibration-corrected markout per $1 — Σ shares × (kickoff
- * midpoint − price + c(midpoint)) ÷ Σ shares × price — resampling matches. The outcome
- * profit per $1 is its sanity check.
+ * The primary statistic and its interval. Markout-scored fills (fresh kickoff price)
+ * contribute shares × (m − p + c(m)); the others, once settled, shares × (result − p).
+ * Each bootstrap replicate resamples matches of the fills AND of the calibration games, and
+ * re-estimates the c table from the latter, so its error is in the interval.
  */
-export function sideResult(fills, cal, { iters = 2000, level = 0.95 } = {}) {
-  const marked = fills.filter((f) => f.mark !== null && f.mark !== undefined)
-  const markout = ratioBoot(marked.map((f) => ({ cluster: f.game ?? f.marketId, value: f.shares * (f.mark - f.price + cal.c(f.mark)), cost: f.shares * f.price })), { iters, level })
-  // Live, a visible order can be jumped: what if every fill cost a tick more, or we were second in line?
-  const tickDearer = ratioBoot(marked.map((f) => ({ cluster: f.game ?? f.marketId, value: f.shares * (f.mark - f.price - 0.01 + cal.c(f.mark)), cost: f.shares * (f.price + 0.01) })), { iters: 200, level })
-  const second = marked.map((f) => ({ f, sh: f.source === 'touch' ? f.shares : Math.min(f.orderShares ?? f.shares, Math.max(0, (f.evidence ?? f.shares) - (f.orderShares ?? f.shares))) })).filter((x) => x.sh > 0)
-  const secondInLine = ratioBoot(second.map(({ f, sh }) => ({ cluster: f.game ?? f.marketId, value: sh * (f.mark - f.price + cal.c(f.mark)), cost: sh * f.price })), { iters: 200, level })
+export function markoutBoot(fills, calList, { iters = 1000, level = 0.95 } = {}) {
+  const groups = new Map()
+  let byMark = 0, byResult = 0
+  for (const f of fills) {
+    const key = f.game ?? f.marketId
+    if (!groups.has(key)) groups.set(key, { v0: 0, cost: 0, S: new Float64Array(BANDS) })
+    const g = groups.get(key)
+    if (freshMark(f)) { g.v0 += f.shares * (f.mark - f.price); g.S[bandOf(f.mark)] += f.shares; g.cost += f.shares * f.price; byMark++ }
+    else if (f.settle) { g.v0 += f.settle.pnl; g.cost += f.settle.cost; byResult++ }
+  }
+  const fg = [...groups.values()].filter((g) => g.cost > 0)
+  if (!fg.length) return null
+  const cg = new Map()
+  for (const x of calGames(calList)) { const k = x.game ?? x.id; if (!cg.has(k)) cg.set(k, []); cg.get(k).push(x) }
+  const calGroups = [...cg.values()].map(calTotals)
+  const stat = (picks, cpicks) => {
+    const n = new Float64Array(BANDS), sum = new Float64Array(BANDS), S = new Float64Array(BANDS)
+    for (const t of cpicks) for (let b = 0; b < BANDS; b++) { n[b] += t.n[b]; sum[b] += t.sum[b] }
+    const c = cFrom(n, sum)
+    let v = 0, cost = 0
+    for (const g of picks) { v += g.v0; cost += g.cost; for (let b = 0; b < BANDS; b++) S[b] += g.S[b] }
+    for (let b = 0; b < BANDS; b++) v += c[b] * S[b]
+    return { v, cost }
+  }
+  const full = stat(fg, calGroups)
+  const rnd = mulberry32(4242), out = []
+  for (let k = 0; k < iters; k++) {
+    const p = Array.from(fg, () => fg[Math.floor(rnd() * fg.length)])
+    const q = calGroups.length ? Array.from(calGroups, () => calGroups[Math.floor(rnd() * calGroups.length)]) : []
+    const s = stat(p, q); out.push(s.cost > 0 ? s.v / s.cost : 0)
+  }
+  out.sort((a, b) => a - b)
+  const tail = (1 - level) / 2
+  return { n: byMark + byResult, byMark, byResult, matches: fg.length, value: full.v, cost: full.cost, perDollar: full.v / full.cost, lo: quant(out, tail), hi: quant(out, 1 - tail) }
+}
+
+/** Per side and rule: the corrected markout (deciding), real outcome, the guard and the sensitivities. */
+export function sideResult(fills, calList, cal, { iters = 1000, level = 0.95 } = {}) {
+  const markout = markoutBoot(fills, calList, { iters, level })
   const settled = fills.filter((f) => f.settle)
   const outcome = ratioBoot(settled.map((f) => ({ cluster: f.game ?? f.marketId, value: f.settle.pnl, cost: f.settle.cost })), { iters, level: 0.95 })
+  // Guard: markout-scored fills must not reliably lose against their own kickoff price.
+  const guard = ratioBoot(settled.filter(freshMark).map((f) => ({ cluster: f.game ?? f.marketId, value: f.shares * (f.settle.yesPrice - f.mark - cal.c(f.mark)), cost: f.shares * f.price })), { iters: Math.min(iters, 1000), level: 0.95 })
+  // Live, a visible order can be jumped: what if every fill cost a tick more, or we were second in line?
+  const tickDearer = markoutBoot(fills.map((f) => ({ ...f, price: f.price + 0.01, settle: f.settle ? { ...f.settle, pnl: f.settle.pnl - 0.01 * f.shares, cost: f.settle.cost + 0.01 * f.shares } : f.settle })), calList, { iters: 200, level })
+  const secondInLine = markoutBoot(fills.map((f) => {
+    if (f.source.includes('touch')) return f
+    const sh = Math.min(f.orderShares ?? f.shares, Math.max(0, (f.evidence ?? f.shares) - (f.orderShares ?? f.shares)))
+    const k = f.shares > 0 ? sh / f.shares : 0
+    return { ...f, shares: sh, settle: f.settle ? { ...f.settle, pnl: f.settle.pnl * k, cost: f.settle.cost * k } : f.settle }
+  }).filter((f) => f.shares > 0), calList, { iters: 200, level })
   const wins = settled.filter((f) => f.settle.yesPrice === 1).length
   return {
     fills: fills.length, settled: settled.length, wins, losses: settled.filter((f) => f.settle.yesPrice === 0).length,
-    matches: new Set(settled.map((f) => f.game ?? f.marketId)).size, markout, outcome, tickDearer, secondInLine,
+    matches: new Set(settled.map((f) => f.game ?? f.marketId)).size, markout, outcome, guard, tickDearer, secondInLine,
     hitRate: settled.length ? wins / settled.length : null, avgPrice: settled.length ? settled.reduce((a, f) => a + f.price, 0) / settled.length : null,
   }
 }
 
 /**
- * The verdict, per side (Bonferroni over the two sides: 98.75% intervals). A side is YES
- * only if its corrected markout's lower end is above zero under BOTH fill rules and its
- * outcome profit under the trade rule is not negative. The data gates come first.
+ * The verdict at the stop, per side (98.75% intervals: two sides). A side is YES only if,
+ * under BOTH fill rules, its corrected markout's lower end is above zero; its real outcome
+ * under the trade rule is not negative; its fills do not reliably lose against their own
+ * kickoff price (the guard); and the touch rule is not kinder than the trade rule (if it is,
+ * the touch rule is mis-specified and the result is INCONCLUSIVE). Data gates come first.
  */
 export function verdictOf(s) {
   if (s.gate) return `INCONCLUSIVE — ${s.gate}`
+  const bad = SIDES.filter((side) => { const t = s.sides[side]?.trade?.markout, h = s.sides[side]?.touch?.markout; return t && h && h.perDollar > t.perDollar + 1e-9 })
+  if (bad.length) return `INCONCLUSIVE — the cautious rule scored the ${bad.join(' and ')} side better than the main rule, so it is mis-specified`
   const passed = SIDES.filter((side) => {
     const t = s.sides[side]?.trade, h = s.sides[side]?.touch
-    return t?.markout && h?.markout && t.markout.lo > 0 && h.markout.lo > 0 && t.outcome && t.outcome.perDollar >= 0
+    return t?.markout && h?.markout && t.markout.lo > 0 && h.markout.lo > 0 && t.outcome && t.outcome.perDollar >= 0 && !(t.guard && t.guard.hi < 0)
   })
   if (passed.length) return `YES — ${passed.join(' and ')} side${passed.length > 1 ? 's' : ''}: resting orders made money under both fill rules`
   const tradeOnly = SIDES.filter((side) => s.sides[side]?.trade?.markout?.lo > 0)
@@ -389,14 +502,20 @@ export function verdictOf(s) {
   return 'NO — resting orders did not reliably make money'
 }
 
+/**
+ * Everything the verdict needs. `done` and the stop's reason are decided here; the verdict
+ * is filled in only when the test is done (YES can only be given at the stop).
+ */
 export function makerSummary(mk, nowMs, { iters = 1000 } = {}) {
-  const cal = calibrationTable(Object.values(mk.cal ?? {}))
+  const calList = Object.values(mk.cal ?? {})
+  const cal = calibrationTable(calList)
+  const live = (w) => fillsOf(mk, w).filter((f) => !isStale(f, nowMs))
   const sides = {}
   for (const side of SIDES) {
     sides[side] = {}
-    for (const w of WORLDS) sides[side][w] = sideResult(fillsOf(mk, w).filter((f) => sideOf(f) === side), cal, { iters, level: 0.9875 })
+    for (const w of WORLDS) sides[side][w] = sideResult(live(w).filter((f) => sideOf(f) === side), calList, cal, { iters, level: 0.9875 })
   }
-  const pooled = Object.fromEntries(WORLDS.map((w) => [w, sideResult(fillsOf(mk, w), cal, { iters, level: 0.95 })]))
+  const pooled = Object.fromEntries(WORLDS.map((w) => [w, sideResult(live(w), calList, cal, { iters: Math.min(iters, 1000), level: 0.95 })]))
   const first = mk.firstEnrolledAt ? Date.parse(mk.firstEnrolledAt) : null
   const days = first !== null ? (nowMs - first) / DAY_MS : 0
   const matches = pooled.trade.matches
@@ -406,64 +525,88 @@ export function makerSummary(mk, nowMs, { iters = 1000 } = {}) {
   const gate = pooled.trade.settled < MAKER.minSettledFills ? `only ${pooled.trade.settled} settled fills (needs ${MAKER.minSettledFills})`
     : voidShare > MAKER.maxVoidShare ? `${Math.round(voidShare * 100)}% of games had unreadable trades`
     : downShare > MAKER.maxDowntimeShare ? `the tracker was down ${Math.round(downShare * 100)}% of the time` : null
-  // Futility, from day 3: neither side can plausibly be ahead even under the trade rule.
-  const futile = days >= MAKER.futilityFromDays && matches >= MAKER.futilityMatches
-    && SIDES.every((side) => { const m = sides[side].trade.markout; return !m || m.hi < 0 })
-  const done = (days >= MAKER.minDays && matches >= MAKER.stopMatches) || days >= MAKER.stopDays || futile
-  const out = { sides, pooled, matches, days: +days.toFixed(1), done, futile, gate: done ? gate : null, voidShare, downShare,
+  const futile = days >= MAKER.futilityFromDays && matches >= MAKER.futilityMatches && SIDES.every((side) => { const m = sides[side].trade.markout; return !m || m.hi < 0 })
+  const reason = days >= MAKER.stopDays ? '28 days' : days >= MAKER.minDays && matches >= MAKER.stopMatches ? 'registered stop' : futile ? 'futility' : null
+  const out = { sides, pooled, matches, days: +days.toFixed(1), done: Boolean(reason), reason, futile, gate, voidShare, downShare,
     calibration: cal.table, pairs: Object.keys(mk.markets).filter((id) => mk.fills[`trade|${id}:0`] && mk.fills[`trade|${id}:1`]).length,
     firstEnrolledAt: mk.firstEnrolledAt, stats: mk.stats, ruleVersion: RULE_VERSION }
-  out.verdict = futile && !gate ? 'NO — stopped for futility' : verdictOf({ ...out, gate })
+  out.verdict = !reason ? null : gate ? `INCONCLUSIVE — ${gate}` : reason === 'futility' ? 'NO — stopped for futility' : verdictOf(out)
   return out
 }
 
-/** The stop, made permanent: everything from the fills settled at that moment. */
-export function freezeMaker(mk, nowMs) {
+/** The stop, made permanent, from exactly the summary that decided it. */
+export function freezeMaker(mk, nowMs, summary = null) {
   if (mk.final) return mk.final
-  const { stats: _s, ...s } = makerSummary(mk, nowMs, { iters: 4000 })
-  mk.final = { ...s, done: true, frozenAt: new Date(nowMs).toISOString(), commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? null, settledIds: Object.values(mk.fills).filter((f) => f.settle).map((f) => `${f.world}|${f.id}`) }
+  const { stats: _s, ...s } = summary ?? makerSummary(mk, nowMs, { iters: MAKER.stopIters })
+  if (!s.done) return null
+  mk.final = { ...s, frozenAt: isoOf(nowMs), commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? null, settledIds: Object.values(mk.fills).filter((f) => f.settle).map((f) => `${f.world}|${f.id}`) }
   return mk.final
 }
 
 // ---------------------------------------------------------------- storage
+/** Calls fn on each line of a file, reading it in 1 MiB pieces (a whole-file string can exceed Node's limit). */
+export function eachLine(file, fn) {
+  if (!fs.existsSync(file)) return 0
+  const fd = fs.openSync(file, 'r'), buf = Buffer.alloc(1 << 20), dec = new StringDecoder('utf8')
+  let rest = '', bad = 0, n
+  const line = (l) => { if (!l.trim()) return; try { fn(JSON.parse(l)) } catch { bad++ } }
+  try {
+    while ((n = fs.readSync(fd, buf, 0, buf.length, null)) > 0) {
+      const parts = (rest + dec.write(buf.subarray(0, n))).split('\n')
+      rest = parts.pop()
+      parts.forEach(line)
+    }
+    line(rest + dec.end())
+  } finally { fs.closeSync(fd) }
+  return bad
+}
+
 /**
  * Append-only, beside Tests A/B's files:
  *   maker-markets.jsonl   one line per enrolled game
+ *   maker-games.jsonl     per-game state changes (two-sided, quoted, stopped, kickoff moved)
  *   maker-orders.jsonl    one line per order when it ends (its life and what the book did)
  *   maker-open.json       orders resting now, rewritten each round, so they rest through a restart
  *   maker-trades.jsonl    each replayed game's trades (compact), for audit
- *   maker-replayed.jsonl  one line per game replayed (or void)
+ *   maker-replayed.jsonl  one line per game replayed (or void, or audited)
  *   maker-fills.jsonl     one line per fill, per rule
  *   maker-settles.jsonl   one line per settled fill
  *   maker-cal.jsonl       each game's midpoint at kickoff, then its result (the calibration correction)
- *   maker-meta.json       counters and the frozen result
- * Games already replayed are not loaded back into memory, except for their fills.
+ *   maker-after.jsonl     prices 1, 15 and 60 minutes after each fill
+ *   maker-meta.json       counters, the rule version and the frozen result
+ * Data of an earlier rule version with no fill yet is moved to maker-archive/ on load.
  */
 export function openMakerStore(dir) {
   fs.mkdirSync(dir, { recursive: true })
   const f = (n) => path.join(dir, n)
-  const each = (name, fn) => {
-    if (!fs.existsSync(f(name))) return 0
-    let bad = 0
-    for (const l of fs.readFileSync(f(name), 'utf8').split('\n')) { if (!l.trim()) continue; try { fn(JSON.parse(l)) } catch { bad++ } }
-    return bad
-  }
   const append = (name, objs) => { if (objs.length) fs.appendFileSync(f(name), objs.map((o) => JSON.stringify(o)).join('\n') + '\n') }
   const writeAtomic = (name, obj) => { fs.writeFileSync(f(name + '.tmp'), JSON.stringify(obj)); fs.renameSync(f(name + '.tmp'), f(name)) }
   return {
     load(nowMs = Date.now()) {
+      // A new rule version starts clean, unless the old one already has fills (then it is kept, and flagged).
+      if (fs.existsSync(f('maker-meta.json'))) {
+        const meta = JSON.parse(fs.readFileSync(f('maker-meta.json'), 'utf8'))
+        const hasFills = fs.existsSync(f('maker-fills.jsonl')) && fs.statSync(f('maker-fills.jsonl')).size > 0
+        if ((meta.ruleVersion ?? 'C1') !== RULE_VERSION && !hasFills) {
+          const to = path.join(dir, 'maker-archive', `${meta.ruleVersion ?? 'C1'}-${new Date(nowMs).toISOString().replace(/[:.]/g, '-')}`)
+          fs.mkdirSync(to, { recursive: true })
+          for (const name of fs.readdirSync(dir)) if (name.startsWith('maker-') && name !== 'maker-archive') fs.renameSync(f(name), path.join(to, name))
+          console.log(`maker: rule ${meta.ruleVersion ?? 'C1'} data (no fills) archived to ${to}; ${RULE_VERSION} starts clean`)
+        }
+      }
       const mk = newMakerState()
-      let bad = each('maker-replayed.jsonl', (x) => { mk.replayed[x.id] = x })
-      bad += each('maker-markets.jsonl', (m) => { mk.markets[m.id] = m; mk.enrolled.add(m.id); if (!mk.firstEnrolledAt || m.enrolledAt < mk.firstEnrolledAt) mk.firstEnrolledAt = m.enrolledAt })
-      bad += each('maker-cal.jsonl', (x) => { mk.cal[x.id] = { ...(mk.cal[x.id] ?? {}), ...x } })
-      bad += each('maker-orders.jsonl', (o) => { if (!mk.replayed[o.id]) (mk.closed[o.id] ??= []).push(o); if (o.cross) mk.retired[`${o.id}:${o.side}`] = true })
-      bad += each('maker-fills.jsonl', (x) => { mk.fills[`${x.world}|${x.id}`] = x })
-      bad += each('maker-settles.jsonl', (x) => { if (mk.fills[x.key]) mk.fills[x.key].settle = x.settle })
-      bad += each('maker-after.jsonl', (x) => { if (mk.fills[x.key]) mk.fills[x.key].after = x.after })
+      let bad = eachLine(f('maker-replayed.jsonl'), (x) => { mk.replayed[x.id] = { ...(mk.replayed[x.id] ?? {}), ...x } })
+      bad += eachLine(f('maker-markets.jsonl'), (m) => { mk.markets[m.id] = m; mk.enrolled.add(m.id); if (!mk.firstEnrolledAt || m.enrolledAt < mk.firstEnrolledAt) mk.firstEnrolledAt = m.enrolledAt })
+      bad += eachLine(f('maker-games.jsonl'), ({ id, ...change }) => { if (mk.markets[id]) Object.assign(mk.markets[id], change) })
+      bad += eachLine(f('maker-cal.jsonl'), (x) => { mk.cal[x.id] = { ...(mk.cal[x.id] ?? {}), ...x } })
+      const pendingAudit = (id) => mk.replayed[id]?.auditAt && !mk.replayed[id]?.audited
+      bad += eachLine(f('maker-orders.jsonl'), (o) => { if (!mk.replayed[o.id] || pendingAudit(o.id)) (mk.closed[o.id] ??= []).push(o); if (o.cross) mk.retired[`${o.id}:${o.side}`] = true })
+      bad += eachLine(f('maker-fills.jsonl'), (x) => { mk.fills[`${x.world}|${x.id}`] = x })
+      bad += eachLine(f('maker-settles.jsonl'), (x) => { if (mk.fills[x.key]) mk.fills[x.key].settle = x.settle })
+      bad += eachLine(f('maker-after.jsonl'), (x) => { if (mk.fills[x.key]) mk.fills[x.key].after = x.after })
       if (fs.existsSync(f('maker-open.json'))) {
         const o = JSON.parse(fs.readFileSync(f('maker-open.json'), 'utf8'))
-        mk.open = o.open ?? {}
-        for (const [id, mark] of Object.entries(o.marks ?? {})) if (mk.markets[id]) mk.markets[id].mark = mark
+        for (const [k, x] of Object.entries(o.open ?? {})) if (mk.markets[x.id] && !mk.replayed[x.id]) mk.open[k] = x
         for (const x of o.needSize ?? []) mk.needSize.push(x)
       }
       if (fs.existsSync(f('maker-meta.json'))) {
@@ -473,25 +616,22 @@ export function openMakerStore(dir) {
         // Downtime: from the last live round before the restart to now.
         if (mk.stats.lastReadAt && !mk.final) mk.stats.downMs = (mk.stats.downMs ?? 0) + Math.max(0, nowMs - Date.parse(mk.stats.lastReadAt) - MAKER.readMs)
       }
-      // Replayed games with no fill are only counts now.
-      for (const id of Object.keys(mk.markets)) if (mk.replayed[id] && !mk.fills[`trade|${id}:0`] && !mk.fills[`trade|${id}:1`] && !mk.fills[`touch|${id}:0`] && !mk.fills[`touch|${id}:1`]) delete mk.markets[id]
+      // Replayed games with no fill and no audit pending are only counts now.
+      for (const id of Object.keys(mk.markets)) if (mk.replayed[id] && !pendingAudit(id) && !WORLDS.some((w) => mk.fills[`${w}|${id}:0`] || mk.fills[`${w}|${id}:1`])) delete mk.markets[id]
       if (bad) console.error(`maker storage: skipped ${bad} unreadable line(s)`)
       return mk
     },
     addMarkets: (list) => append('maker-markets.jsonl', list),
+    addGameEvents: (list) => append('maker-games.jsonl', list),
     addCal: (list) => append('maker-cal.jsonl', list),
     addAfter: (x) => append('maker-after.jsonl', [x]),
     addOrders: (list) => append('maker-orders.jsonl', list),
     addTrades: (id, trades) => append('maker-trades.jsonl', [{ id, trades: trades.map((t) => [t.ms, t.token, t.side, t.pmil, t.size, t.tx]) }]),
     addReplayed: (list) => append('maker-replayed.jsonl', list),
-    addFills: (list) => append('maker-fills.jsonl', list.map(({ settle: _s, ...r }) => r)),
+    addFills: (list) => append('maker-fills.jsonl', list.map(({ settle: _s, after: _a, ...r }) => r)),
     addSettles: (list) => append('maker-settles.jsonl', list.map((r) => ({ key: `${r.world}|${r.id}`, settle: r.settle }))),
-    saveOpen(mk) {
-      const marks = {}
-      for (const [id, m] of Object.entries(mk.markets)) if (m.mark && !mk.replayed[id]) marks[id] = m.mark
-      writeAtomic('maker-open.json', { open: mk.open, marks, needSize: mk.needSize })
-    },
-    saveMeta(mk) { writeAtomic('maker-meta.json', { stats: mk.stats, final: mk.final }) },
+    saveOpen(mk) { writeAtomic('maker-open.json', { open: mk.open, needSize: mk.needSize }) },
+    saveMeta(mk) { writeAtomic('maker-meta.json', { ruleVersion: RULE_VERSION, stats: mk.stats, final: mk.final }) },
   }
 }
 
@@ -516,31 +656,35 @@ export async function listWindow(getJson, nowMs, minH, maxH) {
   return out
 }
 
-/** Enrols every eligible game first seen 22–26h before kickoff. Returns what was listed, for the feed check. */
+/** Enrols every eligible game first seen 22–26h before kickoff; each market once, ever. */
 export async function enroll(mk, io, nowMs, index) {
   const list = await listWindow(io.getJson, nowMs, MAKER.enrollMinH, MAKER.enrollMaxH)
   const added = []
-  mk.stats.skipped ??= {}
-  mk.seen ??= new Set()   // counts each skipped market once per run
+  mk.skipped ??= {}       // per run: each skipped market counted once since the last start
+  mk.seen ??= new Set()
   for (const m of list) {
-    if (mk.enrolled.has(String(m.id)) || mk.markets[m.id] || mk.replayed[m.id]) continue
+    if (mk.enrolled.has(String(m.id))) continue
     const why = ineligible(m, nowMs)
     if (why) {
-      if (why !== 'outside the window' && armOf(m) && !mk.seen.has(m.id)) { mk.seen.add(m.id); mk.stats.skipped[why] = (mk.stats.skipped[why] ?? 0) + 1 }
+      if (why !== 'outside the window' && armOf(m) && !mk.seen.has(m.id)) { mk.seen.add(m.id); mk.skipped[why] = (mk.skipped[why] ?? 0) + 1 }
       continue
     }
     const r = enrollRecord(m, nowMs, tagsOf(m, index), matchKeyOf(m))
     if (r) added.push(r)
   }
   io.store.addMarkets(added)   // written first: a market in memory is always on disk
-  for (const r of added) { mk.markets[r.id] = r; mk.enrolled.add(r.id); if (!mk.firstEnrolledAt) mk.firstEnrolledAt = r.enrolledAt }
+  mk.stats.enrolledBy ??= { sport: {}, type: {} }
+  for (const r of added) {
+    mk.markets[r.id] = r; mk.enrolled.add(r.id); if (!mk.firstEnrolledAt) mk.firstEnrolledAt = r.enrolledAt
+    for (const k of ['sport', 'type']) { const v = r[k] ?? 'Untagged'; mk.stats.enrolledBy[k][v] = (mk.stats.enrolledBy[k][v] ?? 0) + 1 }
+  }
   return { added: added.length, list }
 }
 
 /**
- * Best bid and ask of outcome 0 for each game, 250 per request, in shuffled batches. A failed
- * batch is retried in halves down to single games; a game still unread is counted, and its
- * order simply rests on until the next read. Returns id → { bm, am, tau }.
+ * Best bid and ask of outcome 0 for each game, 250 per request, 4 requests at a time, in
+ * shuffled batches. A failed batch is retried in halves down to single games; a game still
+ * unread is counted, and its orders rest on until the next read. Returns id → { bm, am, tau }.
  */
 export async function readPrices(mk, io, ids) {
   const out = new Map(), byToken = new Map()
@@ -555,16 +699,19 @@ export async function readPrices(mk, io, ids) {
       const tau = Math.round((sent + clock()) / 2)   // the book as of the middle of the request
       for (const t of chunk) {
         if (res?.[t]) out.set(byToken.get(t), { ...readOf(res[t]), tau })
-        else mk.stats.unread = (mk.stats.unread ?? 0) + 1
+        else mk.stats.unread++
       }
       mk.stats.reads += chunk.length
     } catch (e) {
       mk.stats.readFails++
       if (chunk.length > 1) { const h = Math.ceil(chunk.length / 2); await read(chunk.slice(0, h)); await read(chunk.slice(h)) }
-      else { mk.stats.unread = (mk.stats.unread ?? 0) + 1; io.log?.('maker prices', e.message) }
+      else { mk.stats.unread++; io.log?.('maker prices', e.message) }
     }
   }
-  for (let i = 0; i < tokens.length; i += 250) await read(tokens.slice(i, i + 250))
+  const chunks = []
+  for (let i = 0; i < tokens.length; i += 250) chunks.push(tokens.slice(i, i + 250))
+  let next = 0
+  await Promise.all(Array.from({ length: Math.min(4, chunks.length) }, async () => { while (next < chunks.length) await read(chunks[next++]) }))
   return out
 }
 
@@ -581,42 +728,65 @@ async function sizeCrossings(mk, io) {
 }
 
 /**
- * One live round (every minute): enrol (every 15 minutes), read prices for games with
- * orders (every round) and the rest (every 5 minutes), record evidence, re-price, end
- * orders at kickoff. Orders that end are written to disk at once.
+ * One live round (every minute): end orders at kickoff or a stop, record each game's
+ * midpoint at kickoff, read every enrolled game before kickoff, record evidence, re-price.
+ * Orders that end and per-game changes are written to disk at once.
  */
-export async function liveRound(mk, io, nowMs, { index = null, enrollNow = false } = {}) {
+export async function liveRound(mk, io, nowMs) {
   if (mk.final) return { done: true }
-  let enrolled = 0
-  if (enrollNow) {
-    try { enrolled = (await enroll(mk, io, nowMs, index)).added } catch (e) { mk.stats.enrollFails = (mk.stats.enrollFails ?? 0) + 1; io.log?.('maker enrol', e.message) }
-  }
   const ended = []
   closeAtKickoff(mk, nowMs, (o) => ended.push(o))
-  // Each game's last midpoint before kickoff, kept for the markout and the calibration correction.
   const marks = []
   for (const [id, m] of Object.entries(mk.markets)) {
     if (mk.cal[id] || Date.parse(m.kickoff) > nowMs) continue
-    mk.cal[id] = { id, mid: m.mark?.mid ?? null, at: m.mark ? new Date(m.mark.at).toISOString() : null, kickoff: m.kickoff }
+    const k = Date.parse(m.kickoff), mark = markBefore(m, k)
+    mk.cal[id] = { id, game: m.game, mid: mark?.mid ?? null, at: mark ? isoOf(mark.at) : null, kickoff: m.kickoff, quoted: Boolean(m.quoted), fresh: Boolean(mark && mark.at >= k - MAKER.freshBeforeKickoffMs) }
     marks.push(mk.cal[id])
   }
   io.store.addCal(marks)
-  const ids = Object.entries(mk.markets).filter(([id, m]) => Date.parse(m.kickoff) > nowMs && !mk.replayed[id]
-    && (m.active || mk.open[`${id}:0`] || mk.open[`${id}:1`] || !m.lastRead || nowMs - m.lastRead >= MAKER.idleReadMs - 5000)).map(([id]) => id)
+  const ids = Object.entries(mk.markets).filter(([id, m]) => !m.stopped && Date.parse(m.kickoff) > nowMs && !mk.replayed[id]).map(([id]) => id)
   const reads = await readPrices(mk, io, ids)
   for (const [id, r] of reads) applyRead(mk, id, r.bm, r.am, r.tau, (o) => ended.push(o))
   await sizeCrossings(mk, io)
   io.store.addOrders(ended)
+  io.store.addGameEvents(mk.events.splice(0))
   io.store.saveOpen(mk)
-  mk.stats.lastReadAt = new Date(nowMs).toISOString()
-  return { enrolled, read: reads.size, of: ids.length, resting: Object.keys(mk.open).length, ended: ended.length }
+  // A round that read nothing (the price service down) is downtime, and does not count as a read.
+  if (reads.size || !ids.length) mk.stats.lastReadAt = isoOf(nowMs)
+  else mk.stats.downMs = (mk.stats.downMs ?? 0) + MAKER.readMs
+  return { read: reads.size, of: ids.length, resting: Object.keys(mk.open).length, ended: ended.length }
+}
+
+/** Refreshes kickoff and status of every enrolled game still before kickoff (Gamma, 50 per request). */
+export async function refreshGames(mk, io, nowMs) {
+  const ids = Object.values(mk.markets).filter((m) => !m.stopped && Date.parse(m.kickoff) > nowMs && !mk.replayed[m.id]).map((m) => m.id)
+  const ended = []
+  let n = 0
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50)
+    try {
+      const seen = new Set()
+      for (const closed of ['false', 'true']) {
+        const left = closed === 'false' ? chunk : chunk.filter((id) => !seen.has(id))
+        if (!left.length) break
+        const q = new URLSearchParams({ closed, limit: '100' })
+        for (const id of left) q.append('id', id)
+        const list = await io.getJson('https://gamma-api.polymarket.com/markets?' + q)
+        for (const g of Array.isArray(list) ? list : []) { const m = mk.markets[String(g.id)]; if (m) { seen.add(m.id); refreshGame(mk, m, g, nowMs, (o) => ended.push(o)); n++ } }
+      }
+    } catch (e) { mk.stats.refreshFails = (mk.stats.refreshFails ?? 0) + 1; io.log?.('maker refresh', e.message) }
+  }
+  io.store.addOrders(ended)
+  io.store.addGameEvents(mk.events.splice(0))
+  return n
 }
 
 /**
  * Every taker trade of the given games in [start, end], paged to the end. Anything that
- * could silently mean "no trades" is an error instead: a reply without data, has_more
- * without a cursor, a full page with no way to page on, a trade from a game not asked for.
- * Identical records are dropped only when they repeat across pages.
+ * could silently mean "no trades" is an error instead: a reply without data, a page
+ * without a clear has_more, has_more without a cursor, a full page with no way to page on,
+ * a trade from a game not asked for. Identical records are dropped only when they repeat
+ * across pages (within a page they can be separate matches).
  */
 export async function fetchTrades(io, mk, cids, start, end) {
   const want = new Set(cids.map((c) => String(c).toLowerCase()))
@@ -640,8 +810,12 @@ export async function fetchTrades(io, mk, cids, start, end) {
     }
     for (const k of keys) seen.add(k)
     if (Array.isArray(body)) { if (raw.length >= 1000) throw new Error('a full page with no way to page on'); cursor = null }
-    else if (body.pagination?.has_more) { if (!body.pagination.next_cursor) throw new Error('has_more without a cursor'); cursor = body.pagination.next_cursor }
-    else cursor = null
+    else {
+      const more = body.pagination?.has_more
+      if (typeof more !== 'boolean') { if (raw.length >= 1000) throw new Error('a full page without has_more'); cursor = null }
+      else if (more) { if (!body.pagination.next_cursor) throw new Error('has_more without a cursor'); cursor = body.pagination.next_cursor }
+      else cursor = null
+    }
     if (++pages > 200) throw new Error('more than 200 pages of trades')
   } while (cursor)
   return got
@@ -657,19 +831,25 @@ async function feedWatermark(io) {
 }
 
 /**
- * Reads the trades of every game whose kickoff was at least two hours ago and replays its
- * orders. 20 games per request; a failing request is split in halves down to single games;
- * a game is tried again next time, and is void if still unreadable a day after kickoff.
- * 5% of replayed games are read again a day later, and any difference is counted.
+ * Reads the trades of every game whose kickoff was at least two hours ago, once the feed
+ * shows trades from 30 minutes after that kickoff, and replays its orders. 20 games per
+ * request; a failing request is split in halves down to single games; a game still
+ * unreadable (or the feed still behind) a day after kickoff is void. 5% of replayed games
+ * are read again a day later, and any difference is counted.
  */
 export async function replayDue(mk, io, nowMs) {
   const due = Object.values(mk.markets).filter((m) => !mk.replayed[m.id] && Date.parse(m.kickoff) + MAKER.tradesAfterMs <= nowMs)
   const fills = [], done = []
-  for (const m of due.filter((x) => !(mk.closed[x.id] ?? []).length)) { mk.replayed[m.id] = { id: m.id, at: new Date(nowMs).toISOString(), status: 'no orders' }; done.push(mk.replayed[m.id]) }
+  const finish = (m, rec) => { mk.replayed[m.id] = { id: m.id, at: isoOf(nowMs), ...rec }; done.push(mk.replayed[m.id]) }
+  for (const m of due.filter((x) => !(mk.closed[x.id] ?? []).length)) finish(m, { status: 'no orders' })
   const todo = due.filter((x) => (mk.closed[x.id] ?? []).length)
   const water = todo.length ? await feedWatermark(io) : null
-  const ready = todo.filter((m) => water === null || water >= Date.parse(m.kickoff) + 30 * 60_000)
-  if (water !== null) mk.stats.feedWatermark = new Date(water).toISOString()
+  if (water !== null) mk.stats.feedWatermark = isoOf(water)
+  const ready = []
+  for (const m of todo) {
+    if (water !== null && water >= Date.parse(m.kickoff) + 30 * 60_000) ready.push(m)
+    else if (nowMs - Date.parse(m.kickoff) > MAKER.giveUpMs) { finish(m, { status: 'void', why: 'feed behind', orders: mk.closed[m.id].length }); mk.stats.voidGames++; delete mk.closed[m.id] }
+  }
   const replay = (m, trades) => {
     const r = replayGame(m, mk.closed[m.id], trades)
     const add = []
@@ -677,14 +857,13 @@ export async function replayDue(mk, io, nowMs) {
     io.store.addTrades(m.id, trades)
     io.store.addFills(add)   // written first: a fill in memory is always on disk
     for (const f of add) { mk.fills[`${f.world}|${f.id}`] = f; fills.push(f); if (f.world === 'trade') bumpDay(mk, Date.parse(f.filledAt), 'fills') }
-    mk.replayed[m.id] = { id: m.id, at: new Date(nowMs).toISOString(), status: 'ok', trades: trades.length, orders: mk.closed[m.id].length }
-    if (Math.random() < 0.05) mk.replayed[m.id].auditAt = nowMs + DAY_MS
-    done.push(mk.replayed[m.id])
-    if (!mk.replayed[m.id].auditAt) delete mk.closed[m.id]
+    const audit = Math.random() < 0.05
+    finish(m, { status: 'ok', trades: trades.length, orders: mk.closed[m.id].length, ...(audit ? { auditAt: nowMs + DAY_MS } : {}) })
+    if (!audit) delete mk.closed[m.id]
   }
   const attempt = async (group) => {
     const start = Math.min(...group.map((m) => Math.min(...mk.closed[m.id].map((o) => o.from)))) - MAKER.lagMs
-    const end = Math.max(...group.map((m) => Date.parse(m.kickoff))) + MAKER.lagMs
+    const end = Math.max(...group.map((m) => Date.parse(m.kickoff)))
     try {
       const got = await fetchTrades(io, mk, group.map((m) => m.cid), start, end)
       mk.stats.tradesRead += got.length; mk.stats.lastTradesOkAt = new Date().toISOString()
@@ -693,10 +872,7 @@ export async function replayDue(mk, io, nowMs) {
       mk.stats.tradeFails++; mk.stats.lastTradesError = `${new Date().toISOString()} ${e.message}`.slice(0, 200); io.log?.('maker trades', e.message)
       if (group.length > 1) { const h = Math.ceil(group.length / 2); await attempt(group.slice(0, h)); await attempt(group.slice(h)); return }
       const m = group[0]
-      if (nowMs - Date.parse(m.kickoff) > MAKER.giveUpMs) {
-        mk.replayed[m.id] = { id: m.id, at: new Date(nowMs).toISOString(), status: 'void', orders: mk.closed[m.id].length }
-        done.push(mk.replayed[m.id]); mk.stats.voidGames++; delete mk.closed[m.id]
-      }
+      if (nowMs - Date.parse(m.kickoff) > MAKER.giveUpMs) { finish(m, { status: 'void', why: 'unreadable', orders: mk.closed[m.id].length }); mk.stats.voidGames++; delete mk.closed[m.id] }
     }
   }
   for (let i = 0; i < ready.length; i += 20) await attempt(ready.slice(i, i + 20))
@@ -704,61 +880,22 @@ export async function replayDue(mk, io, nowMs) {
   for (const r of Object.values(mk.replayed)) {
     if (!r.auditAt || r.auditAt > nowMs || r.audited) continue
     const m = mk.markets[r.id]
-    if (!m || !mk.closed[r.id]) { r.audited = 'skipped'; continue }
+    mk.stats.audit ??= { games: 0, changed: 0, skipped: 0, tradesBefore: 0, tradesAfter: 0 }
+    if (!m || !mk.closed[r.id]) { r.audited = 'skipped'; mk.stats.audit.skipped++; done.push({ id: r.id, audited: 'skipped' }); continue }
     try {
-      const got = await fetchTrades(io, mk, [m.cid], Math.min(...mk.closed[r.id].map((o) => o.from)) - MAKER.lagMs, Date.parse(m.kickoff) + MAKER.lagMs)
+      const got = await fetchTrades(io, mk, [m.cid], Math.min(...mk.closed[r.id].map((o) => o.from)) - MAKER.lagMs, Date.parse(m.kickoff))
       const again = replayGame(m, mk.closed[r.id], got)
       const before = WORLDS.flatMap((w) => [0, 1].map((side) => mk.fills[`${w}|${r.id}:${side}`]?.shares ?? 0)).join(',')
       const after = WORLDS.flatMap((w) => [0, 1].map((side) => again[w].find((f) => f.side === side)?.shares ?? 0)).join(',')
-      mk.stats.audit ??= { games: 0, changed: 0, tradesBefore: 0, tradesAfter: 0 }
       mk.stats.audit.games++; mk.stats.audit.tradesBefore += r.trades ?? 0; mk.stats.audit.tradesAfter += got.length
       if (before !== after) mk.stats.audit.changed++
       r.audited = before === after ? 'same' : 'changed'
-      done.push({ ...r })
+      done.push({ id: r.id, audited: r.audited })
     } catch { continue }
     delete mk.closed[r.id]
   }
   io.store.addReplayed(done)
   return { replayed: done.length, fills: fills.length, waiting: todo.length - ready.length }
-}
-
-/** Refreshes kickoff and status of games still before kickoff (Gamma, 50 per request). */
-export async function refreshGames(mk, io, nowMs) {
-  const ids = Object.values(mk.markets).filter((m) => !m.stopped && Date.parse(m.kickoff) > nowMs && (m.active || mk.open[`${m.id}:0`] || mk.open[`${m.id}:1`])).map((m) => m.id)
-  let n = 0
-  for (let i = 0; i < ids.length; i += 50) {
-    const chunk = ids.slice(i, i + 50)
-    try {
-      for (const closed of ['false', 'true']) {
-        const q = new URLSearchParams({ closed, limit: '100' })
-        for (const id of chunk) q.append('id', id)
-        const list = await io.getJson('https://gamma-api.polymarket.com/markets?' + q)
-        for (const g of Array.isArray(list) ? list : []) { const m = mk.markets[String(g.id)]; if (m) { refreshGame(m, g, nowMs); n++ } }
-      }
-    } catch (e) { mk.stats.refreshFails = (mk.stats.refreshFails ?? 0) + 1; io.log?.('maker refresh', e.message) }
-  }
-  return n
-}
-
-/** Results for the calibration correction: every enrolled game that had a two-sided book. */
-export async function settleCal(mk, io, nowMs) {
-  const due = Object.values(mk.cal).filter((c) => c.mid !== null && c.r0 === undefined && Date.parse(c.kickoff) + MAKER.tradesAfterMs <= nowMs && nowMs - Date.parse(c.kickoff) < MAKER.unsettledAfterDays * DAY_MS)
-  const done = []
-  for (let i = 0; i < due.length; i += 50) {
-    const chunk = due.slice(i, i + 50)
-    try {
-      const q = new URLSearchParams({ closed: 'true', limit: '100' })
-      for (const c of chunk) q.append('id', c.id)
-      const list = await io.getJson('https://gamma-api.polymarket.com/markets?' + q)
-      for (const g of Array.isArray(list) ? list : []) {
-        const c = mk.cal[String(g.id)]
-        const s = c && settleFill({ side: 0, shares: 1, price: 0 }, g)
-        if (s) { c.r0 = s.yesPrice; done.push({ id: c.id, r0: c.r0 }) }
-      }
-    } catch (e) { mk.stats.calFails = (mk.stats.calFails ?? 0) + 1; io.log?.('maker cal', e.message) }
-  }
-  io.store.addCal(done)
-  return done.length
 }
 
 /** Settles fills whose game has been decided (Gamma, 50 games per request). */
@@ -782,13 +919,32 @@ export async function settleFills(mk, io, nowMs) {
   return done.length
 }
 
-/**
- * Polymarket's own minute price 1, 15 and 60 minutes after each fill (reported, not deciding):
- * how fast the market moved against or with our fills. Up to 200 fills per call of this.
- */
+/** Results for the calibration correction: every enrolled game with a kickoff midpoint. */
+export async function settleCal(mk, io, nowMs) {
+  const due = Object.values(mk.cal).filter((c) => c.mid !== null && c.r0 === undefined && Date.parse(c.kickoff) + MAKER.tradesAfterMs <= nowMs && nowMs - Date.parse(c.kickoff) < MAKER.unsettledAfterDays * DAY_MS)
+  const done = []
+  for (let i = 0; i < due.length; i += 50) {
+    const chunk = due.slice(i, i + 50)
+    try {
+      const q = new URLSearchParams({ closed: 'true', limit: '100' })
+      for (const c of chunk) q.append('id', c.id)
+      const list = await io.getJson('https://gamma-api.polymarket.com/markets?' + q)
+      for (const g of Array.isArray(list) ? list : []) {
+        const c = mk.cal[String(g.id)]
+        const s = c && settleFill({ side: 0, shares: 1, price: 0 }, g)
+        if (s) done.push([c, s.yesPrice])
+      }
+    } catch (e) { mk.stats.calFails = (mk.stats.calFails ?? 0) + 1; io.log?.('maker cal', e.message) }
+  }
+  io.store.addCal(done.map(([c, r0]) => ({ id: c.id, r0 })))
+  for (const [c, r0] of done) c.r0 = r0
+  return done.length
+}
+
+/** Polymarket's own minute price 1, 15 and 60 minutes after each fill (reported, not deciding). */
 export async function markFills(mk, io, nowMs) {
   const due = Object.values(mk.fills).filter((f) => f.world === 'trade' && !f.after && (f._afterTries ?? 0) < 3 && Date.parse(f.filledAt) + 61 * 60_000 <= nowMs).slice(0, 200)
-  const done = []
+  let n = 0
   for (const f of due) {
     f._afterTries = (f._afterTries ?? 0) + 1
     const t = Math.floor(Date.parse(f.filledAt) / 1000)
@@ -798,15 +954,19 @@ export async function markFills(mk, io, nowMs) {
       const at = (s) => { let v = null; for (const x of pts) if (x.t <= t + s) v = x.p; return v }
       const after = { m1: at(60), m15: at(900), m60: at(3600) }
       io.store.addAfter({ key: `${f.world}|${f.id}`, after })
-      f.after = after; done.push(f)
+      f.after = after; n++
     } catch (e) { io.log?.('maker after', e.message) }
+    await sleep(50)
   }
-  return done.length
+  return n
 }
 
-/** Drops games that are replayed and filled nothing. */
+/** Drops games that are replayed, filled nothing, and have no audit pending. */
 export function pruneMarkets(mk) {
-  for (const id of Object.keys(mk.markets)) if (mk.replayed[id] && !WORLDS.some((w) => mk.fills[`${w}|${id}:0`] || mk.fills[`${w}|${id}:1`])) delete mk.markets[id]
+  for (const id of Object.keys(mk.markets)) {
+    const r = mk.replayed[id]
+    if (r && !(r.auditAt && !r.audited) && !WORLDS.some((w) => mk.fills[`${w}|${id}:0`] || mk.fills[`${w}|${id}:1`])) { delete mk.markets[id]; delete mk.closed[id] }
+  }
 }
 
 // ---------------------------------------------------------------- dashboard
@@ -828,15 +988,13 @@ function sliceTable(fills, key, counted) {
 }
 
 /** Everything the dashboard shows for Test C, for an optional sport / bet-type filter. */
-export function makerDashboard(mk, nowMs, { sport = null, type = null } = {}) {
+export function makerDashboard(mk, nowMs, { sport = null, type = null, iters = 200 } = {}) {
   const final = mk.final
-  const live = makerSummary(mk, nowMs)
   const { settledIds, ...frozen } = final ?? {}
-  const s = final ? { ...frozen, stats: mk.stats } : live
+  const s = final ? { ...frozen, stats: mk.stats } : makerSummary(mk, nowMs, { iters })
   const counted = new Set(final ? settledIds : Object.values(mk.fills).filter((f) => f.settle).map((f) => `${f.world}|${f.id}`))
   const okTags = (x) => (!sport || (x.sport ?? 'Untagged') === sport) && (!type || (x.type ?? 'Untagged') === type)
   const trade = fillsOf(mk, 'trade'), tradeView = trade.filter(okTags)
-  const touchKeys = new Set(fillsOf(mk, 'touch').map((f) => f.id))
   const row = (f) => ({
     id: f.id, question: f.question, outcome: f.outcome, sport: f.sport, league: f.league, type: f.type, price: f.price, shares: f.shares, cost: f.cost,
     bid: f.bid, ask: f.ask, source: f.source, filledAt: f.filledAt, endDate: f.kickoff, mark: f.mark,
@@ -844,20 +1002,27 @@ export function makerDashboard(mk, nowMs, { sport = null, type = null } = {}) {
     ...(f.settle && counted.has(`${f.world}|${f.id}`) ? { resolved: f.settle.yesPrice, pnl: f.settle.pnl, counted: true } : {}),
   })
   const resting = []
-  for (const o of Object.values(mk.open)) {
+  for (const o of final ? [] : Object.values(mk.open)) {
     const m = mk.markets[o.id]
     if (!m || !okTags(m)) continue
-    resting.push({ question: m.question, outcome: m.outcomes[o.side], sport: m.sport, league: m.league, type: m.type, price: o.price, shares: o.shares, bid: o.bid, ask: o.ask, endDate: m.kickoff, since: new Date(o.from).toISOString(), touched: o.touch !== null })
+    const [bm, am] = m.book ?? [null, null]
+    const own = o.side === 0 ? [bm, am] : [am === null ? null : 1000 - am, bm === null ? null : 1000 - bm]
+    resting.push({ question: m.question, outcome: m.outcomes[o.side], sport: m.sport, league: m.league, type: m.type, price: o.price, shares: o.shares,
+      bid: own[0] === null ? null : own[0] / 1000, ask: own[1] === null ? null : own[1] / 1000, endDate: m.kickoff, since: isoOf(o.from), touched: Boolean(o.touch) })
   }
   resting.sort((a, b) => Date.parse(a.endDate) - Date.parse(b.endDate))
   const games = Object.values(mk.markets).filter(okTags)
-  const perDay = Object.entries(mk.stats.byDay).map(([d, v]) => ({ day: d, orders: v.orders ?? 0, fills: v.fills ?? 0, settled: v.settled ?? 0 })).sort((a, b) => a.day.localeCompare(b.day)).slice(-35)
+  // Orders per day are counted for all games; fills and settlements follow the filter.
+  const days = new Map(Object.entries(mk.stats.byDay).map(([d, v]) => [d, { day: d, orders: v.orders ?? 0, fills: 0, settled: 0 }]))
+  const dayRow = (d) => { if (!days.has(d)) days.set(d, { day: d, orders: 0, fills: 0, settled: 0 }); return days.get(d) }
+  for (const f of tradeView) { dayRow(f.filledAt.slice(0, 10)).fills++; if (f.settle) dayRow(f.settle.settledAt.slice(0, 10)).settled++ }
+  const perDay = [...days.values()].sort((a, b) => a.day.localeCompare(b.day)).slice(-35)
   const priceBins = Array.from({ length: 10 }, (_, i) => ({ lo: i / 10, hi: (i + 1) / 10, n: 0 }))
   for (const f of tradeView) priceBins[Math.min(9, Math.floor(f.price * 10))].n++
   let viewResult = null
   if (sport || type) {
     const list = tradeView.filter((f) => f.settle && counted.has(`trade|${f.id}`))
-    const r = list.length ? profitPerDollar(list, { iters: 1000 }) : null
+    const r = list.length ? profitPerDollar(list, { iters: 400 }) : null
     viewResult = r ? { result: r, hitRate: list.filter((f) => f.settle.yesPrice === 1).length / list.length, avgPrice: list.reduce((a, f) => a + f.price, 0) / list.length } : null
   }
   const first = mk.firstEnrolledAt ? Date.parse(mk.firstEnrolledAt) : null
@@ -866,40 +1031,43 @@ export function makerDashboard(mk, nowMs, { sport = null, type = null } = {}) {
     // Matches with a settled fill arrive about a day after orders start; the rate so far estimates the rest.
     const n = s.matches ?? 0, rate = n / Math.max(nowMs - first - DAY_MS, 3600_000)
     const tN = n >= MAKER.stopMatches ? nowMs : rate > 0 ? nowMs + (MAKER.stopMatches - n) / rate : Infinity
-    eta = new Date(Math.min(first + MAKER.stopDays * DAY_MS, Math.max(first + MAKER.minDays * DAY_MS, tN))).toISOString()
+    eta = isoOf(Math.min(first + MAKER.stopDays * DAY_MS, Math.max(first + MAKER.minDays * DAY_MS, tN)))
   }
-  const kinds = (key) => { const c = new Map(); for (const m of Object.values(mk.markets)) c.set(m[key] ?? 'Untagged', (c.get(m[key] ?? 'Untagged') ?? 0) + 1); return [...c].sort((a, b) => b[1] - a[1]).map(([name, n]) => ({ name, bets: n })) }
+  // Filter options: games enrolled per sport / bet type since the start.
+  const kinds = (key) => Object.entries(mk.stats.enrolledBy?.[key] ?? {}).sort((a, b) => b[1] - a[1]).map(([name, n]) => ({ name, bets: n }))
   return {
-    kind: 'maker', arm: 'C', armInfo: MAKER_INFO, filter: { sport, type }, ...s, done: Boolean(final), running: !final, finishing: !final && live.done,
+    kind: 'maker', arm: 'C', armInfo: MAKER_INFO, filter: { sport, type }, ...s, done: Boolean(final), running: !final, skipped: mk.skipped ?? {},
     rule: { stakeUsd: MAKER.stakeUsd, readMin: MAKER.readMs / 60_000, stopMatches: MAKER.stopMatches, minDays: MAKER.minDays, stopDays: MAKER.stopDays, tradesAfterH: MAKER.tradesAfterMs / 3600_000, ruleVersion: RULE_VERSION },
     view: {
-      upcomingGames: games.filter((m) => Date.parse(m.kickoff) > nowMs).length,
+      upcomingGames: final ? 0 : games.filter((m) => Date.parse(m.kickoff) > nowMs && !m.stopped).length,
       quotingGames: new Set(Object.values(mk.open).filter((o) => mk.markets[o.id] && okTags(mk.markets[o.id])).map((o) => o.id)).size,
       ordersNow: resting.length,
       checking: games.filter((m) => Date.parse(m.kickoff) <= nowMs && !mk.replayed[m.id]).length,
       fills: tradeView.length, touchFills: fillsOf(mk, 'touch').filter(okTags).length,
       settled: tradeView.filter((f) => f.settle).length, waiting: tradeView.filter((f) => !f.settle && !isStale(f, nowMs)).length,
-      replayed: Object.keys(mk.replayed).length,
+      counted: tradeView.filter((f) => f.settle && counted.has(`trade|${f.id}`)).length,
+      replayed: Object.values(mk.replayed).filter((r) => r.status === 'ok').length,
     },
     sports: kinds('sport'), types: kinds('type'),
     resting: resting.slice(0, 40), restingTotal: resting.length,
-    latest: [...tradeView].sort((a, b) => Date.parse(b.filledAt) - Date.parse(a.filledAt)).slice(0, 40).map((f) => ({ ...row(f), touchToo: touchKeys.has(f.id) })),
+    latest: [...tradeView].sort((a, b) => Date.parse(b.filledAt) - Date.parse(a.filledAt)).slice(0, 40).map(row),
     upcoming: tradeView.filter((f) => !f.settle && !isStale(f, nowMs)).sort((a, b) => Date.parse(a.kickoff) - Date.parse(b.kickoff)).slice(0, 40).map(row),
     results: tradeView.filter((f) => f.settle && counted.has(`trade|${f.id}`)).sort((a, b) => Date.parse(b.settle.settledAt) - Date.parse(a.settle.settledAt)).slice(0, 40).map(row),
     bySport: sliceTable(trade.filter((f) => !type || (f.type ?? 'Untagged') === type), 'sport', counted),
     byType: sliceTable(trade.filter((f) => !sport || (f.sport ?? 'Untagged') === sport), 'type', counted),
-    perDay, priceBins, viewResult, eta, generatedAt: new Date(nowMs).toISOString(),
+    perDay, priceBins, viewResult, eta, generatedAt: isoOf(nowMs),
     firstRecordAt: mk.firstEnrolledAt, lastScanAt: mk.stats.lastReadAt, scanEveryMin: MAKER.readMs / 60_000,
   }
 }
 
-/** Every fill (both rules, with settlement), the replay log and the counters, for offline evaluation. */
+/** Every fill (both rules, with settlement), the replay log, the calibration table and the counters, for offline evaluation. */
 export function makerExportLines(mk, nowMs) {
   return [
-    { kind: 'maker-meta', exportedAt: new Date(nowMs).toISOString(), rule: MAKER, ruleVersion: RULE_VERSION, firstEnrolledAt: mk.firstEnrolledAt, stats: mk.stats, final: mk.final,
+    { kind: 'maker-meta', exportedAt: isoOf(nowMs), rule: MAKER, ruleVersion: RULE_VERSION, firstEnrolledAt: mk.firstEnrolledAt, stats: mk.stats, final: mk.final,
       calibration: calibrationTable(Object.values(mk.cal ?? {})).table },
     ...Object.values(mk.fills).map(({ _afterTries, ...f }) => ({ kind: 'fill', ...f })),
     ...Object.values(mk.replayed).map((r) => ({ kind: 'replayed', ...r })),
+    ...Object.values(mk.cal).map((c) => ({ kind: 'cal', ...c })),
   ]
 }
 

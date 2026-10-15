@@ -21,7 +21,7 @@ import http from 'node:http'
 import zlib from 'node:zlib'
 import { execFile } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { MAKER, MAKER_INFO, openMakerStore, liveRound, enroll, refreshGames, replayDue, settleCal, markFills, makerSummary, freezeMaker, settleFills, pruneMarkets, makerDashboard, makerExportLines, feedCheck } from './polymaker.js'
+import { MAKER, MAKER_INFO, openMakerStore, liveRound, enroll, refreshGames, replayDue, settleCal, markFills, makerSummary, freezeMaker, closeAll, settleFills, pruneMarkets, makerDashboard, makerExportLines, feedCheck } from './polymaker.js'
 
 // ---------------------------------------------------------------- the registered rules
 export const RULE = {
@@ -43,7 +43,7 @@ export const ALL_ARMS = ['A', 'B', 'W']    // plus the watch list, which has nei
  */
 export const EARLY_STOP = {
   at: '2026-10-15',
-  note: 'Stopped early at your request on 2026-10-15 (day 5.9), 1.1 days before the 7-day minimum. The 400-bet condition was long met, and no plausible last day could have turned this into a YES.',
+  note: (days) => `Stopped early at your request on 2026-10-15 (day ${days.toFixed(1)}), ${Math.max(0, 7 - days).toFixed(1)} days before the 7-day minimum. The 400-bet condition was long met, and no plausible last day could have turned this into a YES.`,
 }
 /** Sports the watch list follows. Change with POLY_WATCH_SPORTS="Hockey,College football". */
 export const WATCH_SPORTS = (process.env.POLY_WATCH_SPORTS ?? 'Hockey,College football').split(',').map((x) => x.trim()).filter(Boolean)
@@ -851,7 +851,7 @@ export async function run() {
       return send(cached(`${arm}|${sport}|${type}`, () => {
         const now = Date.now()
         const d = arm === 'C' ? makerDashboard(mk, now, { sport, type }) : dashboardData(state, now, { arm, sport, type })
-        return { ...d, arms: armTabs(state, mk, now), earlyStop: arm === 'C' ? null : EARLY_STOP }
+        return { ...d, arms: armTabs(state, mk, now), earlyStop: arm === 'C' || !d.stoppedEarly ? null : { at: EARLY_STOP.at, note: EARLY_STOP.note(d.days ?? 0) } }
       }))
     }
     if (u.pathname === '/api/export' && u.searchParams.get('part') === 'orders') {
@@ -887,11 +887,11 @@ export async function run() {
     for (;;) {
       const started = Date.now()
       try {
-        if (!mk.final) await liveRound(mk, io, Date.now(), { index })
+        if (!mk.final) await liveRound(mk, io, Date.now())
         makerStore.saveMeta(mk)
         state.version = (state.version ?? 0) + 1
         cache.clear()
-      } catch (e) { state.errors = (state.errors ?? 0) + 1; console.error('live', e.message) }
+      } catch (e) { mk.stats.loopErrors = (mk.stats.loopErrors ?? 0) + 1; console.error('live', e.message) }
       await sleep(Math.max(5_000, MAKER.readMs - (Date.now() - started)))
     }
   }
@@ -899,31 +899,42 @@ export async function run() {
   // Everything else, on its own clock: enrolment and kickoff refresh, replaying finished games,
   // settlement, the calibration results, the stop.
   const background = async () => {
-    let lastEnroll = 0, lastReplay = 0, lastSettle = 0, checked = false
+    let lastEnroll = 0, lastReplay = 0, lastSettle = 0, lastStopDay = null, checked = false
     for (;;) {
       try {
         // Tests A and B: stopped early at the user's request (EARLY_STOP), each frozen once.
         for (const arm of ARMS) {
           if (state.finalByArm[arm]) continue
-          const f = freeze(state, Date.now(), arm, { stoppedEarly: true, earlyStop: EARLY_STOP })
+          const f = freeze(state, Date.now(), arm, { stoppedEarly: true, earlyStopAt: EARLY_STOP.at })
           store.saveMeta(state); cache.clear()
           console.log(`Test ${arm} stopped early — ${f.verdict} · ${f.settled} settled bets, profit per $1 ${f.result?.perDollar.toFixed(4)} [${f.result?.lo.toFixed(4)}, ${f.result?.hi.toFixed(4)}]`)
         }
-        // Test C's stop is checked first, so its result is frozen on exactly the fills settled when it was reached.
-        if (!mk.final && makerSummary(mk, Date.now(), { iters: 200 }).done) {
-          const f = freezeMaker(mk, Date.now()); makerStore.saveMeta(mk); cache.clear()
-          console.log(`STOP reached, test C — ${f.verdict}`)
-          await telegram(`Sports paper test C (maker) finished: ${f.verdict}`)
+        // Test C's stop: one check a day, at the first pass after 00:00 UTC, with the registered
+        // bootstrap; the summary that decides is the one frozen.
+        const today = new Date().toISOString().slice(0, 10)
+        if (!mk.final && lastStopDay !== today) {
+          lastStopDay = today
+          const s = makerSummary(mk, Date.now(), { iters: MAKER.stopIters })
+          mk.stats.lastStopCheck = { at: new Date().toISOString(), days: s.days, matches: s.matches, done: s.done, reason: s.reason }
+          if (s.done) {
+            const f = freezeMaker(mk, Date.now(), s)
+            const ended = []
+            closeAll(mk, Date.now(), (o) => ended.push(o))   // Test C stops quoting
+            makerStore.addOrders(ended); makerStore.saveOpen(mk); makerStore.saveMeta(mk); cache.clear()
+            console.log(`STOP reached (${f.reason}), test C — ${f.verdict}`)
+            await telegram(`Sports paper test C (maker) finished: ${f.verdict}`)
+          }
         }
         if (!index || Date.now() - indexAt > INDEX_MS) {
           try { index = sportsIndex(await getJson('https://gamma-api.polymarket.com/sports')); indexAt = Date.now() }
-          catch (e) { state.errors = (state.errors ?? 0) + 1; console.error('sports index', e.message) }
+          catch (e) { mk.stats.indexFails = (mk.stats.indexFails ?? 0) + 1; console.error('sports index', e.message) }
         }
-        if (!mk.final && Date.now() - lastEnroll >= MAKER.enrollMs) {
+        // Enrolment waits for the sports directory, so every game is tagged (a game stays in the 22–26h window for 4 hours).
+        if (!mk.final && index && Date.now() - lastEnroll >= MAKER.enrollMs) {
           const t0 = Date.now()
           const e = await enroll(mk, io, Date.now(), index).catch((err) => { mk.stats.enrollFails = (mk.stats.enrollFails ?? 0) + 1; console.error('enrol', err.message); return { added: 0 } })
           const r = await refreshGames(mk, io, Date.now())
-          lastEnroll = Date.now(); state.lastScanAt = new Date().toISOString()
+          lastEnroll = Date.now()
           console.log(`test C: +${e.added} games · refreshed ${r} · resting ${Object.keys(mk.open).length} orders · ${((Date.now() - t0) / 1000).toFixed(0)}s`)
           // Once per start: what the public trade feed really returns, kept in the export.
           if (!checked) {
@@ -941,6 +952,8 @@ export async function run() {
           if (r.replayed || r.waiting) console.log(`test C: replayed ${r.replayed} games · ${r.fills} fills · ${r.waiting} waiting for the feed`)
         }
         if (Date.now() - lastSettle > SETTLE_MS) {
+          // A and B's open bets keep settling for the record (Amendment 4); the frozen results do not move.
+          await settleAll(state, getJson, Date.now(), store.addSettles, ALL_ARMS).catch((e) => console.error('old settle', e.message))
           const c = await settleFills(mk, io, Date.now())
           const k = await settleCal(mk, io, Date.now())
           const a = await markFills(mk, io, Date.now())
@@ -950,7 +963,7 @@ export async function run() {
         makerStore.saveMeta(mk)
         store.saveMeta(state)
         cache.clear()
-      } catch (e) { state.errors = (state.errors ?? 0) + 1; console.error('background', e.message) }
+      } catch (e) { mk.stats.loopErrors = (mk.stats.loopErrors ?? 0) + 1; console.error('background', e.message) }
       await sleep(60_000)
     }
   }

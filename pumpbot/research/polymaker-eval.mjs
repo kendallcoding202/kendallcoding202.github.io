@@ -97,7 +97,7 @@ say(`- Price reads ${st.reads ?? 0} · failed requests ${st.readFails ?? 0} · u
 say(`- Trade requests ${st.tradeCalls ?? 0} · failed ${st.tradeFails ?? 0} · trades read ${st.tradesRead ?? 0} · bad records ${st.badRecords ?? 0} · last error ${st.lastTradesError ?? 'none'}`)
 const statusN = (s) => replayed.filter((r) => r.status === s).length
 say(`- Games replayed: ${statusN('ok')} ok · ${statusN('void')} void · ${statusN('no orders')} with no orders · re-read audit ${JSON.stringify(st.audit ?? null)}`)
-say(`- Restarts ${st.restarts ?? 0} · downtime ${((st.downMs ?? 0) / 3600_000).toFixed(1)} h · not enrolled ${JSON.stringify(st.skipped ?? {})}`)
+say(`- Restarts ${st.restarts ?? 0} · downtime ${((st.downMs ?? 0) / 3600_000).toFixed(1)} h · enrolled by sport ${JSON.stringify(st.enrolledBy?.sport ?? {})}`)
 say()
 
 say('## Feed check (what the trade feed returned on the server)')
