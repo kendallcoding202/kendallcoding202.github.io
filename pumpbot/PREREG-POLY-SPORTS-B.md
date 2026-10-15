@@ -116,3 +116,11 @@ See `PREREG-POLY-SPORTS.md` ("Evaluation of the export") and
 long shot won 9.35% against a midpoint of 9.6¢; the rule paid 12.4¢. Betting the other
 side instead, at 1 − the recorded bid, would have lost too: −3.0% [−4.6%, −1.6%]. The
 verdict freezes at the stop, 2026-10-16 ~17:09 UTC.
+
+## Amendment 3 — 2026-10-15, day 5.8: stopped early, at the user's request
+
+Stopped together with Test A, when the next version of the tracker starts. The result is
+frozen at that moment and labelled **stopped early**. The reasons and conditions are the
+same as in Test A's Amendment 4 (`PREREG-POLY-SPORTS.md`): only the 7-day minimum was cut
+short (5,642 settled bets, far past 400), and the running result (−32.3% per $1, range
+−42.9% to −20.7%) cannot plausibly reach YES. The watch list stops at the same moment.

@@ -30,6 +30,9 @@ wallet list changes that arithmetic, which is why six different ideas failed the
 | 8 | Jev (TypeSafe AI) on launch features | does **not** beat a free regression; raw calibration fails; adds nothing on top — `PREREG-JEV.md` |
 | 9 | Jev forecasting Polymarket (blind to price) | **void**: incoherent Yes/No answers; worse than the market where it was scored — `PREREG-JEV-POLYMARKET.md` |
 | 10 | weather forecast vs Polymarket temperature markets | **no**: the market already prices the forecast (model weight 0.08); bets not significant — `PREREG-WEATHER.md` |
+| 11 | buying cheap (2–20¢) Polymarket sports contracts at the ask (Test A, Yes/No) | **no** (stopped early, day 5.9): −40.6% per $1 [−44%, −37%] on 10,650 bets; long shots won at the midpoint, so the buyer pays half the spread plus a 4% fee — `PREREG-POLY-SPORTS.md` |
+| 12 | the same on two-way markets (Test B: over/unders, spreads) | **no** (stopped early): −32.3% per $1 [−43%, −21%]; betting the other side loses too (−1.8% / −3.0%) — `PREREG-POLY-SPORTS-B.md`, `EVAL-POLY-SPORTS-2026-10-15.md` |
+| 13 | resting orders 1¢ above the best bid (Test C, the maker side) | **running** from 2026-10-15 — `PREREG-POLY-MAKER.md` |
 
 ## The finding that reframed the rest
 

@@ -215,3 +215,22 @@ or the verdict test. The stop falls 7 days after each test's first record: Test 
   recorded `bestBid` prices the opposite bet exactly: A −1.8% per $1 [−2.1%, −1.5%], B −3.0%
   [−4.6%, −1.6%]. A taker pays the half-spread and the fee whichever side they buy.
   **No forward test of the mirror will be registered.**
+
+## Amendment 4 — 2026-10-15, day 5.9: stopped early, at the user's request
+
+The user asked to stop Tests A and B and move on: "a day won't change anything". They stop
+when the next version of the tracker starts on Railway (2026-10-15). Each test's result is
+frozen at that moment, from the bets settled then, exactly as at a registered stop, and is
+labelled **stopped early**. Test C (`PREREG-POLY-MAKER.md`) replaces them.
+
+- **What was cut short:** only the 7-day minimum (1.1 days early for A, ~1.2 for B). The
+  400-settled-bet condition was passed many times over (A 10,650, B 5,642).
+- **Why the early stop cannot flatter the result:** the danger of stopping early is
+  declaring a lucky run a win. These tests stop far behind, and the only verdict the
+  registered test could give is NO. To reach YES, Test A's ~1,700 open bets would have to
+  return more than the $9,000 lost on about $3,500 staked, and the whole plausible range
+  would have to clear zero. That is not a plausible day of results.
+- **Recorded as:** NO, stopped early (day 5.9). The frozen figures are entered here and in
+  `FINDINGS.md` from the export taken after the stop.
+- Bets still open at the stop keep settling, for the record only; they are not counted.
+- The watch list (not a test) stops at the same moment.

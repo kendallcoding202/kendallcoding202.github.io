@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "node src/index.js run",
-    "test": "node test/run.js && node test/polysports.test.js",
+    "test": "node test/run.js && node test/polysports.test.js && node test/polymaker.test.js",
     "keygen": "node src/index.js keygen",
     "balance": "node src/index.js balance",
     "record": "node src/index.js record",

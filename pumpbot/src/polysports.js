@@ -1,9 +1,13 @@
 /**
- * Forward paper tests of cheap Polymarket sports contracts.
+ * Forward paper tests on Polymarket sports markets.
  *
  *   Test A — PREREG-POLY-SPORTS.md: buy YES at 2–20¢ on Yes/No sports markets.
  *   Test B — PREREG-POLY-SPORTS-B.md: buy the cheap side, 2–20¢, of two-outcome sports
  *            markets (over/under, spread, team vs team).
+ *            A and B were stopped early on 2026-10-15 at the user's request (both NO).
+ *   Test C — PREREG-POLY-MAKER.md: resting buy orders one tick above the best bid (a
+ *            maker), run from src/polymaker.js: a live round every minute, each game's
+ *            trades replayed two hours after kickoff.
  *
  *   node src/polysports.js run       scanner + settlement + dashboard (PORT)
  *   node src/polysports.js summary   print each test's state from DATA_DIR
@@ -17,6 +21,7 @@ import http from 'node:http'
 import zlib from 'node:zlib'
 import { execFile } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { MAKER, MAKER_INFO, openMakerStore, liveRound, enroll, refreshGames, replayDue, settleCal, markFills, makerSummary, freezeMaker, settleFills, pruneMarkets, makerDashboard, makerExportLines, feedCheck } from './polymaker.js'
 
 // ---------------------------------------------------------------- the registered rules
 export const RULE = {
@@ -32,6 +37,14 @@ export const RULE = {
 }
 export const ARMS = ['A', 'B']             // the registered tests: each has a stop and a verdict
 export const ALL_ARMS = ['A', 'B', 'W']    // plus the watch list, which has neither
+/**
+ * Amendment 4 (A) / 3 (B), 2026-10-15: both tests stopped early at the user's request, with
+ * the watch list. Each is frozen, as at a registered stop, when this version starts.
+ */
+export const EARLY_STOP = {
+  at: '2026-10-15',
+  note: 'Stopped early at your request on 2026-10-15 (day 5.9), 1.1 days before the 7-day minimum. The 400-bet condition was long met, and no plausible last day could have turned this into a YES.',
+}
 /** Sports the watch list follows. Change with POLY_WATCH_SPORTS="Hockey,College football". */
 export const WATCH_SPORTS = (process.env.POLY_WATCH_SPORTS ?? 'Hockey,College football').split(',').map((x) => x.trim()).filter(Boolean)
 export const WATCH_WINDOW_H = [0.25, 22]   // kickoff too soon for the tests' 22–26h window
@@ -345,12 +358,12 @@ function outcomeSummary(settled, recs, { iters = 4000 } = {}) {
  * settled at that moment, and stored: bets that settle afterwards cannot move it, and that
  * test stops scanning. Idempotent — a second call keeps the first result.
  */
-export function freeze(state, nowMs = Date.now(), arm = 'A') {
+export function freeze(state, nowMs = Date.now(), arm = 'A', extra = {}) {
   state.finalByArm ??= {}
   if (state.finalByArm[arm]) return state.finalByArm[arm]
   const full = summarise(state, nowMs, { arm, reveal: true })
   const settledIds = armRecords(state, arm).filter((r) => r.rule && r.settle).map((r) => r.id)
-  state.finalByArm[arm] = { ...full, done: true, frozenAt: new Date(nowMs).toISOString(), settledIds }
+  state.finalByArm[arm] = { ...full, ...extra, done: true, frozenAt: new Date(nowMs).toISOString(), settledIds }
   return state.finalByArm[arm]
 }
 
@@ -435,7 +448,7 @@ export function dashboardData(state, nowMs = Date.now(), { arm = 'A', sport = nu
   const v = state.version ?? 0
   const settledBets = () => armRecords(state, arm).filter((r) => r.rule && r.settle)
   const running = () => liveMemo(state, `${arm}|main`, () => { const { verdict: _v, ...o } = outcomeSummary(settledBets(), armRecords(state, arm), { iters: 1000 }); return o })
-  const s = watch ? { ...summarise(state, nowMs, { arm, withhold: true }), ...running(), done: true, watch: true }
+  const s = watch ? { ...summarise(state, nowMs, { arm, withhold: true }), ...running(), done: true, watch: true, retired: EARLY_STOP.at }
     : final ? frozen : { ...live, ...running(), done: false, finishing: live.done, running: true }
   const counted = final ? new Set(settledIds ?? []) : new Set(settledBets().map((r) => r.id))
   const armRecs = armRecords(state, arm)
@@ -615,6 +628,14 @@ function getJson(url) {
   if (process.env.POLY_HTTP === 'curl') return new Promise((ok, fail) => execFile('curl', ['-sS', '--fail', '--max-time', '30', url], { encoding: 'utf8', maxBuffer: 64 << 20 }, (e, out) => { if (e) return fail(e); try { ok(JSON.parse(out)) } catch (err) { fail(err) } }))
   return fetch(url, { signal: AbortSignal.timeout(30_000) }).then((r) => { if (!r.ok) throw new Error(`${r.status} ${url}`); return r.json() })
 }
+function postJson(url, body) {
+  const data = JSON.stringify(body)
+  if (process.env.POLY_HTTP === 'curl') return new Promise((ok, fail) => {
+    const p = execFile('curl', ['-sS', '--fail', '--max-time', '60', '-X', 'POST', '-H', 'content-type: application/json', '--data-binary', '@-', url], { encoding: 'utf8', maxBuffer: 256 << 20 }, (e, out) => { if (e) return fail(e); try { ok(JSON.parse(out)) } catch (err) { fail(err) } })
+    p.stdin.end(data)
+  })
+  return fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: data, signal: AbortSignal.timeout(60_000) }).then((r) => { if (!r.ok) throw new Error(`${r.status} ${url}`); return r.json() })
+}
 const iso = (ms) => new Date(ms).toISOString().slice(0, 19) + 'Z'
 
 function dataDir() {
@@ -777,9 +798,23 @@ function publicSummary(state, arm) {
   return rest
 }
 
+/** The tabs: Test C first (the live test), then the finished ones. */
+export function armTabs(state, mk, nowMs = Date.now()) {
+  const c = makerSummary(mk, nowMs, { iters: 50 })
+  return [
+    { key: 'C', name: MAKER_INFO.name, ruleBets: c.pooled.trade.fills, settled: c.pooled.trade.settled, done: Boolean(mk.final), live: !mk.final, unit: 'fills' },
+    ...ALL_ARMS.map((a) => {
+      const f = a === 'W' ? null : state.finalByArm?.[a], l = f ?? summarise(state, nowMs, { arm: a, withhold: true })
+      return { key: a, name: ARM_INFO[a].name, ruleBets: l.ruleBets, settled: l.settled, recorded: l.recorded, done: true, early: Boolean(f?.stoppedEarly), watch: a === 'W' }
+    }).filter((a) => !a.watch || a.recorded > 0),
+  ]
+}
+
 export async function run() {
   const store = openStore(dataDir())
   const state = store.load()
+  const makerStore = openMakerStore(dataDir())
+  const mk = makerStore.load()
   const port = Number(process.env.PORT ?? process.env.DASHBOARD_PORT ?? 8080), token = process.env.DASHBOARD_TOKEN
   const html = fs.readFileSync(DASHBOARD_HTML, 'utf8')
   if (!token) console.warn('DASHBOARD_TOKEN is not set: the dashboard is open to anyone with the address (it shows no money and places no orders).')
@@ -810,53 +845,116 @@ export async function run() {
     }
     const send = (body) => { res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(body) }
     if (u.pathname === '/api/status') {
-      const arm = ALL_ARMS.includes(u.searchParams.get('arm')) ? u.searchParams.get('arm') : 'A'
+      const want = u.searchParams.get('arm')
+      const arm = want === 'C' || !ALL_ARMS.includes(want) ? 'C' : want
       const sport = u.searchParams.get('sport') || null, type = u.searchParams.get('type') || null
-      return send(cached(`${arm}|${sport}|${type}`, () => dashboardData(state, Date.now(), { arm, sport, type })))
+      return send(cached(`${arm}|${sport}|${type}`, () => {
+        const now = Date.now()
+        const d = arm === 'C' ? makerDashboard(mk, now, { sport, type }) : dashboardData(state, now, { arm, sport, type })
+        return { ...d, arms: armTabs(state, mk, now), earlyStop: arm === 'C' ? null : EARLY_STOP }
+      }))
+    }
+    if (u.pathname === '/api/export' && u.searchParams.get('part') === 'orders') {
+      // Test C's order log, for the $200-ledger analysis: streamed, so a large file never blocks the tracker.
+      const f = path.join(dataDir(), 'maker-orders.jsonl')
+      if (!fs.existsSync(f)) { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }); return res.end('no orders yet') }
+      res.writeHead(200, { 'content-type': 'application/gzip', 'cache-control': 'no-store',
+        'content-disposition': `attachment; filename="maker-orders-${new Date().toISOString().slice(0, 16).replace(':', '')}.jsonl.gz"` })
+      return fs.createReadStream(f).pipe(zlib.createGzip()).pipe(res)
     }
     if (u.pathname === '/api/export') {
-      const body = zlib.gzipSync(exportLines(state).map((l) => JSON.stringify(l)).join('\n') + '\n')
+      const now = Date.now()
+      const lines = [...exportLines(state, now), ...makerExportLines(mk, now)]
+      const body = zlib.gzipSync(lines.map((l) => JSON.stringify(l)).join('\n') + '\n')
       res.writeHead(200, { 'content-type': 'application/gzip', 'cache-control': 'no-store',
         'content-disposition': `attachment; filename="polysports-export-${new Date().toISOString().slice(0, 16).replace(':', '')}.jsonl.gz"` })
       return res.end(body)
     }
-    if (u.pathname === '/json') return send(cached('json', () => ({ ...Object.fromEntries(ARMS.map((a) => [a, publicSummary(state, a)])), W: summarise(state, Date.now(), { arm: 'W', reveal: true }) })))
+    if (u.pathname === '/json') return send(cached('json', () => {
+      const { stats: _s, ...c } = makerSummary(mk, Date.now())
+      return { C: mk.final ? { ...mk.final, settledIds: undefined } : c, ...Object.fromEntries(ARMS.map((a) => [a, publicSummary(state, a)])), W: summarise(state, Date.now(), { arm: 'W', reveal: true }) }
+    }))
     if (u.pathname === '/') { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); return res.end(html) }
     res.writeHead(404); res.end('not found')
   }
-  if (ARMS.some((a) => !state.finalByArm[a])) await telegram('Sports paper tests running (no real money). Results are reported only at each registered stop.')
-  let lastSettle = 0, index = null, indexAt = 0
-  for (;;) {
-    try {
-      // Each test's stop is checked FIRST each round, so its result is frozen on exactly the
-      // bets that were settled when it was reached, before this round could settle any more.
-      for (const arm of ARMS) {
-        if (state.finalByArm[arm] || !summarise(state, Date.now(), { arm, withhold: true }).done) continue
-        const f = freeze(state, Date.now(), arm); store.saveMeta(state); cache.clear()
-        console.log(`STOP reached, test ${arm} — ${f.verdict} · ${f.settled} settled bets, profit per $1 ${f.result?.perDollar.toFixed(4)} [${f.result?.lo.toFixed(4)}, ${f.result?.hi.toFixed(4)}]`)
-        await telegram(`Sports paper test ${arm} finished: ${f.verdict}\n${f.settled} bets, profit per $1 ${f.result?.perDollar.toFixed(3)} (95% ${f.result?.lo.toFixed(3)} to ${f.result?.hi.toFixed(3)})`)
-      }
-      const active = ARMS.filter((a) => !state.finalByArm[a])
-      if (!index || Date.now() - indexAt > INDEX_MS) {
-        try { index = sportsIndex(await getJson('https://gamma-api.polymarket.com/sports')); indexAt = Date.now() }
-        catch (e) { state.errors = (state.errors ?? 0) + 1; console.error('sports index', e.message) }
-      }
-      {
-        const added = active.length ? await scan(state, index, active, store.addRecords) : []
-        added.push(...await scanWatch(state, index, store.addRecords))
-        if (Date.now() - lastSettle > SETTLE_MS) {
-          const n = await settleAll(state, getJson, Date.now(), store.addSettles, [...active, 'W'])
-          const t = await tagMissing(state, index, getJson, store.addTags)
-          lastSettle = Date.now(); console.log(`settled ${n} · tagged ${t}`)
-        }
-        store.saveMeta(state)
+  const io = { getJson, postJson, store: makerStore, log: (...a) => console.error(...a) }
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+  if (!mk.final) await telegram('Sports paper test C (maker) running — no real money.')
+  let index = null, indexAt = 0
+
+  // The live loop: prices every minute, nothing else, so slow work elsewhere never stretches an order's life.
+  const live = async () => {
+    for (;;) {
+      const started = Date.now()
+      try {
+        if (!mk.final) await liveRound(mk, io, Date.now(), { index })
+        makerStore.saveMeta(mk)
         state.version = (state.version ?? 0) + 1
         cache.clear()
-        console.log([...active, 'W'].map((a) => { const s = summarise(state, Date.now(), { arm: a, withhold: true }); return `${a === 'W' ? 'watch' : 'test ' + a}: +${added.filter((r) => r.arm === a).length} · recorded ${s.recorded} · bets ${s.ruleBets} · settled ${s.settled}` }).join(' | '))
-      }
-    } catch (e) { state.errors = (state.errors ?? 0) + 1; console.error('loop', e.message) }
-    await new Promise((r) => setTimeout(r, SCAN_MS))
+      } catch (e) { state.errors = (state.errors ?? 0) + 1; console.error('live', e.message) }
+      await sleep(Math.max(5_000, MAKER.readMs - (Date.now() - started)))
+    }
   }
+
+  // Everything else, on its own clock: enrolment and kickoff refresh, replaying finished games,
+  // settlement, the calibration results, the stop.
+  const background = async () => {
+    let lastEnroll = 0, lastReplay = 0, lastSettle = 0, checked = false
+    for (;;) {
+      try {
+        // Tests A and B: stopped early at the user's request (EARLY_STOP), each frozen once.
+        for (const arm of ARMS) {
+          if (state.finalByArm[arm]) continue
+          const f = freeze(state, Date.now(), arm, { stoppedEarly: true, earlyStop: EARLY_STOP })
+          store.saveMeta(state); cache.clear()
+          console.log(`Test ${arm} stopped early — ${f.verdict} · ${f.settled} settled bets, profit per $1 ${f.result?.perDollar.toFixed(4)} [${f.result?.lo.toFixed(4)}, ${f.result?.hi.toFixed(4)}]`)
+        }
+        // Test C's stop is checked first, so its result is frozen on exactly the fills settled when it was reached.
+        if (!mk.final && makerSummary(mk, Date.now(), { iters: 200 }).done) {
+          const f = freezeMaker(mk, Date.now()); makerStore.saveMeta(mk); cache.clear()
+          console.log(`STOP reached, test C — ${f.verdict}`)
+          await telegram(`Sports paper test C (maker) finished: ${f.verdict}`)
+        }
+        if (!index || Date.now() - indexAt > INDEX_MS) {
+          try { index = sportsIndex(await getJson('https://gamma-api.polymarket.com/sports')); indexAt = Date.now() }
+          catch (e) { state.errors = (state.errors ?? 0) + 1; console.error('sports index', e.message) }
+        }
+        if (!mk.final && Date.now() - lastEnroll >= MAKER.enrollMs) {
+          const t0 = Date.now()
+          const e = await enroll(mk, io, Date.now(), index).catch((err) => { mk.stats.enrollFails = (mk.stats.enrollFails ?? 0) + 1; console.error('enrol', err.message); return { added: 0 } })
+          const r = await refreshGames(mk, io, Date.now())
+          lastEnroll = Date.now(); state.lastScanAt = new Date().toISOString()
+          console.log(`test C: +${e.added} games · refreshed ${r} · resting ${Object.keys(mk.open).length} orders · ${((Date.now() - t0) / 1000).toFixed(0)}s`)
+          // Once per start: what the public trade feed really returns, kept in the export.
+          if (!checked) {
+            checked = true
+            try {
+              const busy = (await getJson('https://gamma-api.polymarket.com/markets?' + new URLSearchParams({ closed: 'false', limit: '50', order: 'volume24hr', ascending: 'false', tag_id: '100350' }))).filter((m) => m.conditionId)
+              mk.stats.feedCheck = await feedCheck(io, busy)
+              console.log('feed check:', JSON.stringify(mk.stats.feedCheck.markets.map((x) => [x.takerOnly_true?.n ?? x.takerOnly_true?.error, x.takerOnly_false?.n ?? x.takerOnly_false?.error])))
+            } catch (err) { mk.stats.feedCheck = { error: err.message.slice(0, 200), at: new Date().toISOString() } }
+          }
+        }
+        if (Date.now() - lastReplay >= MAKER.enrollMs) {
+          const r = await replayDue(mk, io, Date.now())
+          lastReplay = Date.now()
+          if (r.replayed || r.waiting) console.log(`test C: replayed ${r.replayed} games · ${r.fills} fills · ${r.waiting} waiting for the feed`)
+        }
+        if (Date.now() - lastSettle > SETTLE_MS) {
+          const c = await settleFills(mk, io, Date.now())
+          const k = await settleCal(mk, io, Date.now())
+          const a = await markFills(mk, io, Date.now())
+          pruneMarkets(mk)
+          lastSettle = Date.now(); console.log(`test C: settled ${c} fills · ${k} calibration results · ${a} after-fill prices`)
+        }
+        makerStore.saveMeta(mk)
+        store.saveMeta(state)
+        cache.clear()
+      } catch (e) { state.errors = (state.errors ?? 0) + 1; console.error('background', e.message) }
+      await sleep(60_000)
+    }
+  }
+  live(); background()
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
@@ -864,6 +962,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   if (cmd === 'run') run()
   else if (cmd === 'summary') {
     const st = openStore(dataDir()).load()
-    console.log(JSON.stringify(Object.fromEntries(ARMS.map((a) => [a, publicSummary(st, a)])), null, 2))
+    const mk = openMakerStore(dataDir()).load()
+    const { stats: _s, ...c } = makerSummary(mk, Date.now())
+    console.log(JSON.stringify({ C: mk.final ?? c, ...Object.fromEntries(ARMS.map((a) => [a, publicSummary(st, a)])) }, null, 2))
   } else { console.error('usage: node src/polysports.js run|summary'); process.exit(1) }
 }

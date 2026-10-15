@@ -130,6 +130,11 @@
   .tab b { display: block; color: var(--text); font-size: 12.5px; letter-spacing: .04em; margin-bottom: 2px; }
   .tab.on { border-color: rgba(77,216,255,.55); background: linear-gradient(180deg, rgba(77,216,255,.08), var(--panel)); }
   .tab.on b { color: var(--cyan); }
+  .tab.old { flex: 0.7 1 0; opacity: .78; }
+  .tab.old b { font-size: 11.5px; }
+  .tab .fin { color: var(--red); }
+  .betchip.bid { background: var(--amber); }
+  .betchip.got { background: var(--green); }
   .filters { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-bottom: 14px; }
   .filters label { display: grid; gap: 4px; font-family: var(--mono); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); flex: 1 1 150px; }
   .filters select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px;
@@ -206,12 +211,12 @@
     <section class="card">
       <div class="panelhead"><h2>Activity by day</h2><span class="meta">UTC</span></div>
       <div id="daily"></div>
-      <div class="legend"><span><i style="background:var(--violet)"></i>paper bets placed</span><span><i style="background:var(--cyan)"></i>bets settled</span></div>
+      <div class="legend" id="dailyLegend"><span><i style="background:var(--violet)"></i>paper bets placed</span><span><i style="background:var(--cyan)"></i>bets settled</span></div>
     </section>
     <section class="card">
-      <div class="panelhead"><h2>Price paid</h2><span class="meta">per $1 share</span></div>
+      <div class="panelhead"><h2 id="pricesTitle">Price paid</h2><span class="meta">per $1 share</span></div>
       <div id="prices"></div>
-      <div class="legend"><span>How many bets were placed at each price, 2¢–20¢</span></div>
+      <div class="legend"><span id="pricesLegend">How many bets were placed at each price, 2¢–20¢</span></div>
     </section>
   </div>
 
@@ -233,11 +238,9 @@
 
   <section class="card">
     <div class="panelhead"><h2 id="latestTitle">Latest paper bets</h2><span class="meta" id="latestMeta"></span></div>
-    <div class="seg" id="seg" hidden>
-      <button type="button" data-v="upcoming">Upcoming</button><button type="button" data-v="results">Results</button><button type="button" data-v="bets">Just placed</button>
-    </div>
+    <div class="seg" id="seg" hidden></div>
     <div class="scroll"><table class="bets">
-      <thead><tr><th>Bet ($2 each)</th><th>Paid</th><th>Pays if it hits</th><th>Kickoff</th><th>Result</th></tr></thead>
+      <thead id="latestHead"><tr><th>Bet ($2 each)</th><th>Paid</th><th>Pays if it hits</th><th>Kickoff</th><th>Result</th></tr></thead>
       <tbody id="latest"></tbody>
     </table></div>
     <button class="more" id="more" hidden></button>
@@ -248,8 +251,41 @@
     <div class="kv" id="health" style="margin-top:0"></div>
   </section>
 
-  <details class="card">
-    <summary>How this test works</summary>
+  <details class="card" id="howMaker">
+    <summary>How Test C works</summary>
+    <div class="note">
+      <p><b>What it tests.</b> Tests A and B bought at the asking price and lost: the market's middle price turned out
+      to be about right, so whoever buys pays half the gap between the buy and sell price, plus a fee. That gap goes to
+      whoever <b>posts</b> the prices. Test C asks whether posting them makes money.</p>
+      <p><b>The rule.</b> On every Polymarket sports game kicking off in about a day, the tracker keeps a
+      <b>paper buy order one cent above the best bid</b> on each side, re-priced every minute, whenever the gap
+      between the buy and sell price is 3¢ to 10¢. Each order is about <b>$2</b> (Polymarket's 5-share minimum on
+      dear sides). Orders stop at kickoff. No order is ever sent.</p>
+      <p><b>When an order counts as filled.</b> Two hours after kickoff the tracker reads the game's public trades.
+      An order is filled only if a real seller traded at or below its price while it rested, or a sell was offered at
+      or below it. Being one cent above everyone else, it would have been first in line. Makers pay <b>no fee</b>.
+      Each side of a game is bought at most once.</p>
+      <p><b>Two readings.</b> A resting order tends to get filled when the seller knows something — a lineup, an
+      injury, a sharper price elsewhere — and a real order can be picked off without any trade showing. So every game is
+      also scored the <b>cautious</b> way: an order counts as filled whenever the market's middle price came down to it.</p>
+      <p><b>What decides it.</b> Each fill is scored by how the price stood at kickoff against what we paid, corrected for
+      how well kickoff prices predicted results across every game the test watched. That "edge" is far less noisy than
+      win/lose, so it can spot a real edge of about 1¢ a share. The cheap side (under 50¢) and the dear side are judged
+      separately. A side is <b>YES only if its edge stays above zero across the plausible range under both readings</b>,
+      and its real profit is not negative.</p>
+      <p><b>When it stops.</b> At <b>300 games with a settled fill and at least 7 days</b>, or at 28 days. It can stop early
+      only if it is clearly going nowhere (from day 3). The verdict is taken once, at the stop; the rules were written
+      before the first order (<b>PREREG-POLY-MAKER.md</b>) and don't change with the running number. If the data fails
+      (too few fills, unreadable trades, long downtime) the result is INCONCLUSIVE, not NO.</p>
+      <p><b>By sport and bet type.</b> With about 30 slices, about one will look good by chance. A slice can never turn a
+      NO into a YES; it can only become a new idea to test.</p>
+      <p><b>Tests A and B</b> (and the Watch list) were stopped early on 15 Oct at your request. Both were NO; their
+      tabs keep their final results.</p>
+    </div>
+  </details>
+
+  <details class="card" id="howOld">
+    <summary>How this test worked</summary>
     <div class="note">
       <p>Every 15 minutes the tracker reads every Polymarket sports market that ends in about a day,
       and records a paper bet at the real asking price, plus Polymarket's fee, when a <b>$2</b> order would fill
@@ -284,7 +320,8 @@
   // The address carries the token (forwarded to the data feed) and the chosen test and filters.
   const params = new URLSearchParams(location.search)
   const token = params.get('token')
-  const sel = { arm: ['A', 'B', 'W'].includes(params.get('arm')) ? params.get('arm') : 'A', sport: params.get('sport') || '', type: params.get('type') || '' }
+  // Test C (the maker test) is the live one and the default; A, B and Watch are finished.
+  const sel = { arm: ['A', 'B', 'W', 'C'].includes(params.get('arm')) ? params.get('arm') : 'C', sport: params.get('sport') || '', type: params.get('type') || '' }
   function feedUrl() {
     const q = new URLSearchParams({ arm: sel.arm })
     if (token) q.set('token', token)
@@ -297,7 +334,7 @@
     Object.assign(sel, change)
     const q = new URLSearchParams()
     if (token) q.set('token', token)
-    if (sel.arm !== 'A') q.set('arm', sel.arm)
+    if (sel.arm !== 'C') q.set('arm', sel.arm)
     if (sel.sport) q.set('sport', sel.sport)
     if (sel.type) q.set('type', sel.type)
     history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : ''))
@@ -382,6 +419,8 @@
       ? 'Profit stayed above zero across the plausible range. Per the plan, the next step is a written live rule, then $50 at $1–2 per bet with a 20% stop — after checking Polymarket allows trading where you live.'
       : !d.result ? 'No bet had settled when the test reached its stop, so there is nothing to judge.'
       : 'The bets did not reliably make money once the real asking price and fees were paid.'
+    if (d.stoppedEarly && d.earlyStop) $('vSub').textContent += ' ' + d.earlyStop.note
+    $('vLabel').textContent = d.armInfo.name + (d.stoppedEarly ? ' · stopped early' : ' · finished')
     $('eta').textContent = ''
     rk.hidden = false
     resultKvs(d, rk)
@@ -416,7 +455,7 @@
     $('vSub').textContent = 'Not part of either test. ' + (r && r.n < 100
       ? 'With ' + fmtInt(r.n) + ' settled bet' + (r.n === 1 ? '' : 's') + ' this is luck, not evidence — it is here so you can watch the rule at work.'
       : 'It is here so you can watch the rule at work on the games the tests never saw.')
-    $('eta').textContent = d.watchSports ? 'Following: ' + d.watchSports.join(', ') + ' — games kicking off in the next 22 hours' : ''
+    $('eta').textContent = d.retired ? 'Stopped on ' + d.retired + ' with Tests A and B.' : d.watchSports ? 'Following: ' + d.watchSports.join(', ') + ' — games kicking off in the next 22 hours' : ''
     rk.hidden = !r
     if (!r) return
     const wins = Math.round((d.hitRate ?? 0) * r.n)
@@ -426,6 +465,93 @@
       kv('Net', (r.pnl >= 0 ? '+$' : '−$') + Math.abs(r.pnl).toFixed(2), 'on $' + r.cost.toFixed(2) + ' staked (paper)', r.pnl >= 0 ? 'pos' : 'neg'),
       kv('Plausible range', pct(r.lo) + ' to ' + pct(r.hi), 'per $1, resampling whole games'),
     )
+  }
+
+  /** Test C's headline: the running result before its stop, the frozen verdict after. Two sides × two fill rules. */
+  function renderMakerVerdict(d) {
+    const card = $('verdict'), prog = $('prog'), rk = $('resultKv')
+    const P = d.pooled?.trade ?? {}, o = P.outcome
+    prog.replaceChildren(); rk.replaceChildren()
+    if (!d.done) {
+      card.className = 'card verdict'
+      $('vLabel').textContent = d.armInfo.name + ' · running result'
+      $('vBig').className = 'big' + (o ? (o.perDollar >= 0 ? ' pos' : ' neg') : '')
+      $('vBig').textContent = d.finishing ? 'Stop reached' : o ? pct(o.perDollar) + ' per $1 so far' : P.fills ? 'Waiting for the first result' : d.view.ordersNow ? fmtInt(d.view.ordersNow) + ' paper orders resting' : 'Starting up'
+      $('vSub').textContent = d.finishing ? 'The test has reached its fixed stop. The verdict is frozen within a minute, from the fills settled by then.'
+        : o ? 'Profit on orders real sellers filled, settled on the real results. The verdict rests on the edge table below, taken once at the stop — nothing seen before then changes the rules.'
+        : P.fills ? 'Orders have been filled; results arrive as those games are decided.'
+        : d.view.ordersNow ? 'Each game\'s trades are checked ' + d.rule.tradesAfterH + ' hours after kickoff, so fills first show up about a day after the first orders.'
+        : 'The first round reads every game\'s prices; the first orders appear within a minute or two.'
+      prog.append(progRow('Matches with a settled fill', d.matches ?? 0, d.rule.stopMatches, ''))
+      prog.append(progRow('Days running', d.days, d.rule.minDays, 'minimum', d.days.toFixed(1)))
+      const due = d.eta && Date.parse(d.eta) <= Date.now()
+      $('eta').replaceChildren(...(d.eta ? [due ? 'Verdict due as soon as ' + fmtInt(d.rule.stopMatches) + ' matches have a settled fill' : 'Verdict around ', due ? '' : el('b', null, dateLabel(d.eta)), ' · hard stop after ' + d.rule.stopDays + ' days · it can stop early only for futility'] : []))
+    } else {
+      const yes = String(d.verdict || '').startsWith('YES')
+      card.className = 'card verdict ' + (yes ? 'yes' : 'no')
+      $('vLabel').textContent = d.armInfo.name + ' · finished'
+      $('vBig').className = 'big ' + (yes ? 'pos' : 'neg')
+      $('vBig').textContent = d.verdict || '—'
+      $('vSub').textContent = yes ? 'Per the plan, the next step is the registered live rule for the side(s) that passed: $50, ~$2 orders, a 20% stop — after checking Polymarket allows trading where you live.'
+        : 'YES needed a side whose edge cleared zero across the plausible range both when real sellers decide the fills and when every stale order is picked off.'
+      $('eta').textContent = ''
+    }
+    rk.hidden = !(P.fills || d.pooled?.touch?.fills)
+    if (rk.hidden) return
+    // The deciding numbers: corrected markout per $1, by side and fill rule.
+    const cell = (x) => !x?.markout ? el('td', null, '—') : el('td', { class: x.markout.lo > 0 ? 'pos' : x.markout.hi < 0 ? 'neg' : '', title: 'plausible range ' + pct(x.markout.lo) + ' to ' + pct(x.markout.hi) + ' · ' + fmtInt(x.fills) + ' fills on ' + fmtInt(x.markout.matches) + ' games' },
+      pct(x.markout.perDollar), el('span', { class: 'bm' }, pct(x.markout.lo) + ' to ' + pct(x.markout.hi)))
+    const S = d.sides || {}
+    rk.append(el('div', { style: 'grid-column:1/-1; background:none; padding:0' },
+      el('div', { class: 'k', style: 'margin-bottom:6px' }, 'The edge that decides it — per $1, price at kickoff vs ours, corrected for calibration'),
+      el('div', { class: 'scroll' }, el('table', null,
+        el('thead', null, el('tr', null, el('th', null, 'Side'), el('th', null, 'Sellers decide'), el('th', null, 'Picked off'))),
+        el('tbody', null,
+          el('tr', null, el('td', null, 'Cheap', el('span', { class: 'bm' }, 'under 50¢')), cell(S.cheaper?.trade), cell(S.cheaper?.touch)),
+          el('tr', null, el('td', null, 'Dear', el('span', { class: 'bm' }, '50¢ and up')), cell(S.dearer?.trade), cell(S.dearer?.touch))))),
+      el('div', { class: 'x', style: 'margin-top:6px' }, '"Sellers decide": filled only when a real seller reached our price. "Picked off": also filled whenever the price came down to it. A side passes only if both stay above zero across the range shown, and its real profit is not negative.')))
+    rk.append(
+      kv('Net (paper)', o ? money(o.value) : '—', o ? 'on $' + o.cost.toFixed(2) + ' staked — makers pay no fee' : 'no fill settled yet', o ? (o.value >= 0 ? 'pos' : 'neg') : ''),
+      kv('Record', o ? fmtInt(P.wins) + ' won · ' + fmtInt(P.losses) + ' lost' : fmtInt(P.fills) + ' fills', o ? fmtInt(o.n) + ' settled fills on ' + fmtInt(o.matches) + ' games · range ' + pct(o.lo) + ' to ' + pct(o.hi) : 'waiting on results'),
+      kv('Won vs paid', plainPct(P.hitRate), 'hit rate vs average price ' + cents(P.avgPrice)),
+      kv('Fills, cautious rule', fmtInt(d.pooled?.touch?.fills ?? 0), 'orders the price came down to, filled or not by a real seller'),
+      kv('Both sides filled', fmtInt(d.pairs), 'games where both outcomes were bought'),
+    )
+    const vr = d.viewResult, label = [d.filter.sport, d.filter.type].filter(Boolean).join(' · ')
+    if (vr && vr.result) rk.append(el('div', { class: 'viewres', style: 'grid-column:1/-1' },
+      'This slice (', el('b', null, label), '): ', el('b', null, pct(vr.result.perDollar)), ' per $1, range ' + pct(vr.result.lo) + ' to ' + pct(vr.result.hi) +
+      ' · ' + fmtInt(vr.result.n) + ' fills. With ~30 slices, expect about one to look good by chance — a breakdown, never a verdict.'))
+  }
+
+  function renderMakerTiles(d) {
+    const v = d.view
+    $('tiles').replaceChildren(
+      tile(fmtInt(v.upcomingGames), 'Games watched', 'kicking off within ~26h', 'var(--dim)'),
+      tile(fmtInt(v.quotingGames), 'Quoting now', 'books with a 3¢–10¢ gap', 'var(--violet)'),
+      tile(fmtInt(v.ordersNow), 'Orders resting', 'paper bids, ~$2 each', 'var(--amber)'),
+      tile(fmtInt(v.checking), 'Being checked', 'kicked off; trades read ' + d.rule.tradesAfterH + 'h after', 'var(--dim)'),
+      tile(fmtInt(v.fills), 'Fills', fmtInt(v.touchFills) + ' under the cautious rule', 'var(--cyan)'),
+      tile(fmtInt(v.settled), 'Settled', fmtInt(v.waiting) + ' waiting on a result', 'var(--green)'),
+    )
+  }
+
+  function renderMakerHealth(d) {
+    const st = d.stats || {}, age = st.lastReadAt ? (Date.now() - Date.parse(st.lastReadAt)) / 60000 : Infinity
+    const lastErrAt = st.lastTradesError ? Date.parse(st.lastTradesError.slice(0, 24)) : 0
+    const feedOk = st.lastTradesOkAt && Date.parse(st.lastTradesOkAt) >= lastErrAt
+    const skipped = Object.entries(st.skipped || {}).map(([k, n]) => fmtInt(n) + ' ' + k).join(' · ')
+    $('health').replaceChildren(
+      kv('Last price read', ago(st.lastReadAt), d.done ? 'finished: no longer quoting' : 'every minute', !d.done && age > 5 ? 'amb' : ''),
+      kv('Trades feed', feedOk ? 'OK' : st.tradeCalls ? 'FAILING' : 'not needed yet', feedOk ? fmtInt(st.tradesRead) + ' trades read · last ' + ago(st.lastTradesOkAt) : st.lastTradesError ? st.lastTradesError.slice(25, 140) : 'first read 2h after the first kickoff', feedOk ? '' : st.tradeCalls ? 'neg' : ''),
+      kv('Games checked', fmtInt(d.view.replayed), fmtInt(st.voidGames ?? 0) + ' void (trades never readable)', st.voidGames ? 'amb' : ''),
+      kv('Paper orders so far', fmtInt(st.orders), fmtInt(st.crossings) + ' crossed · ' + fmtInt(st.touches) + ' touched'),
+      kv('Errors', fmtInt((st.readFails ?? 0) + (st.tradeFails ?? 0) + (st.settleFails ?? 0) + (st.enrollFails ?? 0)), 'failed requests, retried', (st.readFails || st.tradeFails) ? 'amb' : ''),
+      kv('Running since', d.firstRecordAt ? dateLabel(d.firstRecordAt) : '—', d.days.toFixed(1) + ' days · ' + fmtInt(st.restarts ?? 0) + ' restarts'),
+      kv('Not enrolled', skipped || '—', 'markets left out by the rule'),
+      kv('Feed check', st.feedCheck ? (st.feedCheck.error ? 'failed' : 'recorded') : '—', st.feedCheck?.at ? 'what the trades feed returns, ' + ago(st.feedCheck.at) + ' · in the download' : 'runs once at start'),
+    )
+    const a = el('a', { class: 'dl', href: exportUrl, download: '' }, '⬇ Download data')
+    $('health').append(el('div', null, el('div', { class: 'k' }, 'For analysis'), el('div', { class: 'v', style: 'margin-top:6px' }, a), el('div', { class: 'x' }, 'every fill and result, all tests, one file')))
   }
 
   function renderTiles(d) {
@@ -440,11 +566,14 @@
     )
   }
 
-  function renderDaily(days) {
+  const OLD_SERIES = [{ k: 'bets', c: '#a97bff', label: 'paper bets placed' }, { k: 'settled', c: '#4dd8ff', label: 'bets settled' }]
+  const MAKER_SERIES = [{ k: 'fills', c: '#2ee88a', label: 'fills (a seller reached our price)' }, { k: 'settled', c: '#4dd8ff', label: 'fills settled' }]
+  function renderDaily(days, series = OLD_SERIES) {
     const box = $('daily')
+    $('dailyLegend').replaceChildren(...series.map((x) => el('span', null, el('i', { style: 'background:' + x.c }), x.label)))
     if (!days.length) return box.replaceChildren(el('div', { class: 'empty' }, 'No data yet'))
     const W = Math.max(280, Math.round(box.clientWidth || 560)), H = 190, pad = { l: 34, r: 6, t: 10, b: 24 }
-    const max = Math.max(1, ...days.map((x) => Math.max(x.bets, x.settled)))
+    const max = Math.max(1, ...days.map((x) => Math.max(x[series[0].k] ?? 0, x[series[1].k] ?? 0)))
     const step = (W - pad.l - pad.r) / days.length, bw = Math.max(2, Math.min(16, step / 2 - 2))
     const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Paper bets placed and settled per day' })
     for (const f of [0, 0.5, 1]) {
@@ -455,18 +584,22 @@
     const every = Math.ceil(days.length / 7)
     days.forEach((x, i) => {
       const cx = pad.l + step * i + step / 2, base = H - pad.b, h = (v) => (H - pad.t - pad.b) * (v / max)
-      const a = svgEl('rect', { x: cx - bw - 1, y: base - h(x.bets), width: bw, height: h(x.bets), rx: 2, fill: '#a97bff' })
-      const b = svgEl('rect', { x: cx + 1, y: base - h(x.settled), width: bw, height: h(x.settled), rx: 2, fill: '#4dd8ff' })
-      const tip = svgEl('title', {}); tip.textContent = `${x.day}: ${x.bets} bets placed, ${x.settled} settled, ${x.scanned} markets scanned`
+      const [s0, s1] = series, v0 = x[s0.k] ?? 0, v1 = x[s1.k] ?? 0
+      const a = svgEl('rect', { x: cx - bw - 1, y: base - h(v0), width: bw, height: h(v0), rx: 2, fill: s0.c })
+      const b = svgEl('rect', { x: cx + 1, y: base - h(v1), width: bw, height: h(v1), rx: 2, fill: s1.c })
+      const tip = svgEl('title', {}); tip.textContent = series === OLD_SERIES ? `${x.day}: ${x.bets} bets placed, ${x.settled} settled, ${x.scanned} markets scanned`
+        : `${x.day}: ${fmtInt(x.orders)} paper orders placed, ${x.fills} filled, ${x.settled} settled`
       a.append(tip); svg.append(a, b)
       if (i % every === 0) { const t = svgEl('text', { x: cx, y: H - 7, 'text-anchor': 'middle' }); t.textContent = x.day.slice(5); svg.append(t) }
     })
     box.replaceChildren(svg)
   }
 
-  function renderPrices(bins) {
+  function renderPrices(bins, maker = false) {
     const box = $('prices')
-    if (!bins.some((b) => b.n)) return box.replaceChildren(el('div', { class: 'empty' }, 'No bets yet'))
+    $('pricesTitle').textContent = maker ? 'Fill prices' : 'Price paid'
+    $('pricesLegend').textContent = maker ? 'How many orders were filled at each price, 0–100¢' : 'How many bets were placed at each price, 2¢–20¢'
+    if (!bins.some((b) => b.n)) return box.replaceChildren(el('div', { class: 'empty' }, maker ? 'No fills yet' : 'No bets yet'))
     const W = Math.max(260, Math.round(box.clientWidth || 360)), H = 190, pad = { l: 34, r: 6, t: 10, b: 24 }
     const max = Math.max(1, ...bins.map((b) => b.n)), step = (W - pad.l - pad.r) / bins.length
     const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Number of bets at each price' })
@@ -478,7 +611,7 @@
     bins.forEach((b, i) => {
       const h = (H - pad.t - pad.b) * (b.n / max), x = pad.l + step * i + 3
       const r = svgEl('rect', { x, y: H - pad.b - h, width: step - 6, height: h, rx: 3, fill: '#a97bff' })
-      const tip = svgEl('title', {}); tip.textContent = `${Math.round(b.lo * 100)}–${Math.round(b.hi * 100)}¢: ${b.n} bets`; r.append(tip); svg.append(r)
+      const tip = svgEl('title', {}); tip.textContent = `${Math.round(b.lo * 100)}–${Math.round(b.hi * 100)}¢: ${b.n} ${maker ? 'fills' : 'bets'}`; r.append(tip); svg.append(r)
       const t = svgEl('text', { x: x + (step - 6) / 2, y: H - 7, 'text-anchor': 'middle' }); t.textContent = Math.round(b.lo * 100) + '¢'; svg.append(t)
     })
     box.replaceChildren(svg)
@@ -509,12 +642,60 @@
   // or "Just placed" (newest first). Upcoming by default while there is anything to come.
   let listView = null
   $('seg').addEventListener('click', (e) => { const v = e.target.dataset?.v; if (v) { listView = v; if (last) renderLatest(last) } })
+  const OLD_VIEWS = [['upcoming', 'Upcoming'], ['results', 'Results'], ['bets', 'Just placed']]
+  const MAKER_VIEWS = [['resting', 'Resting now'], ['filled', 'Filled'], ['upcoming', 'Waiting on result'], ['results', 'Results']]
+  function segButtons(views, on) {
+    $('seg').replaceChildren(...views.map(([v, label]) => el('button', { type: 'button', 'data-v': v, class: v === on ? 'on' : '' }, label)))
+  }
+  const head = (...cols) => $('latestHead').replaceChildren(el('tr', null, ...cols.map((c) => el('th', null, c))))
+  const qmeta = (b, extra) => el('span', { class: 'bm' }, [b.sport, b.league && b.league !== b.sport ? b.league : null, b.type, extra].filter(Boolean).join(' · ') || 'tagging…')
+  const SOURCE_PART = { trade: 'a seller traded at or through our price', cross: 'a sell was offered at our price', crossprint: 'someone bought from a sell at our price' }
+  const SOURCE = new Proxy({}, { get: (_, k) => String(k).split('+').map((x) => SOURCE_PART[x] ?? x).join(', and ') })
+  function renderMakerLatest(d) {
+    const lists = { resting: d.resting || [], filled: d.latest || [], upcoming: d.upcoming || [], results: d.results || [] }
+    if (!lists[listView]) listView = null
+    const view = listView ?? 'resting'
+    segButtons(MAKER_VIEWS, view); $('seg').hidden = false
+    const list = lists[view], rows = showAll ? list : list.slice(0, 12)
+    $('latestTitle').textContent = { resting: 'Orders resting now', filled: 'Filled orders', upcoming: 'Fills waiting on a result', results: 'Latest results' }[view]
+    const total = { resting: d.restingTotal, filled: d.view.fills, upcoming: d.view.waiting, results: d.view.settled }[view]
+    $('latestMeta').textContent = list.length ? (view === 'resting' ? 'soonest kickoff first · ' : view === 'upcoming' ? 'soonest first · ' : 'newest first · ') + rows.length + ' of ' + fmtInt(total) : ''
+    $('more').hidden = list.length <= 12
+    $('more').textContent = showAll ? 'Show fewer' : 'Show ' + list.length
+    if (view === 'resting') head('Paper order', 'Our bid', 'Book now', 'Kickoff', 'Size')
+    else head('Filled order', 'Price', 'Pays if it hits', 'Kickoff', 'Result')
+    if (!list.length) return $('latest').replaceChildren(el('tr', null, el('td', { colspan: 5, class: 'empty' },
+      { resting: d.view.upcomingGames ? 'No book has a 3¢–10¢ gap right now' : 'Starting up', filled: 'No fills yet — each game is checked ' + d.rule.tradesAfterH + 'h after kickoff', upcoming: 'No fills waiting on a result', results: 'No settled fills yet' }[view])))
+    $('latest').replaceChildren(...rows.map((b) => {
+      const label = betLabel(b)
+      if (view === 'resting') return el('tr', null,
+        el('td', { class: 'q', title: 'A paper buy order for ' + label + ' at ' + cents(b.price) + ', one cent above the best bid. It fills only if a seller comes down to it.' },
+          el('span', { class: 'betchip bid' }, 'BID ' + label), b.question ?? '', qmeta(b, 'resting since ' + ago(b.since).replace(' ago', '') + (b.touched ? ' · price came down to it' : ''))),
+        el('td', null, cents(b.price)),
+        el('td', null, cents(b.bid) + ' / ' + cents(b.ask)),
+        el('td', { title: new Date(b.endDate).toLocaleString() }, until(b.endDate)),
+        el('td', null, b.shares.toFixed(1) + ' sh'))
+      let chip
+      if (b.status === 'settled' && b.counted) chip = outcomeChip(b)
+      else { const [t, c] = STATUS[b.status] ?? [b.status, '']; chip = el('span', { class: 'chip ' + c }, t) }
+      return el('tr', null,
+        el('td', { class: 'q', title: 'Bought ' + b.shares.toFixed(1) + ' shares of ' + label + ' at ' + cents(b.price) + ' (book was ' + cents(b.bid) + ' / ' + cents(b.ask) + ')' },
+          el('span', { class: 'betchip got' }, 'GOT ' + label), b.question ?? '', qmeta(b, 'filled ' + ago(b.filledAt) + ': ' + (SOURCE[b.source] ?? b.source))),
+        el('td', null, cents(b.price)),
+        el('td', null, el('span', { class: 'ph' }, '→ pays '), '$' + b.shares.toFixed(2)),
+        el('td', { title: new Date(b.endDate).toLocaleString() }, until(b.endDate)),
+        el('td', null, chip))
+    }))
+  }
   function renderLatest(d) {
     last = d
+    if (d.kind === 'maker') return renderMakerLatest(d)
+    head('Bet ($2 each)', 'Paid', 'Pays if it hits', 'Kickoff', 'Result')
     const lists = { upcoming: d.upcoming || [], results: d.results || [], bets: d.latest || [] }
+    if (!lists[listView]) listView = null
     const view = listView ?? (lists.upcoming.length ? 'upcoming' : lists.results.length ? 'results' : 'bets')
+    segButtons(OLD_VIEWS, view)
     $('seg').hidden = !(lists.upcoming.length || lists.results.length)
-    for (const b of $('seg').querySelectorAll('button')) b.className = b.dataset.v === view ? 'on' : ''
     const list = lists[view]
     $('latestTitle').textContent = { upcoming: 'Upcoming bets', results: 'Latest results', bets: 'Just placed' }[view]
     const rows = showAll ? list : list.slice(0, 12)
@@ -553,7 +734,7 @@
   function renderHealth(d) {
     const scanAge = d.lastScanAt ? (Date.now() - Date.parse(d.lastScanAt)) / 60000 : Infinity
     $('health').replaceChildren(
-      kv('Last scan', ago(d.lastScanAt), d.done && !d.watch ? 'finished: no longer scanning' : 'every ' + d.scanEveryMin + ' min', !(d.done && !d.watch) && scanAge > d.scanEveryMin * 2.5 ? 'amb' : ''),
+      kv('Last scan', ago(d.lastScanAt), (d.done && !d.watch) || d.retired ? 'finished: no longer scanning' : 'every ' + d.scanEveryMin + ' min', !((d.done && !d.watch) || d.retired) && scanAge > d.scanEveryMin * 2.5 ? 'amb' : ''),
       kv('Last settlement check', ago(d.lastSettleAt), 'hourly'),
       kv('Oldest result pending', d.oldestWaitingAt ? ago(d.oldestWaitingAt).replace(' ago', '') : '—', 'since kickoff'),
       kv('Errors', fmtInt(d.errors), 'failed requests, retried next round', d.errors ? 'amb' : ''),
@@ -567,8 +748,10 @@
 
   function renderTabs(d) {
     $('tabs').replaceChildren(...d.arms.map((a) => {
-      const b = el('button', { class: 'tab' + (a.key === d.arm ? ' on' : ''), type: 'button', 'aria-pressed': String(a.key === d.arm) },
-        el('b', null, a.name), a.done ? 'finished' : fmtInt(a.ruleBets) + ' bets · ' + fmtInt(a.settled) + (a.watch ? ' results' : ' settled'))
+      const sub = a.key === 'C' ? (a.done ? 'finished' : fmtInt(a.ruleBets) + ' fills · ' + fmtInt(a.settled) + ' settled')
+        : a.watch ? 'stopped' : el('span', null, 'finished · ', el('span', { class: 'fin' }, 'NO'))
+      const b = el('button', { class: 'tab' + (a.key === d.arm ? ' on' : '') + (a.key !== 'C' ? ' old' : ''), type: 'button', 'aria-pressed': String(a.key === d.arm) },
+        el('b', null, a.name), sub)
       b.addEventListener('click', () => { if (a.key !== sel.arm) choose({ arm: a.key, sport: '', type: '' }) })
       return b
     }))
@@ -597,9 +780,22 @@
   function renderBreakdown(all, which, d) {
     const keyName = which === 'bySport' ? 'sport' : 'type'
     // Sports and bet types that were scanned but never cheap enough to bet are left out.
+    const first = which === 'bySport' ? 'Sport' : 'Bet type'
+    if (d.kind === 'maker') {
+      const hd = $(which + 'Head'), bd = $(which), list = all.filter((r) => r.fills > 0 || sel[keyName] === r.name)
+      hd.replaceChildren(el('tr', null, ...[first, 'Fills', 'Record', 'Won / paid', 'Per $1'].map((h) => el('th', null, h))))
+      $(which + 'Meta').textContent = d.done ? 'from the fills the verdict counted' : 'record so far'
+      if (!list.length) return bd.replaceChildren(el('tr', null, el('td', { colspan: 5, class: 'empty' }, 'No fills yet')))
+      return bd.replaceChildren(...list.map((r) => {
+        const tr = el('tr', { class: sel[keyName] === r.name ? 'sel' : '' }, ...[r.name, fmtInt(r.fills), r.counted ? fmtInt(r.wins) + '–' + fmtInt(r.losses) : '—',
+          r.counted ? plainPct(r.wins / r.counted) + ' / ' + cents(r.avgPrice) : '—',
+          r.perDollar === null ? '—' : el('span', { class: r.perDollar >= 0 ? 'pos' : 'neg', title: '95% range ' + pct(r.lo) + ' to ' + pct(r.hi) }, pct(r.perDollar))].map((c) => el('td', null, c)))
+        tr.addEventListener('click', () => choose({ [keyName]: sel[keyName] === r.name ? '' : r.name }))
+        return tr
+      }))
+    }
     const rows = all.filter((r) => r.bets > 0 || sel[keyName] === r.name)
     const done = all.some((r) => 'wins' in r), head = $(which + 'Head'), body = $(which), key = which === 'bySport' ? 'sport' : 'type'
-    const first = which === 'bySport' ? 'Sport' : 'Bet type'
     head.replaceChildren(el('tr', null, ...(done
       ? [first, 'Bets', 'Record', 'Won / paid', 'Per $1']
       : [first, 'Bets', 'Games', 'Settled', 'Waiting']).map((h) => el('th', null, h))))
@@ -620,7 +816,7 @@
   function renderState(d) {
     const scanAge = d.lastScanAt ? (Date.now() - Date.parse(d.lastScanAt)) / 60000 : Infinity
     const pill = $('state')
-    if (d.done && !d.watch) { pill.className = 'pill live'; $('stateText').textContent = 'FINISHED' }
+    if ((d.done && !d.watch) || d.retired) { pill.className = 'pill live'; $('stateText').textContent = d.stoppedEarly || d.retired ? 'STOPPED' : 'FINISHED' }
     else if (scanAge <= d.scanEveryMin * 2.5) { pill.className = 'pill live'; $('stateText').textContent = 'LIVE · scanned ' + ago(d.lastScanAt) }
     else if (d.lastScanAt) { pill.className = 'pill stale'; $('stateText').textContent = 'STALE · last scan ' + ago(d.lastScanAt) }
     else { pill.className = 'pill stale'; $('stateText').textContent = 'FIRST SCAN RUNNING' }
@@ -633,10 +829,14 @@
       if (!r.ok) throw new Error('The tracker answered ' + r.status)
       const d = await r.json()
       $('banner').hidden = true
-      renderTabs(d); renderFilters(d)
-      renderState(d); renderVerdict(d); renderTiles(d); renderDaily(d.perDay); renderPrices(d.priceBins)
+      const maker = d.kind === 'maker'
+      $('howMaker').hidden = !maker; $('howOld').hidden = maker
+      renderTabs(d); renderFilters(d); renderState(d)
+      if (maker) { renderMakerVerdict(d); renderMakerTiles(d); renderDaily(d.perDay, MAKER_SERIES); renderPrices(d.priceBins, true); $('calCard').hidden = true }
+      else { renderVerdict(d); renderTiles(d); renderDaily(d.perDay); renderPrices(d.priceBins); renderCalibration(d) }
       renderBreakdown(d.bySport, 'bySport', d); renderBreakdown(d.byType, 'byType', d)
-      renderCalibration(d); renderLatest(d); renderHealth(d)
+      renderLatest(d)
+      if (maker) renderMakerHealth(d); else renderHealth(d)
       $('updated').textContent = 'updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     } catch (e) {
       $('banner').hidden = false

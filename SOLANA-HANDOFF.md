@@ -36,25 +36,24 @@ pre-registration first.
 - `pumpbot/PREREG-WEATHER.md` — **NO** (2026-10-02): the market already prices the
   forecast; the bets were not significant.
 
-- **Active: Polymarket sports paper tests A and B.** Test A (`pumpbot/PREREG-POLY-SPORTS.md`,
-  amendments 1–2): YES at 2–20¢ on Yes/No markets (in practice all soccer). Test B
-  (`pumpbot/PREREG-POLY-SPORTS-B.md`): the cheap side of two-way markets (over/unders,
-  spreads, team vs team). Tracker `pumpbot/src/polysports.js`, dashboard at `/` with tabs
-  and sport / bet-type filters. On Railway: its own service from this repo with
-  **`APP=polysports`**, a volume and `DATA_DIR=/data`, optional `DASHBOARD_TOKEN`. Places
-  no orders. Each test's result is hidden, then frozen, at its own stop (400 settled
-  bets and 7 days, or 28 days). Test A's first record 2026-10-09 16:22 UTC; Test B's
-  17:09 UTC. A **Watch** tab (not a test) follows hockey and college football kicking off
-  within 22h, with results shown live (`POLY_WATCH_SPORTS`).
-  **2026-10-15, day 5.8: both tests are failing decisively** — A −40.6% per $1 [−44%, −37%],
-  B −32.3% [−43%, −21%]; long shots won less often than priced (5.0% at 7.8¢, 9.0% at
-  12.4¢). Verdicts freeze 2026-10-16 (A ~16:22 UTC, B ~17:09 UTC: 7 days after each
-  test's first record; expected NO). **Evaluated from the export the same day**
-  (`pumpbot/EVAL-POLY-SPORTS-2026-10-15.md`). The market is right at its midpoint, and the
-  rule paid the ask. The mirror (bet against the long shot at 1 − its bid) also loses:
-  A −1.8%, B −3.0%, both ranges below zero. So no mirror test. Only the quote-poster (the
-  maker) earns the spread, which would need a different, registered test. After the stop,
-  record the frozen verdicts here, in both pre-registrations and in `FINDINGS.md`.
+- **Polymarket sports Tests A and B — finished, NO (stopped early 2026-10-15 at the user's
+  request, day 5.9).** A: buy YES at 2–20¢ on Yes/No markets, −40.6% per $1 [−44%, −37%].
+  B: the cheap side of two-way markets, −32.3% [−43%, −21%]. The market is right at its
+  midpoint; buyers pay half the spread plus the fee; the mirror (bet against the long shot)
+  loses too. Evaluation: `pumpbot/EVAL-POLY-SPORTS-2026-10-15.md`; early-stop amendments in
+  both pre-registrations. The tracker freezes both on its first start after the change; the
+  watch list stopped with them.
+- **Active: Test C, the maker side (`pumpbot/PREREG-POLY-MAKER.md`, rule C1).** Paper buy
+  orders 1¢ above the best bid on both outcomes of single sports games (1¢-tick books,
+  3–10¢ spread), re-priced every minute until kickoff; each game's trades read 2h after
+  kickoff and the orders replayed under a trade rule and a pessimistic touch rule. Decided
+  per side (cheap / dear) on the calibration-corrected markout; stop at 300 matches and 7
+  days, or 28 days; futility stop from day 3. Code `pumpbot/src/polymaker.js`, run by the
+  same Railway service (`APP=polysports`); dashboard tab "Test C · Maker" (default).
+  **Open before registration:** the trade feed (`data-api.polymarket.com`) is blocked from
+  the Claude sandbox, so its format is recorded by the tracker's startup feed check (in the
+  export) and must be confirmed before the first replay (~26h after start). The user's
+  country (Polymarket eligibility) is still unconfirmed.
 
 The live probe service should be `PAPER=1` or stopped — it spends real SOL.
 
