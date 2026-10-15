@@ -554,6 +554,9 @@
       kv('Running since', d.firstRecordAt ? dateLabel(d.firstRecordAt) : '—', d.days.toFixed(1) + ' days'),
       kv('Not yet tagged', fmtInt(d.untagged), 'sport / bet type filled in hourly', d.untagged ? 'amb' : ''),
     )
+    // Every test's bets and settlements in one file, for a full offline evaluation.
+    const a = el('a', { href: '/api/export' + (token ? '?token=' + encodeURIComponent(token) : ''), download: '' }, 'Download all data')
+    $('health').append(el('div', null, el('div', { class: 'k' }, 'For analysis'), el('div', { class: 'v', style: 'font-size:14px' }, a), el('div', { class: 'x' }, 'every bet and result, all tests, one file')))
   }
 
   function renderTabs(d) {

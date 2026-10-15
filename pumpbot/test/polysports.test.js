@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { sortedAsks, walkAsks, takerFee, isCandidate, armOf, matchKeyOf, decide, settle, profitPerDollar, summarise, dashboardData, firstRecordMs, calibration, settleAll, freeze,
-  sportsIndex, betTypeOf, tagsOf, tagMissing, breakdown, openStore, correctFee, armFor, refineSport, WATCH_SPORTS, RULE } from '../src/polysports.js'
+  sportsIndex, betTypeOf, tagsOf, tagMissing, breakdown, openStore, correctFee, armFor, refineSport, WATCH_SPORTS, exportLines, RULE } from '../src/polysports.js'
 
 let passed = 0
 const t = (name, fn) => { fn(); passed++ }
@@ -382,6 +382,21 @@ t('college football and the NFL are told apart, including records filed before t
   assert.equal(refineSport({ sport: 'American football', league: 'NFL' }).sport, 'NFL')
   assert.equal(refineSport({ sport: 'American football', league: 'UFL' }).sport, 'American football')
   assert.equal(refineSport({ sport: 'Soccer', league: 'NFL' }).sport, 'Soccer')
+})
+
+t('the export carries every bet in full and the other settled markets compactly', () => {
+  const st = stateWith(30)
+  const extra = decide(mkt({ id: 'cheap-no', events: [{ id: 'z', title: 'Z vs. Y', series: [{ id: 'S1' }] }] }), bookAt(0.5), now, INDEX)   // not a bet
+  extra.settle = { ...settle(extra, { closed: true, outcomePrices: '["1","0"]' }), settledAt: 'x' }
+  const open = decide(mkt({ id: 'open-no' }), bookAt(0.6), now, INDEX)                                  // not a bet, unsettled
+  st.records[extra.id] = extra; st.records[open.id] = open; st.records['0']._tagTries = 2
+  st.finalByArm = { A: { frozenAt: 'f', settledIds: ['0'] } }
+  const lines = exportLines(st, now)
+  assert.equal(lines[0].kind, 'meta'); assert.equal(lines[0].scanned.A, 32); assert.deepEqual(lines[0].finalByArm.A.settledIds, ['0'])
+  const bets = lines.filter((l) => l.kind === 'bet'), cals = lines.filter((l) => l.kind === 'cal')
+  assert.equal(bets.length, 30); assert.ok(bets.every((b) => b.fill && b.settle && b.question && !('_tagTries' in b)))
+  assert.equal(cals.length, 1); assert.deepEqual(Object.keys(cals[0]).sort(), ['arm', 'endDate', 'filled', 'game', 'id', 'kind', 'price', 'resolved', 'sport', 'type'])
+  assert.equal(cals[0].resolved, 1); assert.equal(cals[0].price, 0.5)
 })
 
 // ---------------------------------------------------------------- storage and tagging

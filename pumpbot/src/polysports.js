@@ -14,6 +14,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import http from 'node:http'
+import zlib from 'node:zlib'
 import { execFile } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
@@ -533,6 +534,29 @@ export function dashboardData(state, nowMs = Date.now(), { arm = 'A', sport = nu
   }
 }
 
+// ---------------------------------------------------------------- export
+/**
+ * Everything needed to evaluate the tests offline, as JSON lines (gzipped by the server):
+ *   one `meta` line — when, each test's first record, frozen results, scan health;
+ *   one `bet` line per rule bet — the full record, settlement included;
+ *   one `cal` line per settled market that was not a bet — compact, for calibration only.
+ */
+export function exportLines(state, nowMs = Date.now()) {
+  const recs = Object.values(state.records)
+  const firstByArm = {}, scannedByArm = {}
+  for (const a of ALL_ARMS) { const ar = recs.filter((r) => (r.arm ?? 'A') === a); firstByArm[a] = firstRecordMs(ar); scannedByArm[a] = ar.length }
+  const lines = [{
+    kind: 'meta', exportedAt: new Date(nowMs).toISOString(), format: 1, rule: RULE, watchSports: WATCH_SPORTS,
+    firstRecordAt: Object.fromEntries(Object.entries(firstByArm).map(([a, t]) => [a, t ? new Date(t).toISOString() : null])),
+    scanned: scannedByArm, finalByArm: state.finalByArm ?? {}, lastScanAt: state.lastScanAt ?? null, lastSettleAt: state.lastSettleAt ?? null, errors: state.errors ?? 0,
+  }]
+  for (const r of recs) {
+    if (r.rule) { const { _tagTries, ...rest } = r; lines.push({ kind: 'bet', ...rest }) }
+    else if (r.settle) lines.push({ kind: 'cal', id: r.id, arm: r.arm ?? 'A', sport: r.sport ?? null, type: r.type ?? null, game: r.game ?? r.event, price: r.fill?.avgPrice ?? null, filled: Boolean(r.fill?.filled), resolved: r.settle.yesPrice, endDate: r.endDate })
+  }
+  return lines
+}
+
 // ---------------------------------------------------------------- storage
 /**
  * Append-only files, so a 28-day run never rewrites hundreds of MB every 15 minutes:
@@ -789,6 +813,12 @@ export async function run() {
       const arm = ALL_ARMS.includes(u.searchParams.get('arm')) ? u.searchParams.get('arm') : 'A'
       const sport = u.searchParams.get('sport') || null, type = u.searchParams.get('type') || null
       return send(cached(`${arm}|${sport}|${type}`, () => dashboardData(state, Date.now(), { arm, sport, type })))
+    }
+    if (u.pathname === '/api/export') {
+      const body = zlib.gzipSync(exportLines(state).map((l) => JSON.stringify(l)).join('\n') + '\n')
+      res.writeHead(200, { 'content-type': 'application/gzip', 'cache-control': 'no-store',
+        'content-disposition': `attachment; filename="polysports-export-${new Date().toISOString().slice(0, 16).replace(':', '')}.jsonl.gz"` })
+      return res.end(body)
     }
     if (u.pathname === '/json') return send(cached('json', () => ({ ...Object.fromEntries(ARMS.map((a) => [a, publicSummary(state, a)])), W: summarise(state, Date.now(), { arm: 'W', reveal: true }) })))
     if (u.pathname === '/') { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); return res.end(html) }
