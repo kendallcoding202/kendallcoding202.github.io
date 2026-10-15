@@ -108,3 +108,11 @@ dashboard):
 Test B's running result is shown before the stop, exactly as Test A's Amendment 3 sets out:
 the rule, the stop and the verdict test are unchanged; the verdict is taken once, at the
 stop, and frozen; nothing seen before then changes them.
+
+## Evaluation of the export — 2026-10-15, day 5.8 (exploratory; not the verdict)
+
+See `PREREG-POLY-SPORTS.md` ("Evaluation of the export") and
+`EVAL-POLY-SPORTS-2026-10-15.md`. For Test B: −32.3% per $1 [−42.9%, −20.7%] so far. The
+long shot won 9.35% against a midpoint of 9.6¢; the rule paid 12.4¢. Betting the other
+side instead, at 1 − the recorded bid, would have lost too: −3.0% [−4.6%, −1.6%]. The
+verdict freezes at the stop, 2026-10-16 ~17:09 UTC.

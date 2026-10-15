@@ -196,3 +196,22 @@ i.e. bet against the long shot). The same numbers suggest a small pre-fee gain, 
 idea comes from this data and must be registered and tested forward on new bets. Its
 cost depends on the bid side, which the records keep (`bestBid`), so the export can price
 it before any new test is designed.
+
+## Evaluation of the export — 2026-10-15, day 5.9 (exploratory; not the verdict)
+
+Full report: `EVAL-POLY-SPORTS-2026-10-15.md`; data kept at
+`data/polysports/export-2026-10-15T1248.jsonl.gz`. Nothing here changes the rule, the stop
+or the verdict test. The stop falls 7 days after each test's first record: Test A
+2026-10-16 ~16:22 UTC, Test B ~17:09 UTC.
+
+- **Data sound:** 40 of 40 settled bets re-read from Polymarket agree. No partial fills, no
+  prices out of range, all fees match the formula, no duplicates.
+- **The market is right at its midpoint.** On bets with a bid on the book, the long shot won
+  5.95% vs a midpoint of 6.1¢ (A) and 9.35% vs 9.6¢ (B). The rule paid the ask (7.8¢,
+  12.4¢): half the spread above fair value, plus the fee. One-sided books (no bid) were
+  worse still: 2,107 Test A bets won 1.0% at 7.8¢.
+- **The mirror rule (above) is now priced and loses.** The two outcome books mirror each
+  other (the other side's ask = 1 − this side's bid, checked on live books), so the
+  recorded `bestBid` prices the opposite bet exactly: A −1.8% per $1 [−2.1%, −1.5%], B −3.0%
+  [−4.6%, −1.6%]. A taker pays the half-spread and the fee whichever side they buy.
+  **No forward test of the mirror will be registered.**

@@ -43,14 +43,18 @@ pre-registration first.
   and sport / bet-type filters. On Railway: its own service from this repo with
   **`APP=polysports`**, a volume and `DATA_DIR=/data`, optional `DASHBOARD_TOKEN`. Places
   no orders. Each test's result is hidden, then frozen, at its own stop (400 settled
-  bets and 7 days, or 28 days). Test A started 2026-10-09 ~10:21 UTC; Test B with the
-  next deploy. A **Watch** tab (not a test) follows hockey and college football kicking off
+  bets and 7 days, or 28 days). Test A's first record 2026-10-09 16:22 UTC; Test B's
+  17:09 UTC. A **Watch** tab (not a test) follows hockey and college football kicking off
   within 22h, with results shown live (`POLY_WATCH_SPORTS`).
   **2026-10-15, day 5.8: both tests are failing decisively** — A −40.6% per $1 [−44%, −37%],
   B −32.3% [−43%, −21%]; long shots won less often than priced (5.0% at 7.8¢, 9.0% at
-  12.4¢). Verdicts freeze 2026-10-16 (expected NO). Next: price the mirror rule (bet
-  against the long shot) from the export (`research/polysports-eval.mjs`), and register it
-  as a new forward test only if the numbers justify it.
+  12.4¢). Verdicts freeze 2026-10-16 (A ~16:22 UTC, B ~17:09 UTC: 7 days after each
+  test's first record; expected NO). **Evaluated from the export the same day**
+  (`pumpbot/EVAL-POLY-SPORTS-2026-10-15.md`). The market is right at its midpoint, and the
+  rule paid the ask. The mirror (bet against the long shot at 1 − its bid) also loses:
+  A −1.8%, B −3.0%, both ranges below zero. So no mirror test. Only the quote-poster (the
+  maker) earns the spread, which would need a different, registered test. After the stop,
+  record the frozen verdicts here, in both pre-registrations and in `FINDINGS.md`.
 
 The live probe service should be `PAPER=1` or stopped — it spends real SOL.
 

@@ -38,6 +38,7 @@ const groupBy = (list, f) => { const m = new Map(); for (const x of list) { cons
 const preFee = (b) => ({ ...b, settle: { ...b.settle, pnl: b.settle.pnl + b.fee, cost: b.settle.cost - b.fee } })
 const res = (list, opts = {}) => (list.length ? profitPerDollar(list, { iters: 3000, ...opts }) : null)
 const won = (b) => b.settle.yesPrice === 1
+const RULE_STAKE = meta.rule?.stakeUsd ?? 2
 function line(label, list) {
   const r = res(list), pre = res(list.map(preFee))
   if (!r) return `| ${label} | 0 | | | | | |`
@@ -85,6 +86,31 @@ for (const arm of ['A', 'B', 'W']) {
     ` Before fees the rule is ${pre.lo > 0 ? 'clearly ahead' : pre.hi < 0 ? 'clearly behind' : 'indistinguishable from break-even'} — i.e. cheap contracts ${pre.lo > 0 ? 'did' : pre.hi < 0 ? 'did not' : 'may or may not'} win more often than their price said.`)
   say()
 
+  // Where the fair price sits, and what the other side would have earned. Polymarket's two
+  // books mirror each other (the other side's ask = 1 − this side's bid; checked on live
+  // books 2026-10-15), so a bet's recorded best bid prices the opposite bet exactly.
+  const withBid = settled.filter((b) => b.bestBid !== null && b.bestBid !== undefined), noBid = settled.filter((b) => !withBid.includes(b))
+  if (withBid.length) {
+    const bid = mean(withBid.map((b) => b.bestBid)), ask = mean(withBid.map((b) => b.fill.avgPrice)), hitB = mean(withBid.map((b) => b.settle.yesPrice))
+    const mirror = (b, slip = 0) => {
+      const q = Math.min(0.999, 1 - b.bestBid + slip), shares = RULE_STAKE / q
+      const fee = takerFee({ rate: b.feeRate ?? 0.05, exponent: b.feeExp ?? 1 }, q, shares), payout = shares * (1 - b.settle.yesPrice)
+      return { ...b, fill: { shares, spent: RULE_STAKE, avgPrice: q, filled: true }, fee, settle: { ...b.settle, yesPrice: 1 - b.settle.yesPrice, payout, cost: RULE_STAKE + fee, pnl: payout - RULE_STAKE - fee } }
+    }
+    const mr = res(withBid.map((b) => mirror(b))), ms = res(withBid.map((b) => mirror(b, 0.01)))
+    say(`### Where the fair price sits, and betting the other side`)
+    say(`| | |\n|---|---|`)
+    say(`| Bets with a bid on the book | ${withBid.length}: the long shot won **${plain(hitB, 2)}**; best bid ${c(bid)}, midpoint ${c((bid + ask) / 2)}, ask paid ${c(ask)} |`)
+    if (noBid.length) say(`| Bets with no bid at all | ${noBid.length}: won ${plain(mean(noBid.map((b) => b.settle.yesPrice)), 2)} at ${c(mean(noBid.map((b) => b.fill.avgPrice)))} paid |`)
+    say(`| Bet the other side instead, at 1 − the bid | ${pct(mr.perDollar)} per $1 after fees [${pct(mr.lo)}, ${pct(mr.hi)}] · ${usd(mr.pnl)} |`)
+    say(`| … with fills 1¢ worse | ${pct(ms.perDollar)} [${pct(ms.lo)}, ${pct(ms.hi)}] |`)
+    say()
+    say(`**Read:** the long shot came in ${Math.abs(hitB - (bid + ask) / 2) < 0.01 ? 'close to' : hitB > (bid + ask) / 2 ? 'above' : 'below'} the midpoint of the book. ` +
+      `${mr.hi < 0 ? 'Betting the other side loses too: whichever side a taker buys, they pay half the spread plus the fee.' : mr.lo > 0 ? 'Betting the other side was ahead — exploratory only, a hypothesis for a new forward test.' : 'Betting the other side is indistinguishable from break-even.'} ` +
+      `(Exploratory: chosen after seeing this data.)`)
+    say()
+  }
+
   say(`### By price paid`)
   say(HEAD)
   for (const [lo, hi] of [[0.02, 0.05], [0.05, 0.10], [0.10, 0.15], [0.15, 0.2001]]) say(line(`${Math.round(lo * 100)}–${Math.round(Math.min(hi, 0.2) * 100)}¢`, settled.filter((b) => b.fill.avgPrice >= lo && b.fill.avgPrice < hi)))
@@ -123,6 +149,8 @@ for (const arm of ['A', 'B', 'W']) {
     const s = pts.filter((x) => x.p >= lo && x.p < hi)
     if (s.length >= 10) say(`| ${Math.round(lo * 100)}–${Math.round(hi * 100)}¢ | ${s.length} | ${c(mean(s.map((x) => x.p)))} | ${plain(mean(s.map((x) => x.y)))} |`)
   }
+  say()
+  say(`Prices here are asks. Above about 35¢ the rows are mostly books with no real quote on one side (in a two-way market, a *cheaper* side above 50¢ means both sides are offered above 50¢), so they measure empty books, not prices. The rule's 2–20¢ bets all filled at real asks.`)
   say()
 
   // Data quality.
