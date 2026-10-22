@@ -92,10 +92,14 @@ slice('price', (f) => (f.price < 0.1 ? '2–10¢' : f.price < 0.3 ? '10–30¢' 
 slice('sport', (f) => f.sport ?? 'Untagged')
 slice('bet type', (f) => f.type ?? 'Untagged')
 
-say('## Prices after the fill (trade rule; Polymarket minute history, minus our price, per $1)')
+say('## Prices after the fill (trade rule; Polymarket minute history, minus our price, per $1; before kickoff only)')
+// The tracker reads these up to an hour after the fill with no kickoff cap; an in-play price is not a pre-game drift.
 for (const k of ['m1', 'm15', 'm60']) {
-  const rows = fills.filter((f) => f.world === 'trade' && f.after && Number.isFinite(f.after[k])).map((f) => ({ cluster: f.game ?? f.marketId, value: f.shares * (f.after[k] - f.price), cost: f.shares * f.price }))
-  say(`- after ${k.slice(1)} min: ${range(ratioBoot(rows))}`)
+  const before = (f) => Date.parse(f.filledAt) + (Number(k.slice(1)) + 1) * 60_000 <= Date.parse(f.kickoff)
+  for (const side of SIDES) {
+    const rows = fills.filter((f) => f.world === 'trade' && sideOf(f) === side && f.after && Number.isFinite(f.after[k]) && before(f)).map((f) => ({ cluster: f.game ?? f.marketId, value: f.shares * (f.after[k] - f.price), cost: f.shares * f.price }))
+    say(`- ${side}, after ${k.slice(1)} min: ${range(ratioBoot(rows))}`)
+  }
 }
 say()
 

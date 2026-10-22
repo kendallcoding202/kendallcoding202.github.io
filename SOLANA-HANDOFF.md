@@ -43,17 +43,14 @@ pre-registration first.
   loses too. Evaluation: `pumpbot/EVAL-POLY-SPORTS-2026-10-15.md`; early-stop amendments in
   both pre-registrations. The tracker freezes both on its first start after the change; the
   watch list stopped with them.
-- **Active: Test C, the maker side (`pumpbot/PREREG-POLY-MAKER.md`, rule C1).** Paper buy
-  orders 1¢ above the best bid on both outcomes of single sports games (1¢-tick books,
-  3–10¢ spread), re-priced every minute until kickoff; each game's trades read 2h after
-  kickoff and the orders replayed under a trade rule and a pessimistic touch rule. Decided
-  per side (cheap / dear) on the calibration-corrected markout; stop at 300 matches and 7
-  days, or 28 days; futility stop from day 3. Code `pumpbot/src/polymaker.js`, run by the
-  same Railway service (`APP=polysports`); dashboard tab "Test C · Maker" (default).
-  **Open before registration:** the trade feed (`data-api.polymarket.com`) is blocked from
-  the Claude sandbox, so its format is recorded by the tracker's startup feed check (in the
-  export) and must be confirmed before the first replay (~26h after start). The user's
-  country (Polymarket eligibility) is still unconfirmed.
+- **Finished: Test C, the maker side (`pumpbot/PREREG-POLY-MAKER.md`, rule C2).** Paper
+  buy orders 1¢ above the best bid on both outcomes of single sports games, 2026-10-15 to the
+  stop at day 7.3 (frozen by the server at 00:00 UTC 2026-10-23). Registered verdict
+  INCONCLUSIVE (the cautious touch rule was mis-specified); in substance NO: real outcome
+  −2.6% per $1 [−4.2%, −1.0%] on 12,463 paper fills, both sides negative. Evaluation:
+  `pumpbot/EVAL-POLY-MAKER-2026-10-22.md`. After the freeze the Railway service only
+  settles; it can be stopped. The server's geoblock answer is US / California, and the
+  user's country (venue eligibility) is still unconfirmed: any next test needs it first.
 
 The live probe service should be `PAPER=1` or stopped — it spends real SOL.
 

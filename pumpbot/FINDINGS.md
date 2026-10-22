@@ -32,7 +32,7 @@ wallet list changes that arithmetic, which is why six different ideas failed the
 | 10 | weather forecast vs Polymarket temperature markets | **no**: the market already prices the forecast (model weight 0.08); bets not significant — `PREREG-WEATHER.md` |
 | 11 | buying cheap (2–20¢) Polymarket sports contracts at the ask (Test A, Yes/No) | **no** (stopped early, day 5.9): −40.6% per $1 [−44%, −37%] on 10,650 bets; long shots won at the midpoint, so the buyer pays half the spread plus a 4% fee — `PREREG-POLY-SPORTS.md` |
 | 12 | the same on two-way markets (Test B: over/unders, spreads) | **no** (stopped early): −32.3% per $1 [−43%, −21%]; betting the other side loses too (−1.8% / −3.0%) — `PREREG-POLY-SPORTS-B.md`, `EVAL-POLY-SPORTS-2026-10-15.md` |
-| 13 | resting orders 1¢ above the best bid (Test C, the maker side) | **running** from 2026-10-15 — `PREREG-POLY-MAKER.md` |
+| 13 | resting orders 1¢ above the best bid (Test C, the maker side) | **no** in substance (registered label INCONCLUSIVE: the cautious fill rule was mis-specified): real outcome −2.6% per $1 [−4.2%, −1.0%] on 12,463 paper fills; favourites were sold to us just before the price fell (about 2.6× the spread), long shots looked positive only against stub 50¢ kickoff prices — `PREREG-POLY-MAKER.md`, `EVAL-POLY-MAKER-2026-10-22.md` |
 
 ## The finding that reframed the rest
 

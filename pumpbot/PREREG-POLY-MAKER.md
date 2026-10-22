@@ -272,6 +272,37 @@ needs a dated amendment here, and results are reported by rule version.
 enrolment, kickoff refresh, replay, settlement and the stop. Dashboard tab "Test C · Maker".
 Data in `DATA_DIR/polysports/maker-*`.
 
+## Evaluation — 2026-10-22, day 7.3 (preview of the freeze at 00:00 UTC 2026-10-23)
+
+From the dashboard export of 2026-10-22 20:44 UTC (`data/polysports/export-2026-10-22T2044.jsonl.gz`);
+full review in `EVAL-POLY-MAKER-2026-10-22.md`. The registered stop was met (day 7.3, 1,227
+matches); the server freezes the verdict at its next daily check, and the 3 hours this
+export lacks cannot change it. Confirm against a post-freeze export.
+
+- **Registered verdict: INCONCLUSIVE.** The touch rule scored the cheaper side better than
+  the trade rule (+48.6% vs +4.6% corrected markout per $1; gap +44 points, 98.75% [+37, +51]).
+  The code applies this to the whole test; read per side as this document says (line
+  "By side, decided separately"), it is cheaper INCONCLUSIVE, dearer NO.
+- **In substance NO; no live step.** Independently of the touch rule, the cheaper side fails
+  the real-outcome condition (−3.0%) and the guard (−7.7%, upper end −1.6%); the dearer side
+  fails both markouts (trade [−4.0%, −2.2%]) and its real outcome (−2.4% [−3.9%, −0.9%]).
+  Pooled real outcome −2.6% per $1 [−4.2%, −1.0%].
+- **The touch rule is mis-specified on both sides**: 'bid gone' fires on book flicker
+  (a lone bid cancelled), 'price fell' dips were mostly not adverse, a touch fills the whole
+  order, and 8.8% of calibration games have a stub kickoff midpoint of exactly 50¢ that the
+  fresh-mark test accepts and the calibration cannot correct. After removing these
+  artifacts it is still kinder than the trade rule on both sides.
+- **Protocol deviation, recorded here:** the feed validation above (start/end honoured, one
+  record per match, per-level records) was not met by the startup feed check (start/end
+  ignored; one record per taker order), and no amendment was made before the first replay.
+  The replay reads each game's whole history, the paging reconciles exactly and the re-read
+  audit changed 0 of 2,064 games, so the effect is small and, if anything, flatters the
+  paper result.
+- **Other code-vs-text gaps (none decisive):** the guard's bootstrap used 1,000 draws, not
+  4,000; the order log was not exported, so the registered $200 ledger cannot be computed
+  from the export; after-fill prices were read up to an hour after the fill without a
+  kickoff cap (the evaluator now reports pre-kickoff prices only).
+
 ## Implementation fixes under C2 (2026-10-15, before any fill)
 
 A second code review found places where the code did not do what C2 says. Fixed before the
