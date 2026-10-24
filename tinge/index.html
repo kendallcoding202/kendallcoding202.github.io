@@ -1,0 +1,991 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta property="og:title" content="Tinge">
+<meta property="og:description" content="You've seen a school bus a thousand times. What color is it? A daily color memory game.">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}</style>
+<title>Tinge</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="You've seen a school bus a thousand times. What color is it? Mix the colors of five everyday things from memory, every day.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=DM+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a color-viewing booth. One narrow column on a neutral gray surround
+   (so the colors read true): header, today's five chips, the prompt, one big paint chip, a control tray. */
+:root {
+  --booth: #e1e1df;
+  --tray: #f5f5f3;
+  --ink: #19191b;
+  --ink-2: #5d5d62;
+  --rule: #c7c7c4;
+  --on-ink: #f5f5f3;
+  --shade: rgba(20, 20, 24, 0.22);
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --radius-chip: 5px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --booth: #1a1a1c; --tray: #27272a; --ink: #ececea; --ink-2: #a2a2a7;
+    --rule: #3c3c40; --on-ink: #1a1a1c; --shade: rgba(0, 0, 0, 0.6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --booth: #1a1a1c; --tray: #27272a; --ink: #ececea; --ink-2: #a2a2a7;
+  --rule: #3c3c40; --on-ink: #1a1a1c; --shade: rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { height: 100%; }
+body {
+  min-height: 100%; margin: 0; display: flex; flex-direction: column;
+  background: var(--booth); color: var(--ink);
+  font: 400 16px/1.45 var(--font-display);
+  -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent;
+}
+button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
+p, h1, h2 { margin: 0; }
+:focus-visible { outline: 2.5px solid var(--ink); outline-offset: 2px; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.eyebrow { font: 500 12px/1.3 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
+.fine { font-size: 13px; color: var(--ink-2); text-align: center; }
+
+.app {
+  flex: 1; display: flex; flex-direction: column; gap: 12px;
+  width: 100%; max-width: 480px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 6px 18px;
+}
+
+/* Header */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 50px; }
+.brand { display: flex; align-items: center; gap: 9px; }
+.mark { width: 15px; height: 22px; border-radius: 2px; background: linear-gradient(#e4473b 0 33%, #f2b33d 33% 66%, #3c6e9e 66%); box-shadow: 0 1px 2px var(--shade); }
+.word { font-weight: 800; font-size: 30px; line-height: 1; letter-spacing: -0.045em; font-variation-settings: "opsz" 96; }
+.no { font-size: 12px; color: var(--ink-2); letter-spacing: 0.04em; align-self: flex-end; padding-bottom: 3px; }
+.tools { display: flex; gap: 8px; }
+.icon { width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--rule); background: transparent; display: grid; place-items: center; font-weight: 700; font-size: 17px; padding: 0; }
+.icon:hover { border-color: var(--ink); }
+.icon svg { width: 18px; height: 18px; }
+
+.screen { flex: 1; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+
+/* Intro */
+.intro { justify-content: center; gap: 22px; padding-block: 8px; }
+.fan { display: flex; justify-content: center; align-items: flex-end; gap: 8px; padding-block: 6px 4px; }
+.pc {
+  flex: 0 1 64px; min-width: 0; height: 112px;
+  transform: translateY(var(--y, 0)) rotate(var(--r));
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--tray); border-radius: 4px; box-shadow: 0 1px 2px var(--shade), 0 10px 22px -10px var(--shade);
+}
+.pc i {
+  flex: 1; display: grid; place-items: center; font: 800 28px var(--font-display); font-style: normal; color: var(--ink-2);
+  background: repeating-linear-gradient(135deg, var(--tray) 0 7px, var(--booth) 7px 14px);
+}
+.pc i.live { color: #ffffff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); background: #e4473b; animation: mixing 7s linear infinite; }
+@keyframes mixing {
+  0% { background: #e4473b; } 20% { background: #f2b33d; } 40% { background: #5aa04a; }
+  60% { background: #3c6e9e; } 80% { background: #8a4fa8; } 100% { background: #e4473b; }
+}
+.pc span { font: 500 9px/1.2 var(--font-mono); padding: 5px 6px 6px; min-height: 3.6em; color: var(--ink-2); letter-spacing: 0.02em; }
+.intro-copy { display: grid; gap: 10px; }
+.headline { font-weight: 800; font-size: clamp(30px, 8.4vw, 42px); line-height: 1; letter-spacing: -0.04em; font-variation-settings: "opsz" 96; text-wrap: balance; }
+.steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 9px; }
+.steps li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: baseline; }
+.steps b { font: 500 13px var(--font-mono); color: var(--ink-2); }
+
+/* Buttons */
+.btn {
+  height: 54px; width: 100%; border: 0; border-radius: 999px;
+  background: var(--ink); color: var(--on-ink);
+  font-weight: 700; font-size: 17px; letter-spacing: -0.01em;
+  transition: transform 0.1s, opacity 0.2s;
+}
+.btn:active { transform: scale(0.98); }
+.btn:disabled { opacity: 0.3; cursor: default; transform: none; }
+.btn.ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); }
+.btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* Play */
+.progress { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 30px; }
+.chips { display: flex; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.chips li { width: 20px; height: 28px; border-radius: 2px; box-shadow: inset 0 0 0 1.5px var(--rule); }
+.chips li.cur { box-shadow: inset 0 0 0 2px var(--ink); }
+.chips li.done { background: linear-gradient(var(--c) 0 70%, var(--tray) 70%); box-shadow: 0 1px 3px var(--shade); }
+.prog-label { font-weight: 700; font-size: 17px; }
+.running { font-size: 16px; }
+.running small { color: var(--ink-2); font-size: 12px; }
+
+.prompt { display: grid; gap: 4px; }
+.prompt-title { font-weight: 800; font-size: clamp(26px, 7.4vw, 34px); line-height: 1.04; letter-spacing: -0.035em; font-variation-settings: "opsz" 96; text-wrap: balance; }
+
+.chip {
+  flex: 1; display: flex; flex-direction: column; margin: 0; min-height: 210px;
+  border-radius: var(--radius-chip); overflow: hidden; background: var(--tray);
+  box-shadow: 0 1px 2px var(--shade), 0 16px 32px -16px var(--shade);
+  -webkit-user-select: none; user-select: none;
+}
+.swatch { position: relative; flex: 1; min-height: 160px; background: repeating-linear-gradient(135deg, var(--tray) 0 12px, var(--booth) 12px 24px); }
+.layer { position: absolute; inset: 0; }
+.layer.target { clip-path: polygon(0 0, 0 0, 0 100%, 0 100%); }
+.swatch.revealed .layer.target { clip-path: polygon(0 0, 57% 0, 43% 100%, 0 100%); transition: clip-path 0.75s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.sw-tag {
+  position: absolute; z-index: 2; opacity: 0;
+  font: 500 11px/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 5px 7px; border-radius: 3px; background: rgba(255, 255, 255, 0.85); color: #19191b;
+}
+.sw-tag.tl { top: 10px; left: 10px; }
+.sw-tag.br { right: 10px; bottom: 10px; }
+.swatch.revealed .sw-tag { opacity: 1; transition: opacity 0.3s 0.55s; }
+.chip-label { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 10px 14px 12px; border-top: 1px solid var(--rule); }
+.chip-name { font-weight: 700; font-size: 16px; line-height: 1.2; min-width: 0; }
+.chip-code { font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+
+.tray { min-height: 210px; display: flex; flex-direction: column; justify-content: flex-end; }
+.panel { display: flex; flex-direction: column; gap: 12px; }
+
+.mixer { display: grid; grid-template-columns: auto 1fr; column-gap: 12px; row-gap: 2px; align-items: center; }
+.mixer label { font: 500 11px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
+.mixer input {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 46px; margin: 0;
+  background: transparent; --track: var(--rule); --thumb: var(--tray);
+}
+.mixer input::-webkit-slider-runnable-track { height: 24px; border-radius: 12px; background: var(--track); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12); }
+.mixer input::-moz-range-track { height: 24px; border-radius: 12px; background: var(--track); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12); }
+.mixer input::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 32px; height: 32px; margin-top: -4px; border-radius: 50%;
+  background: var(--thumb); border: 3px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+.mixer input::-moz-range-thumb {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--thumb); border: 3px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+.mixer input:focus-visible { outline: none; }
+.mixer input:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--ink), 0 2px 8px rgba(0, 0, 0, 0.35); }
+.mixer input:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 3px var(--ink), 0 2px 8px rgba(0, 0, 0, 0.35); }
+
+.rv-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.rv-verdict { font-weight: 800; font-size: 26px; line-height: 1.05; letter-spacing: -0.03em; }
+.rv-hex { margin-top: 5px; font-size: 12px; color: var(--ink-2); }
+.rv-score { font-size: 46px; line-height: 0.9; letter-spacing: -0.04em; white-space: nowrap; }
+.rv-score small { font-size: 15px; color: var(--ink-2); letter-spacing: 0; }
+.hints { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.hints li { font: 500 12px/1 var(--font-mono); padding: 7px 10px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--rule); }
+.rv-note { font-size: 14px; line-height: 1.4; color: var(--ink-2); }
+
+/* Results */
+.results { gap: 18px; padding-block: 6px 12px; }
+.res-head { display: grid; gap: 14px; }
+.res-total { font-size: 68px; line-height: 0.85; letter-spacing: -0.05em; }
+.res-total small { font-size: 18px; color: var(--ink-2); letter-spacing: 0; }
+.res-rank { font-weight: 800; font-size: 26px; line-height: 1; letter-spacing: -0.03em; }
+.res-rank span { display: block; font: 500 12px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); margin-bottom: 6px; }
+.palette { border-radius: var(--radius-chip); overflow: hidden; box-shadow: 0 1px 2px var(--shade), 0 14px 28px -16px var(--shade); }
+.pal-row { display: flex; }
+.pal-row.t { height: 72px; }
+.pal-row.g { height: 22px; }
+.pal-row i { flex: 1; background: var(--c); }
+.pal-key { display: flex; justify-content: space-between; gap: 12px; margin-top: -10px; }
+.rows { list-style: none; margin: 0; padding: 0; display: grid; }
+.row { display: grid; grid-template-columns: 48px 1fr auto; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+.row:first-child { border-top: 1px solid var(--rule); }
+.pair { width: 48px; height: 36px; border-radius: 3px; background: linear-gradient(135deg, var(--t) 0 50%, var(--g) 50% 100%); box-shadow: 0 1px 2px var(--shade); }
+.row-main { min-width: 0; display: grid; }
+.row-name { font-weight: 700; line-height: 1.25; }
+.row-hex { font: 12px var(--font-mono); color: var(--ink-2); }
+.row-score { font-size: 22px; }
+.sharebox { width: 100%; font: 13px/1.4 var(--font-mono); padding: 10px 12px; border-radius: 6px; border: 1.5px solid var(--rule); background: var(--tray); color: var(--ink); resize: none; }
+.nextday { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-radius: var(--radius-chip); background: var(--tray); }
+.nextday .mono { font-size: 22px; }
+.nextday .btn { width: auto; height: 40px; padding: 0 18px; font-size: 15px; }
+.h2 { font-weight: 800; font-size: 21px; letter-spacing: -0.02em; margin-top: 4px; }
+
+.stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.stat b { display: block; font: 500 26px/1.1 var(--font-mono); font-variant-numeric: tabular-nums; }
+.stat span { display: block; font-size: 12px; line-height: 1.25; color: var(--ink-2); margin-top: 2px; }
+.dist { display: grid; gap: 6px; margin-top: 16px; }
+.dist-row { display: grid; grid-template-columns: 50px 1fr; gap: 8px; align-items: center; font: 12px var(--font-mono); }
+.dist-row > span:first-child { color: var(--ink-2); }
+.dist-bar { height: 22px; min-width: 24px; width: var(--w); display: flex; align-items: center; justify-content: flex-end; padding-right: 7px; border-radius: 2px; background: var(--rule); color: var(--ink); }
+.dist-bar.me { background: var(--ink); color: var(--on-ink); }
+.dist-note { margin-top: 8px; font-size: 13px; color: var(--ink-2); }
+
+/* Dialogs and toast */
+dialog { border: 0; padding: 0; border-radius: 8px; width: min(440px, calc(100% - 32px)); max-height: calc(100% - 48px); background: var(--tray); color: var(--ink); box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.55); }
+dialog::backdrop { background: rgba(10, 10, 12, 0.5); }
+.dlg { padding: 22px 20px 20px; display: grid; gap: 14px; }
+.dlg h2 { font-weight: 800; font-size: 24px; letter-spacing: -0.03em; }
+.dlg ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.dlg .muted { color: var(--ink-2); font-size: 14px; }
+.toast {
+  position: fixed; left: 50%; z-index: 20; bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  transform: translate(-50%, 16px); opacity: 0; pointer-events: none;
+  max-width: calc(100% - 32px); padding: 11px 18px; border-radius: 999px;
+  background: var(--ink); color: var(--on-ink); font-weight: 700; font-size: 15px; text-align: center;
+  transition: opacity 0.25s, transform 0.25s;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+@media (prefers-reduced-motion: reduce) {
+  .swatch.revealed .layer.target, .swatch.revealed .sw-tag, .toast, .btn { transition: none; }
+  .pc i.live { animation: none; }
+}
+@media (max-width: 360px) {
+  .stat-grid { grid-template-columns: repeat(2, 1fr); row-gap: 12px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <span class="mark" aria-hidden="true"></span>
+      <span class="word">Tinge</span>
+      <span class="no mono" id="puzzleNo">No. 1</span>
+    </div>
+    <div class="tools">
+      <button class="icon" id="btnHelp" type="button" aria-label="How to play">?</button>
+      <button class="icon" id="btnStats" type="button" aria-label="Your stats">
+        <svg viewBox="0 0 18 18" aria-hidden="true"><rect x="2" y="9" width="3.2" height="7" rx="1" fill="currentColor"/><rect x="7.4" y="4" width="3.2" height="12" rx="1" fill="currentColor"/><rect x="12.8" y="7" width="3.2" height="9" rx="1" fill="currentColor"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <section class="screen intro" id="scrIntro">
+    <div class="fan" aria-hidden="true">
+      <span class="pc" style="--r:-5deg;--y:4px"><i>?</i><span>A school bus</span></span>
+      <span class="pc" style="--r:3deg;--y:-6px"><i>?</i><span>A flamingo</span></span>
+      <span class="pc" style="--r:-2deg;--y:-12px"><i class="live">?</i><span>Blue jeans</span></span>
+      <span class="pc" style="--r:4deg;--y:-4px"><i>?</i><span>An avocado</span></span>
+      <span class="pc" style="--r:-4deg;--y:6px"><i>?</i><span>A stop sign</span></span>
+    </div>
+    <div class="intro-copy">
+      <p class="eyebrow" id="introDate">No. 1</p>
+      <h1 class="headline">You've seen a school bus a thousand times. What color is it?</h1>
+    </div>
+    <ol class="steps">
+      <li><b>1</b><span>You get the name of something everyone has seen.</span></li>
+      <li><b>2</b><span>Mix its color from memory with hue, saturation and brightness.</span></li>
+      <li><b>3</b><span>See the real color and your score. Five things a day, the same five for everyone.</span></li>
+    </ol>
+    <button class="btn" id="btnStart" type="button">Play today's five</button>
+    <p class="fine" id="introStreak"></p>
+  </section>
+
+  <section class="screen play" id="scrPlay" hidden>
+    <div class="progress">
+      <ol class="chips" id="chips" aria-label="Today's progress"></ol>
+      <span class="prog-label" id="progLabel" hidden>Practice round</span>
+      <span class="running mono" id="running"><span id="runTotal">0.0</span><small>/50</small></span>
+    </div>
+    <div class="prompt">
+      <p class="eyebrow" id="promptEyebrow">Mix the color of</p>
+      <h1 class="prompt-title" id="promptTitle">A school bus</h1>
+    </div>
+    <figure class="chip">
+      <div class="swatch" id="swatch">
+        <div class="layer" id="layerMine"></div>
+        <div class="layer target" id="layerTarget"></div>
+        <span class="sw-tag tl">Real</span>
+        <span class="sw-tag br">Yours</span>
+      </div>
+      <figcaption class="chip-label">
+        <span class="chip-name" id="chipName">Your mix</span>
+        <span class="chip-code mono" id="chipCode">No. 1 · 1</span>
+      </figcaption>
+    </figure>
+    <div class="tray">
+      <div class="panel" id="pnlMix">
+        <div class="mixer">
+          <label for="slH">Hue</label><input id="slH" type="range" min="0" max="360" step="1" value="180">
+          <label for="slS">Saturation</label><input id="slS" type="range" min="0" max="100" step="1" value="50">
+          <label for="slB">Brightness</label><input id="slB" type="range" min="0" max="100" step="1" value="50">
+        </div>
+        <button class="btn" id="btnLock" type="button" disabled>Lock it in</button>
+      </div>
+      <div class="panel" id="pnlReveal" hidden>
+        <div class="rv-top" aria-live="polite">
+          <div>
+            <p class="rv-verdict" id="rvVerdict">Very close</p>
+            <p class="rv-hex mono" id="rvHex"></p>
+          </div>
+          <p class="rv-score mono"><span id="rvScore">0.0</span><small>/10</small></p>
+        </div>
+        <ul class="hints" id="rvHints"></ul>
+        <p class="rv-note" id="rvNote" hidden></p>
+        <div class="btn-row" id="practiceBtns" hidden>
+          <button class="btn ghost" id="btnBack" type="button">Done</button>
+          <button class="btn" id="btnAgain" type="button">Another</button>
+        </div>
+        <button class="btn" id="btnNext" type="button">Next</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="screen results" id="scrResults" hidden>
+    <p class="eyebrow" id="resDate"></p>
+    <div class="res-head">
+      <p class="res-total mono"><span id="resTotal">0.0</span><small>/50</small></p>
+      <p class="res-rank"><span>Today's title</span><b id="resRank"></b></p>
+    </div>
+    <div class="palette">
+      <div class="pal-row t" id="palT"></div>
+      <div class="pal-row g" id="palG"></div>
+    </div>
+    <div class="pal-key eyebrow"><span>Top: the real colors</span><span>Bottom: yours</span></div>
+    <ol class="rows" id="resRows"></ol>
+    <div class="btn-row" id="shareRow">
+      <button class="btn" id="btnShare" type="button" hidden>Share</button>
+      <button class="btn" id="btnCopy" type="button">Copy result</button>
+    </div>
+    <textarea class="sharebox" id="shareBox" rows="3" readonly hidden aria-label="Your result"></textarea>
+    <div class="nextday">
+      <span>Next Tinge in</span>
+      <span class="mono" id="countdown">--:--:--</span>
+      <button class="btn" id="btnNewDay" type="button" hidden>Play it</button>
+    </div>
+    <h2 class="h2">Your stats</h2>
+    <div id="resStats"></div>
+    <button class="btn ghost" id="btnPractice" type="button">Practice with another thing</button>
+    <p class="fine">Practice rounds don't count toward your stats.</p>
+  </section>
+</div>
+
+<dialog id="dlgHelp" aria-labelledby="helpTitle">
+  <div class="dlg">
+    <h2 id="helpTitle">How to play</h2>
+    <ol>
+      <li>You get the name of something everyone has seen, like a school bus or a flamingo.</li>
+      <li>Mix its color from memory with the hue, saturation and brightness sliders.</li>
+      <li>Lock it in to see the real color. Each one scores up to 10, so a perfect day is 50.</li>
+    </ol>
+    <p>Five new things arrive at midnight. Everyone gets the same five.</p>
+    <p class="muted">The real colors are typical examples. Actual school buses and bananas vary a little, so a 9 is as good as a 10.</p>
+    <p class="muted">Scoring measures the gap between the two colors in OKLab, a color space built to match how people see. Being off in lightness costs as much as being off in hue.</p>
+    <button class="btn" type="button" data-close>Got it</button>
+  </div>
+</dialog>
+
+<dialog id="dlgStats" aria-labelledby="statsTitle">
+  <div class="dlg">
+    <h2 id="statsTitle">Your stats</h2>
+    <div id="dlgStatsBody"></div>
+    <button class="btn" type="button" data-close>Close</button>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  "use strict";
+
+  const EPOCH = Date.UTC(2026, 9, 24); // the day of Tinge No. 1
+  const ROUNDS = 5;
+  const NO_REPEAT_DAYS = 18; // a thing won't come back within this many days
+  const SITE = "kendallcoding202.github.io/tinge";
+  const KEY = "tinge:v1";
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const $ = (sel) => document.querySelector(sel);
+  const sum = (a) => a.reduce((x, y) => x + y, 0);
+  const round1 = (x) => Math.round(x * 10) / 10;
+
+  /* ---------- The things. [name, typical color, color group, optional fact] ----------
+     Groups: R red, O orange, Y yellow, G green, B blue, P purple, K pink, N brown, W gray. */
+  const ITEMS = [
+    ["A stop sign", "C8102E", "R", "US stop signs were yellow until 1954. They turned red once a reflective red that didn't fade was available."],
+    ["A fire truck", "CE2029", "R"],
+    ["A ripe strawberry", "C8232F", "R"],
+    ["Ketchup", "B22418", "R"],
+    ["A ripe tomato", "D8361F", "R"],
+    ["A dark sweet cherry", "8C1424", "R"],
+    ["A ladybug", "D62A1E", "R"],
+    ["A male cardinal (the bird)", "C2263A", "R", "Cardinals get their red from pigments in the berries and seeds they eat."],
+    ["The red stripes on the US flag", "B22234", "R", "The official shade is called Old Glory Red."],
+    ["The red on Canada's flag", "D52B1E", "R"],
+    ["A British postbox", "D4202C", "R", "British postboxes have been red since 1874. Many of the earlier ones were green."],
+    ["A red plastic party cup", "C42230", "R"],
+    ["A Red Delicious apple", "8E1A2B", "R"],
+    ["A raspberry", "C42A50", "R"],
+    ["A cooked lobster", "D9452B", "R", "Live lobsters are a dark greenish brown. Heat breaks down a protein that hides their red pigment."],
+    ["A beet", "7B1F3C", "R"],
+    ["Red wine in a glass", "6E1F2E", "R"],
+    ["Paprika", "B83A1C", "R"],
+    ["An old red brick", "A24B36", "R"],
+
+    ["A traffic cone", "FF6A13", "O"],
+    ["A carrot", "ED8A24", "O", "Orange carrots caught on thanks to Dutch growers in the 1600s. Before that, most carrots were purple or yellow."],
+    ["An orange", "F38B23", "O"],
+    ["A pumpkin", "E9791E", "O"],
+    ["A goldfish", "F3851E", "O", "Goldfish were bred from a dull gray-green carp in China more than a thousand years ago."],
+    ["A basketball", "D2672E", "O"],
+    ["The inside of a cantaloupe", "F4A15A", "O"],
+    ["A glass of orange juice", "F6A21E", "O"],
+    ["A monarch butterfly's wings", "E8761E", "O", "The orange warns birds that monarchs are toxic. They store poison from the milkweed they eat as caterpillars."],
+    ["A clownfish", "F26B1D", "O"],
+    ["A tiger's fur", "DE7A2C", "O", "Deer can't tell orange from green, so to them a tiger blends into the leaves."],
+    ["Raw salmon", "F2865E", "O", "Wild salmon get their color from the krill and shrimp they eat. Farmed salmon get it added to their feed."],
+    ["A cooked shrimp", "F29A72", "O"],
+    ["A terracotta flower pot", "C9663F", "O"],
+    ["Orange cheddar cheese", "F0A034", "O", "Cheddar is naturally pale. The orange comes from annatto, a seed added for color."],
+    ["Mars", "C1502A", "O", "Mars gets its color from iron oxide in its dust. In other words, rust."],
+    ["A cheese puff", "F38A22", "O"],
+
+    ["A school bus", "F6B20A", "Y", "US school bus yellow was picked in 1939 because black letters on it are easy to read in early-morning light."],
+    ["A ripe banana", "F4D34A", "Y"],
+    ["A lemon", "F8E13F", "Y"],
+    ["A rubber duck", "FFD21F", "Y"],
+    ["A yellow No. 2 pencil", "F4B41A", "Y"],
+    ["A yellow sticky note", "FCF28F", "Y"],
+    ["Yellow mustard", "E9B517", "Y", "Classic yellow mustard gets its bright color from turmeric."],
+    ["An egg yolk", "F7A51E", "Y", "Yolk color depends on what the hen eats, not on how nutritious the egg is."],
+    ["A stick of butter", "F6E08A", "Y"],
+    ["Corn on the cob", "F2CB55", "Y"],
+    ["A yellow highlighter", "EEF23A", "Y"],
+    ["A New York City taxi", "F3B71F", "Y"],
+    ["Honey in a jar", "E09A1C", "Y"],
+    ["Turmeric powder", "DFA00C", "Y"],
+    ["A sunflower's petals", "F7C41C", "Y"],
+    ["A tennis ball", "D2E340", "Y", "Tennis balls switched from white to yellow in 1972 because yellow shows up better on TV. Wimbledon held out until 1986."],
+    ["Mac and cheese", "F3B23E", "Y"],
+    ["A manila folder", "EFD38E", "Y"],
+    ["An Olympic gold medal", "CBA135", "Y", "Olympic gold medals are mostly silver with a gold coating."],
+
+    ["A lime", "74A93A", "G"],
+    ["A freshly mowed lawn", "5A9A3A", "G"],
+    ["A Granny Smith apple", "8CC152", "G"],
+    ["A cucumber's skin", "355E2B", "G"],
+    ["The inside of a ripe avocado", "C9D16A", "G"],
+    ["The inside of a kiwi", "9BBF33", "G"],
+    ["A dill pickle", "7A8B38", "G"],
+    ["A green olive", "8B8B3E", "G"],
+    ["A green tree frog", "59B33A", "G"],
+    ["A pine tree", "2E4B30", "G"],
+    ["Broccoli", "4E7032", "G"],
+    ["Mint chocolate chip ice cream", "AEE5C4", "G"],
+    ["Guacamole", "93A63E", "G"],
+    ["The inside of a honeydew melon", "D8E7A8", "G"],
+    ["An emerald", "1E8C58", "G"],
+    ["A chalkboard", "36483A", "G"],
+    ["Green peas", "7FB23B", "G"],
+    ["A matcha latte", "A8BF6E", "G"],
+    ["Pistachio ice cream", "C1D99A", "G"],
+    ["An army jeep", "4F5326", "G", "The shade is called olive drab. It was the standard for US Army vehicles in World War II."],
+    ["The Statue of Liberty", "78A795", "G", "The statue was shiny copper-brown when it was finished in 1886. The green coating formed over the next few decades."],
+    ["A green bell pepper", "3F7F2A", "G", "Green bell peppers are unripe. Left on the plant, most turn red, yellow or orange."],
+    ["A maple leaf in summer", "4B7B2E", "G"],
+
+    ["A clear midday sky", "85C1E9", "B"],
+    ["Classic blue jeans", "3D5A80", "B", "Indigo dye coats only the outside of each cotton thread, so jeans fade wherever they rub."],
+    ["The blue on the US flag", "3C3B6E", "B", "The official shade is called Old Glory Blue."],
+    ["A swimming pool", "55C3E3", "B"],
+    ["The Caribbean Sea", "3CC3C7", "B"],
+    ["A blueberry", "46507E", "B", "The dusty look is a waxy coating called bloom. Rub it off and the skin underneath is much darker."],
+    ["A robin's egg", "9BD3CF", "B"],
+    ["A blue raspberry slushie", "1E90E0", "B", "Blue raspberry was made blue so it wouldn't be confused with cherry and strawberry, which were already red."],
+    ["Blue ballpoint pen ink", "23399A", "B"],
+    ["A peacock's neck", "1B5EA6", "B", "Peacock blue isn't a pigment. Tiny structures in the feathers bend light to make the color."],
+    ["A sapphire", "164FA6", "B"],
+    ["Turquoise (the stone)", "3EB5AE", "B"],
+    ["A blue jay", "5B8BCB", "B", "Blue jay feathers have no blue pigment. Crush one and it looks brown."],
+    ["A blue whale", "607489", "B", "Blue whales are mostly a mottled blue-gray. They only look truly blue underwater."],
+    ["A navy blazer", "1F2A44", "B"],
+
+    ["An eggplant", "3E2340", "P"],
+    ["Lavender flowers", "9A7FC0", "P"],
+    ["An amethyst", "8E5FBF", "P"],
+    ["Purple cabbage", "6E3A70", "P", "Purple cabbage juice changes color with acidity. Add lemon juice and it turns pink."],
+    ["A plum", "5B2445", "P"],
+    ["Grape jelly", "5A1E4E", "P"],
+    ["Lilac flowers", "BFA0CF", "P"],
+    ["A violet (the flower)", "7F4CB5", "P"],
+    ["Concord grapes", "4D2E5C", "P"],
+
+    ["A flamingo", "F7909F", "K", "Flamingos are born gray. They turn pink from pigments in the algae and shrimp they eat."],
+    ["Cotton candy", "FDB7D5", "K"],
+    ["A pink eraser", "F2A3A0", "K"],
+    ["A pig", "F0B3A8", "K"],
+    ["Watermelon flesh", "EE5763", "K"],
+    ["Bubblegum", "F9A3BE", "K"],
+    ["A pink highlighter", "FF62A5", "K"],
+    ["The inside of a pink grapefruit", "EE7A6E", "K"],
+    ["A plastic lawn flamingo", "F04E98", "K", "The plastic lawn flamingo was designed in 1957 by Don Featherstone."],
+    ["Cherry blossoms", "F6CAD3", "K"],
+    ["A slice of deli ham", "E99A96", "K"],
+
+    ["A cardboard box", "C49A6C", "N"],
+    ["A milk chocolate bar", "7B4A2D", "N"],
+    ["Dark chocolate", "3E2419", "N"],
+    ["Peanut butter", "C2853E", "N"],
+    ["A walnut shell", "9C774E", "N"],
+    ["Ground cinnamon", "9E5A30", "N"],
+    ["Maple syrup", "96480F", "N", "Maple syrup gets darker as the sugaring season goes on."],
+    ["A grizzly bear", "7A5434", "N"],
+    ["An American football", "8A4B28", "N"],
+    ["A roasted coffee bean", "4B2E1E", "N"],
+    ["A latte", "B88A60", "N"],
+    ["A slice of golden toast", "C88A47", "N"],
+    ["A brand-new penny", "C47A4A", "N", "US pennies made since 1982 are about 97.5% zinc with a thin copper coat."],
+    ["Hummus", "D7BC8C", "N"],
+    ["Khaki pants", "C2AF8C", "N", "Khaki comes from a Hindi word meaning dusty."],
+    ["A brown egg", "D4A57A", "N"],
+    ["Dry beach sand", "E2CFA5", "N"],
+    ["Wheat ready for harvest", "D6B26E", "N"],
+    ["Rust on old metal", "9A4521", "N"],
+
+    ["An elephant", "8E8A85", "W"],
+    ["A concrete sidewalk", "A9A6A0", "W"],
+    ["A silver spoon", "B9BCC0", "W"],
+    ["A storm cloud", "6E7378", "W"],
+    ["Barbecue charcoal", "36373A", "W"],
+    ["Oatmeal", "D9C9A8", "W"],
+    ["A button mushroom", "D9CCBA", "W"],
+    ["Pencil lead", "5A5C5F", "W", "Pencil lead has never been lead. It's graphite mixed with clay."],
+    ["Slate roof tiles", "4D545A", "W"],
+    ["A gray squirrel", "8D8580", "W"],
+  ];
+
+  /* ---------- Color math ---------- */
+  function hsbToRgb(c) {
+    const S = c.s / 100, V = c.b / 100;
+    const f = (n) => { const k = (n + c.h / 60) % 6; return V - V * S * Math.max(0, Math.min(k, 4 - k, 1)); };
+    return [f(5), f(3), f(1)].map((x) => Math.round(x * 255));
+  }
+  function hexToHsb(hx) {
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(hx.slice(i, i + 2), 16) / 255);
+    const max = Math.max(r, g, b), d = max - Math.min(r, g, b);
+    let h = 0;
+    if (d) {
+      if (max === r) h = ((g - b) / d) % 6;
+      else if (max === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h *= 60; if (h < 0) h += 360;
+    }
+    return { h: Math.round(h) % 360, s: Math.round(max ? (d / max) * 100 : 0), b: Math.round(max * 100) };
+  }
+  const css = (c) => { const [r, g, b] = hsbToRgb(c); return `rgb(${r},${g},${b})`; };
+  const hex = (c) => "#" + hsbToRgb(c).map((x) => x.toString(16).padStart(2, "0")).join("").toUpperCase();
+  function lin(v) { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
+  function oklabRgb(rgb) {
+    const [R, G, B] = rgb.map(lin);
+    const l = Math.cbrt(0.4122214708 * R + 0.5363325363 * G + 0.0514459929 * B);
+    const m = Math.cbrt(0.2119034982 * R + 0.6806995451 * G + 0.1073969566 * B);
+    const s = Math.cbrt(0.0883024619 * R + 0.2817188376 * G + 0.6299787005 * B);
+    return [
+      0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+      1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+      0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+    ];
+  }
+  const lchOf = (lab) => ({ L: lab[0], C: Math.hypot(lab[1], lab[2]), h: (Math.atan2(lab[2], lab[1]) * 180 / Math.PI + 360) % 360 });
+  const oklab = (c) => oklabRgb(hsbToRgb(c));
+  const oklch = (c) => lchOf(oklab(c));
+  const hueDist = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
+
+  function scoreFor(t, g) {
+    const A = oklab(t), B = oklab(g);
+    const d = Math.hypot(A[0] - B[0], A[1] - B[1], A[2] - B[2]);
+    return Math.round(100 / (1 + Math.pow(d / 0.13, 2.2))) / 10;
+  }
+
+  /* ---------- Hints, verdicts, titles ---------- */
+  // Hue landmarks in HSB degrees. Neighbors can share a plain name; hints use the next different name.
+  const FAMILIES = [["red", 0], ["orange", 28], ["yellow", 52], ["green", 85], ["green", 125], ["teal", 168], ["blue", 190], ["blue", 218], ["purple", 245], ["purple", 275], ["pink", 305], ["pink", 335]];
+  function family(h) {
+    let best = "red", bd = 999;
+    for (const [name, c] of FAMILIES) { const d = hueDist(h, c); if (d < bd) { bd = d; best = name; } }
+    return best;
+  }
+  function leanName(h, sign) {
+    const f0 = family(h);
+    for (let k = 5; k <= 150; k += 5) { const f = family((h + sign * k + 720) % 360); if (f !== f0) return f; }
+    return f0;
+  }
+  function hintsFor(t, g) {
+    const A = oklch(t), B = oklch(g), out = [];
+    const dL = B.L - A.L;
+    if (Math.abs(dL) > 0.035) out.push(dL > 0 ? "Too light" : "Too dark");
+    const dC = B.C - A.C;
+    if (Math.abs(dC) > 0.025) out.push(dC > 0 ? "Too vivid" : "Too gray");
+    const dH = 2 * Math.sqrt(A.C * B.C) * Math.sin(hueDist(A.h, B.h) * Math.PI / 360);
+    if (dH > 0.025) {
+      if (hueDist(t.h, g.h) > 45) out.push("Too " + family(g.h));
+      else out.push("Leans " + leanName(t.h, Math.sign(((g.h - t.h + 540) % 360) - 180) || 1));
+    }
+    return out.length ? out : ["Right on all three"];
+  }
+  function verdict(s) {
+    if (s >= 9.5) return "Perfect eye";
+    if (s >= 9) return "Spot on";
+    if (s >= 8) return "Very close";
+    if (s >= 6.5) return "Close";
+    if (s >= 4.5) return "Getting there";
+    if (s >= 2.5) return "A stretch";
+    return "Way off";
+  }
+  const RANKS = [[45, "Master colorist"], [40, "Colorist"], [35, "Painter"], [29, "Apprentice"], [22, "Sketcher"], [0, "Doodler"]];
+  const rankFor = (total) => RANKS.find(([min]) => total >= min)[1];
+
+  const EMOJI = [["🟥", [221, 46, 68]], ["🟧", [244, 144, 12]], ["🟨", [253, 203, 88]], ["🟩", [120, 177, 89]], ["🟦", [85, 172, 238]], ["🟪", [170, 142, 214]]]
+    .map(([e, rgb]) => [e, lchOf(oklabRgb(rgb)).h]);
+  function emojiFor(c) {
+    const { L, C, h } = oklch(c);
+    if (C < 0.04) return L < 0.7 ? "⬛" : "⬜";
+    if (h > 40 && h < 100 && (L < 0.62 || C < 0.09)) return "🟫";
+    let best = EMOJI[0][0], bd = 999;
+    for (const [e, eh] of EMOJI) { const d = hueDist(h, eh); if (d < bd) { bd = d; best = e; } }
+    return best;
+  }
+
+  /* ---------- Daily puzzle ---------- */
+  function hashStr(s) { let h = 2166136261 >>> 0; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function shuffle(a, r) {
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+  }
+  const POOL = ITEMS.map(([name, hx, group, note], id) => ({ id, name, group, note: note || "", ...hexToHsb(hx) }));
+
+  // Every day's five, worked out in order from day 1 so everyone gets the same set.
+  // A day uses five different color groups when it can, and skips anything used recently.
+  const FIRST_DAY = ["A school bus", "A flamingo", "Classic blue jeans", "The inside of a ripe avocado", "A stop sign"];
+  const schedule = [null, FIRST_DAY.map((name) => POOL.findIndex((it) => it.name === name))];
+  function dayIds(n) {
+    while (schedule.length <= n) {
+      const k = schedule.length, recent = new Set();
+      for (let j = Math.max(1, k - NO_REPEAT_DAYS); j < k; j++) schedule[j].forEach((id) => recent.add(id));
+      const r = mulberry32(hashStr("tinge/" + k));
+      const cand = shuffle(POOL.filter((it) => !recent.has(it.id)), r);
+      const picked = [], groups = new Set();
+      for (const it of cand) if (picked.length < ROUNDS && !groups.has(it.group)) { picked.push(it.id); groups.add(it.group); }
+      for (const it of cand) if (picked.length < ROUNDS && !picked.includes(it.id)) picked.push(it.id);
+      schedule.push(picked);
+    }
+    return schedule[n];
+  }
+  function startMixFor(seed, t) {
+    const r = mulberry32(hashStr(seed));
+    return { h: Math.round((t.h + 90 + r() * 180) % 360), s: Math.round(30 + r() * 30), b: Math.round(50 + r() * 30) };
+  }
+  function dayItems(n) {
+    return dayIds(n).map((id, i) => ({ ...POOL[id], start: startMixFor(`tinge/${n}/${i}`, POOL[id]) }));
+  }
+  function todayIndex() {
+    const d = new Date();
+    return Math.max(1, Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - EPOCH) / 864e5) + 1);
+  }
+  const dateOf = (n) => { const e = new Date(EPOCH); return new Date(e.getUTCFullYear(), e.getUTCMonth(), e.getUTCDate() + n - 1); };
+  const fmtDate = (d) => new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" }).format(d);
+
+  /* ---------- Saved progress (stays in this browser) ---------- */
+  function load() {
+    let d = null;
+    try { d = JSON.parse(localStorage.getItem(KEY)); } catch (e) { /* storage blocked */ }
+    if (!d || typeof d !== "object") d = {};
+    if (!d.days || typeof d.days !== "object") d.days = {};
+    return d;
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { /* storage blocked */ } }
+  const data = load();
+  function dayRec(n) {
+    let d = data.days[n];
+    if (!d || !Array.isArray(d.guesses) || !Array.isArray(d.scores)) d = data.days[n] = { guesses: [], scores: [] };
+    return d;
+  }
+
+  function stats() {
+    const done = Object.keys(data.days).map(Number)
+      .filter((k) => data.days[k] && Array.isArray(data.days[k].scores) && data.days[k].scores.length >= ROUNDS)
+      .sort((a, b) => a - b);
+    const totals = done.map((k) => round1(sum(data.days[k].scores)));
+    let maxStreak = 0, run = 0, prev = null;
+    for (const k of done) { run = prev !== null && k === prev + 1 ? run + 1 : 1; maxStreak = Math.max(maxStreak, run); prev = k; }
+    const set = new Set(done), today = todayIndex();
+    let streak = 0, k = set.has(today) ? today : today - 1;
+    while (set.has(k)) { streak++; k--; }
+    return { played: done.length, streak, maxStreak, totals, avg: totals.length ? sum(totals) / totals.length : 0, best: totals.length ? Math.max(...totals) : 0 };
+  }
+
+  /* ---------- State ---------- */
+  const S = { n: 1, items: [], day: null, round: 0, phase: "intro", mix: null, touched: false, practice: null, timers: [] };
+  const target = () => (S.practice ? S.practice : S.items[S.round]);
+  function clearTimers() { S.timers.forEach((t) => clearInterval(t)); S.timers = []; }
+
+  const swatch = $("#swatch"), layerMine = $("#layerMine"), layerTarget = $("#layerTarget");
+  const slH = $("#slH"), slS = $("#slS"), slB = $("#slB"), btnLock = $("#btnLock");
+
+  function showScreen(name) {
+    for (const id of ["Intro", "Play", "Results"]) $("#scr" + id).hidden = id.toLowerCase() !== name;
+    window.scrollTo(0, 0);
+  }
+  function showPanel(name) {
+    for (const id of ["Mix", "Reveal"]) $("#pnl" + id).hidden = id.toLowerCase() !== name;
+  }
+  let toastTimer = 0;
+  function toast(msg) {
+    const el = $("#toast");
+    el.textContent = msg; el.classList.add("show");
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
+  }
+
+  /* ---------- Screens ---------- */
+  function boot(hot) {
+    hot = hot || {};
+    clearTimers();
+    S.n = todayIndex(); S.items = dayItems(S.n); S.day = dayRec(S.n); S.practice = null;
+    $("#puzzleNo").textContent = "No. " + S.n;
+    if (S.day.guesses.length >= ROUNDS) { showResults(); return; }
+    if (hot.phase === "mix" && hot.mix && !hot.practice) { enterRound(hot.mix); return; }
+    showIntro();
+  }
+
+  function showIntro() {
+    S.phase = "intro";
+    const g = S.day.guesses.length;
+    $("#introDate").textContent = `No. ${S.n} · ${fmtDate(dateOf(S.n))}`;
+    $("#btnStart").textContent = g ? `Continue with thing ${g + 1} of 5` : "Play today's five";
+    const st = stats();
+    $("#introStreak").textContent = st.streak ? `You're on a ${st.streak}-day streak. Keep it going.` : "";
+    showScreen("intro");
+  }
+
+  function renderProgress() {
+    const ol = $("#chips");
+    const practice = !!S.practice;
+    ol.hidden = practice; $("#running").hidden = practice; $("#progLabel").hidden = !practice;
+    if (practice) return;
+    ol.innerHTML = "";
+    const g = S.day.guesses.length;
+    for (let i = 0; i < ROUNDS; i++) {
+      const li = document.createElement("li");
+      if (i < g) { li.className = "done"; li.style.setProperty("--c", css(S.items[i])); li.setAttribute("aria-label", `${S.items[i].name}: ${S.day.scores[i].toFixed(1)}`); }
+      else if (i === g) { li.className = "cur"; li.setAttribute("aria-label", `Thing ${i + 1}, current`); }
+      else li.setAttribute("aria-label", `Thing ${i + 1}`);
+      ol.append(li);
+    }
+    $("#runTotal").textContent = sum(S.day.scores).toFixed(1);
+  }
+
+  function enterRound(mix) {
+    clearTimers();
+    S.round = S.practice ? 0 : S.day.guesses.length;
+    const t = target();
+    renderProgress();
+    swatch.classList.remove("revealed");
+    layerTarget.style.background = "";
+    $("#promptEyebrow").textContent = S.practice ? "Mix the color of" : `${S.round + 1} of 5 · Mix the color of`;
+    $("#promptTitle").textContent = t.name;
+    $("#chipCode").textContent = S.practice ? "Practice" : `No. ${S.n} · ${S.round + 1}`;
+    $("#chipName").textContent = "Your mix";
+    S.phase = "mix";
+    S.mix = mix ? { h: +mix.h, s: +mix.s, b: +mix.b } : { ...t.start };
+    S.touched = !!mix;
+    slH.value = S.mix.h; slS.value = S.mix.s; slB.value = S.mix.b;
+    paintMix();
+    btnLock.disabled = !S.touched;
+    showPanel("mix");
+    showScreen("play");
+  }
+
+  function paintMix() {
+    const { h, s, b } = S.mix;
+    layerMine.style.background = css(S.mix);
+    const hues = [0, 60, 120, 180, 240, 300, 360].map((x) => css({ h: x, s: 100, b: 100 })).join(",");
+    slH.style.setProperty("--track", `linear-gradient(90deg,${hues})`);
+    slH.style.setProperty("--thumb", css({ h, s: 100, b: 100 }));
+    slS.style.setProperty("--track", `linear-gradient(90deg,${css({ h, s: 0, b })},${css({ h, s: 100, b })})`);
+    slB.style.setProperty("--track", `linear-gradient(90deg,${css({ h, s, b: 0 })},${css({ h, s, b: 100 })})`);
+    slS.style.setProperty("--thumb", css(S.mix));
+    slB.style.setProperty("--thumb", css(S.mix));
+  }
+
+  function lockIn() {
+    if (S.phase !== "mix" || !S.touched) return;
+    const t = target(), g = { h: S.mix.h, s: S.mix.s, b: S.mix.b };
+    const score = scoreFor(t, g);
+    if (!S.practice) { S.day.guesses.push(g); S.day.scores.push(score); save(); }
+    reveal(t, g, score);
+  }
+
+  function reveal(t, g, score) {
+    S.phase = "reveal";
+    layerMine.style.background = css(g);
+    layerTarget.style.background = css(t);
+    swatch.classList.remove("revealed");
+    void swatch.offsetWidth;
+    swatch.classList.add("revealed");
+    $("#chipName").textContent = `Real: ${hex(t)}`;
+    $("#rvVerdict").textContent = verdict(score);
+    $("#rvHex").textContent = `Yours: ${hex(g)}`;
+    const ul = $("#rvHints"); ul.innerHTML = "";
+    for (const h of hintsFor(t, g)) { const li = document.createElement("li"); li.textContent = h; ul.append(li); }
+    const note = $("#rvNote");
+    note.textContent = t.note; note.hidden = !t.note;
+    countUp($("#rvScore"), score);
+    renderProgress();
+    $("#practiceBtns").hidden = !S.practice;
+    $("#btnNext").hidden = !!S.practice;
+    $("#btnNext").textContent = !S.practice && S.day.guesses.length >= ROUNDS ? "See today's results" : "Next";
+    showPanel("reveal");
+  }
+
+  function countUp(el, v) {
+    if (reduceMotion) { el.textContent = v.toFixed(1); return; }
+    const t0 = performance.now(), dur = 750;
+    const step = (now) => {
+      const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+      el.textContent = (v * e).toFixed(1);
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  function next() {
+    if (S.day.guesses.length >= ROUNDS) showResults();
+    else enterRound();
+  }
+
+  // Practice picks things that aren't coming up in the next two weeks.
+  function startPractice() {
+    const upcoming = new Set();
+    for (let k = S.n; k <= S.n + 14; k++) dayIds(k).forEach((id) => upcoming.add(id));
+    const options = POOL.filter((it) => !upcoming.has(it.id) && !(S.practice && it.id === S.practice.id));
+    const it = options[Math.floor(Math.random() * options.length)];
+    S.practice = { ...it, start: startMixFor(String(Math.random()), it) };
+    enterRound();
+  }
+
+  function showResults() {
+    clearTimers();
+    S.phase = "results"; S.practice = null;
+    const d = S.day, total = round1(sum(d.scores));
+    $("#resDate").textContent = `No. ${S.n} · ${fmtDate(dateOf(S.n))}`;
+    $("#resTotal").textContent = total.toFixed(1);
+    $("#resRank").textContent = rankFor(total);
+    const palT = $("#palT"), palG = $("#palG"), rows = $("#resRows");
+    palT.innerHTML = ""; palG.innerHTML = ""; rows.innerHTML = "";
+    S.items.forEach((t, i) => {
+      const g = d.guesses[i];
+      const a = document.createElement("i"); a.style.setProperty("--c", css(t)); palT.append(a);
+      const b = document.createElement("i"); b.style.setProperty("--c", css(g)); palG.append(b);
+      const li = document.createElement("li"); li.className = "row";
+      li.innerHTML = '<span class="pair"></span><span class="row-main"><span class="row-name"></span><span class="row-hex"></span></span><span class="row-score mono"></span>';
+      li.querySelector(".pair").style.cssText = `--t:${css(t)};--g:${css(g)}`;
+      li.querySelector(".row-name").textContent = t.name;
+      li.querySelector(".row-hex").textContent = `Real ${hex(t)} · yours ${hex(g)}`;
+      li.querySelector(".row-score").textContent = d.scores[i].toFixed(1);
+      rows.append(li);
+    });
+    const canShare = typeof navigator.share === "function" && window.top === window;
+    $("#btnShare").hidden = !canShare;
+    $("#btnCopy").classList.toggle("ghost", canShare);
+    $("#shareRow").style.gridTemplateColumns = canShare ? "" : "1fr";
+    $("#shareBox").hidden = true;
+    renderStats($("#resStats"));
+    startCountdown();
+    showScreen("results");
+  }
+
+  function renderStats(el) {
+    const st = stats();
+    const buckets = [["45–50", 45, 51], ["40–45", 40, 45], ["35–40", 35, 40], ["30–35", 30, 35], ["25–30", 25, 30], ["0–25", 0, 25]];
+    const counts = buckets.map(([, lo, hi]) => st.totals.filter((t) => t >= lo && t < hi).length);
+    const max = Math.max(1, ...counts);
+    const mine = S.day && S.day.scores.length >= ROUNDS ? round1(sum(S.day.scores)) : null;
+    const cell = (v, label) => `<div class="stat"><b>${v}</b><span>${label}</span></div>`;
+    el.innerHTML =
+      `<div class="stat-grid">${cell(st.played, "Played")}${cell(st.streak, "Streak")}${cell(st.maxStreak, "Best streak")}${cell(st.played ? st.avg.toFixed(1) : "–", "Average")}</div>` +
+      `<div class="dist">${buckets.map(([label, lo, hi], i) => {
+        const me = mine !== null && mine >= lo && mine < hi;
+        return `<div class="dist-row"><span>${label}</span><span class="dist-bar${me ? " me" : ""}" style="--w:${Math.round((counts[i] / max) * 100)}%">${counts[i]}</span></div>`;
+      }).join("")}</div>` +
+      `<p class="dist-note">${st.played ? `Best day so far: ${st.best.toFixed(1)}.` : "Finish today's five to start your stats."}</p>`;
+  }
+
+  function startCountdown() {
+    const out = $("#countdown"), btn = $("#btnNewDay");
+    btn.hidden = true; out.hidden = false;
+    const tick = () => {
+      if (todayIndex() !== S.n) { out.hidden = true; btn.hidden = false; clearTimers(); return; }
+      const now = new Date();
+      const ms = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) - now;
+      const h = Math.floor(ms / 3.6e6), m = Math.floor(ms / 6e4) % 60, s = Math.floor(ms / 1000) % 60;
+      out.textContent = [h, m, s].map((x) => String(x).padStart(2, "0")).join(":");
+    };
+    tick();
+    S.timers.push(setInterval(tick, 1000));
+  }
+
+  function shareText() {
+    const d = S.day, total = round1(sum(d.scores));
+    const parts = d.scores.map((sc, i) => `${emojiFor(S.items[i])} ${sc.toFixed(1)}`);
+    return `Tinge No. ${S.n} · ${total.toFixed(1)}/50\n${parts.join("  ")}\n${SITE}`;
+  }
+  function copyResult() {
+    const text = shareText();
+    const fallback = () => {
+      const box = $("#shareBox");
+      box.value = text; box.hidden = false; box.focus(); box.select();
+      toast("Copy the text below to share it.");
+    };
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.writeText) { fallback(); return; }
+      navigator.clipboard.writeText(text).then(() => toast("Copied. Paste it anywhere."), fallback);
+    } catch (e) { fallback(); }
+  }
+  function shareResult() {
+    navigator.share({ text: shareText() }).catch(() => {});
+  }
+
+  /* ---------- Wiring ---------- */
+  $("#btnStart").addEventListener("click", () => enterRound());
+  btnLock.addEventListener("click", lockIn);
+  $("#btnNext").addEventListener("click", next);
+  $("#btnAgain").addEventListener("click", startPractice);
+  $("#btnBack").addEventListener("click", () => { S.practice = null; showResults(); });
+  $("#btnPractice").addEventListener("click", startPractice);
+  $("#btnCopy").addEventListener("click", copyResult);
+  $("#btnShare").addEventListener("click", shareResult);
+  $("#btnNewDay").addEventListener("click", () => boot());
+  for (const [el, key] of [[slH, "h"], [slS, "s"], [slB, "b"]]) {
+    el.addEventListener("input", () => {
+      if (S.phase !== "mix") return;
+      S.mix[key] = +el.value;
+      if (!S.touched) { S.touched = true; btnLock.disabled = false; }
+      paintMix();
+    });
+  }
+  const openDialog = (dlg) => { try { dlg.showModal(); } catch (e) { dlg.setAttribute("open", ""); } };
+  $("#btnHelp").addEventListener("click", () => openDialog($("#dlgHelp")));
+  $("#btnStats").addEventListener("click", () => { renderStats($("#dlgStatsBody")); openDialog($("#dlgStats")); });
+  for (const dlg of document.querySelectorAll("dialog")) {
+    dlg.addEventListener("click", (e) => {
+      if (e.target === dlg || e.target.hasAttribute("data-close")) { if (dlg.close) dlg.close(); else dlg.removeAttribute("open"); }
+    });
+  }
+
+  const hot = window.claude && window.claude.hot;
+  if (hot && typeof hot.snapshot === "function") {
+    try { hot.snapshot(() => ({ phase: S.phase, mix: S.mix, practice: !!S.practice })); } catch (e) { /* no hot reload */ }
+  }
+  if (hot && typeof hot.ready === "function") hot.ready(boot);
+  else boot((hot && hot.data) || {});
+})();
+</script>
+</body>
+</html>
