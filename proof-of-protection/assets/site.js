@@ -20,9 +20,10 @@
 
   var MESSAGES = {
     "proof-check": {
-      subject: "Proof Check request",
+      subject: "Founding pilot: WISP + Proof",
       body:
-        "Hi,\n\nI'd like to book a $299 Proof Check.\n\n" +
+        "Hi,\n\nI'd like to join the founding pilot, starting with:\n" +
+        "[ ] WISP ($897)\n[ ] WISP + Monitoring ($1,497 first year)\n[ ] Monitoring ($99/mo, we already have a WISP)\n\n" +
         "Firm name:\nHow many people:\n" +
         "Email (Microsoft 365 / Google / other):\n" +
         "Computers (Windows / Mac / both):\n" +
