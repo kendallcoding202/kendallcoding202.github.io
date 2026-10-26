@@ -1,0 +1,51 @@
+{
+  "demo_only": true,
+  "limits": {
+    "max_clock_skew_s": 300,
+    "max_report_delay_s": 900,
+    "max_tsa_spread_s": 300
+  },
+  "log": {
+    "origin": "kovyr.com/proof/demo-log",
+    "vkey": "kovyr.com/proof/demo-log+08e9524f+AV9jXVprZV3+If11YrStMt1058pzzkLw+nIeAiCgme9R"
+  },
+  "policy_type": "proof-trust-policy/v1",
+  "timestamp_authorities": [
+    {
+      "kind": "simulated-tsa/v1",
+      "label": "Simulated TSA A (stands in for a commercial RFC 3161 timestamp authority)",
+      "name": "tsa-a.example",
+      "public_key": "MCowBQYDK2VwAyEAIKJwZ2HPHa/5P+qL6leCPDJXdWQar+QlV+t63A4k0lA=",
+      "simulated": true
+    },
+    {
+      "kind": "simulated-tsa/v1",
+      "label": "Simulated TSA B (stands in for Sigstore's open-source timestamp-authority)",
+      "name": "tsa-b.example",
+      "public_key": "MCowBQYDK2VwAyEA/HLCCYCwmhmhOKdttWejZ1inNtR2xvIhGrPsbCq1acs=",
+      "simulated": true
+    }
+  ],
+  "timestamp_quorum": 2,
+  "witness_quorum": 2,
+  "witnesses": [
+    {
+      "label": "Simulated witness A",
+      "name": "witness-a.example",
+      "simulated": true,
+      "vkey": "witness-a.example+b1e020ef+BKXLlBjOaN3Sc6m+lyutaq6UoNdveF9Msf+4ZFTMHh5k"
+    },
+    {
+      "label": "Simulated witness B",
+      "name": "witness-b.example",
+      "simulated": true,
+      "vkey": "witness-b.example+4b9dbb3c+BK5a88/TL9Vtl53VYCMSfQdVVSNHCBe0hoP1ABm9caEQ"
+    },
+    {
+      "label": "Simulated witness C",
+      "name": "witness-c.example",
+      "simulated": true,
+      "vkey": "witness-c.example+c14b6e14+BGF1gGnrENiq4hKk982tvbXMOfdguWYKf8fmgKkqyxzt"
+    }
+  ]
+}

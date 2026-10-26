@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Proof Pack demo</title>
+<meta name="description" content="A sample Proof Pack for a fictional tax firm, verified with cryptography in your browser.">
+<link rel="icon" href="kovyr-mark.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to the Proof Pack</a>
+<div class="sample-banner" role="note"><strong>Sample data:</strong> fictional firm. The keys that signed it are public demo keys.</div>
+
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <div class="brand"><img src="kovyr-mark.png" alt="" width="28" height="28"><span data-brand="product">Proof</span></div>
+    <span class="topbar-note">Proof Pack viewer and verifier</span>
+  </div>
+</header>
+
+<main id="main" class="wrap">
+  <div id="tamper-banner" class="tamper-banner" hidden role="alert"></div>
+
+  <section class="card hero" aria-labelledby="firm-name">
+    <div class="hero-text">
+      <p class="eyebrow" id="pack-period">Proof Pack</p>
+      <h1 id="firm-name">Loading the Proof Pack…</h1>
+      <p class="headline" id="headline"></p>
+      <ul class="chips" id="coverage-chips" aria-label="Coverage"></ul>
+    </div>
+    <div class="hero-seal">
+      <div class="seal" id="seal" data-state="idle" aria-live="polite">
+        <span class="seal-icon" aria-hidden="true">?</span>
+        <span class="seal-text"><strong id="seal-title">Not verified yet</strong><span id="seal-sub">Check it yourself: nothing to install, nothing sent anywhere.</span></span>
+      </div>
+      <button type="button" class="btn-verify" id="verify-btn" disabled>Verify this Proof Pack</button>
+      <p class="fineprint" id="verify-note">Runs every cryptographic check in this browser using Web Crypto.</p>
+    </div>
+  </section>
+
+  <div class="grid-main">
+    <div class="col-left">
+      <section class="card prot-card" aria-labelledby="prot-title">
+        <h2 id="prot-title">Protections, October 1 to 30</h2>
+        <p class="section-sub">Each line is summarized from signed daily reports. Badges show how strong the evidence is.</p>
+        <div id="protections"></div>
+        <details class="legend-strength">
+          <summary>What the evidence badges mean</summary>
+          <dl>
+            <dt><span class="badge s-hardware">Hardware key</span></dt><dd>Signed by a key locked in the device's security chip (TPM or Secure Enclave). The strongest. <em>Not used in this prototype.</em></dd>
+            <dt><span class="badge s-platform">Platform-verified</span></dt><dd>Read from Microsoft 365's own records by a read-only connector.</dd>
+            <dt><span class="badge s-scan_verified">Scan-verified</span></dt><dd>Checked from outside, against the firm's own domain, by <span data-brand="name">the vendor</span>'s scanner.</dd>
+            <dt><span class="badge s-staff_attested">Staff-attested</span></dt><dd>A person's signed, time-stamped record (for example a call-back). Honest about being a person's word.</dd>
+            <dt><span class="badge s-software">Software key</span></dt><dd>Signed by a key stored in software on the device. This prototype uses software keys everywhere; production Windows devices use TPM-bound keys.</dd>
+          </dl>
+        </details>
+      </section>
+    </div>
+
+    <div class="col-right">
+      <section class="card verify-card" aria-labelledby="verify-title">
+        <div class="verify-head">
+          <h2 id="verify-title">Verification</h2>
+          <span class="verify-summary" id="verify-summary">10 checks, offline</span>
+        </div>
+        <div id="crypto-error" class="crypto-error" hidden role="alert"></div>
+        <ol class="steps" id="steps"></ol>
+      </section>
+
+      <section class="card tamper-card" aria-labelledby="tamper-title">
+        <div class="tamper-head">
+          <div>
+            <h2 id="tamper-title">Try to tamper</h2>
+            <p class="section-sub">Play the attacker. Pick a trick, then watch which check catches it and why.</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="tamper-toggle" disabled>
+            <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+            <span id="tamper-state">Off</span><span class="sr-only"> (try to tamper)</span>
+          </label>
+        </div>
+        <div id="tamper-body" hidden>
+          <fieldset class="scenarios" id="scenarios">
+            <legend class="sr-only">Choose an attack</legend>
+          </fieldset>
+          <div class="tamper-outcome" id="tamper-outcome" hidden aria-live="polite"></div>
+          <button type="button" class="btn-secondary" id="tamper-reset">Restore the genuine pack</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <section class="card timeline-card" aria-labelledby="timeline-title">
+    <div class="timeline-head">
+      <h2 id="timeline-title">30-day timeline</h2>
+      <ul class="legend" aria-label="Legend">
+        <li><span class="cell ok"></span>All protections on</li>
+        <li><span class="cell warn"></span>Minor warning</li>
+        <li><span class="cell lapse"></span>Protection off</li>
+        <li><span class="cell gap"></span>No check-in (gap)</li>
+      </ul>
+    </div>
+    <p class="section-sub">One square per daily report. Tap a square to see the exact signed statement behind it.</p>
+    <div class="timeline" id="timeline" role="grid" aria-label="Daily reports by device"></div>
+    <div class="cell-detail" id="cell-detail" hidden></div>
+    <h3 class="events-title">What happened this month</h3>
+    <ol class="events" id="events"></ol>
+  </section>
+
+  <section class="card proves" aria-labelledby="proves-title">
+    <h2 id="proves-title">What this proves, and what it doesn't</h2>
+    <div class="proves-grid">
+      <div>
+        <h3 class="proves-yes">It proves</h3>
+        <ul id="proves-list"></ul>
+      </div>
+      <div>
+        <h3 class="proves-no">It does not prove</h3>
+        <ul id="limits-list"></ul>
+      </div>
+    </div>
+    <p class="privacy-note"><strong>Private by design.</strong> The public log holds only fingerprints; your results stay private until you share them. Reports carry yes/no answers, counts, categories and times, never file names, user names, host names or email content.</p>
+  </section>
+
+  <section class="card details-card no-print" aria-labelledby="details-title">
+    <details>
+      <summary><h2 id="details-title">Technical details for security reviewers</h2></summary>
+      <div id="tech"></div>
+    </details>
+  </section>
+</main>
+
+<footer class="wrap footer">
+  <p><span data-brand="product">Proof</span> prototype. Sample data for a fictional firm, signed with demo keys published on purpose. Timestamp authorities and witnesses are simulated. Verification runs entirely in this page; no data is sent anywhere.</p>
+</footer>
+
+<script src="brand.js"></script>
+<script src="verifier/schema.js"></script>
+<script src="verifier/strict-json.js"></script>
+<script src="verifier/crypto.js"></script>
+<script src="verifier/merkle.js"></script>
+<script src="verifier/note.js"></script>
+<script src="verifier/posture.js"></script>
+<script src="verifier/verify.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
