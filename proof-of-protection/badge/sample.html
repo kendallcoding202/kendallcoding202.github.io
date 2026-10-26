@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Sample trust page for a fictional firm, showing what clients see when they click a Kovyr Proof badge.">
+  <title>Maple Street Tax &amp; Bookkeeping (sample): security checks · Kovyr Proof</title>
+  <link rel="icon" href="img/mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="trust.css">
+</head>
+<body>
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="kovyr-mark" viewBox="0 0 1024 1024">
+      <rect x="32" y="32" width="960" height="960" rx="232" fill="#1e3a5f"/>
+      <g transform="translate(512 512) scale(0.86) translate(-512 -512)" fill="none" stroke="#eef4fb">
+        <circle cx="512" cy="512" r="300" stroke-width="76"/>
+        <path stroke-width="52" d="M870 512H938M765.1 765.1L813.2 813.2M512 870V938M258.9 765.1L210.8 813.2M154 512H86M258.9 258.9L210.8 210.8M512 154V86M765.1 258.9L813.2 210.8"/>
+        <path stroke-width="58" d="M512 512V716M512 512L335.3 410M512 512L688.7 410"/>
+      </g>
+      <circle cx="512" cy="512" r="89" fill="#eef4fb"/>
+      <circle cx="512" cy="512" r="50" fill="#5b9bd5"/>
+    </symbol>
+    <symbol id="i-check" viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M5 10.5l3.2 3.2L15 6.8"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" d="M7.5 6v8M12.5 6v8"/></symbol>
+    <symbol id="i-dash" viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M6 10h8"/></symbol>
+    <symbol id="i-gap" viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M10 5v6"/><circle cx="10" cy="14.6" r="1.4" fill="currentColor"/></symbol>
+  </svg>
+
+  <div class="sample-banner" role="note">
+    <div class="wrap">
+      <p><span class="sample-tag">Sample</span>Fictional firm. Maple Street Tax &amp; Bookkeeping isn't real; this shows what a firm's clients see when they click its badge.</p>
+      <div class="preview" id="preview" hidden>
+        <span id="preview-label">Preview:</span>
+        <div class="preview-group" role="group" aria-labelledby="preview-label">
+          <button type="button" data-preview="verified" aria-pressed="true">Checks current</button>
+          <button type="button" data-preview="lapsed" aria-pressed="false">Checks lapsed</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="../">
+        <svg class="brand-mark" aria-hidden="true" focusable="false"><use href="#kovyr-mark"/></svg>
+        <span data-brand="product">Kovyr Proof</span>
+      </a>
+      <span class="header-tag">Trust page</span>
+    </div>
+  </header>
+
+  <main id="trust-root" class="wrap">
+    <p class="loading">Checking this firm's current status…</p>
+    <noscript><p>This page checks the firm's status in your browser, so it needs JavaScript. Without it, no status is shown.</p></noscript>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>Trust page by <a href="../"><span data-brand="product">Kovyr Proof</span></a>. Questions about this firm's security? Ask the firm directly.</p>
+      <p>Something wrong with this page? Email <a data-brand="contactEmail" href="mailto:kendall@kovyr.com">kendall@kovyr.com</a>.</p>
+    </div>
+  </footer>
+
+  <!-- Fictional sample data. "sample": true shows the banner and keeps the dates current. -->
+  <script type="application/json" id="firm-data">
+  {
+    "sample": true,
+    "firm": "Maple Street Tax & Bookkeeping",
+    "tagline": "Tax preparation and bookkeeping · 7 people · Springfield",
+    "status": "verified",
+    "lastVerified": "2026-10-26T06:00:00-05:00",
+    "validUntil": "2026-10-29T06:00:00-05:00",
+    "proofUrl": "../demo/",
+    "coverage": "6 of 6 known laptops and 9 of 9 staff accounts are enrolled. No unknown devices seen.",
+    "protections": [
+      { "label": "Multi-factor sign-in or passkeys on every account", "detail": "9 of 9 accounts, including the owner and admin accounts", "source": "Microsoft 365, read automatically" },
+      { "label": "Laptops encrypted", "detail": "6 of 6 laptops have BitLocker on", "source": "Device check signed with each laptop's hardware key" },
+      { "label": "Updates current", "detail": "All laptops patched within the last 14 days", "source": "Device check signed with each laptop's hardware key" },
+      { "label": "Backups tested", "detail": "A test restore was completed and recorded this month", "source": "Staff record, entered by the firm" },
+      { "label": "Tamper alarm on", "detail": "The owner is alerted if protection is switched off on any laptop", "source": "Device check signed with each laptop's hardware key" },
+      { "label": "Email spoofing blocked", "detail": "DMARC tells email services to reject fakes using the firm's domain", "source": "Public DNS records" }
+    ]
+  }
+  </script>
+  <script src="../check/brand.js"></script>
+  <script src="trust.js"></script>
+</body>
+</html>

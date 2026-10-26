@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Only our own files load. The only network calls are public DNS lookups. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https://cloudflare-dns.com https://dns.google; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Free check: can someone send email pretending to be your firm? Get a plain-English grade and specific fixes in seconds. Runs in your browser.">
+  <title data-template="Free email spoofing check · {check}">Free email spoofing check · Kovyr Check</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="check.css">
+</head>
+<body>
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="kovyr-mark" viewBox="0 0 1024 1024">
+      <rect x="32" y="32" width="960" height="960" rx="232" fill="#1e3a5f"/>
+      <g transform="translate(512 512) scale(0.86) translate(-512 -512)" fill="none" stroke="#eef4fb">
+        <circle cx="512" cy="512" r="300" stroke-width="76"/>
+        <path stroke-width="52" d="M870 512H938M765.1 765.1L813.2 813.2M512 870V938M258.9 765.1L210.8 813.2M154 512H86M258.9 258.9L210.8 210.8M512 154V86M765.1 258.9L813.2 210.8"/>
+        <path stroke-width="58" d="M512 512V716M512 512L335.3 410M512 512L688.7 410"/>
+      </g>
+      <circle cx="512" cy="512" r="89" fill="#eef4fb"/>
+      <circle cx="512" cy="512" r="50" fill="#5b9bd5"/>
+    </symbol>
+    <symbol id="i-pass" viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M5 10.5l3.2 3.2L15 6.8"/></symbol>
+    <symbol id="i-fail" viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M6 6l8 8M14 6l-8 8"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M10 5v6"/><circle cx="10" cy="14.6" r="1.4" fill="currentColor"/></symbol>
+    <symbol id="i-info" viewBox="0 0 20 20"><circle cx="10" cy="5.6" r="1.4" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M10 9v6"/></symbol>
+    <symbol id="i-error" viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M7.4 7.4a2.7 2.7 0 1 1 3.6 2.6c-.7.3-1 .8-1 1.5v.6"/><circle cx="10" cy="15" r="1.3" fill="currentColor"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 20 20"><rect x="4" y="9" width="12" height="8.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="none" stroke="currentColor" stroke-width="1.8" d="M7 9V6.5a3 3 0 0 1 6 0V9"/></symbol>
+    <symbol id="i-ext" viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M11 4h5v5M16 4l-7 7M14 12v3.5a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5H8"/></symbol>
+  </svg>
+
+  <a class="skip-link" href="#check-form">Skip to the check</a>
+
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="../">
+        <svg class="brand-mark" aria-hidden="true" focusable="false"><use href="#kovyr-mark"/></svg>
+        <span data-brand="company">Kovyr</span>
+      </a>
+      <a class="header-link" href="../">What is <span data-brand="product">Kovyr Proof</span>?</a>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero wrap" aria-labelledby="page-title">
+      <p class="eyebrow"><span data-brand="check">Kovyr Check</span> · Free · About 10 seconds</p>
+      <h1 id="page-title">Can someone send email pretending to be your firm?</h1>
+      <p class="lede">Fake and hijacked email is how most small offices lose money: a "new bank details" message that looks like it came from you or someone you trust. See how well your domain blocks impersonation, in plain English, with the exact fixes.</p>
+
+      <form id="check-form" class="check-form" novalidate>
+        <label for="domain-input">Your work email address or domain</label>
+        <div class="field-row">
+          <input id="domain-input" name="domain" type="text" inputmode="email" autocomplete="email" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="jane@smithcpa.com" aria-describedby="domain-hint domain-error">
+          <button type="submit" id="check-button" class="btn btn-primary">Check my domain</button>
+        </div>
+        <p id="domain-hint" class="hint">For example jane@smithcpa.com or smithcpa.com. We only use the part after the&nbsp;@.</p>
+        <p id="domain-error" class="field-error" hidden></p>
+      </form>
+
+      <div class="privacy" id="privacy">
+        <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-lock"/></svg>
+        <p><strong>Private by design.</strong> This check runs in your browser. It asks a public DNS service (Cloudflare) for your domain's public records. <span data-brand="company">Kovyr</span> doesn't see or store what you type unless you choose to send us your results. If Cloudflare doesn't answer, your browser asks Google Public DNS instead. No cookies, no analytics.</p>
+      </div>
+      <noscript><p class="field-error">This check runs entirely in your browser, so it needs JavaScript turned on.</p></noscript>
+    </section>
+
+    <section id="progress" class="wrap progress" hidden>
+      <div class="panel">
+        <p class="progress-title" id="progress-title">Checking…</p>
+        <ul class="progress-list" aria-describedby="progress-title">
+          <li data-step="mx">Mail servers</li>
+          <li data-step="spf">Approved senders (SPF)</li>
+          <li data-step="dmarc">Spoofing policy (DMARC)</li>
+          <li data-step="dkim">Email signing (DKIM)</li>
+          <li data-step="extras">Encrypted delivery (optional)</li>
+        </ul>
+      </div>
+    </section>
+
+    <p id="live" class="visually-hidden" aria-live="polite"></p>
+
+    <section id="results" class="wrap results" hidden aria-label="Results"></section>
+
+    <section class="wrap about" aria-labelledby="about-title">
+      <h2 id="about-title">What this check looks at</h2>
+      <dl class="about-list">
+        <div><dt>SPF</dt><dd>Your domain's list of servers allowed to send its email.</dd></div>
+        <div><dt>DMARC</dt><dd>Your instruction to Gmail, Outlook and others: deliver, quarantine or reject email that fails the checks. This is what stops fakes using your exact address.</dd></div>
+        <div><dt>DKIM</dt><dd>A signature on your outgoing email. We look under common names only, so "not found" is not a failure.</dd></div>
+        <div><dt>MTA-STS and TLS-RPT</dt><dd>Optional extras that keep email to you encrypted in transit and report problems.</dd></div>
+      </dl>
+
+      <h2>What it can't tell you</h2>
+      <ul class="limits">
+        <li><strong>Whether a mailbox has already been taken over.</strong> A criminal inside a real account sends from your real address, and no DNS record stops that. <span data-brand="product">Kovyr Proof</span> watches for mailbox takeover and alerts you.</li>
+        <li><strong>Lookalike domains,</strong> such as smithcpa-co.com. Those belong to someone else, so your records can't block them. A call-back to a known number before any change to payment details can.</li>
+        <li><strong>Everything else that stops losses,</strong> like passkeys, encrypted laptops and tested backups. That's what the full <span data-brand="fullCheck">Proof Check</span> covers.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <p><a href="../"><span data-brand="product">Kovyr Proof</span></a> · <a href="../demo/">Sample Proof Pack</a> · <a href="#privacy">Privacy</a></p>
+      <p class="fine">Grades reflect your domain's public DNS records at the moment you check. They are guidance, not a certification or a guarantee.</p>
+    </div>
+  </footer>
+
+  <script src="brand.js"></script>
+  <script src="grader.js"></script>
+  <script src="doh.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <meta name="color-scheme" content="light dark">
+  <!-- Send a firm embed.html?f=<slug>; without ?f= it shows the sample badge. -->
+  <title>Add your badge · Kovyr Proof</title>
+  <link rel="icon" href="img/mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="trust.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="../"><img class="brand-mark" src="img/mark.svg" alt=""><span data-brand="product">Kovyr Proof</span></a>
+      <span class="header-tag">Badge setup</span>
+    </div>
+  </header>
+
+  <main class="wrap embed">
+    <p class="eyebrow" id="for-firm">Badge setup</p>
+    <h1>Add your badge</h1>
+    <p>Your badge links to your live trust page. Always use the copies below: they load from <span data-brand="product">Kovyr Proof</span>, so the badge updates by itself, including switching to "Lapsed" if checks stop. A saved or uploaded copy of the image would never update.</p>
+    <p id="embed-error" class="embed-error" hidden></p>
+
+    <section aria-labelledby="sig-title">
+      <h2 id="sig-title">1. Email signature</h2>
+      <div class="copy-area" id="sig-area"></div>
+      <p><button type="button" class="btn btn-primary" id="copy-sig">Copy badge for my signature</button> <span class="copy-status" id="sig-status" aria-live="polite"></span></p>
+      <ul class="howto">
+        <li><strong>Outlook and Apple Mail:</strong> open your signature settings and paste.</li>
+        <li><strong>Gmail:</strong> Settings › See all settings › Signature. Click the image button, choose "Web address (URL)" and paste <code id="sig-img-url"></code>. Then select the image, click the link button and paste <code id="sig-link-url"></code>.</li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="web-title">
+      <h2 id="web-title">2. Website</h2>
+      <p>Paste this HTML where you want the badge, for example in your footer. Use the dark version on a dark background.</p>
+      <div class="badge-pair" id="web-preview"></div>
+      <label for="web-code">HTML for a light background</label>
+      <textarea id="web-code" rows="6" readonly spellcheck="false"></textarea>
+      <label for="web-code-dark">HTML for a dark background</label>
+      <textarea id="web-code-dark" rows="6" readonly spellcheck="false"></textarea>
+    </section>
+
+    <section aria-labelledby="html-title">
+      <h2 id="html-title">3. Signature HTML (for IT or signature tools)</h2>
+      <label for="sig-code">HTML</label>
+      <textarea id="sig-code" rows="6" readonly spellcheck="false"></textarea>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap"><p>Questions? Email <a data-brand="contactEmail" href="mailto:kendall@kovyr.com">kendall@kovyr.com</a>.</p></div>
+  </footer>
+
+  <script src="../check/brand.js"></script>
+  <script src="trust.js"></script>
+  <script src="embed.js"></script>
+</body>
+</html>

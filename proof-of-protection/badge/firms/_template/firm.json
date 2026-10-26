@@ -1,0 +1,16 @@
+{
+  "firm": "Firm Name LLC",
+  "tagline": "What the firm does · City",
+  "status": "verified",
+  "lastVerified": "2026-10-26T06:00:00-05:00",
+  "validUntil": "2026-11-25T06:00:00-05:00",
+  "proofUrl": "../demo/",
+  "coverage": "6 of 6 known laptops and 9 of 9 staff accounts are enrolled. No unknown devices seen.",
+  "protections": [
+    { "label": "Multi-factor sign-in or passkeys on every account", "detail": "9 of 9 accounts", "source": "Microsoft 365, read automatically", "met": true },
+    { "label": "Laptops encrypted", "detail": "6 of 6 laptops", "source": "Device check signed with each laptop's hardware key", "met": true },
+    { "label": "Updates current", "detail": "All laptops patched within the last 14 days", "source": "Device check signed with each laptop's hardware key", "met": true },
+    { "label": "Backups tested", "detail": "Test restore recorded on 3 Oct 2026", "source": "Staff record, entered by the firm", "met": true },
+    { "label": "Tamper alarm on", "detail": "The owner is alerted if protection is switched off", "source": "Device check signed with each laptop's hardware key", "met": true }
+  ]
+}
