@@ -1,0 +1,777 @@
+<!doctype html>
+<!--
+  ============================================================================
+  Kovyr Proof — landing page (founding pilot / customer validation sprint)
+
+  SWAP LIST: the name, links, contact and logo may change. Every brand string
+  is one of the exact, case-sensitive strings below. Find-and-replace them
+  across this file IN THIS ORDER (the order keeps the email and domain intact):
+
+    1. "kendall@kovyr.com"   contact email. It appears ONCE: the #contact-email
+                             link in the contact section. assets/site.js reads
+                             that link and builds every "email us" button from
+                             it, so there is nothing to change in the JS.
+    2. "kovyr.com"           company website (nav, footer; links use https://).
+    3. "Kovyr Proof"         product name.
+    4. "Kovyr"               brand name. Also catches "Kovyr Check" (the free
+                             email check), "the Kovyr app" and "© 2026 Kovyr".
+    5. "Kendall"             founder name (founder note and signature).
+
+  Logo: replace these files and keep their names:
+    assets/logo-mark.png (40px), assets/logo-mark@3x.png (120px),
+    assets/favicon-32.png, assets/apple-touch-icon.png.
+    The mark is drawn light-on-transparent for the navy brand colour, so it
+    always sits on navy here.
+  Social card: assets/og-card.png has the name baked in, so regenerate it.
+
+  Paths are all relative because this folder may be renamed. Most link
+  previews need an absolute og:image URL, so once the final address is known,
+  change og:image to https://<final-host>/<folder>/assets/og-card.png.
+
+  Sibling pages (built by teammates, linked relatively):
+    demo/   sample Proof Pack ("try to fake it")
+    check/  free Kovyr Check (email spoofing)
+
+  check/brand.js (a teammate's file) holds the same names for the check and
+  badge pages. Keep the two in sync when renaming.
+
+  This page loads nothing from third parties. The CSP below enforces it.
+  ============================================================================
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Kovyr Proof — Your security plan, proven</title>
+  <meta name="description" content="A security plan that proves itself, for US tax, accounting and bookkeeping practices with 2–25 people. Kovyr Proof watches the protections that stop the most common losses and turns every check into a signed, time-stamped record anyone can verify. Founding pilot open now; plans launch May 2027.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#1a3354">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Kovyr">
+  <meta property="og:title" content="Kovyr Proof — Your security plan, proven">
+  <meta property="og:description" content="For small tax and accounting practices: we watch the protections that matter and turn every check into a signed, time-stamped record your insurer, clients or a regulator can verify without trusting us. Founding pilot open now.">
+  <meta property="og:image" content="assets/og-card.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Kovyr Proof: Your security plan, proven. For tax and accounting practices with 2 to 25 people.">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/styles.css">
+  <script src="assets/site.js" defer></script>
+</head>
+<body id="top">
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <!-- Icon sprite (decorative; every icon sits next to visible text) -->
+  <svg width="0" height="0" class="visually-hidden" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 6.5v7"/><path d="M12 17.6v.01"/></symbol>
+      <symbol id="i-verified" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.8 2.8L16.2 9.5"/></symbol>
+      <symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="3.5"/><path d="M10 13l9-9"/><path d="M16 7l3 3"/><path d="M13.5 9.5l2 2"/></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/><path d="M12 14.5v2.5"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.5 10A8 8 0 0 0 5 7.2"/><path d="M4.5 3.5v4h4"/><path d="M4.5 14A8 8 0 0 0 19 16.8"/><path d="M19.5 20.5v-4h-4"/></symbol>
+      <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.4 2.5 3.6 5.5 3.6 9s-1.2 6.5-3.6 9c-2.4-2.5-3.6-5.5-3.6-9S9.6 5.5 12 3z"/></symbol>
+      <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></symbol>
+      <symbol id="i-phone" viewBox="0 0 24 24"><path d="M6.6 3.5h3l1.6 4.4-2 1.3a10.5 10.5 0 0 0 5.6 5.6l1.3-2 4.4 1.6v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.6 5.7a2 2 0 0 1 2-2.2z"/></symbol>
+      <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 6.5L12 13l8.5-6.5"/></symbol>
+      <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2.5-6 5 12 2.5-6h4"/></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.4-7.5 9.5-4.3-1.1-7.5-4.9-7.5-9.5V6z"/><path d="M8.8 12l2.2 2.2 4.3-4.6"/></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="i-seal" viewBox="0 0 24 24"><circle cx="12" cy="9.5" r="6"/><path d="M8.7 14.5L7.5 21l4.5-2.4 4.5 2.4-1.2-6.5"/><path d="M9.6 9.6l1.7 1.7 3.2-3.4"/></symbol>
+      <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 12h6"/><path d="M9 16h6"/></symbol>
+      <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c1.3-3.6 4.2-5.5 7.5-5.5s6.2 1.9 7.5 5.5"/></symbol>
+      <symbol id="i-laptop" viewBox="0 0 24 24"><rect x="4.5" y="5" width="15" height="10" rx="1.5"/><path d="M2.5 19h19"/></symbol>
+      <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17"/><path d="M8 3v4"/><path d="M16 3v4"/></symbol>
+      <symbol id="i-code" viewBox="0 0 24 24"><path d="M8.5 8l-4 4 4 4"/><path d="M15.5 8l4 4-4 4"/><path d="M13.5 5.5l-3 13"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+      <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6"/><path d="M9 12h6"/></symbol>
+      <symbol id="i-nodata" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M3 3l18 18"/></symbol>
+      <symbol id="i-id" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2"/><circle cx="8.5" cy="11" r="2"/><path d="M5.5 16c.6-1.4 1.7-2 3-2s2.4.6 3 2"/><path d="M14 10h4.5"/><path d="M14 13.5h3"/></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5"/><path d="M12 7.6v.01"/></symbol>
+      <symbol id="i-at" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-3.5 7.1"/></symbol>
+      <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5c1.6 0 3 .4 4.2 1"/><path d="M21.5 12s-1.3 2.4-3.7 4.3"/><path d="M14.1 18.1c-.7.3-1.4.4-2.1.4C6 18.5 2.5 12 2.5 12"/><path d="M3.5 3.5l17 17"/></symbol>
+      <symbol id="i-gap" viewBox="0 0 24 24"><path d="M3 12h5"/><path d="M16 12h5"/><path d="M10.5 9.5v5"/><path d="M13.5 9.5v5"/></symbol>
+    </defs>
+  </svg>
+
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="#top">
+        <img src="assets/logo-mark.png" srcset="assets/logo-mark.png 1x, assets/logo-mark@3x.png 3x" width="32" height="32" alt="">
+        <span>Kovyr Proof</span>
+      </a>
+      <nav class="site-nav" aria-label="Main">
+        <ul>
+          <li><a href="#how">How it works</a></li>
+          <li><a href="#proof-pack">Proof Pack</a></li>
+          <li><a href="#trust">Trust</a></li>
+          <li><a href="#pricing">Pricing</a></li>
+          <li><a href="#faq">FAQ</a></li>
+          <li><a class="nav-ext" href="https://kovyr.com">kovyr.com</a></li>
+        </ul>
+      </nav>
+      <a class="btn header-cta" href="#contact" data-mail="proof-check">Book a Proof Check</a>
+    </div>
+  </header>
+
+  <main id="main">
+
+    <!-- ── Hero ─────────────────────────────────────────────────────── -->
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="wrap hero-grid">
+        <div>
+          <p class="hero-kicker">
+            <span class="chip">Founding pilot · open now</span>
+            <span>For US tax, accounting and bookkeeping practices with 2–25 people</span>
+          </p>
+          <h1 id="hero-title">Your security plan, proven.</h1>
+          <p class="hero-sub">
+            Kovyr Proof switches on and watches the protections that stop the most common losses,
+            and warns you when a mailbox is hijacked or a computer’s protection is switched off.
+            Every check becomes a signed, time-stamped record you can hand to an insurer, a client
+            or a regulator, and they can verify it without trusting us.
+          </p>
+          <div class="hero-ctas">
+            <a class="btn btn-primary" href="#contact" data-mail="proof-check">Book a Proof Check · $299</a>
+            <a class="btn btn-secondary" href="demo/">See a sample Proof Pack <span class="arrow" aria-hidden="true">→</span></a>
+          </div>
+          <p class="hero-fine">Founding pilot price, credited in full toward a subscription. Plans launch May 2027.</p>
+
+          <a class="free-check" href="check/">
+            <span class="free-check-icon"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-at"/></svg></span>
+            <span class="free-check-text">
+              <strong>Free: check your email security in 30 seconds</strong>
+              <span>Kovyr Check. Enter your firm’s email domain to see if it can be spoofed.</span>
+            </span>
+            <span class="arrow" aria-hidden="true">→</span>
+          </a>
+
+          <p class="ptin-note">
+            <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-calendar"/></svg>
+            <span><strong>PTIN renewal closes 31 December.</strong> It’s a good moment to make sure your WISP is more than paper.</span>
+          </p>
+        </div>
+
+        <div class="receipt-wrap">
+          <figure class="receipt" aria-labelledby="receipt-cap">
+            <div class="receipt-head">
+              <span class="tile"><img src="assets/logo-mark.png" srcset="assets/logo-mark.png 1x, assets/logo-mark@3x.png 3x" width="30" height="30" alt=""></span>
+              <div>
+                <p class="receipt-title">Daily check</p>
+                <p class="receipt-sub">Example Tax &amp; Bookkeeping · Mon 26 Oct 2026, 7:02 am</p>
+              </div>
+              <span class="chip chip-sample">Sample</span>
+            </div>
+            <ul class="receipt-rows">
+              <li><span class="st st-ok"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg></span><span class="r-name"><span class="visually-hidden">On: </span>MFA on every account</span><span class="r-val">11 of 11</span></li>
+              <li><span class="st st-ok"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg></span><span class="r-name"><span class="visually-hidden">On: </span>Disk encryption</span><span class="r-val">12 of 12</span></li>
+              <li><span class="st st-ok"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg></span><span class="r-name"><span class="visually-hidden">On: </span>Updates installed</span><span class="r-val">12 of 12</span></li>
+              <li><span class="st st-ok"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg></span><span class="r-name"><span class="visually-hidden">On: </span>Defender running, no gaps</span><span class="r-val">12 of 12</span></li>
+              <li><span class="st st-ok"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg></span><span class="r-name"><span class="visually-hidden">On: </span>Unencrypted SSNs found</span><span class="r-val">0</span></li>
+              <li><span class="st st-warn"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-alert"/></svg></span><span class="r-name"><span class="visually-hidden">In progress: </span>Passkeys</span><span class="r-val is-warn">4 of 11</span></li>
+            </ul>
+            <div class="receipt-foot">
+              <p>Signed on each computer · time-stamped by two outside clocks · recorded in a public log</p>
+              <p class="hash">Fingerprint <code>sha256:3f9a61c2…7be0c21e</code></p>
+            </div>
+          </figure>
+          <p class="receipt-caption" id="receipt-cap">Sample record for a fictional firm. Counts only, never names, files or client data.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── The problem ─────────────────────────────────────────────── -->
+    <section class="section" aria-labelledby="problem-title">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">The problem</p>
+          <h2 id="problem-title">Writing the plan down was the easy part.</h2>
+          <p class="lead">
+            You have a WISP, or you know you’re supposed to. A $29 template, or the IRS’s free one,
+            covers the “written” part. It can’t show anyone that the plan is actually working.
+          </p>
+        </div>
+
+        <ul class="ask-grid">
+          <li class="ask">
+            <p class="ask-who"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-doc"/></svg>Your insurer asks</p>
+            <p class="q">“Is MFA on for every account? Is every laptop encrypted?”</p>
+            <p>You tick “yes” and sign. If you ever make a claim, that signature matters, so you want to know it’s true.</p>
+          </li>
+          <li class="ask">
+            <p class="ask-who"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-user"/></svg>A client asks</p>
+            <p class="q">“How do you keep my Social Security number safe?”</p>
+            <p>A real answer they can check beats a reassuring email.</p>
+          </li>
+          <li class="ask">
+            <p class="ask-who"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-laptop"/></svg>A laptop goes missing</p>
+            <p class="q">“Was it encrypted?”</p>
+            <p>On that day, what matters is whether you can show it was encrypted when it was taken. The answer can change what you have to report, and to whom.</p>
+          </li>
+        </ul>
+
+        <div class="says-shows">
+          <div class="says">
+            <span class="ss-label">What a template says</span>
+            <blockquote><p>“All company laptops use full-disk encryption.”</p></blockquote>
+            <p class="ss-note">A promise. Nobody can check it, not even you.</p>
+          </div>
+          <div class="shows">
+            <span class="ss-label">What Kovyr Proof shows</span>
+            <blockquote><p>Disk encryption on 12 of 12 enrolled computers. Checked daily since 1 Sep 2026; last check today at 7:02 am.</p></blockquote>
+            <p class="ss-note">Evidence that is signed, time-stamped and checkable by anyone you share it with.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Free check band ──────────────────────────────────────────── -->
+    <section class="check-band-section" aria-labelledby="check-title">
+      <div class="wrap">
+        <div class="check-band">
+          <div>
+            <h2 id="check-title">Start free: can someone send email as your firm?</h2>
+            <p>
+              If criminals can send email that looks like it came from your domain, they can trick clients
+              into sending documents or money. The free Kovyr Check reads your domain’s public email settings
+              and tells you in plain English whether it’s protected against spoofing. Nothing to install.
+            </p>
+          </div>
+          <a class="btn btn-primary" href="check/">Run the free Kovyr Check <span class="arrow" aria-hidden="true">→</span></a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── How it works ─────────────────────────────────────────────── -->
+    <section class="section section-alt" id="how" aria-labelledby="how-title">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">How it works</p>
+          <h2 id="how-title">Protect. Monitor. Prove.</h2>
+          <p class="lead">Three steps, mostly in the background. We use the tools you already pay for. It isn’t another antivirus.</p>
+        </div>
+
+        <ol class="steps">
+          <li class="step">
+            <div class="step-top">
+              <span class="step-icon"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-shield"/></svg></span>
+              <span class="step-num">Step 1</span>
+            </div>
+            <h3>Protect</h3>
+            <p class="step-line">We switch on the basics.</p>
+            <p class="body">We use what you already have: Microsoft 365, Microsoft Defender and BitLocker, Windows’ built-in encryption.</p>
+            <ul>
+              <li>One plain-English task at a time, each with a “why this matters” note</li>
+              <li>Free fixes first</li>
+              <li>Your IT provider makes the changes, or we walk you through them</li>
+            </ul>
+          </li>
+          <li class="step">
+            <div class="step-top">
+              <span class="step-icon"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-eye"/></svg></span>
+              <span class="step-num">Step 2</span>
+            </div>
+            <h3>Monitor</h3>
+            <p class="step-line">Daily, quiet, and you only hear from us when something changes.</p>
+            <p class="body">The Kovyr app on each office computer and a read-only link to Microsoft 365 check in every day.</p>
+            <ul>
+              <li>One-sentence alerts, like “Maria’s laptop encryption is off”</li>
+              <li>Mailbox-takeover and tamper alerts as soon as we see them</li>
+              <li>A one-paragraph weekly summary</li>
+            </ul>
+          </li>
+          <li class="step">
+            <div class="step-top">
+              <span class="step-icon"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-seal"/></svg></span>
+              <span class="step-num">Step 3</span>
+            </div>
+            <h3>Prove</h3>
+            <p class="step-line">Records that anyone can check.</p>
+            <p class="body">Every check is signed, time-stamped by independent outside clocks and written to a public log that outside witnesses countersign.</p>
+            <ul>
+              <li>A Proof Pack you can hand to anyone</li>
+              <li>Your WISP kept up to date from the same evidence</li>
+              <li>A free, open-source verifier for whoever you share it with</li>
+            </ul>
+          </li>
+        </ol>
+
+        <div class="status-note">
+          <svg class="ico" aria-hidden="true" focusable="false"><use href="#i-info"/></svg>
+          <p><strong>Where we are today:</strong> Kovyr Proof is in a founding pilot. For now, we run Proof Checks hands-on with a small group of firms. The software that does all of this every day launches in May 2027, and founding firms help shape it.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── What we watch ────────────────────────────────────────────── -->
+    <section class="section" id="watch" aria-labelledby="watch-title">
+      <div class="wrap">
+        <div class="watch-intro">
+          <div class="section-head">
+            <p class="eyebrow">What we watch</p>
+            <h2 id="watch-title">The protections that matter most, checked rather than assumed.</h2>
+            <p class="lead">Your Proof Check looks at all nine once. From launch, your plan watches them every day and tells you in one sentence when something slips.</p>
+          </div>
+          <figure class="alert-sample" aria-label="Sample alert">
+            <p class="alert-top"><span class="st st-bad"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-alert"/></svg></span>Kovyr alert · today, 3:12 pm <span class="chip chip-sample">Sample</span></p>
+            <p class="alert-msg">Maria’s laptop: disk encryption was switched off.</p>
+            <p class="alert-next">Here’s how to turn it back on, or forward this to your IT provider.</p>
+          </figure>
+        </div>
+
+        <ul class="watch-grid">
+          <li class="watch">
+            <span class="watch-icon"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-key"/></svg></span>
+            <div><h3>Passkeys and MFA</h3><p>A second sign-in check on every account, and a nudge toward phishing-resistant passkeys, which a fake login page can’t trick out of you.</p></div>
+          </li>
+          <li class="watch">
+            <span class="watch-icon"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-lock"/></svg></span>
+            <div><h3>Disk encryption</h3><p>BitLocker on every computer, so a lost or stolen laptop doesn’t hand over client files.</p></div>
+          </li>
+          <li class="watch">
+            <span class="watch-icon"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-refresh"/></svg></span>
+            <div><h3>Updates</h3><p>Windows and key software kept current. We flag anything that has been waiting too long.</p></div>
+          </li>
+          <li class="watch">
+            <span class="watch-icon"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-globe"/></svg></span>
+            <div><h3>Remote-access exposure</h3><p>From outside, we look for exposed remote desktop and known, actively exploited flaws in your firewall or VPN. We also list the remote-control tools installed inside.</p></div>
+          </li>
+          <li class="watch">
+            <span class="watch-icon"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-database"/></svg></span>
+            <div><h3>Backups, tested</h3><p>A quarterly restore drill shows your backups actually come back, with a signed record of what was restored and when.</p></div>
+          </li>
+          <li class="watch">
+            <span class="watch-icon"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-phone"/></svg></span>
+            <div><h3>Verify before you pay</h3><p>A request to change bank details, send a refund or wire money gets a call-back to the number on file and a second approver. A cloned voice can fake the boss, but it can’t fake the call-back.</p></div>
+          </li>
+          <li class="watch">
+            <span class="watch-icon"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-mail"/></svg></span>
+            <div><h3>Mailbox takeover</h3><p>We alert you when an account suddenly forwards mail outside the firm, signs in from an unusual country, adds a new login method or gains a new admin.</p></div>
+          </li>
+          <li class="watch">
+            <span class="watch-icon"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-pulse"/></svg></span>
+            <div><h3>Tamper alarm</h3><p>Each computer checks in with a signed heartbeat. If it goes quiet or Defender is switched off, you hear from our servers, which an attacker on your computer doesn’t control.</p></div>
+          </li>
+          <li class="watch">
+            <span class="watch-icon"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-id"/></svg></span>
+            <div><h3>Client numbers left in the open</h3><p>The Kovyr app finds Social Security and card numbers sitting unencrypted in documents and helps you encrypt them. It reports counts, never the numbers.</p></div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ── Proof Pack ───────────────────────────────────────────────── -->
+    <section class="section section-alt" id="proof-pack" aria-labelledby="pack-title">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">The Proof Pack</p>
+          <h2 id="pack-title">One page an insurer or client can actually check.</h2>
+          <p class="lead">Instead of saying “trust us,” you hand over a Proof Pack: a plain summary of what was on, where and when, with a link anyone can use to verify it.</p>
+        </div>
+
+        <div class="pack-grid">
+          <div>
+            <figure class="pack" aria-labelledby="pack-cap">
+              <div class="pack-band">
+                <img src="assets/logo-mark.png" srcset="assets/logo-mark.png 1x, assets/logo-mark@3x.png 3x" width="30" height="30" alt="">
+                <div>
+                  <p class="t">Proof Pack</p>
+                  <p class="s">Kovyr Proof · issued 26 Oct 2026</p>
+                </div>
+                <span class="chip">Sample</span>
+              </div>
+              <div class="pack-body">
+                <dl class="pack-meta">
+                  <div><dt>Firm</dt><dd>Example Tax &amp; Bookkeeping</dd></div>
+                  <div><dt>Period</dt><dd>28 Sep – 26 Oct 2026</dd></div>
+                  <div><dt>Computers</dt><dd>12 of 12 known computers enrolled</dd></div>
+                  <div><dt>Accounts</dt><dd>11 of 11 Microsoft 365 accounts</dd></div>
+                </dl>
+                <p class="pack-summary">Every protection was on for the whole period except passkeys, which are in progress on 4 of 11 accounts.</p>
+                <ul class="pack-rows">
+                  <li><span class="st st-ok"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg></span><span class="pr-name"><span class="visually-hidden">On: </span>MFA on every account</span><span class="pr-val">11 of 11</span><span class="pr-how">Microsoft 365 · platform-verified</span></li>
+                  <li><span class="st st-warn"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-alert"/></svg></span><span class="pr-name"><span class="visually-hidden">In progress: </span>Passkeys</span><span class="pr-val is-warn">4 of 11</span><span class="pr-how">Microsoft 365 · platform-verified</span></li>
+                  <li><span class="st st-ok"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg></span><span class="pr-name"><span class="visually-hidden">On: </span>Disk encryption</span><span class="pr-val">12 of 12</span><span class="pr-how">Each computer’s security chip · hardware-verified</span></li>
+                  <li><span class="st st-ok"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg></span><span class="pr-name"><span class="visually-hidden">On: </span>Updates installed</span><span class="pr-val">12 of 12</span><span class="pr-how">Hardware-verified</span></li>
+                  <li><span class="st st-ok"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg></span><span class="pr-name"><span class="visually-hidden">On: </span>Defender running</span><span class="pr-val">No gaps</span><span class="pr-how">Signed heartbeats · hardware-verified</span></li>
+                  <li><span class="st st-ok"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg></span><span class="pr-name"><span class="visually-hidden">On: </span>Remote access</span><span class="pr-val">Nothing exposed</span><span class="pr-how">Outside-in scan · scan-verified</span></li>
+                  <li><span class="st st-ok"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg></span><span class="pr-name"><span class="visually-hidden">Done: </span>Backup restore drill</span><span class="pr-val">Passed 3 Oct</span><span class="pr-how">Staff-attested · file fingerprints</span></li>
+                  <li><span class="st st-ok"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg></span><span class="pr-name"><span class="visually-hidden">Done: </span>Verify before you pay</span><span class="pr-val">6 of 6</span><span class="pr-how">Payment changes called back · staff-attested</span></li>
+                  <li><span class="st st-ok"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg></span><span class="pr-name"><span class="visually-hidden">Watched: </span>Mailbox takeover</span><span class="pr-val">1 alert, closed</span><span class="pr-how">Closed same day · Microsoft 365 · platform-verified</span></li>
+                  <li><span class="st st-ok"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg></span><span class="pr-name"><span class="visually-hidden">Checked: </span>Client numbers</span><span class="pr-val">0 unencrypted</span><span class="pr-how">SSNs and card numbers in documents · Kovyr app · counts only</span></li>
+                </ul>
+              </div>
+              <p class="pack-limits"><strong>What this proves, and what it doesn’t.</strong> It proves which protections were measurably on, on enrolled computers and accounts, at the times checked. It doesn’t prove the firm can’t be breached, and it says so.</p>
+              <div class="pack-foot">
+                <p class="hash">Fingerprint <code>sha256:9c41e07a…d2b6f318</code></p>
+                <p>Time-stamped by two independent services · recorded in a public, witnessed log</p>
+                <p>Anyone can check it with the free, open-source verifier. No account needed.</p>
+              </div>
+            </figure>
+            <p class="pack-caption" id="pack-cap">Sample Proof Pack for a fictional firm, with illustrative data.</p>
+          </div>
+
+          <div class="pack-side">
+            <ul class="pack-points">
+              <li>
+                <span class="pp-icon"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-eye-off"/></svg></span>
+                <div><h3>Counts, not contents</h3><p>Yes/no answers and counts like “12 of 12”. Never file names, emails or client records.</p></div>
+              </li>
+              <li>
+                <span class="pp-icon"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-verified"/></svg></span>
+                <div><h3>Says how each fact was checked</h3><p>Each line says where its fact came from: the computer’s own security chip, Microsoft 365, an outside scan, or your staff’s attestation.</p></div>
+              </li>
+              <li>
+                <span class="pp-icon"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-gap"/></svg></span>
+                <div><h3>Shows gaps instead of hiding them</h3><p>If a computer stops reporting, the record shows the gap. Missing days show up as missing, not as quiet days.</p></div>
+              </li>
+              <li>
+                <span class="pp-icon"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-user"/></svg></span>
+                <div><h3>You choose who sees what</h3><p>Show your insurer “encryption on 12 of 12” and nothing else.</p></div>
+              </li>
+              <li>
+                <span class="pp-icon"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-search"/></svg></span>
+                <div><h3>Free for anyone to check</h3><p>No account and no fee, and nobody has to take our word for it.</p></div>
+              </li>
+            </ul>
+
+            <div class="demo-cta">
+              <p>Open our sample Proof Pack. Change a number, a date or anything else, and see whether the verifier notices.</p>
+              <a class="btn btn-primary" href="demo/">See a sample Proof Pack, and try to fake it <span class="arrow" aria-hidden="true">→</span></a>
+            </div>
+          </div>
+        </div>
+
+        <div class="ledger-block">
+          <div>
+            <h3>Why it can’t be quietly faked</h3>
+            <p class="lead">Think of a notary’s numbered ledger, kept in public. Every page is stamped by an outside clock and countersigned by independent witnesses, so nobody, including us, can tear out or rewrite a page without it showing.</p>
+            <figure class="ledger" aria-labelledby="ledger-cap">
+              <p class="ledger-title"><span>Public log</span><span>Sample</span></p>
+              <ol>
+                <li><span class="n">#1288</span><span class="d">25 Oct 2026 · 07:01</span><span class="h">sha256:<b>7c1e…44a0</b> · follows 0b9d…e3f1</span></li>
+                <li><span class="n">#1289</span><span class="d">26 Oct 2026 · 07:02</span><span class="h">sha256:<b>3f9a…c21e</b> · follows 7c1e…44a0</span></li>
+                <li><span class="n">#1290</span><span class="d">26 Oct 2026 · 15:12</span><span class="h">sha256:<b>a41f…09bd</b> · follows 3f9a…c21e</span></li>
+              </ol>
+            </figure>
+            <p class="ledger-note" id="ledger-cap">Each entry carries the fingerprint of the one before it. If anyone removes or edits an entry, the chain breaks in plain view.</p>
+          </div>
+          <ol class="ledger-steps">
+            <li><h4>Signed at the source</h4><p>Each computer signs its own results with a key locked inside its security chip.</p></li>
+            <li><h4>Stamped by outside clocks</h4><p>Two independent timestamp services mean nobody can backdate a good day.</p></li>
+            <li><h4>Written to a public log</h4><p>The log is append-only and countersigned by outside witnesses. Missing days show up as gaps.</p></li>
+            <li><h4>Checked by anyone</h4><p>A free, open-source verifier does the checking, with no account and no need to trust us.</p></li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Verified badge ───────────────────────────────────────────── -->
+    <section class="section" id="badge" aria-labelledby="badge-title">
+      <div class="wrap badge-grid">
+        <div class="badge-copy">
+          <p class="eyebrow">The Verified badge · in pilot</p>
+          <h2 id="badge-title">Show clients your protections, and let them check.</h2>
+          <p class="lead">Put a Kovyr Proof badge on your website or in your email signature. When a client clicks it, a trust page checks your live Proof Pack on the spot, so the badge can’t claim more than your record shows.</p>
+          <ul>
+            <li><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg><span><strong>Live, not a sticker.</strong> The page checks your current record each time it’s opened.</span></li>
+            <li><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg><span><strong>Honest when something slips.</strong> If a protection lapses, the page says so.</span></li>
+            <li><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg><span><strong>Shows only what you choose.</strong> Counts and dates only, never client information.</span></li>
+          </ul>
+          <p><span class="chip chip-warn">In pilot</span> We’re testing badges with founding firms. They launch with the plans in May 2027.</p>
+        </div>
+
+        <figure class="badge-stage" aria-labelledby="badge-cap">
+          <div>
+            <p class="stage-label">On your website</p>
+            <div class="vbadge">
+              <span class="vbadge-mark"><img src="assets/logo-mark.png" srcset="assets/logo-mark.png 1x, assets/logo-mark@3x.png 3x" width="38" height="38" alt=""></span>
+              <span class="vbadge-body">
+                <span class="vbadge-top"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-verified"/></svg>Kovyr Proof · Verified</span>
+                <span class="vbadge-sub">Security checks verified daily · last check today, 7:02 am</span>
+                <span class="vbadge-link">Verify ›</span>
+              </span>
+            </div>
+          </div>
+          <div>
+            <p class="stage-label">In your email signature</p>
+            <div class="sig">
+              <p class="sig-name">Jordan Lee, EA</p>
+              <p class="sig-role">Example Tax &amp; Bookkeeping</p>
+              <div class="sig-rule"></div>
+              <p class="sig-line"><span class="mini-tile"><img src="assets/logo-mark.png" width="16" height="16" alt=""></span><span>How we protect your tax records:</span><b>verify ›</b></p>
+            </div>
+          </div>
+          <p class="pack-caption mt-0" id="badge-cap">Sample badge and signature for a fictional firm. <a href="demo/">See what a client would check</a>.</p>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ── Trust ────────────────────────────────────────────────────── -->
+    <section class="section section-ice" id="trust" aria-labelledby="trust-title">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">Trust</p>
+          <h2 id="trust-title">Why you can trust a small security company</h2>
+          <p class="lead">We’re small, and you shouldn’t have to take our word for anything. So we’re building Kovyr Proof so that you don’t have to.</p>
+        </div>
+
+        <ul class="trust-grid">
+          <li class="trust">
+            <div class="trust-top"><span class="trust-icon"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-nodata"/></svg></span><span class="chip chip-good">Our rule</span></div>
+            <h3>We hold no client data</h3>
+            <p>Only yes/no answers and counts leave your computers, never file names, documents, emails or client records. We never ask for your passwords. Our Microsoft 365 access is read-only unless you choose to let us lock a hijacked account.</p>
+          </li>
+          <li class="trust">
+            <div class="trust-top"><span class="trust-icon"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-code"/></svg></span><span class="chip chip-warn">Before launch</span></div>
+            <h3>An open-source verifier</h3>
+            <p>Before launch we will publish the verifier, and the code that collects your checks, as open source. Anyone will be able to see exactly what we collect and check a Proof Pack without us.</p>
+          </li>
+          <li class="trust">
+            <div class="trust-top"><span class="trust-icon"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-seal"/></svg></span><span class="chip chip-navy">From launch</span></div>
+            <h3>Our own record, in public</h3>
+            <p>We will run Kovyr Proof on our own company first and publish our record in the same public log. If we ever have a security incident, we will post a first public notice within 72 hours and a full write-up afterwards, with a named person accountable.</p>
+          </li>
+          <li class="trust">
+            <div class="trust-top"><span class="trust-icon"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-search"/></svg></span><span class="chip chip-warn">Before launch</span></div>
+            <h3>An independent review</h3>
+            <p>Before launch we will have an independent firm review our cryptography and try to break in. Then we will publish their summary and what we fixed.</p>
+          </li>
+          <li class="trust">
+            <div class="trust-top"><span class="trust-icon"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-receipt"/></svg></span><span class="chip chip-good">Our promise</span></div>
+            <h3>Clean billing</h3>
+            <p>Our prices are published. You pay the same price at renewal and can cancel in one click. We never sell data, whether it’s yours or anyone else’s.</p>
+          </li>
+        </ul>
+
+        <div class="timeline-wrap">
+          <h3>Where we are, in the open</h3>
+          <ol class="timeline">
+            <li class="tl is-now">
+              <p class="tl-when">Now – Dec 2026</p>
+              <p class="tl-what">Founding pilot</p>
+              <p>Hands-on Proof Checks with a small group of tax and accounting firms.</p>
+              <span class="chip chip-navy">You are here</span>
+            </li>
+            <li class="tl">
+              <p class="tl-when">Jan – Apr 2027</p>
+              <p class="tl-what">We build</p>
+              <p>We build the software while you’re busy with tax season.</p>
+            </li>
+            <li class="tl">
+              <p class="tl-when">Before launch</p>
+              <p class="tl-what">Outside checks</p>
+              <p>We will publish the independent review, open-source the verifier and sign up an outside witness for the public log.</p>
+            </li>
+            <li class="tl">
+              <p class="tl-when">May 2027</p>
+              <p class="tl-what">Plans launch</p>
+              <p>Founding firms keep their founding price.</p>
+            </li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Pricing ──────────────────────────────────────────────────── -->
+    <section class="section" id="pricing" aria-labelledby="pricing-title">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">Pricing</p>
+          <h2 id="pricing-title">Simple, published prices</h2>
+          <p class="lead">Prices are flat per office, not per computer. Start with a Proof Check.</p>
+        </div>
+
+        <div class="pricing-grid">
+          <article class="price-card is-featured" aria-labelledby="pc-title">
+            <div class="price-top">
+              <h3 id="pc-title">Proof Check</h3>
+              <span class="chip chip-good">Founding pilot · open now</span>
+            </div>
+            <p class="price"><span class="amt">$299</span><span class="per">one time</span></p>
+            <p class="price-note">Credited in full toward a subscription when plans launch.</p>
+            <ul class="ticks">
+              <li><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg><span>A hands-on review of your Microsoft 365 accounts and Windows computers, covering MFA, passkeys, admin accounts, encryption, updates and Defender</span></li>
+              <li><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg><span>A search for client Social Security and card numbers sitting unencrypted on office computers. We see counts only, never the numbers themselves</span></li>
+              <li><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg><span>An outside check for exposed remote access, known exploited flaws and email spoofing</span></li>
+              <li><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg><span>A plain-English fix list, one task at a time, for you or your IT provider</span></li>
+              <li><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg><span>Answers mapped to the questions you’re actually asked: your insurance application, client questionnaires and your WISP</span></li>
+              <li><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg><span>Your first Proof Pack, current for 30 days</span></li>
+              <li><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg><span>Founding firms lock in their plan price</span></li>
+            </ul>
+            <a class="btn btn-primary" href="#contact" data-mail="proof-check">Book a Proof Check</a>
+            <p class="price-fine">Not ready? Start with the <a href="check/">free Kovyr Check</a>.</p>
+          </article>
+
+          <article class="price-card" aria-labelledby="plans-title">
+            <div class="price-top">
+              <h3 id="plans-title">Kovyr Proof plans</h3>
+              <span class="chip chip-warn">Planned launch pricing · May 2027</span>
+            </div>
+            <ul class="plans">
+              <li class="plan"><h4>Essentials</h4><span class="amt">$99<span class="per">/mo</span></span><span class="size">Up to 5 people</span></li>
+              <li class="plan"><h4>Practice</h4><span class="amt">$199<span class="per">/mo</span></span><span class="size">6–15 people</span></li>
+              <li class="plan"><h4>Firm</h4><span class="amt">$299<span class="per">/mo</span></span><span class="size">16–25 people</span></li>
+            </ul>
+            <div class="plans-includes">
+              <h4>Every plan includes</h4>
+              <ul class="ticks">
+                <li><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg><span>All nine protections, checked daily</span></li>
+                <li><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg><span>Mailbox-takeover alerts and the tamper alarm</span></li>
+                <li><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg><span>Verify-before-you-pay call-backs</span></li>
+                <li><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg><span>Proof Packs whenever you need one</span></li>
+                <li><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg><span>A WISP that updates itself from live evidence</span></li>
+                <li><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg><span>Works alongside your IT provider</span></li>
+              </ul>
+            </div>
+            <p class="plans-fine">These are the prices we plan to launch with in May 2027, and founding pilot firms lock in theirs. We commit to the same price at renewal and one-click cancellation. More than 25 people? <a href="#contact" data-mail="question">Email us</a>.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── FAQ ──────────────────────────────────────────────────────── -->
+    <section class="section section-alt" id="faq" aria-labelledby="faq-title">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">FAQ</p>
+          <h2 id="faq-title">Straight answers</h2>
+        </div>
+        <div class="faq-list">
+          <details class="faq">
+            <summary>Does this make me FTC compliant?</summary>
+            <div class="faq-a">
+              <p>No product can do that on its own, and we won’t claim to. The FTC Safeguards Rule asks you to run an information security program, and a written plan is part of that. Kovyr Proof helps you run the technical parts and keep evidence that they’re working.</p>
+              <p>It isn’t legal advice, and it isn’t a guarantee. For questions about your obligations, talk to your attorney or compliance adviser.</p>
+            </div>
+          </details>
+          <details class="faq">
+            <summary>What leaves my computers?</summary>
+            <div class="faq-a">
+              <p>Only yes/no answers and counts (like “12 of 12 laptops encrypted”), signed and time-stamped. Never file names, documents or client information.</p>
+            </div>
+          </details>
+          <details class="faq">
+            <summary>Do you see my clients’ data?</summary>
+            <div class="faq-a">
+              <p>No. When the Kovyr app looks for Social Security or card numbers sitting unencrypted in documents, it shows you where they are on your own computer. We only ever see the count, never the numbers or the documents.</p>
+            </div>
+          </details>
+          <details class="faq">
+            <summary>Do I need an IT person?</summary>
+            <div class="faq-a">
+              <p>No. Most fixes are settings in tools you already have, and we give you one plain-English task at a time with a short “why this matters” note. If something truly needs hands-on IT work, we’ll say so plainly.</p>
+            </div>
+          </details>
+          <details class="faq">
+            <summary>What if I already have an IT provider?</summary>
+            <div class="faq-a">
+              <p>Good, because we work with them. They make the fixes, and we show what needs doing and prove when it’s done. We don’t sell managed IT, so we’re not after their job.</p>
+            </div>
+          </details>
+          <details class="faq">
+            <summary>Will it lower my insurance premium?</summary>
+            <div class="faq-a">
+              <p>We can’t promise that, and we won’t. What it gives you is evidence. Instead of just ticking “yes” on an application, you can show your broker exactly which protections were on, and when. Whether an insurer gives you credit for that is up to the insurer.</p>
+            </div>
+          </details>
+          <details class="faq">
+            <summary>What computers are supported?</summary>
+            <div class="faq-a">
+              <p>Windows computers and Microsoft 365 come first. Mac support follows after launch, and Google Workspace after that. If your office runs mostly on Macs or Google, tell us, because it helps us decide what to build next.</p>
+            </div>
+          </details>
+          <details class="faq">
+            <summary>What does “can’t be quietly faked” actually mean?</summary>
+            <div class="faq-a">
+              <p>Each record is signed on the computer that made it, time-stamped by independent outside clocks and written to a public, append-only log. If anyone, including us, later changed, backdated or deleted a record, the verifier would show it.</p>
+              <p>It proves what was checked and when. It doesn’t prove a firm can’t be hacked, and we never claim it does.</p>
+            </div>
+          </details>
+          <details class="faq">
+            <summary>What is the free Kovyr Check?</summary>
+            <div class="faq-a">
+              <p>It’s a quick look at your email domain’s public anti-spoofing settings, the ones that stop criminals sending email that looks like it came from your firm. Enter your domain and get a plain-English answer. It’s free, and you don’t need to book anything. <a href="check/">Run the Kovyr Check</a>.</p>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Founder note & contact ───────────────────────────────────── -->
+    <section class="section" id="contact" aria-labelledby="contact-title">
+      <div class="wrap contact-grid">
+        <article class="letter" aria-labelledby="letter-title">
+          <p class="eyebrow">A note from the founder</p>
+          <h2 id="letter-title">Why we’re building this</h2>
+          <div class="letter-body">
+            <p>Hi, I’m Kendall. Kovyr is a small cybersecurity practice for small offices: tax and accounting firms, dental practices and law offices.</p>
+            <p>Owners like you are asked to promise your security all the time, on insurance applications, in client questionnaires and in the plan on the shelf. Almost nobody can show it. Kovyr Proof is how we want to change that, with protections that are actually on and a record that anyone can check.</p>
+            <p>We’re starting small on purpose. Before tax season, we’re working hands-on with a small group of founding firms. You get a Proof Check, a direct line to me, and a real say in what we build. If you’d rather just tell me how your office handles security today, I’d like to hear that too.</p>
+          </div>
+          <div class="letter-sign">
+            <span class="tile"><img src="assets/logo-mark.png" srcset="assets/logo-mark.png 1x, assets/logo-mark@3x.png 3x" width="30" height="30" alt=""></span>
+            <div>
+              <p class="name">Kendall</p>
+              <p class="role">Founder, Kovyr</p>
+            </div>
+          </div>
+        </article>
+
+        <div class="contact-card">
+          <h2 id="contact-title">Join the founding pilot</h2>
+          <p>There are no forms and no tracking, just email.</p>
+          <div class="contact-actions">
+            <a class="btn btn-primary" href="#contact" data-mail="proof-check">Book a Proof Check · $299 <span class="arrow" aria-hidden="true">→</span></a>
+            <a class="btn btn-secondary" href="#contact" data-mail="pilot">Ask about the founding pilot <span class="arrow" aria-hidden="true">→</span></a>
+            <a class="btn btn-secondary" href="#contact" data-mail="call">Ask for a free 20-minute call <span class="arrow" aria-hidden="true">→</span></a>
+          </div>
+          <p class="contact-address">
+            <span class="label">Email</span>
+            <!-- CONTACT EMAIL: the one place the address lives (see swap list at top). -->
+            <a class="contact-email" id="contact-email" href="mailto:kendall@kovyr.com">kendall@kovyr.com</a>
+            <button class="copy-btn" type="button" data-copy-email hidden>Copy address</button>
+          </p>
+          <p class="contact-fine">Prefer to start free? <a href="check/">Run the Kovyr Check</a> on your email domain.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="footer-grid">
+        <div>
+          <a class="brand" href="#top">
+            <img src="assets/logo-mark.png" srcset="assets/logo-mark.png 1x, assets/logo-mark@3x.png 3x" width="32" height="32" alt="">
+            <span>Kovyr Proof</span>
+          </a>
+          <p class="footer-tag">Kovyr Proof is a service from Kovyr, a small cybersecurity practice for small offices. The founding pilot is open now, and plans launch in May 2027.</p>
+        </div>
+        <nav aria-label="Footer">
+          <ul class="footer-links">
+            <li><a href="https://kovyr.com">kovyr.com</a></li>
+            <li><a href="demo/">Sample Proof Pack</a></li>
+            <li><a href="check/">Free Kovyr Check</a></li>
+            <li><a href="#pricing">Pricing</a></li>
+            <li><a href="#faq">FAQ</a></li>
+            <li><a href="#contact" data-mail="question">Email us</a></li>
+          </ul>
+        </nav>
+      </div>
+      <div class="footer-fine">
+        <p class="no-third-parties"><svg class="ico" aria-hidden="true" focusable="false"><use href="#i-check"/></svg>This page loads nothing from third parties: no web fonts, no analytics, no trackers and no cookies.</p>
+        <p>This isn’t legal advice. Kovyr Proof helps you run and document your security program. It doesn’t guarantee compliance and can’t prevent every attack.</p>
+        <p>Microsoft 365, Microsoft Defender, BitLocker and Windows are trademarks of Microsoft. Kovyr is not affiliated with Microsoft, the IRS or the FTC.</p>
+        <p>© 2026 Kovyr</p>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
