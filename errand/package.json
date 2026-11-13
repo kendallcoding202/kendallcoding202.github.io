@@ -1,0 +1,16 @@
+{
+  "name": "errand",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "An AI agent that runs errands in the browser you already use, and asks before anything that matters.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test tests/policy.test.mjs",
+    "test:e2e": "node --test tests/e2e.test.mjs"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
+    "esbuild": "^0.28.2"
+  }
+}

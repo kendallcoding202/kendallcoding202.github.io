@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Errand</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <header class="bar">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+        <rect width="32" height="32" rx="9" fill="var(--accent)"/>
+        <path d="M9 21.5c3.2 0 4.2-2.2 5.2-5s2-5 5.3-5H23" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/>
+        <path d="M20.2 8.2 23.6 11.5 20.2 14.8" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="9" cy="21.5" r="2.2" fill="#fff"/>
+      </svg>
+      <span>Errand</span>
+    </div>
+    <div class="bar-actions">
+      <button class="icon-btn" id="new-btn" type="button" title="New errand" aria-label="New errand">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+      <button class="icon-btn" id="settings-btn" type="button" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main-view">
+    <section id="timeline" aria-live="polite"></section>
+
+    <form id="composer" autocomplete="off">
+      <div class="composer-box">
+        <textarea id="input" rows="2" placeholder="What should Errand do on this page?" aria-label="Task for Errand"></textarea>
+        <button id="send-btn" type="submit" class="send" aria-label="Run">
+          <svg class="i-run" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          <svg class="i-stop" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
+        </button>
+      </div>
+      <div class="meta">
+        <span id="meta-model"></span>
+        <span id="meta-usage"></span>
+        <button type="button" id="export-btn" class="link-btn" hidden>Export log</button>
+      </div>
+    </form>
+  </main>
+
+  <section id="settings-view" hidden>
+    <div class="settings-head">
+      <button class="icon-btn" id="settings-back" type="button" aria-label="Back">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+      </button>
+      <h2>Settings</h2>
+    </div>
+
+    <div class="field">
+      <label for="s-key">Anthropic API key</label>
+      <div class="row">
+        <input id="s-key" type="password" placeholder="sk-ant-…" spellcheck="false">
+        <button type="button" class="ghost" id="s-key-toggle">Show</button>
+      </div>
+      <p class="hint">Stored only in this browser, and sent only to the API address below. Get a key at console.anthropic.com.</p>
+    </div>
+
+    <div class="field">
+      <label for="s-model">Model</label>
+      <select id="s-model"></select>
+    </div>
+
+    <div class="field">
+      <label for="s-effort">Effort</label>
+      <select id="s-effort">
+        <option value="low">Low: fastest, for simple errands</option>
+        <option value="medium">Medium: quick and capable</option>
+        <option value="high">High: most thorough, slower</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <span class="label">Approvals</span>
+      <label class="choice"><input type="radio" name="s-mode" value="balanced"> <span><b>Balanced.</b> Ask before purchases, sending, posting, deleting and submitting forms.</span></label>
+      <label class="choice"><input type="radio" name="s-mode" value="cautious"> <span><b>Cautious.</b> Ask before every click, keystroke and form change.</span></label>
+    </div>
+
+    <div class="field">
+      <label for="s-steps">Check in after this many steps</label>
+      <input id="s-steps" type="number" min="5" max="200" step="5">
+    </div>
+
+    <div class="field">
+      <span class="label">Browsing history</span>
+      <label class="choice"><input type="checkbox" id="s-history"> <span>Let Errand search your history when a task refers to something you visited before. Off by default; Chrome asks for permission.</span></label>
+    </div>
+
+    <div class="field">
+      <span class="label">Sites Errand may always work on</span>
+      <ul id="s-sites" class="sites"></ul>
+      <p class="hint">Errand asks before working on any site not listed here. The site you start an errand on is allowed for that errand.</p>
+    </div>
+
+    <details class="field">
+      <summary>Advanced</summary>
+      <label for="s-base">API address</label>
+      <input id="s-base" type="url" placeholder="https://api.anthropic.com" spellcheck="false">
+      <p class="hint">Leave empty for Anthropic's API. Set it only to route through your own gateway.</p>
+    </details>
+
+    <p class="saved" id="s-saved" role="status"></p>
+  </section>
+
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>
