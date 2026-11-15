@@ -1,0 +1,7 @@
+node_modules/
+art/review/
+art/gen.log
+tests/e2e/out/
+dist/
+.DS_Store
+__pycache__/

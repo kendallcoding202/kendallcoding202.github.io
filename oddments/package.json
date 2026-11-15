@@ -1,0 +1,16 @@
+{
+  "name": "oddments",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Oddments (working title): befriend the things in the house that came alive, and battle alongside them.",
+  "scripts": {
+    "start": "node tools/serve.mjs",
+    "test": "node --test \"tests/unit/*.test.mjs\"",
+    "sim": "node tools/sim.mjs",
+    "e2e": "node tests/e2e/run.mjs",
+    "preview": "node tools/build-preview.mjs",
+    "art": "node tools/gen-art.mjs && python3 tools/process-art.py",
+    "art:needs": "node tools/art-needs.mjs"
+  }
+}
