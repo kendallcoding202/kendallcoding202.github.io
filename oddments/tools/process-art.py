@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Turns the originals in art/raw/ into the web-sized assets under web/assets/.
 
-Only art made for this game is in art/raw/ (the people, and the world: one
-sheet of buildings and things, and one ground texture). A person's front and
-back views arrive two to an image, and the cast four to an image; each is cut
-into its figures here. The monsters, rooms,
-icons and font were painted for Pawst Lives and are copied from it already
-processed. Sprites are trimmed to their painted area and shrunk, exactly as
+Only art made for this game is in art/raw/ (the people; the world: one
+sheet of buildings and things, and one ground texture; and the insides of
+the buildings you can walk into: for each a sheet of the things in it, its
+back wall and its floor). A person's front and back views arrive two to an
+image, and the cast four to an image; each is cut into its figures here.
+The monsters, the paintings fights are seen against, the icons and the font
+were painted for Pawst Lives and are copied from it already processed. Sprites are trimmed to their painted area and shrunk, exactly as
 Pawst Lives does it, so old and new sit at the same scale.
 
 Run from the project root:  python3 tools/process-art.py
@@ -64,6 +65,27 @@ ALLEY = [
     ("a_drum", 200), ("a_boxes", 200), ("a_pallets", 220), ("a_bottles", 200),
     ("a_barricade", 420), ("a_fence", 260), ("a_heap", 200), ("a_cone", 160),
 ]
+
+
+# The insides of buildings (web/assets/rooms/). For each room:
+#   sheet  its twelve things, row by row: what each is called (it is saved as <room>_<name>) and its
+#          longest side on the web. Things at home are seen close up, so they are kept larger.
+#   wall   which rows of the back wall's painting are used (top, bottom): from just above whatever is
+#          highest on it down to where it meets the floor, and how wide it is saved.
+#   floor  how wide its repeating tile is saved. (These were painted to repeat and do, as they come:
+#          no edge is faded into another, which would smear a pattern of tiles.)
+INSIDES = {
+    "home": {
+        "sheet": [("bed", 420), ("phone", 200), ("shelf", 340), ("hearth", 340), ("basket", 230), ("armchair", 250), ("fern", 180), ("teatable", 180), ("rug", 520), ("mat", 220), ("coats", 320), ("drawers", 260)],
+        "wall": (138, 842, 1240),
+        "floor": 600,
+    },
+    "pantry": {
+        "sheet": [("sack", 150), ("barrel", 150), ("potatoes", 150), ("tins", 150), ("pickles", 150), ("cheese", 150), ("eggs", 150), ("milk", 150), ("stool", 150), ("onions", 150), ("scales", 150), ("mat", 220)],
+        "wall": (103, 911, 800),
+        "floor": 512,
+    },
+}
 
 
 def bands(filled, want):
@@ -210,8 +232,38 @@ def process_world(name, im, world):
     return written
 
 
+def process_room(name, im, rooms):
+    """One of a room's three paintings: its sheet becomes twelve things, its wall a band, its floor a tile."""
+    room, part = name.rsplit("_", 1)
+    plan = INSIDES[room]
+    written = []
+    if part == "sheet":
+        for (thing, longest), piece in zip(plan["sheet"], cut_sheet(im)):
+            dest = os.path.join(rooms, f"{room}_{thing}.webp")
+            fit(trimmed(piece), longest).save(dest, "WEBP", quality=90, method=6)
+            written.append(dest)
+    elif part == "wall":
+        top, bottom, wide = plan["wall"]
+        band = im.convert("RGB").crop((0, top, im.width, bottom))
+        dest = os.path.join(rooms, f"{room}_wall.webp")
+        band.resize((wide, round(wide * band.height / band.width)), Image.LANCZOS).save(dest, "WEBP", quality=86, method=6)
+        written.append(dest)
+    elif part == "floor":
+        side = plan["floor"]
+        dest = os.path.join(rooms, f"{room}_floor.webp")
+        im.convert("RGB").resize((side, side), Image.LANCZOS).save(dest, "WEBP", quality=86, method=6)
+        written.append(dest)
+    return written
+
+
+def room_part(name):
+    """Whether an original is one of a room's three paintings."""
+    room, _, part = name.rpartition("_")
+    return room in INSIDES and part in ("sheet", "wall", "floor")
+
+
 def main():
-    for sub in ("sprites", "world"):
+    for sub in ("sprites", "world", "rooms"):
         os.makedirs(os.path.join(OUT, sub), exist_ok=True)
     count = 0
     total = 0
@@ -228,8 +280,9 @@ def main():
                 im.convert("RGB").save(os.path.join(RAW, name + ".webp"), "WEBP", lossless=True, method=6)
                 os.remove(os.path.join(RAW, fname))
             continue
-        if name.startswith(("world_", "alley_")) or name.endswith("_turn") or name == "cast_sheet":
-            written = (process_world(name, im, os.path.join(OUT, "world")) if name.startswith(("world_", "alley_"))
+        if room_part(name) or name.startswith(("world_", "alley_")) or name.endswith("_turn") or name == "cast_sheet":
+            written = (process_room(name, im, os.path.join(OUT, "rooms")) if room_part(name)
+                       else process_world(name, im, os.path.join(OUT, "world")) if name.startswith(("world_", "alley_"))
                        else process_people(name, im, os.path.join(OUT, "sprites")))
             count += 1
             total += sum(os.path.getsize(dest) for dest in written)

@@ -47,6 +47,36 @@ const WORLD_STYLE =
   'vibrant saturated colors, sticker-like, chunky and cute. ' +
   'No ground, no shadow, no text, no letters, no numbers, no border. Transparent background.';
 
+// ---- the insides of buildings ----
+// A room you walk into is three pictures: a sheet of twelve things that stand in it (cut apart by
+// tools/process-art.py, in the order given), its back wall seen straight on, and its floor seen
+// from above. Agreed on 16 November 2026: "I approve spending on the rooms".
+const roomSheet = (room, where, rows) => ({
+  id: `${room}_sheet`, kind: 'sheet', size: '1536x1024', quality: 'medium', transparent: true,
+  prompt:
+    'A sprite sheet for a game: exactly twelve separate objects arranged in a neat grid of three rows and four columns, evenly spaced, ' +
+    'each centred in its own cell with clear empty space all around it, none touching or overlapping, all drawn at a similar size. ' +
+    `They are things from ${where}, each seen from the front and slightly from above unless said otherwise. ` +
+    rows.map((row, i) => `Row ${['one', 'two', 'three'][i]}, left to right: ${row.join('; ')}.`).join(' ') + ' ' +
+    WORLD_STYLE,
+});
+const roomWall = (room, what) => ({
+  id: `${room}_wall`, kind: 'wall', size: '1536x1024', quality: 'medium', transparent: false,
+  prompt:
+    `The back wall of a room in a 2D mobile game, seen perfectly straight on like a stage backdrop: ${what} ` +
+    'A very wide wall that fills the whole image from the left edge to the right edge with no side walls, no corners and no perspective. ' +
+    'Everything of interest sits in the middle band of the picture; the top fifth and the bottom fifth are plain wall. ' +
+    'No floor, no ceiling, no people, no creatures, no animals, no text, no letters, no numbers, no border. ' +
+    'Style: clean 2D mobile game art, bold dark outline, flat cel shading with soft highlights, rich night-time colours, chunky and cute.',
+});
+const roomFloor = (room, what) => ({
+  id: `${room}_floor`, kind: 'tile', size: '1024x1024', quality: 'medium', transparent: false,
+  prompt:
+    `A seamless tileable floor texture for a 2D mobile game, seen from directly above: ${what} ` +
+    'Painterly flat shapes with soft gradients. Evenly lit, no shadows, no objects, no rugs, no furniture, no text. ' +
+    'Slightly desaturated and low in contrast so characters stand out on top of it. The texture fills the whole square image from edge to edge.',
+});
+
 export const ART = [
   // ---- the house-sitter (the player): four candidate looks to choose from ----
   human('sitter_a', 'a young adult woman house-sitter with warm brown skin and curly dark hair in a messy bun held by a pencil, wearing an oversized mustard-yellow knitted cardigan over teal pyjamas, mismatched socks (one red-striped, one blue-dotted) and no shoes, holding up a small glowing brass wind-up lantern in one hand, the other hand held out open in a friendly way.'),
@@ -150,4 +180,20 @@ export const ART = [
       'no objects, no flowers, no outlines, no text. Slightly desaturated and low in contrast so characters stand out on top of it. ' +
       'The texture fills the whole square image from edge to edge.',
   },
+  // ---- home: great-aunt Maribel's front room ----
+  roomSheet('home', 'the cosy front room of an old cottage at night', [
+    ['a cosy single bed seen from the side, with a wooden headboard at the left end, a white pillow and a colourful patchwork quilt', 'a small wooden bedside table with an old red rotary telephone on it', 'a tall wooden bookshelf full of colourful books', 'a stone fireplace with a warm fire burning in it and a wooden mantelpiece'],
+    ['a round wicker pet basket with a plump lilac cushion in it', 'a comfy green armchair with a knitted blanket over one arm', 'a leafy fern in a terracotta pot', 'a small round wooden table with a teapot and two cups on it'],
+    ['a large oval braided rug lying flat, seen from directly above, red with a cream border', 'a striped green doormat lying flat, seen from directly above', 'a wooden coat stand with a coat and a hat on it', 'a wooden chest of drawers with a glowing table lamp on top'],
+  ]),
+  roomWall('home', 'a cosy cottage wall at night, striped blue-violet wallpaper above dark wood panelling, with a window in the middle showing a crescent moon and stars, red curtains drawn back, and two small framed pictures either side of it.'),
+  roomFloor('home', 'old wooden floorboards at night, warm brown planks running left to right, with the odd knot and nail.'),
+  // ---- the Midnight Pantry ----
+  roomSheet('pantry', 'an old-fashioned pantry and store room at night', [
+    ['a burlap sack of flour tied at the top', 'a wooden barrel with iron hoops', 'a wooden crate full of potatoes', 'a pyramid of stacked tin cans with bright labels and no words'],
+    ['a giant glass jar of green pickles with a lid', 'a round wheel of yellow cheese on a small wooden stool', 'a wicker basket full of eggs', 'a wooden crate of glass milk bottles'],
+    ['a small wooden step stool', 'a heap of onions and a string of garlic', 'an old-fashioned set of brass kitchen scales on a small table', 'a striped red doormat lying flat, seen from directly above'],
+  ]),
+  roomWall('pantry', 'an old pantry at night, long wooden shelves from one side to the other crowded with glass jars, tins, packets, bottles and a hanging string of garlic, dark blue-grey plaster behind them, warm light spilling in from the left.'),
+  roomFloor('pantry', 'old kitchen floor tiles in a checkerboard of terracotta red and cream squares, a little worn, with thin dark grout.'),
 ];
