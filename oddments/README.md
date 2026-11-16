@@ -80,4 +80,4 @@ docs/                   the design and the art list
 
 ## Not done
 
-One place of eight. No sound, no iOS wrapper, no App Store work, no purchases. Oddments do not grow up yet (the table says into what; the rule and the art are not there). The ground you walk on is drawn in code, not painted. The rest of the cast are names in the design, not people in the game. The balance has only been played by bots. Everything has been run in Chromium at phone sizes; nothing has been run on an iPhone or in Safari.
+One place of eight. No sound, no iOS wrapper, no App Store work, no purchases. Oddments do not grow up yet (the table says into what; the rule and the art are not there). The lane's buildings, trees, lamps, hedges and grass are painted (two generated images, see `docs/ART.md`); the path, its stepping stones, the garden gate and the name plates are still drawn in code. The house-sitter is one of four candidate looks, not a final sprite. The rest of the cast are names in the design, not people in the game. The balance has only been played by bots. Everything has been run in Chromium at phone sizes; nothing has been run on an iPhone or in Safari.
