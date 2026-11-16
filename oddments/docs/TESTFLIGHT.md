@@ -8,7 +8,7 @@ The iPhone app is the same game in a thin shell (Capacitor, as Pawst Lives uses)
 | --- | --- |
 | Xcode project (`ios/`), stand-in icon and launch image | In the repository |
 | The app compiles, launches in the iOS Simulator, and keeps its save in native storage | Checked by the "Clutterkin iOS" workflow, job "build", which needs no secrets. Its screenshots are attached to each run. |
-| Upload to TestFlight | Wired up (job "testflight"), **not yet run**: it needs the app record and the five secrets below. |
+| Upload to TestFlight | Wired up (job "testflight"). The app record and the five secrets are in place and the archive builds. The first real attempt was refused by Apple at signing, because the API key did not have Admin access (see step 3). **No build has been uploaded yet.** |
 | A real iPhone | Not tried. TestFlight is how that happens. |
 
 ## What only you can do
@@ -41,9 +41,11 @@ GitHub → this repository → Settings → Secrets and variables → Actions �
 | --- | --- | --- |
 | `ASC_KEY_ID` | The API key's id: 10 letters and digits | App Store Connect → Users and Access → Integrations → App Store Connect API: the Key ID column |
 | `ASC_ISSUER_ID` | A long id with four dashes | The same page, above the table of keys |
-| `ASC_KEY_P8` | The whole text of the `AuthKey_XXXXXXXXXX.p8` file | The file you downloaded when the key was made. Apple lets it be downloaded once; if you no longer have it, make a new key with the same Access as the one Pawst Lives uses (the Access column of the keys table shows it) and use its three values instead. |
+| `ASC_KEY_P8` | The whole text of the `AuthKey_XXXXXXXXXX.p8` file | The file you downloaded when the key was made. Apple lets it be downloaded once; if you no longer have it, make a new key with Access set to **Admin** and use its values instead. |
 | `APPLE_TEAM_ID` | Your team id: 10 letters and digits | developer.apple.com/account → Membership details |
 | `IOS_BUNDLE_ID` | The bundle id from step 1 | You chose it |
+
+**The key must have Admin access.** Apple signs the upload with a certificate it keeps itself, and only does that for an Admin key. With any other access the upload stops at "Cloud signing permission error" (this happened on the first real attempt here). A key's access cannot be changed afterwards: generate a new one with Access set to Admin, replace `ASC_KEY_ID` and `ASC_KEY_P8`, and revoke the old one. The Issuer ID does not change.
 
 ### 4. Run the upload
 

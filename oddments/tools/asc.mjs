@@ -145,6 +145,19 @@ async function check(env) {
   if (apps.status !== 200) fail(`App Store Connect answered ${apps.status}. ${apps.detail}`);
   say('Apple accepted the key, key id and issuer id.');
 
+  // Apple signs an upload with a certificate it keeps itself, and will only do that for a key with
+  // Admin access; with any other, the upload stops at "Cloud signing permission error" after the
+  // Mac has already done its work. Listing the team's users is something only an Admin key may do,
+  // so it tells the two apart in a moment.
+  const users = await get('/v1/users?limit=1&fields[users]=roles', jwt);
+  if (users.status === 403) {
+    fail('This API key works, but it does not have Admin access, and Apple only signs an upload for a key that does. '
+      + 'In App Store Connect: Users and Access -> Integrations -> App Store Connect API, generate a new key with Access set to Admin. '
+      + 'Then replace the ASC_KEY_ID and ASC_KEY_P8 secrets with the new key\'s id and the text of its .p8 file (ASC_ISSUER_ID stays as it is), and revoke the old key. See docs/TESTFLIGHT.md.');
+  }
+  if (users.status === 200) say('The key has Admin access, which Apple needs to sign the upload.');
+  else warn(`Could not tell whether the key has Admin access (App Store Connect answered ${users.status}). If the upload stops at "Cloud signing permission error", it does not.`);
+
   const ids = await get(`/v1/bundleIds?filter[identifier]=${encodeURIComponent(bundleId)}&fields[bundleIds]=identifier,seedId&limit=50`, jwt);
   const registered = ids.data.find((b) => b.attributes?.identifier === bundleId);
   if (registered && registered.attributes.seedId !== tidy(env.APPLE_TEAM_ID)) {
