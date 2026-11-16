@@ -4,8 +4,9 @@
 #
 #   "build"      (box unticked) compiles the app for the Simulator with no
 #                signing, launches it, saves screenshots, and proves a save
-#                survives in the app's native storage. It ends by rehearsing
-#                the TestFlight archive, unsigned. Needs no secrets.
+#                survives in the app's native storage. Beside it, "rehearsal"
+#                builds the same archive the upload would, unsigned, and
+#                checks it is whole. Neither needs secrets.
 #
 #   "testflight" (box ticked) archives the app, has Apple sign it and uploads
 #                it to App Store Connect. The app record must already exist
@@ -121,13 +122,27 @@ jobs:
           path: |
             oddments/first-launch.png
             oddments/resumed.png
-      # A rehearsal of the upload, as far as it can go without Apple: the same steps as the
-      # "testflight" job below (the stand-in bundle id swapped for another, the game copied in, an
-      # Xcode the App Store accepts, a Release archive for a real iPhone), stopping short of signing.
-      # Nothing is uploaded. If this passes, what is left untested is Apple's side.
+  # A rehearsal of the upload, as far as it can go without Apple: the same steps as the
+  # "testflight" job below (the stand-in bundle id swapped for another, the game copied in, an
+  # Xcode the App Store accepts, a Release archive for a real iPhone), stopping short of signing.
+  # Nothing is uploaded and no secrets are needed. If this passes, what is left untested is
+  # Apple's side. It runs beside "build", on a Mac of its own, and is done in a few minutes.
+  rehearsal:
+    if: ${{ !inputs.testflight }}
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: oddments/package-lock.json
+      - run: npm ci
       - name: Rehearse the TestFlight archive (unsigned, nothing is uploaded)
         run: |
           set -o pipefail
+          printf "export const BUILD = '%s';\n" "${{ github.run_number }}" > web/js/platform/build.js
           sed -i '' "s/app\.oddments\.game/app.oddments.rehearsal/g" ios/App/App.xcodeproj/project.pbxproj capacitor.config.json
           npm run ios:sync
           if [ "$(xcodebuild -version | awk 'NR==1 { print int($2) }')" -lt 26 ]; then
@@ -154,6 +169,7 @@ jobs:
           [ -f "$APP/PrivacyInfo.xcprivacy" ] || { echo "::error::the privacy manifest is missing"; exit 1; }
           grep -q "BUILD = '${{ github.run_number }}'" "$APP/public/js/platform/build.js" || { echo "::error::the game inside does not know its build number"; exit 1; }
           echo "the archive is whole: name, version, build number, bundle id, game, icon and privacy manifest are all in place"
+
 
   # Are the secrets the right things, does Apple accept them, and is there an
   # app record to upload to? Answered on Linux, in seconds.
