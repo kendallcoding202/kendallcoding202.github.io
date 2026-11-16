@@ -5,7 +5,7 @@ import { TEAM_SIZE, NAME_LENGTH, lookOf, roomOf } from './balance.js';
 import { createBattle, choices, act, concede } from './battle.js';
 import { settleUp } from './progress.js';
 import { rollEncounter, fairEncounter, enterRoom, leaveRoom, afterFight, roomOpen, teamOf, maxHpOf } from './rooms.js';
-import { WORLD, stepWalk, routeTo, straighten, canStand, spotNear, spotOf, areaOf, canStandIn, meetingAt, atGate } from './world.js';
+import { WORLD, stepWalk, routeTo, straighten, roomy, canStand, spotNear, spotOf, areaOf, canStandIn, meetingAt, atGate } from './world.js';
 
 export class Game {
   /**
@@ -58,10 +58,11 @@ export class Game {
   routeTo(target) {
     const from = this.standing();
     if (!from || !target) return [];
-    if (this.place() === 'lane') return straighten(from, routeTo(from, target, canStand, WORLD), canStand);
+    // The way is found with room to spare on every side; walking it then touches nothing.
+    if (this.place() === 'lane') return straighten(from, routeTo(from, target, roomy(canStand), WORLD), roomy(canStand));
     const visit = this.state.visit;
     const area = areaOf(visit.room);
-    const can = (x, y) => canStandIn(area, x, y, visit.stop);
+    const can = roomy((x, y) => canStandIn(area, x, y, visit.stop));
     return straighten(from, routeTo(from, target, can, area), can);
   }
 

@@ -6,7 +6,7 @@ import { ROOM_IDS } from './balance.js';
 export const WORLD = {
   // The size of the lane, in its own units. It is exactly one screen wide, so the view only ever
   // travels up and down it, and nothing is ever cut off at the sides.
-  w: 640, h: 1720,
+  w: 640, h: 1860,
   edge: 26, // how close to the edge of the world feet may go
   speed: 255, // walking, in units a second
   reach: 82, // how near a door counts as being at it
@@ -17,14 +17,17 @@ export const WORLD = {
 // Where every place stands: x is the middle of its front, y the foot of its
 // front wall. Home is where you are staying; the rest are the eight rooms.
 const AT = {
-  home: [320, 1560], garden: [165, 1320], alley: [475, 1150], pantry: [165, 980], wash: [475, 810],
-  stacks: [165, 640], rooftops: [475, 470], attic: [165, 300], dark: [320, 160],
+  home: [320, 1700], garden: [165, 1460], alley: [475, 1290], pantry: [165, 1120], wash: [475, 950],
+  stacks: [165, 780], rooftops: [475, 610], attic: [165, 440], dark: [372, 250],
 };
+// Most buildings are much of a size; home is broader, and two are tall and thin.
+const WIDE = { home: 226, wash: 176, rooftops: 136, attic: 158 };
+const TALL = { home: 230, rooftops: 250, attic: 250 };
 export const SPOT_IDS = ['home', ...ROOM_IDS];
 export const SPOTS = SPOT_IDS.map((id) => {
   const [x, y] = AT[id];
-  const w = id === 'home' ? 250 : 190; // how wide the building is
-  const tall = id === 'home' ? 190 : 150; // how tall it is drawn
+  const w = WIDE[id] || 196; // how much ground the building takes, side to side
+  const tall = TALL[id] || 200; // about how tall it stands
   // Feet cannot go where the lower part of the building stands; behind its roof is fine.
   return { id, x, y, w, tall, block: { x: x - w / 2, y: y - 64, w, h: 64 }, door: { x, y: y + 34 } };
 });
@@ -32,12 +35,12 @@ export const spotOf = (id) => SPOTS.find((spot) => spot.id === id) || null;
 
 // Trees, as circles to walk round.
 export const TREES = [
-  [48, 1660, 28], [592, 1666, 30], [600, 1440, 28], [44, 1470, 26], [598, 1300, 28], [42, 1140, 28],
-  [598, 960, 28], [42, 800, 26], [598, 625, 28], [42, 460, 26], [598, 290, 28], [560, 130, 26], [44, 140, 26], [604, 40, 22],
+  [48, 1800, 28], [592, 1806, 30], [596, 1580, 28], [44, 1610, 26], [598, 1440, 28], [42, 1280, 28], [598, 1100, 28],
+  [42, 940, 26], [598, 765, 28], [42, 600, 26], [598, 430, 28], [44, 250, 26], [560, 150, 26], [604, 60, 22],
 ].map(([x, y, r]) => ({ x, y, r }));
 
-// A lamp beside every building, on the side the lane is. Thin, but solid.
-export const LAMPS = SPOTS.map((spot) => ({ x: spot.x + (spot.x <= WORLD.w / 2 ? 1 : -1) * (spot.w / 2 + 30), y: spot.y + 26, r: 7 }));
+// A lamp beside every building, on the side the lane is (the last building's on its open side). Thin, but solid.
+export const LAMPS = SPOTS.map((spot) => ({ x: spot.x + (spot.id === 'dark' || spot.x <= WORLD.w / 2 ? 1 : -1) * (spot.w / 2 + 30), y: spot.y + 26, r: 7 }));
 
 /** Whether feet can be at this point: inside the lane, and not in a building, a tree or a lamp post. */
 export function canStand(x, y) {
@@ -81,6 +84,12 @@ export function stepWalk(pos, target, dt, can = canStand) {
 }
 
 const CELL = 24; // route-finding works on squares this big
+
+/**
+ * A stricter idea of where feet can be: only where there is this much room on every side. A way
+ * found with it keeps clear of things, so walking it never brushes a lamp post or catches a corner.
+ */
+export const roomy = (can, room = 6) => (x, y) => can(x, y) && can(x + room, y) && can(x - room, y) && can(x, y + room) && can(x, y - room);
 
 /**
  * The way to walk from `from` to `to` without going through anything: a list

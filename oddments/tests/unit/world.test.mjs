@@ -1,7 +1,7 @@
 // The lane: the open world you walk around between places.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { WORLD, SPOTS, SPOT_IDS, TREES, LAMPS, AREAS, POST, canStand, canStandIn, meetingAt, atGate, areaOf, stepWalk, routeTo, straighten, clearWay, spotNear, spotOf, settleWhere } from '../../web/js/core/world.js';
+import { WORLD, SPOTS, SPOT_IDS, TREES, LAMPS, AREAS, POST, canStand, canStandIn, meetingAt, atGate, areaOf, stepWalk, routeTo, straighten, clearWay, roomy, spotNear, spotOf, settleWhere } from '../../web/js/core/world.js';
 import { ROOM_IDS, ROOMS, roomBuilt } from '../../web/js/core/balance.js';
 import { fairEncounter } from '../../web/js/core/rooms.js';
 import { Game } from '../../web/js/core/game.js';
@@ -26,7 +26,7 @@ test('home and all eight rooms stand in the lane, each with a door you can stand
   for (const spot of SPOTS) {
     assert.ok(canStand(spot.door.x, spot.door.y), `${spot.id}: its door is somewhere feet can be`);
     assert.equal(spotNear(spot.door), spot.id, `${spot.id}: standing at its door is being at it`);
-    assert.ok(spot.block.x >= WORLD.edge && spot.block.x + spot.block.w <= WORLD.w - WORLD.edge && spot.y - spot.tall > 0, `${spot.id} is inside the world`);
+    assert.ok(spot.block.x >= WORLD.edge && spot.block.x + spot.block.w <= WORLD.w - WORLD.edge && spot.y - spot.tall >= 0, `${spot.id} is inside the world`);
   }
   assert.equal(spotOf('garden').id, 'garden');
   assert.equal(spotOf('nowhere'), null);
@@ -56,13 +56,13 @@ test('feet cannot go outside the lane, into a building, or through a tree trunk'
 });
 
 test('a step covers speed x time, straight toward the target, and stops when it gets there', () => {
-  const from = { x: 320, y: 1660 };
-  const up = { x: 320, y: 1610 };
+  const from = { x: 320, y: 1800 };
+  const up = { x: 320, y: 1750 };
   const one = stepWalk(from, up, 0.05);
   assert.equal(one.moving, true);
-  assert.ok(Math.abs(one.y - (1660 - WORLD.speed * 0.05)) < 1e-9 && one.x === 320);
-  const short = stepWalk(from, { x: 323, y: 1660 }, 0.05);
-  assert.deepEqual([short.x, short.y], [323, 1660], 'never past the target');
+  assert.ok(Math.abs(one.y - (1800 - WORLD.speed * 0.05)) < 1e-9 && one.x === 320);
+  const short = stepWalk(from, { x: 323, y: 1800 }, 0.05);
+  assert.deepEqual([short.x, short.y], [323, 1800], 'never past the target');
   assert.equal(stepWalk(from, from, 0.05).moving, false);
   assert.equal(stepWalk(from, up, 0).moving, false);
   assert.equal(stepWalk(from, up, -1).moving, false);
@@ -82,7 +82,7 @@ test('every place can be walked to from the one before, and all the way home aga
   const trip = (from, to) => {
     let pos = { ...from };
     let seconds = 0;
-    for (const point of straighten(from, routeTo(from, to, canStand, WORLD), canStand)) {
+    for (const point of straighten(from, routeTo(from, to, roomy(canStand), WORLD), roomy(canStand))) {
       const leg = walk(pos, point);
       pos = leg.pos;
       seconds += leg.seconds;
@@ -121,12 +121,12 @@ test('being at a door means being within reach of it, and nowhere else is anywhe
   const garden = spotOf('garden').door;
   assert.equal(spotNear({ x: garden.x + WORLD.reach - 1, y: garden.y }), 'garden');
   assert.equal(spotNear({ x: garden.x + WORLD.reach + 1, y: garden.y }), null);
-  assert.equal(spotNear({ x: 320, y: 1240 }), null, 'the middle of the lane');
+  assert.equal(spotNear({ x: 320, y: 1380 }), null, 'the middle of the lane');
 });
 
 test('a position from a save is kept only if feet could really be there', () => {
   const home = spotOf('home').door;
-  assert.deepEqual(settleWhere({ x: 150, y: 1640 }), { x: 150, y: 1640 });
+  assert.deepEqual(settleWhere({ x: 150, y: 1780 }), { x: 150, y: 1780 });
   for (const bad of [null, undefined, 7, 'here', [], {}, { x: 'a', y: 1 }, { x: NaN, y: 5 }, { x: 1e308, y: 1e308 }, { x: -50, y: 20 }, { x: spotOf('wash').x, y: spotOf('wash').y - 10 }]) {
     assert.deepEqual(settleWhere(bad), home, JSON.stringify(bad));
   }
@@ -135,12 +135,12 @@ test('a position from a save is kept only if feet could really be there', () => 
 test('a new game starts at the door of home, and the save remembers where you walked to', () => {
   const game = new Game(newState(NOW, 3), { now: NOW });
   assert.equal(game.near(), 'home');
-  assert.equal(game.walk({ x: 150, y: 1640 }, 0.1), true);
-  for (let i = 0; i < 60; i++) game.walk({ x: 150, y: 1640 }, 0.1);
+  assert.equal(game.walk({ x: 150, y: 1780 }, 0.1), true);
+  for (let i = 0; i < 60; i++) game.walk({ x: 150, y: 1780 }, 0.1);
   assert.equal(game.near(), null);
   const back = reviveState(JSON.parse(game.serialize(NOW)), NOW);
   assert.deepEqual(back.where, game.state.where);
-  assert.ok(Math.hypot(back.where.x - 150, back.where.y - 1640) < 2);
+  assert.ok(Math.hypot(back.where.x - 150, back.where.y - 1780) < 2);
 });
 
 test('you can only walk into a room from its door', () => {
@@ -250,14 +250,14 @@ test('a way is found round whatever is between, and a tap on something solid lea
 test('a way is walked with the corners taken out: fewer points, every stretch clear, the same end', () => {
   const home = spotOf('home').door;
   for (const spot of SPOTS.slice(1)) {
-    const squares = routeTo(home, spot.door, canStand, WORLD);
-    const way = straighten(home, squares, canStand);
+    const squares = routeTo(home, spot.door, roomy(canStand), WORLD);
+    const way = straighten(home, squares, roomy(canStand));
     assert.ok(way.length >= 1 && way.length <= squares.length, spot.id);
     assert.ok(way.length <= Math.max(3, squares.length / 4), `${spot.id}: ${way.length} turns of ${squares.length} squares is a walk, not a staircase`);
     assert.deepEqual(way[way.length - 1], squares[squares.length - 1]);
     let at = home;
     for (const point of way) {
-      if (point !== way[0]) assert.ok(clearWay(at, point, canStand), `${spot.id}: a stretch touches something`);
+      if (point !== way[0]) assert.ok(clearWay(at, point, roomy(canStand)), `${spot.id}: a stretch comes too near something`);
       at = point;
     }
     assert.equal(spotNear(follow(home, way, canStand)), spot.id);
@@ -268,6 +268,30 @@ test('a way is walked with the corners taken out: fewer points, every stretch cl
 test('the lane and every inside are exactly one screen wide', () => {
   assert.equal(WORLD.w, 640);
   for (const area of Object.values(AREAS)) assert.equal(area.w, WORLD.w);
+});
+
+test('a way keeps a little clear of everything, so walking it never brushes a lamp post or a corner', () => {
+  const wide = roomy(canStand);
+  for (const lamp of LAMPS) {
+    assert.equal(canStand(lamp.x + 24, lamp.y), true, 'feet can pass close by a lamp');
+    assert.equal(wide(lamp.x + 24, lamp.y), false, 'but a way is not laid that close');
+  }
+  // Walk every door to every other door, a frame at a time: never once blocked on the way.
+  for (const a of SPOTS) {
+    for (const b of SPOTS) {
+      if (a === b) continue;
+      let pos = { ...a.door };
+      for (const point of straighten(pos, routeTo(pos, b.door, wide, WORLD), wide)) {
+        for (let i = 0; i < 2000; i++) {
+          if (Math.hypot(point.x - pos.x, point.y - pos.y) < 7) break;
+          const next = stepWalk(pos, point, 1 / 60);
+          assert.equal(next.moving, true, `stuck walking from ${a.id} to ${b.id} at ${Math.round(pos.x)},${Math.round(pos.y)}`);
+          pos = next;
+        }
+      }
+      assert.equal(spotNear(pos), b.id, `${a.id} to ${b.id}`);
+    }
+  }
 });
 
 test('the game finds the way for wherever you are, and none during a fight', () => {

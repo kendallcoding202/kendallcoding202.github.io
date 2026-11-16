@@ -10,7 +10,7 @@ import { ROOMS, SPECIES, ELEMENTS, roomOf, roomBuilt } from '../core/balance.js'
 import { WORLD, SPOTS, TREES, LAMPS, spotOf, areaOf } from '../core/world.js';
 import { h, sprite, spriteSrc } from './dom.js';
 import { elementTag, bar } from './parts.js';
-import { FONT, oval, paint, glow, label, paintLaneGround, paintInsideGround, paintBuilding, paintLife, paintTree, paintLamp, paintHedge, paintBush, paintGate } from './scenery.js';
+import { FONT, oval, paint, glow, label, worldSrc, paintLaneGround, paintInsideGround, paintBuilding, paintProp, paintLamp, paintHedge, paintGate } from './scenery.js';
 
 // The world is exactly one screen wide: the view only ever travels up and down.
 const VIEW = WORLD.w;
@@ -84,12 +84,13 @@ export function laneScreen(ctx) {
     return piece;
   }
   const put = (p, dx = 0, dy = 0) => pen.drawImage(p.sheet, p.x + dx, p.y + dy, p.w, p.h);
-  // A room's painting may still be arriving when its building is first painted: paint it again once it is here.
-  const art = (place) => {
-    const image = picture(`assets/bg/${place.bg}.webp`);
+  // A painting may still be arriving when something is first painted from it: paint again once it is here.
+  const painting = (name) => {
+    const image = picture(worldSrc(name));
     if (!image.complete) image.addEventListener('load', () => { kept = new Map(); }, { once: true });
     return image;
   };
+  const groundArt = () => ({ grass: painting('grass'), earth: painting('earth'), bush: painting('p_bush') });
 
   // ------------------------------------------------------------ the camera
 
@@ -133,7 +134,7 @@ export function laneScreen(ctx) {
     const { top, bottom } = over();
     const y0 = -top - 20;
     const full = bake('ground', 0, y0, size.w, size.h + top + bottom + 40,
-      (brush) => (inside ? paintInsideGround(brush, room, area) : paintLaneGround(brush, size, ROUTE, SPOTS, LAMPS)), Math.min(1, 1.7 / (cam.k * cam.dpr)));
+      (brush) => (inside ? paintInsideGround(brush, room, area, groundArt()) : paintLaneGround(brush, size, ROUTE, SPOTS, LAMPS, groundArt())), Math.min(1, 1.7 / (cam.k * cam.dpr)));
     const scale = full.sheet.width / full.w;
     const from = Math.max(full.y, cam.y - 2);
     const to = Math.min(full.y + full.h, cam.y + cam.h + 2);
@@ -160,9 +161,8 @@ export function laneScreen(ctx) {
     const open = !place || game.roomOpen(place.id);
     const cleared = !!place && state.rooms[place.id].clears > 0;
     if (open) glow(pen, spot.x, spot.y + 30, 104, '255,200,61', 0.3); // light spilling from an open door
-    put(bake(`${spot.id}|${open}|${cleared}`, spot.x - 180, spot.y - 300, 360, 346,
-      (brush) => paintBuilding(brush, spot, { name: place ? place.name : HOME.name, tint: place ? place.tint : '#e8a23d', open, cleared, art: place ? art(place) : null })));
-    if (open) paintLife(pen, spot, clock);
+    put(bake(`${spot.id}|${open}|${cleared}`, spot.x - 170, spot.y - 330, 340, 384,
+      (brush) => paintBuilding(brush, spot, { image: painting(`b_${spot.id}`), name: place ? place.name : HOME.name, open, cleared })));
   }
 
   /** Whoever is at a stop: the ones you can see waiting at the next one, a rustle in the bushes further in. */
@@ -172,10 +172,11 @@ export function laneScreen(ctx) {
     if (stop > state.visit.stop) {
       const big = spot.boss ? 1.5 : 1;
       const sway = Math.sin(clock * 2.2 + stop * 2) * 2.5;
-      put(bake(`bush|${big}`, -90, -120, 180, 150, (brush) => paintBush(brush, !!spot.boss)), post.x + sway, post.y);
+      put(bake(`bush|${big}`, -90, -150, 180, 180, (brush) => paintProp(brush, painting('p_bush'), 100 * big)), post.x + sway, post.y);
       pen.font = `700 ${Math.round(30 * big)}px ${FONT}`; pen.textAlign = 'center'; pen.textBaseline = 'middle';
       pen.fillStyle = spot.boss ? '#ff8a96' : '#fff7e8';
-      pen.fillText('?', post.x + sway, post.y - 30 * big);
+      pen.lineWidth = 6; pen.strokeStyle = 'rgba(13,10,28,.85)'; pen.lineJoin = 'round'; pen.strokeText('?', post.x + sway, post.y - 44 * big);
+      pen.fillText('?', post.x + sway, post.y - 44 * big);
       return;
     }
     const foes = state.visit.waiting || [];
@@ -203,12 +204,12 @@ export function laneScreen(ctx) {
     const things = [];
     if (inside) {
       things.push({ y: area.gate.y + 54, draw: () => { put(bake('gate', -160, -90, 320, 120, paintGate), area.gate.x, area.gate.y + 52); label(pen, 'Out to the lane', area.gate.x, area.gate.y + 86, '#ffc83d', 'rgba(255,200,61,.5)'); } });
-      area.blocks.forEach((block, i) => { if (seen(block.y)) things.push({ y: block.y + block.h, draw: () => put(bake(`hedge|${i}`, block.x - 20, block.y - 54, block.w + 40, block.h + 80, (brush) => paintHedge(brush, block))) }); });
+      area.blocks.forEach((block, i) => { if (seen(block.y)) things.push({ y: block.y + block.h, draw: () => put(bake(`hedge|${i}`, block.x - 30, block.y - 60, block.w + 60, block.h + 96, (brush) => paintHedge(brush, block, painting('p_bush')))) }); });
       for (let stop = state.visit.stop; stop < area.posts.length; stop++) if (seen(area.posts[stop].y)) things.push({ y: area.posts[stop].y + 22, draw: () => waiting(stop) });
     } else {
       for (const spot of SPOTS) if (seen(spot.y)) things.push({ y: spot.y, draw: () => building(spot) });
-      for (const t of TREES) if (seen(t.y)) things.push({ y: t.y, draw: () => put(bake(`tree|${t.r}`, -t.r * 1.5 - 8, -t.r * 2.9 - 8, t.r * 3 + 16, t.r * 2.9 + 28, (brush) => paintTree(brush, t.r)), t.x, t.y) });
-      for (const lamp of LAMPS) if (seen(lamp.y)) things.push({ y: lamp.y, draw: () => put(bake('lamp', -56, -146, 112, 156, paintLamp), lamp.x, lamp.y) });
+      for (const t of TREES) if (seen(t.y)) things.push({ y: t.y, draw: () => put(bake(`tree|${t.r}`, -t.r * 1.9, -t.r * 3.8, t.r * 3.8, t.r * 3.8 + 24, (brush) => paintProp(brush, painting('p_tree'), t.r * 3.3)), t.x, t.y) });
+      for (const lamp of LAMPS) if (seen(lamp.y)) things.push({ y: lamp.y, draw: () => put(bake('lamp', -60, -160, 120, 172, (brush) => paintLamp(brush, painting('p_lamp'))), lamp.x, lamp.y) });
     }
     const { x, y } = here();
     for (const pal of pals) {
