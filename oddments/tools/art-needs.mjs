@@ -16,12 +16,12 @@ export function artNeeds() {
     ['People', 'The house-sitter, final sprite (one of the four candidate looks, or a repaint)', 1],
     ['People', `The cast: ${CAST.join(', ')}`, CAST.length],
     ['Grown-up forms', `One per kind (${named} are named in the tables; ${FULL.kinds - named} still to design). Bosses do not grow`, FULL.kinds],
-    ['The world', 'A painted gate and fence, and one special thing for the inside of each place', 2 + FULL.places],
+    ['The world', 'A painted gateway and fence, and one special thing to stand in each place', 2 + FULL.places],
     ['Icons', `Elements (${ELEMENT_IDS.length}), Calls (${CALL_IDS.length}), stats (${STAT_IDS.length - 1}; Health exists), tabs (4), the Heirloom mark (1)`, ELEMENT_IDS.length + CALL_IDS.length + (STAT_IDS.length - 1) + 4 + 1],
     ['Identity', 'App icon and title art, once the game has its name', 2],
   ];
   const free = [
-    ['The world', 'The lane, its nine buildings, trees, lamps, hedges and the ground inside every place: from the two world images already made', 0],
+    ['The world', 'The open neighbourhood: nine buildings, trees, lamps, hedges and grass, from the two world images already made', 0],
     ['Heirlooms', `Rare colours for all ${FULL.kinds} kinds and their ${FULL.kinds} grown forms: recoloured in code by tools/heirlooms.py`, FULL.kinds * 2],
     ['Fights', `The ${FULL.places} room paintings and all ${FULL.kinds + FULL.bosses} monster sprites from Pawst Lives, as they are`, FULL.places + FULL.kinds + FULL.bosses],
   ];

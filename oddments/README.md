@@ -4,7 +4,7 @@
 
 A creature-collecting RPG for iPhone set in the world of Pawst Lives. The monsters are things from a house that came alive (Sock Eel, Toast Ghost, Dust Bunny). You are a person, house-sitting, who befriends them and battles alongside them, three against three.
 
-This is the **framework and a playable slice of the first place**, not the finished game.
+This is the **framework and a playable slice**, not the finished game: the whole neighbourhood to walk around, and the first of its eight places (the garden) to play.
 
 - The design on one page: [docs/DESIGN.md](docs/DESIGN.md)
 - The art that exists and the art still needed, with counts: [docs/ART.md](docs/ART.md)
@@ -44,7 +44,7 @@ node tests/e2e/preview.mjs https://kendallcoding202.github.io/oddments/web/   # 
 
 `npm run e2e` needs Playwright: `npm install --no-save playwright && npx playwright install chromium`.
 
-`npm run sim` takes `[players] [--style=friendly|brawler|careless] [--visits=4]`. Today a sensible player clears the garden on the first visit about four times in five and always by the second; fights last two to five rounds; a visit is about four minutes of bot time. `tests/unit/pacing.test.mjs` holds the game to that shape.
+`npm run sim` takes `[players] [--style=friendly|brawler|careless] [--visits=4]`. Today a sensible player clears the garden on the first visit about four times in five and always by the second; fights last two to five rounds; a visit is about four minutes of fighting (the simulator does not count the walking). `tests/unit/pacing.test.mjs` holds the game to that shape.
 
 ## How it is built
 
@@ -56,14 +56,14 @@ web/                    the game: what ships
     balance.js          every number and name. Tune here.
     battle.js           the fight: turn order, damage, moves, Calls, reaching out
     progress.js         experience, levels, who comes home
-    rooms.js            who is waiting at each stop of a place, and a visit to it
-    world.js            the lane and the inside of places: where feet can go, finding the way
+    rooms.js            who is restless in a place, and a visit: from stepping in to resting at home
+    world.js            the open world: what stands where, where feet can go, finding the way
     game.js             the Game object: every action a player can take
     state.js            the save format and repair of old or damaged saves
     trial.js            a save is rehearsed on a copy before the game trusts it
     auto.js             a plain stand-in player, for the simulator and the rehearsal
     util.js             the seeded random generator
-  js/ui/                the screens: the walkable world, the fight, friends, scrapbook
+  js/ui/                the screens: the world you walk in, the fight, friends, scrapbook
   js/platform/          storage. The only code that knows where the save lives.
   assets/               sprites, room paintings, font (about 1 MB)
 tests/unit/             a test per rule (node:test)
@@ -80,4 +80,4 @@ docs/                   the design and the art list
 
 ## Not done
 
-One place of eight. No sound, no iOS wrapper, no App Store work, no purchases. Oddments do not grow up yet (the table says into what; the rule and the art are not there). The lane's buildings, trees, lamps, hedges and grass are painted (two generated images, see `docs/ART.md`); the path, its stepping stones, the garden gate and the name plates are still drawn in code. The house-sitter is one of four candidate looks, not a final sprite. The rest of the cast are names in the design, not people in the game. The balance has only been played by bots. Everything has been run in Chromium at phone sizes; nothing has been run on an iPhone or in Safari.
+One place of eight can be played: the other seven are buildings you can walk up to, with nothing behind their doors. The world is one neighbourhood about two and a half screens across; it has no people in it yet, nothing to pick up or do besides meeting Oddments, and friends on the green are for looking at, not talking to. You see it from above in 2D; you always face left or right, never toward or away. No sound, no iOS wrapper, no App Store work, no purchases. Oddments do not grow up yet (the table says into what; the rule and the art are not there). The buildings, trees, lamps, hedges and grass are painted (two generated images, see `docs/ART.md`); the streets, their stepping stones, the garden gate and the name plates are still drawn in code. The house-sitter is one of four candidate looks, not a final sprite. The rest of the cast are names in the design, not people in the game. The balance has only been played by bots. Everything has been run in Chromium at phone sizes; nothing has been run on an iPhone or in Safari.
