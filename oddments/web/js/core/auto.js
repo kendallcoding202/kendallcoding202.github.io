@@ -12,7 +12,7 @@ import { nextRandom, rollPick } from './util.js';
 const share = (unit) => unit.hp / unit.maxHp;
 const lowest = (units) => units.slice().sort((a, b) => share(a) - share(b))[0];
 
-/** The one restless Oddment worth calming right now, or null. */
+/** The one restless Oddkin worth calming right now, or null. */
 function wanted(battle, { befriend = false, have = [], heirlooms = [] }) {
   if (!befriend) return null;
   const allies = alliesOf(battle);

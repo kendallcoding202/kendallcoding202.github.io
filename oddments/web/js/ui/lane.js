@@ -15,7 +15,7 @@ import { modal, toast, modalOpen } from './modals.js';
 import { converse } from './talk.js';
 import { FONT, oval, paint, glow, label, worldSrc, paintGround, paintBuilding, paintProp, paintLamp, paintGate, bushesOf } from './scenery.js';
 
-// How much of the world fits across the screen. People and Oddments are small in a big place.
+// How much of the world fits across the screen. People and Oddkin are small in a big place.
 const VIEW = 760;
 const HOME = { name: 'Home', blurb: 'Great-aunt Maribel\'s house, where you are staying.' };
 const GAP = 60; // how far apart the team walks behind you: a little more than any of them is tall
@@ -179,7 +179,7 @@ export function laneScreen(ctx) {
     pen.drawImage(full.sheet, x0 * scale, (from - full.y) * scale, (x1 - x0) * scale, (to - from) * scale, x0, from, x1 - x0, to - from);
   }
 
-  /** A sprite standing with its feet at (x, y). Oddments are painted facing left; people facing right. */
+  /** A sprite standing with its feet at (x, y). Oddkin are painted facing left; people facing right. */
   function stand(src, x, y, tall, faceRight, paintedRight, lift = 0, lean = 0) {
     const image = picture(src);
     // The shadow shrinks as whoever it is lifts off the ground, but is never less than nothing.

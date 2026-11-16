@@ -1,4 +1,4 @@
-// The data: the first twelve Oddments, their moves and the first room.
+// The data: the first twelve Oddkin, their moves and the first room.
 // These tests hold the tables to the rules the engine relies on.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,12 +11,12 @@ import {
 
 const ASSETS = fileURLToPath(new URL('../../web/assets/', import.meta.url));
 
-test('there are twelve Oddments: eleven who can be friends and one boss', () => {
+test('there are twelve Oddkin: eleven who can be friends and one boss', () => {
   assert.equal(SPECIES_IDS.length, 12);
   assert.deepEqual(SPECIES_IDS.filter((id) => SPECIES[id].boss), ['boss_hydra']);
 });
 
-test('every Oddment has an element, four sensible stats, a line of text and its sprite', () => {
+test('every Oddkin has an element, four sensible stats, a line of text and its sprite', () => {
   for (const id of SPECIES_IDS) {
     const kind = SPECIES[id];
     assert.ok(ELEMENTS[kind.element], `${id} element`);
@@ -30,7 +30,7 @@ test('every element has at least one of the twelve', () => {
   for (const element of Object.keys(ELEMENTS)) assert.ok(SPECIES_IDS.some((id) => SPECIES[id].element === element), element);
 });
 
-test('every Oddment knows three moves, learned in order, the first a plain hit ready every turn', () => {
+test('every Oddkin knows three moves, learned in order, the first a plain hit ready every turn', () => {
   const used = new Set();
   for (const id of SPECIES_IDS) {
     const { moves } = SPECIES[id];
@@ -40,7 +40,7 @@ test('every Oddment knows three moves, learned in order, the first a plain hit r
     for (const [move, level] of moves) {
       assert.ok(MOVES[move], `${id}: ${move} exists`);
       assert.ok(level >= 1 && level <= MAX_LEVEL);
-      assert.ok(!used.has(move), `${move} belongs to one Oddment`);
+      assert.ok(!used.has(move), `${move} belongs to one Oddkin`);
       used.add(move);
     }
     const first = MOVES[moves[0][0]];

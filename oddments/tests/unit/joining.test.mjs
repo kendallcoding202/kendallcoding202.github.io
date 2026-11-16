@@ -1,4 +1,4 @@
-// How an Oddment joins: it is calmed in the fight by reaching out, never caught.
+// How an Oddkin joins: it is calmed in the fight by reaching out, never caught.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createBattle, choices, act, chooser, unitOf, stat, reachAmount, standing, damageOf } from '../../web/js/core/battle.js';
@@ -16,7 +16,7 @@ const endRound = (battle) => { const round = battle.round; while (battle.phase =
 // Tough friends so nobody falls over while the test is talking.
 const SITTERS = [{ species: 'toastghost', level: 12 }, { species: 'gnome', level: 12 }];
 
-test('a restless Oddment starts in a full Huff; a friend has none', () => {
+test('a restless Oddkin starts in a full Huff; a friend has none', () => {
   const battle = fight(1, SITTERS, [{ species: 'thornhog', level: 1 }]);
   const hog = unitOf(battle, 'f0');
   assert.equal(hog.huff, SPECIES.thornhog.huff);
@@ -160,7 +160,7 @@ function ended(foes, phase, settled = []) {
   return { state, battle };
 }
 
-test('a calmed Oddment comes home from a fight that was won, at the level it was met', () => {
+test('a calmed Oddkin comes home from a fight that was won, at the level it was met', () => {
   const { state, battle } = ended([{ species: 'gnome', level: 4 }, { species: 'ratscal', level: 2 }], 'won', ['f0']);
   const summary = settleUp(state, battle);
   assert.deepEqual(summary.joined.map((j) => [j.species, j.level, j.heirloom]), [['gnome', 4, false]]);
@@ -172,7 +172,7 @@ test('a calmed Oddment comes home from a fight that was won, at the level it was
   assert.ok(!state.friends.some((f) => f.species === 'ratscal'), 'the one knocked down does not');
 });
 
-test('a calmed Oddment slips away if the fight is lost', () => {
+test('a calmed Oddkin slips away if the fight is lost', () => {
   const { state, battle } = ended([{ species: 'gnome', level: 4 }, { species: 'ratscal', level: 2 }], 'lost', ['f0']);
   const summary = settleUp(state, battle);
   assert.deepEqual(summary.joined, []);

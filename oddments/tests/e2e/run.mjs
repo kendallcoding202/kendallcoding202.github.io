@@ -197,7 +197,7 @@ await page.waitForSelector('.modal.talk');
 check((await S(page, () => document.querySelector('.modal.talk .talkname b').textContent)) === 'Ines Tock', 'Talk starts the conversation');
 await page.waitForTimeout(250);
 await snap(page, 'e2e-ines');
-check((await hearOut(page)) === 5, 'she explains Oddments, Reaching out and ringleaders in five lines');
+check((await hearOut(page)) === 5, 'she explains Oddkin, Reaching out and ringleaders in five lines');
 s = await state(page);
 check(s.story.ines === 1 && await S(page, () => document.querySelector('.goalchip').dataset.goal === 'friend' && document.querySelector('.goalchip span').textContent === 'Make a friend in the garden'), 'and the goal moves on: make a friend in the garden');
 await page.waitForSelector('.placecard[data-person="ines"] [data-act="talk"].plain');
@@ -311,7 +311,7 @@ await snap(page, 'e2e-fight');
 
 // Tapping someone when no move is armed describes them.
 await page.click('[data-unit="f0"]');
-check((await modalTitle(page))?.includes(b.units.find((u) => u.key === 'f0').name), 'tapping an Oddment opens its card');
+check((await modalTitle(page))?.includes(b.units.find((u) => u.key === 'f0').name), 'tapping an Oddkin opens its card');
 check(await S(page, () => document.querySelector('.modal .note').textContent.includes('soft spot')), 'which says what it has a soft spot for');
 await page.click('.modal .x');
 
@@ -368,7 +368,7 @@ check(true, 'the fight plays to its end through the real buttons');
 check((await modalTitle(page)) === 'Won', 'and is won');
 s = await state(page);
 const joined = await S(page, () => [...document.querySelectorAll('.modal .joined')].map((el) => el.dataset.joined));
-check(joined.length >= 1 && joined.every((id) => s.friends.some((f) => f.species === id)), `a calmed Oddment comes home (${joined.join(', ')})`);
+check(joined.length >= 1 && joined.every((id) => s.friends.some((f) => f.species === id)), `a calmed Oddkin comes home (${joined.join(', ')})`);
 check(s.friends.length === 3 + joined.length && s.stats.befriended === joined.length, 'and is counted among your friends');
 check(await S(page, () => document.querySelector('.modal .xp').textContent.includes('experience')), 'experience is shown');
 check(!(await page.$('.modal.result .x')), 'the result has to be acknowledged');

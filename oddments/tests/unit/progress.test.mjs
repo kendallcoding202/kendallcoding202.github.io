@@ -13,7 +13,7 @@ test('each level needs more experience than the one before', () => {
   }
 });
 
-test('a tougher Oddment is worth more, and a boss four times as much', () => {
+test('a tougher Oddkin is worth more, and a boss four times as much', () => {
   assert.ok(xpFor('gnome', 4) > xpFor('gnome', 3));
   assert.equal(xpFor('boss_hydra', 5), 4 * xpFor('gnome', 5));
 });
@@ -45,7 +45,7 @@ test('levels stop at the cap and experience stops with them', () => {
   assert.equal(friend.xp, 0);
 });
 
-test('a level makes an Oddment a tenth of its base stronger in every stat', () => {
+test('a level makes an Oddkin a tenth of its base stronger in every stat', () => {
   const at = (level) => makeFighter('ally', 0, { species: 'sockeel', level });
   const base = SPECIES.sockeel;
   for (const level of [1, 2, 5, 11, MAX_LEVEL]) {

@@ -1,4 +1,4 @@
-// Heirlooms: now and then an Oddment turns up in rare colours.
+// Heirlooms: now and then an Oddkin turns up in rare colours.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
@@ -12,7 +12,7 @@ import { HEIRLOOM, SPECIES, SPECIES_IDS, ROOMS } from '../../web/js/core/balance
 
 const SPRITES = fileURLToPath(new URL('../../web/assets/sprites/', import.meta.url));
 
-test('about one restless Oddment in sixty is an Heirloom, and a boss never is', () => {
+test('about one restless Oddkin in sixty is an Heirloom, and a boss never is', () => {
   let met = 0;
   let rare = 0;
   for (let seed = 1; seed <= 6000; seed++) {

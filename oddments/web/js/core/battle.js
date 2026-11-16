@@ -5,7 +5,7 @@
 //
 // A round: everyone standing acts once, fastest first; a boss acts again at
 // the end. A friend's turn waits for a choice (see `choices` and `act`); a
-// restless Oddment chooses for itself. Once a round the house-sitter may
+// restless Oddkin chooses for itself. Once a round the house-sitter may
 // make one Call, during any friend's turn, without using that turn up.
 import {
   SPECIES, CALLS, CALL_IDS, REACH, HEIRLOOM, BRACE, WOBBLE, MAX_ROUNDS, TEAM_SIZE,
@@ -15,7 +15,7 @@ import { nextRandom, rollPick, clamp } from './util.js';
 
 // ---------------------------------------------------------------- fighters
 
-/** One Oddment as it stands in a fight. `side` is 'ally' or 'foe'. */
+/** One Oddkin as it stands in a fight. `side` is 'ally' or 'foe'. */
 export function makeFighter(side, slot, { species, level, hp, friendId = 0, heirloom = false }) {
   const kind = SPECIES[species];
   const maxHp = statAt(kind.hp, level);
@@ -228,7 +228,7 @@ function advance(battle) {
 
 // ---------------------------------------------------------------- the other side
 
-// A restless Oddment's turn. Not clever: it mends when its side is hurting,
+// A restless Oddkin's turn. Not clever: it mends when its side is hurting,
 // sometimes braces itself or saps you, and otherwise hits, leaning toward
 // its strong moves, the element it beats and whoever is nearly down.
 function foeTurn(battle, unit) {

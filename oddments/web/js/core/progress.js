@@ -22,9 +22,9 @@ export function gainXp(friend, amount) {
 /**
  * Banks a finished fight into the save and says what happened.
  *
- * Experience is paid for every restless Oddment knocked down, win or lose,
+ * Experience is paid for every restless Oddkin knocked down, win or lose,
  * and for every one calmed if the fight was won: the team in full, friends
- * at home a share. A calmed Oddment comes home only from a fight that was
+ * at home a share. A calmed Oddkin comes home only from a fight that was
  * won. There is one friend of each kind: calming a kind you already have
  * sends it off happy and gives your friend of that kind the experience
  * (and, if the visitor was an Heirloom, its colours).
