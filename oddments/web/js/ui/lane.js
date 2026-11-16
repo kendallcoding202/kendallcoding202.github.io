@@ -20,6 +20,7 @@ import { FONT, oval, paint, glow, label, worldSrc, paintGround, paintBuilding, p
 // past ZOOM_MOST screen points to a unit, extra width goes to showing more.
 const VIEW = 760;
 const ZOOM_MOST = 0.66;
+const MOST_DOTS = 2.4e6; // the most pixels the world is ever drawn with: about what a large iPhone has
 const HOME = { name: 'Home', blurb: 'Great-aunt Maribel\'s house, where you are staying.' };
 const GAP = 60; // how far apart the team walks behind you: a little more than any of them is tall
 const LANE = 'The Lane';
@@ -141,7 +142,9 @@ export function laneScreen(ctx) {
 
   function fit() {
     const box = wrap.getBoundingClientRect();
-    const dpr = Math.min(2.5, window.devicePixelRatio || 1);
+    // Sharp, but not past what can be drawn sixty times a second: a big screen (a folding phone,
+    // open) is drawn a little less finely than a small one, never with more dots in all.
+    const dpr = Math.min(2.5, window.devicePixelRatio || 1, Math.sqrt(MOST_DOTS / Math.max(1, box.width * box.height)));
     canvas.width = Math.max(1, Math.round(box.width * dpr));
     canvas.height = Math.max(1, Math.round(box.height * dpr));
     cam.w = Math.max(VIEW, box.width / ZOOM_MOST);
