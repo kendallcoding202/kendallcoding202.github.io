@@ -101,6 +101,8 @@ export const SOUNDS = {
   reach: (kit) => { kit.tone({ freq: 392, dur: 0.32, type: 'sine', vol: 0.09, attack: 0.06 }); kit.tone({ freq: 523, dur: 0.42, type: 'sine', vol: 0.09, delay: 0.16, attack: 0.06 }); },
   pip: (kit) => kit.bell(1319, { vol: 0.07, dur: 0.25 }),
   huff: (kit) => kit.tone({ freq: 233, to: 196, dur: 0.12, type: 'square', vol: 0.05 }),
+  // Reached, and not ready to come: a small "uh-uh", after the pip that did come off.
+  notyet: (kit) => { kit.tone({ freq: 349, to: 294, dur: 0.11, type: 'triangle', vol: 0.085, delay: 0.14 }); kit.tone({ freq: 311, to: 220, dur: 0.17, type: 'triangle', vol: 0.085, delay: 0.3 }); },
   settle: (kit) => [1047, 784, 659, 523].forEach((freq, i) => kit.bell(freq, { delay: i * 0.14, vol: 0.085, dur: 0.9 })),
   joined: (kit) => [784, 988, 1175, 1568].forEach((freq, i) => kit.bell(freq, { delay: i * 0.09, vol: 0.09, dur: 0.7 })),
   heirloom: (kit) => { for (let i = 0; i < 7; i++) kit.bell(1047 * Math.pow(2, [0, 7, 4, 12, 9, 16, 12][i] / 12), { delay: i * 0.07, vol: 0.055, dur: 0.6 }); },

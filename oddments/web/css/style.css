@@ -276,9 +276,29 @@ small { color: var(--muted); font-size: 12px; }
 .teamcard b { display: block; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .teamcard .bar { margin-top: 2px; height: 12px; } .teamcard .bar span { line-height: 12px; font-size: 9.5px; }
 .teamcard.down img { filter: grayscale(1); opacity: .6; }
-/* Walking into whoever is waiting: the view rushes in and whites out, and the fight fades up from it. */
+/* How a fight works: three small pages, read before the first fight. */
+.modal.howto .howpage { display: flex; flex-direction: column; gap: 9px; min-height: 250px; }
+.modal.howto h3 { margin: 0; font-size: 17px; color: var(--gold); }
+.modal.howto p { margin: 0; font-size: 14.5px; line-height: 1.32; }
+.modal.howto .elring { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 3px; padding: 8px 6px; border-radius: 14px; background: var(--card); }
+.modal.howto .elring i { font-style: normal; font-weight: 700; color: var(--muted); }
+.ringchip { padding: 2px 9px; border-radius: 10px; font-size: 12.5px; color: #17132e; }
+.ringchip.el-spark { background: #ffc83d; } .ringchip.el-fluff { background: #c9b8e8; } .ringchip.el-suds { background: #4fc4cf; }
+.ringchip.el-crumb { background: #f2a65a; } .ringchip.el-clank { background: #9fb0c8; } .ringchip.el-sprout { background: #7ac74f; }
+.howrow { display: flex; align-items: center; gap: 10px; }
+.howrow small { flex: 1; font-size: 13.5px; line-height: 1.3; color: var(--ink, inherit); }
+.howrow .edge { flex: none; width: 82px; text-align: center; padding: 3px 0; border-radius: 10px; font-size: 12px; font-weight: 700; }
+.howrow .howcall { flex: none; width: 82px; text-align: center; padding: 5px 0; border-radius: 10px; font-size: 12.5px; background: var(--card-hi); }
+.howkin { flex: none; width: 82px; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.howkin img { height: 48px; width: 60px; object-fit: contain; }
+.howdots { display: flex; justify-content: center; gap: 6px; }
+.howdots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line); } .howdots i.on { background: var(--gold); }
+
+/* Walking into whoever is waiting: the view leans in toward them as the dust billows up over it (ui/shift.js),
+   and the fight is there when the dust clears. */
 .lanewrap.meeting .lanecanvas { animation: meet .46s cubic-bezier(.5,0,.9,.4) forwards; }
-@keyframes meet { 35% { filter: brightness(1.5); transform: scale(1.03); } 100% { filter: brightness(3); transform: scale(1.3); opacity: 0; } }
+@keyframes meet { to { transform: scale(1.09); } }
+.shift { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 30; }
 
 /* ------------------------------------------------------------ the fight */
 #fight { min-height: 0; height: 100%; }
@@ -338,6 +358,8 @@ small { color: var(--muted); font-size: 12px; }
 
 .unit .edge { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); padding: 1px 8px; border-radius: 9px; font-size: 11px; font-weight: 700; white-space: nowrap; z-index: 7; box-shadow: 0 2px 6px rgba(0,0,0,.4); }
 .edge.strong { background: var(--good); color: #0c2a15; } .edge.weak { background: var(--bad); color: #3a0010; } .edge.even { background: var(--card-hi); }
+/* "Hurts more", "Hurts less": two short lines, so three in a row over three heads never touch. */
+.unit .edge.two { top: -31px; white-space: normal; width: min-content; text-align: center; line-height: 1.08; padding: 2px 8px 3px; border-radius: 10px; }
 /* Whose turn it is: a glow, and a marker bobbing over its head. */
 .unit.turn .sprite { filter: drop-shadow(0 0 5px rgba(255,200,61,.95)) drop-shadow(0 0 1px rgba(255,200,61,.9)); }
 .unit.turn::before { content: ""; position: absolute; top: -15px; left: 50%; margin-left: -7px; border: 7px solid transparent; border-top: 9px solid var(--gold); border-bottom: 0; filter: drop-shadow(0 2px 0 rgba(0,0,0,.5)); animation: marker .7s ease-in-out infinite alternate; z-index: 6; }
@@ -372,6 +394,15 @@ small { color: var(--muted); font-size: 12px; }
 .float.dmg { color: #fff; } .float.strong { color: var(--gold); font-size: 29px; } .float.weak { color: #cfc8ea; font-size: 18px; }
 .float.heal { color: #8ff0a6; } .float.heart { color: #ff7aa8; font-size: 30px; }
 .float.up, .float.down { font-size: 13px; text-shadow: none; padding: 1px 7px; }
+/* What a Clutterkin says when you Reach out and it is not ready: a little speech bubble over it, which stays a moment. */
+.float.bubble { font-size: 14px; color: #17132e; background: #fff7e8; text-shadow: none; padding: 3px 11px 4px; border-radius: 13px; border: 2.5px solid #17132e; box-shadow: 0 3px 0 rgba(8,6,20,.45); animation: speak 1.3s cubic-bezier(.2,.8,.3,1) forwards; }
+.float.bubble::after { content: ""; position: absolute; left: 50%; bottom: -8px; margin-left: -6px; width: 10px; height: 10px; background: #fff7e8; border-right: 2.5px solid #17132e; border-bottom: 2.5px solid #17132e; transform: rotate(45deg); }
+@keyframes speak { from { opacity: 0; transform: translate(-50%, 4px) scale(.5); } 12% { opacity: 1; transform: translate(-50%, -16px) scale(1.12); } 20% { transform: translate(-50%, -14px) scale(1); } 82% { opacity: 1; transform: translate(-50%, -14px) scale(1); } to { opacity: 0; transform: translate(-50%, -24px) scale(1); } }
+/* And it turns its back on you, with a shake, before it comes round again. */
+.unit.refuse .body { animation: refuse-shake .9s ease-in-out; }
+.unit.refuse .sprite { animation: refuse-turn .9s ease-in-out; }
+@keyframes refuse-turn { 0%, 100% { transform: scaleX(1); } 16%, 74% { transform: scaleX(-1); } }
+@keyframes refuse-shake { 24% { transform: translateX(7px) rotate(4deg); } 36% { transform: translateX(3px) rotate(-3deg); } 48% { transform: translateX(8px) rotate(4deg); } 60% { transform: translateX(4px) rotate(-2deg); } 74% { transform: translateX(6px); } }
 @keyframes rise { from { opacity: 0; transform: translate(-50%, 10px) scale(.6); } 18% { opacity: 1; transform: translate(-50%, -8px) scale(1.15); } 30% { transform: translate(-50%, -12px) scale(1); } 75% { opacity: 1; } to { opacity: 0; transform: translate(-50%, -44px) scale(1); } }
 /* Where a hit lands. */
 .burst { position: absolute; width: 20px; height: 20px; margin: -10px 0 0 -10px; border-radius: 50%; border: 4px solid #fff; animation: burst .34s ease-out forwards; }

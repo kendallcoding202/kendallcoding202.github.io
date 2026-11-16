@@ -41,7 +41,12 @@ const S = (page, fn, arg) => page.evaluate(fn, arg);
 const state = (page) => S(page, () => JSON.parse(JSON.stringify(window.oddments.game.state)));
 const battle = (page) => S(page, () => { const b = window.oddments.game.battle; return b && JSON.parse(JSON.stringify({ ...b, dice: null, events: null })); });
 const screen = (page) => S(page, () => document.querySelector('#screen').dataset.screen);
-const idle = (page) => page.waitForSelector('#fight[data-busy="0"], .modal.result', { timeout: 30000 });
+/** Waits until a fight is waiting for a choice (or is over). How a fight works is explained before a save's first: read past it. */
+async function idle(page) {
+  await page.waitForSelector('#fight[data-busy="0"], .modal.result, .modal.howto', { timeout: 30000 });
+  for (let pages = 0; pages < 6 && await page.$('.modal.howto'); pages++) { await page.click('.modal.howto [data-id="next"]'); await page.waitForTimeout(30); }
+  await page.waitForSelector('#fight[data-busy="0"], .modal.result', { timeout: 30000 });
+}
 const tab = async (page, id) => { await page.click(`[data-tab="${id}"]`); await page.waitForTimeout(120); };
 const modalTitle = (page) => S(page, () => document.querySelector('.modal header span')?.textContent || null);
 const snap = (page, name) => page.screenshot({ path: `${OUT}${name}.png` });

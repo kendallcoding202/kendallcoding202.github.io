@@ -142,17 +142,20 @@ export const moveOf = (id) => (id === BRACE.id ? BRACE : MOVES[id]);
 // out has to clear. A boss has none and cannot be reached. `turns` is how
 // many times it acts in a round. `grown` is the form it will grow into: the
 // data is here for the art list, but nothing grows up until that art exists.
+// `notYet` is what it does when you Reach out and it is not ready to come.
 export const SPECIES = {
   dustbunny: {
     name: 'Dust Bunny', element: 'fluff', hp: 44, oomph: 13, grit: 9, pep: 15, huff: 4,
     moves: [['lintflurry', 1], ['underbed', 3], ['kickupdust', 6]],
     blurb: 'Lives under the bed. Has always lived under the bed.',
+    notYet: 'scoots back under something',
     grown: { at: 12, name: 'Dust Jackalope' },
   },
   sockeel: {
     name: 'Sock Eel', element: 'suds', hp: 52, oomph: 12, grit: 11, pep: 10, huff: 4,
     moves: [['wringout', 1], ['oddsocksnap', 3], ['soakthrough', 6]],
     blurb: 'Went into the wash as one of a pair.',
+    notYet: 'ties itself in a knot',
     grown: { at: 12, name: 'Stocking Serpent' },
   },
   toastghost: {
@@ -160,18 +163,21 @@ export const SPECIES = {
     moves: [['crumbtoss', 1], ['butterup', 3], ['burntoffering', 6]],
     fly: true,
     blurb: 'Somebody forgot it in the toaster. It has not forgotten.',
+    notYet: 'pops back down out of sight',
     grown: { at: 12, name: 'Toastie Phantom' },
   },
   dandepuff: {
     name: 'Dandepuff', element: 'sprout', hp: 36, oomph: 10, grit: 8, pep: 12, huff: 3,
     moves: [['puffscatter', 1], ['takeroot', 3], ['seedstorm', 6]],
     blurb: 'One good sneeze from being a hundred of itself.',
+    notYet: 'puffs up and turns its back',
     grown: { at: 12, name: 'Dandemane' },
   },
   thornhog: {
     name: 'Thornhog', element: 'sprout', hp: 56, oomph: 10, grit: 13, pep: 6, huff: 5,
     moves: [['brambleshove', 1], ['bristleup', 3], ['rosebudjab', 6]],
     blurb: 'Grew out of the rose bush nobody prunes.',
+    notYet: 'bristles',
     grown: { at: 12, name: 'Bramble Boar' },
   },
   grumblebee: {
@@ -179,54 +185,63 @@ export const SPECIES = {
     moves: [['needlework', 1], ['beeline', 3], ['grumble', 6]],
     fly: true,
     blurb: 'Furious about something. Will not say what.',
+    notYet: 'buzzes a tight, cross circle',
     grown: { at: 12, name: 'Rumblebee' },
   },
   snailor: {
     name: 'Snailor', element: 'suds', hp: 58, oomph: 9, grit: 14, pep: 4, huff: 5,
     moves: [['saltspray', 1], ['battendown', 3], ['slowtide', 6]],
     blurb: 'Sailed here from the water butt. It took a year.',
+    notYet: 'pulls its head in',
     grown: { at: 12, name: 'Snadmiral' },
   },
   gnome: {
     name: 'Grumpy Gnome', element: 'clank', hp: 50, oomph: 12, grit: 11, pep: 9, huff: 5,
     moves: [['rodwhack', 1], ['hookandyank', 3], ['lawnorder', 6]],
     blurb: 'Chipped in 1987 and still not over it.',
+    notYet: 'folds its arms',
     grown: { at: 12, name: 'Gnomarch' },
   },
   capbeetle: {
     name: 'Cap Beetle', element: 'clank', hp: 46, oomph: 11, grit: 13, pep: 8, huff: 4,
     moves: [['pincerpop', 1], ['capclamp', 3], ['shakenfizz', 6]],
     blurb: 'Wandered in from the alley wearing somebody\'s lemonade.',
+    notYet: 'clacks its pincers at you',
     grown: { at: 12, name: 'Corkscrew Stag' },
   },
   sparkplug: {
     name: 'Sparkplug', element: 'spark', hp: 40, oomph: 13, grit: 9, pep: 14, huff: 4,
     moves: [['staticsnap', 1], ['shortcircuit', 3], ['tripthefuse', 6]],
     blurb: 'Fell off the garden lights and kept the charge.',
+    notYet: 'crackles and backs off',
     grown: { at: 12, name: 'Surge Protector' },
   },
   ratscal: {
     name: 'Ratscal', element: 'crumb', hp: 42, oomph: 12, grit: 9, pep: 13, huff: 3,
     moves: [['forkjab', 1], ['binraid', 3], ['scrapsforall', 6]],
     blurb: 'Knows what is in every bin on the street.',
+    notYet: 'hides its fork behind it',
     grown: { at: 12, name: 'Ratscallion' },
   },
   cancrab: {
     name: 'Can Crab', element: 'clank', hp: 54, oomph: 11, grit: 15, pep: 6, huff: 5,
     moves: [['tinnip', 1], ['liddown', 3], ['canopener', 6]],
     blurb: 'Moved into a tin of tomatoes one winter and has not been out since.',
+    notYet: 'pulls its lid down',
     grown: { at: 12, name: 'Dustbin Lobster' },
   },
   sockgoblin: {
     name: 'Sock Goblin', element: 'fluff', hp: 44, oomph: 14, grit: 9, pep: 14, huff: 4,
     moves: [['buttonflick', 1], ['pullathread', 3], ['darnit', 6]],
     blurb: 'The other sock. It has been looking for you.',
+    notYet: 'sticks out a woolly tongue',
     grown: { at: 12, name: 'Jumper Troll' },
   },
   coothug: {
     name: 'Coo-Thug', element: 'crumb', hp: 46, oomph: 13, grit: 10, pep: 12, huff: 4,
     moves: [['peckingorder', 1], ['shakedown', 3], ['flocktogether', 6]],
     blurb: 'A feather duster that fell in with a bad crowd.',
+    notYet: 'ruffles up and struts off',
     grown: { at: 12, name: 'Coo-Kingpin' },
   },
   boss_hydra: {

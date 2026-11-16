@@ -9,7 +9,8 @@ import { unitOf } from '../core/battle.js';
 import { h, sprite, setText, wait } from './dom.js';
 import { modal } from './modals.js';
 import { elementTag, moveLine, oddmentCard } from './parts.js';
-import { lineFor } from './text.js';
+import { lineFor, toGo } from './text.js';
+import { howToFight, EDGE_WORDS } from './howto.js';
 import { play as sound } from '../platform/sound.js'; // (this screen has a `play` of its own: playing back the fight)
 
 export function fightScreen(ctx) {
@@ -26,6 +27,7 @@ export function fightScreen(ctx) {
   let orderAt = 0; // how far along the round's order we are
   let busy = true;
   let armed = null; // a move or Call waiting for its target
+  let notReady = 0; // the pips left on whoever was just reached and was not ready (0: nobody was)
   let over = false;
 
   // ------------------------------------------------------------ building
@@ -69,6 +71,7 @@ export function fightScreen(ctx) {
   const root = h('section', { id: 'fight', data: { busy: '1' } }, arena, orderEl, sayEl, panel);
 
   const nameOf = (key) => view[key].unit.name;
+  const kindOf = (key) => view[key].unit.species;
   const say = (text) => { if (text) setText(sayEl, text); };
 
   // ------------------------------------------------------------ drawing
@@ -113,15 +116,17 @@ export function fightScreen(ctx) {
     for (const k of Object.keys(view)) both(k, (el) => el.classList.toggle('turn', k === key));
   }
 
-  function float(key, text, cls) {
+  function float(key, text, cls, ms = 900) {
     const v = view[key];
     const el = h('span', { class: `float ${cls}` }, text);
     const box = v.el.getBoundingClientRect();
     const frame = arena.getBoundingClientRect();
-    el.style.left = `${box.left - frame.left + box.width / 2}px`;
-    el.style.top = `${box.top - frame.top + box.height * 0.2}px`;
+    // (A speech bubble is kept on the screen: over whoever stands at the edge it would otherwise hang off it.)
+    const inset = cls === 'bubble' ? 46 : 0;
+    el.style.left = `${Math.max(inset, Math.min(frame.width - inset, box.left - frame.left + box.width / 2))}px`;
+    el.style.top = `${cls === 'bubble' ? box.top - frame.top - 31 : box.top - frame.top + box.height * 0.2}px`;
     floaters.append(el);
-    setTimeout(() => el.remove(), 900);
+    setTimeout(() => el.remove(), ms);
   }
 
   /** A ring where something lands. */
@@ -199,14 +204,23 @@ export function fightScreen(ctx) {
         sound(event.call === 'reach' ? 'reach' : 'call');
         await pause(380);
         break;
-      case 'huff':
-        view[event.target].huff = event.huff;
+      case 'huff': {
+        const v = view[event.target];
+        v.huff = event.huff;
         drawPlate(event.target);
-        flash(view[event.target].pips, 'pop', 400);
+        flash(v.pips, 'pop', 400);
         sound(event.by > 0 ? 'huff' : 'pip');
-        say(lineFor(event, nameOf));
-        await pause(360);
+        say(lineFor(event, nameOf, kindOf));
+        if (event.by < 0 && event.huff > 0) {
+          // Reached, and not ready to come: it turns its back on you where everyone can see, and says so.
+          flash(v.el, 'refuse', 900);
+          float(event.target, 'Not yet!', 'bubble', 1300);
+          sound('notyet');
+          notReady = event.huff;
+          await pause(900);
+        } else await pause(360);
         break;
+      }
       case 'settle':
         say(lineFor(event, nameOf));
         leave(event.target, 'settled');
@@ -239,6 +253,7 @@ export function fightScreen(ctx) {
     root.dataset.busy = '1';
     disarm();
     drawPanel();
+    notReady = 0;
     while (cursor < battle.events.length) await playEvent(battle.events[cursor++]);
     for (const key of Object.keys(view)) { view[key].hp = view[key].unit.hp; view[key].huff = view[key].unit.huff; drawPlate(key); drawChips(key); }
     playing = false;
@@ -246,7 +261,8 @@ export function fightScreen(ctx) {
     root.dataset.busy = '0';
     if (over) { finish(); return; }
     const who = game.choices().unit;
-    say(`${who.name}'s turn. Pick a move.`);
+    // After a Reach out that was not enough, the turn is still yours: say how far there is to go, and whose move it is.
+    say(notReady ? `${toGo(notReady)} ${who.name}'s turn.` : `${who.name}'s turn. Pick a move.`);
     drawPanel();
   }
 
@@ -325,7 +341,8 @@ export function fightScreen(ctx) {
       both(key, (el) => el.classList.add('pick'));
       if (move && move.power) {
         const edge = elementEdge(move.element, v.unit.element);
-        if (edge) { v.edge.hidden = false; v.edge.className = `edge ${edge > 0 ? 'strong' : 'weak'}`; setText(v.edge, edge > 0 ? 'Strong' : 'Weak'); }
+        // What this move will do to them, in words that cannot be read the other way round.
+        if (edge) { v.edge.hidden = false; v.edge.className = `edge two ${edge > 0 ? 'strong' : 'weak'}`; setText(v.edge, edge > 0 ? EDGE_WORDS.strong : EDGE_WORDS.weak); }
       }
       if (type === 'call' && option.id === 'reach') {
         const soft = allies.some((ally) => ally.hp > 0 && ally.element === ELEMENTS[v.unit.element].beats);
@@ -372,6 +389,7 @@ export function fightScreen(ctx) {
       ],
       actions: [
         { id: 'stay', label: 'Back to the fight', kind: 'plain' },
+        { id: 'howto', label: 'How a fight works', kind: 'plain', onClick: () => { howToFight(); } },
         { id: 'concede', label: 'Walk away', kind: 'danger', onClick: () => { if (!busy && game.concede()) play(); } },
       ],
     });
@@ -384,6 +402,8 @@ export function fightScreen(ctx) {
   }
 
   // The fight may already be several events old: whoever is quicker than the team has acted.
-  play();
+  // Before your very first, how a fight works is explained; the fight waits until that has been read.
+  if (game.state.seen.fights) play();
+  else { game.state.seen.fights = true; ctx.save(); howToFight(play); }
   return { el: root };
 }
