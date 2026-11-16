@@ -20,9 +20,10 @@ let passed = 0;
 const errors = [];
 const requests = [];
 
+const failures = [];
 function check(ok, what, detail = '') {
   if (ok) { passed++; console.log(`  ok    ${what}`); }
-  else { failed++; console.log(`  FAIL  ${what} ${detail}`); }
+  else { failed++; failures.push(what); console.log(`  FAIL  ${what} ${detail}`); }
 }
 const section = (name) => console.log(`\n${name}`);
 
@@ -103,6 +104,17 @@ async function walkTo(p, id) {
   }
   return (await where(p)).near === id;
 }
+/** Waits until the walker has stopped: two looks a moment apart that agree. */
+async function stopped(p) {
+  let last = await where(p);
+  for (let i = 0; i < 40; i++) {
+    await p.waitForTimeout(150);
+    const now = await where(p);
+    if (now.x === last.x && now.y === last.y) return now;
+    last = now;
+  }
+  return last;
+}
 /** Goes straight to the garden door (the engine's shortcut) and walks in. */
 async function enterGarden(p) {
   await S(p, () => { window.oddments.game.standAt('garden'); window.oddments.ctx.show('lane'); });
@@ -121,7 +133,7 @@ check(await S(page, () => !document.querySelector('#tabs').hidden), 'the tabs sh
 check((await S(page, () => window.oddments.game.enterRoom('garden'))) === false, 'a room cannot be walked into from somewhere else');
 await snap(page, 'e2e-lane');
 check(await walkTo(page, 'garden'), 'tapping walks you to the garden gate');
-const moved = await where(page);
+const moved = await stopped(page);
 check(Math.hypot(moved.x - at.x, moved.y - at.y) > 150, 'by actually crossing the ground between');
 await page.waitForSelector('.placecard[data-spot="garden"]');
 check(await S(page, () => document.querySelector('.placecard h2').textContent.includes('The Garden Gate') && !document.querySelector('[data-act="enter"]').disabled), 'standing at its door offers the way in');
@@ -131,7 +143,7 @@ check(await walkTo(page, 'alley'), 'you can walk on to a place that is not built
 await page.waitForSelector('.placecard[data-spot="alley"]');
 check(await S(page, () => document.querySelector('[data-act="enter"]').disabled && document.querySelector('[data-act="enter"]').textContent === 'Not built yet'), 'but its door is locked');
 check((await S(page, () => window.oddments.game.enterRoom('alley'))) === false, 'and the game cannot be told otherwise');
-at = await where(page);
+at = await stopped(page); // still walking the last few steps to the door when the card appears
 await page.goto(`${base}?debug&fast`);
 await ready(page);
 const again = await where(page);
@@ -478,4 +490,5 @@ check(errors.length === 0, 'no errors, and nothing refused by the content securi
 await browser.close();
 server.close();
 console.log(`\n${passed} passed, ${failed} failed`);
+for (const what of failures) console.log(`FAILED: ${what}`);
 process.exit(failed ? 1 : 0);
