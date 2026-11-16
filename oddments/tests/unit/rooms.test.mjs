@@ -1,10 +1,10 @@
 // Rooms: who is restless at each stop of a place, and a visit from stepping in to resting at home.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rollEncounter, fairEncounter, poolOf, placeCalm, canMeet, nextGroup, roomOpen, enterRoom, leaveRoom, afterFight, heldBy, maxHpOf, teamOf, someone, stillAbout } from '../../web/js/core/rooms.js';
+import { rollEncounter, fairEncounter, poolOf, placeCalm, staysCalm, calmedIn, wandering, wanderersMost, canMeet, nextGroup, roomOpen, enterRoom, leaveRoom, afterFight, heldBy, maxHpOf, teamOf, someone, stillAbout } from '../../web/js/core/rooms.js';
 import { BARRICADE, districtOf } from '../../web/js/core/world.js';
 import { newState } from '../../web/js/core/state.js';
-import { ROOMS, SPECIES, BREATHER, TEAM_SIZE, VISITORS, WANDERERS, START_TEAM, statAt } from '../../web/js/core/balance.js';
+import { ROOMS, SPECIES, BREATHER, TEAM_SIZE, VISITORS, WANDERERS, START_TEAM, statAt, roomOf } from '../../web/js/core/balance.js';
 
 const GARDEN = ROOMS[0];
 
@@ -172,7 +172,7 @@ test('a place you have calmed stays calm: stepping in is a stroll, with a few wa
 test('a stroll is counted in wanderers calmed, cannot calm the place again, and ends when you rest', () => {
   const state = newState(1e12, 4);
   state.rooms.garden.clears = 1;
-  state.rooms.garden.best = 5;
+  state.rooms.garden.calmed = 31;
   enterRoom(state, 'garden');
   const garden = ROOMS[0];
   const about = state.visit.groups.map((group, stop) => (group.done ? -1 : stop)).filter((stop) => stop >= 0);
@@ -186,7 +186,7 @@ test('a stroll is counted in wanderers calmed, cannot calm the place again, and 
   });
   assert.equal(nextGroup(state.visit, garden), -1, 'everyone met: nobody about until you have rested');
   assert.equal(stillAbout(state.visit), 0);
-  assert.deepEqual([state.rooms.garden.clears, state.rooms.garden.best], [1, 5], 'the record of calming it stands as it was');
+  assert.deepEqual([state.rooms.garden.clears, state.rooms.garden.calmed], [1, 31], 'the record of calming it stands as it was');
   assert.equal(leaveRoom(state), true);
   assert.equal(enterRoom(state, 'garden'), true);
   assert.ok(stillAbout(state.visit) >= 1, 'and after a rest, others have wandered in');
@@ -249,21 +249,24 @@ test('after a win that group is calm, everyone takes a breather, and the rest ar
   assert.equal(state.visit.hp[a.id], 10 + Math.ceil(maxHpOf(a) * BREATHER));
   assert.equal(state.visit.hp[b.id], Math.ceil(maxHpOf(b) * BREATHER), 'whoever was knocked down gets up again');
   assert.equal(state.visit.hp[c.id], maxHpOf(c), 'never past full');
-  assert.equal(state.rooms.garden.best, 1);
+  assert.equal(state.rooms.garden.calmed, 0b00100, 'and the place remembers who is calm');
+  assert.deepEqual([0, 1, 2, 3, 4].map((stop) => staysCalm(state, 'garden', stop)), [false, false, true, false, false]);
+  assert.equal(calmedIn(state, 'garden'), 1);
 });
 
-test('a loss sends you home and is counted; nothing else is taken', () => {
+test('a loss sends you home and is counted; nothing is taken, and whoever you calmed before it stays calm', () => {
   const state = newState(1e12, 1);
   enterRoom(state, 'garden');
   afterFight(state, 0, true, {});
   const friends = JSON.stringify(state.friends);
   assert.deepEqual(afterFight(state, 1, false, {}), { cleared: false, home: true });
   assert.equal(state.visit, null);
-  assert.deepEqual(state.rooms.garden, { visits: 1, clears: 0, losses: 1, best: 1 });
+  assert.deepEqual(state.rooms.garden, { visits: 1, clears: 0, losses: 1, calmed: 0b00001 });
   assert.equal(JSON.stringify(state.friends), friends);
   assert.equal(enterRoom(state, 'garden'), true, 'and you can set straight out again, rested');
-  assert.equal(state.visit.stop, 0);
-  assert.ok(state.visit.groups.every((group) => !group.done), 'with everyone restless again');
+  assert.equal(state.visit.stop, 1);
+  assert.deepEqual(state.visit.groups.map((group) => group.done), [true, false, false, false, false], 'with only the others still waiting');
+  assert.deepEqual(state.visit.groups[0], { foes: [], done: true });
 });
 
 test('calming the boss clears the place and ends the visit where you stand', () => {
@@ -272,7 +275,7 @@ test('calming the boss clears the place and ends the visit where you stand', () 
   for (let stop = 0; stop < GARDEN.path.length - 1; stop++) assert.deepEqual(afterFight(state, stop, true, {}), { cleared: false, home: false });
   assert.deepEqual(afterFight(state, GARDEN.path.length - 1, true, {}), { cleared: true, home: false });
   assert.equal(state.visit, null);
-  assert.deepEqual(state.rooms.garden, { visits: 1, clears: 1, losses: 0, best: GARDEN.path.length });
+  assert.deepEqual(state.rooms.garden, { visits: 1, clears: 1, losses: 0, calmed: 0b11111 });
 });
 
 test('resting early is allowed and costs nothing', () => {
@@ -286,4 +289,100 @@ test('resting early is allowed and costs nothing', () => {
 
 test('Health is worked out from kind and level', () => {
   assert.equal(maxHpOf({ species: 'sockeel', level: 3 }), statAt(SPECIES.sockeel.hp, 3));
+});
+
+// ------------------------------------------------------------------ whoever you calm stays calm
+
+test('whoever you calm stays calm, visit after visit, and the ringleader faces you once the others are, however many visits that took', () => {
+  const state = newState(1e12, 4);
+  const last = GARDEN.path.length - 1;
+  // One group a visit, resting or being carried home between: four visits, and the ringleader is next.
+  [2, 0, 3, 1].forEach((stop, n) => {
+    assert.equal(enterRoom(state, 'garden'), true);
+    assert.equal(state.visit.stop, n, 'you step in with everyone calmed so far still calm');
+    assert.equal(canMeet(state.visit, GARDEN, last), false, 'not the ringleader yet');
+    assert.equal(state.visit.groups[stop].done, false);
+    assert.ok(!state.visit.groups[stop].wander && fairEncounter(GARDEN, stop, state.visit.groups[stop].foes), 'whoever is restless is waiting where they were');
+    assert.deepEqual(afterFight(state, stop, true, {}), { cleared: false, home: false });
+    if (n % 2) assert.deepEqual(afterFight(state, last, false, {}), { cleared: false, home: true }); else assert.equal(leaveRoom(state), true);
+    assert.equal(calmedIn(state, 'garden'), n + 1);
+  });
+  assert.equal(state.rooms.garden.calmed, 0b01111);
+  assert.equal(placeCalm(state, 'garden'), false, 'the place is not calm until its ringleader is');
+  assert.equal(enterRoom(state, 'garden'), true);
+  assert.equal(state.visit.stop, 4);
+  assert.equal(state.visit.stroll, false);
+  assert.equal(canMeet(state.visit, GARDEN, last), true, 'the ringleader will face you straight away');
+  assert.equal(nextGroup(state.visit, GARDEN), last, 'and is who a sensible visitor meets next');
+  assert.ok(fairEncounter(GARDEN, last, state.visit.groups[last].foes) && !state.visit.groups[last].wander);
+  assert.deepEqual(afterFight(state, last, true, {}), { cleared: true, home: false });
+  assert.deepEqual(state.rooms.garden, { visits: 5, clears: 1, losses: 2, calmed: 0b11111 });
+});
+
+test('you are never stuck at a ringleader: every time you set out, a few wanderers are about the stops you have calmed, there if you want them', () => {
+  for (let seed = 1; seed <= 30; seed++) {
+    const state = newState(1e12, seed);
+    state.rooms.garden.calmed = 0b01111;
+    for (let visit = 0; visit < 3; visit++) {
+      assert.equal(enterRoom(state, 'garden'), true);
+      const about = state.visit.groups.map((group, stop) => (wandering(state.visit, stop) ? stop : -1)).filter((stop) => stop >= 0);
+      assert.ok(about.length >= 1 && about.length <= WANDERERS.groups[1], `seed ${seed}: ${about.length} groups wandering`);
+      assert.equal(about.includes(GARDEN.path.length - 1), false, 'never at the ringleader\'s stop');
+      for (const stop of about) {
+        const group = state.visit.groups[stop];
+        assert.equal(group.wander, true);
+        assert.ok(fairEncounter(GARDEN, stop, group.foes), 'they are whoever belongs at that stop, at its levels');
+        assert.ok(canMeet(state.visit, GARDEN, stop), 'and can be met, for the practice');
+      }
+      state.visit.groups.forEach((group, stop) => { if (stop < 4 && !about.includes(stop)) assert.deepEqual(group, { foes: [], done: true }); });
+      assert.equal(stillAbout(state.visit), about.length + 1);
+      assert.equal(state.visit.stop, 4, 'they are not counted against you');
+      assert.equal(nextGroup(state.visit, GARDEN), 4, 'and nobody\'s next but the ringleader is');
+      // Calm one: it is practice. The place is no calmer and no less calm for it.
+      assert.deepEqual(afterFight(state, about[0], true, {}), { cleared: false, home: false });
+      assert.equal(wandering(state.visit, about[0]), false);
+      assert.deepEqual([state.visit.stop, state.rooms.garden.calmed, state.rooms.garden.clears], [4, 0b01111, 0]);
+      assert.equal(leaveRoom(state), true);
+    }
+  }
+});
+
+test('wanderers leave one calm stop empty, so none come until two are calm; and none come to Tin Can Alley until it is calm, where there is no walking round them', () => {
+  const count = (state, room) => { enterRoom(state, room); const n = state.visit.groups.filter((_, stop) => wandering(state.visit, stop)).length; leaveRoom(state); return n; };
+  for (let seed = 1; seed <= 20; seed++) {
+    const state = newState(1e12, seed);
+    assert.equal(wanderersMost(state, 'garden'), 0);
+    assert.equal(count(state, 'garden'), 0, 'nobody calmed, nobody wandering');
+    state.rooms.garden.calmed = 0b00100;
+    assert.equal(count(state, 'garden'), 0, 'one stop calm: it stays empty');
+    state.rooms.garden.calmed = 0b00101;
+    assert.equal(wanderersMost(state, 'garden'), 1);
+    assert.equal(count(state, 'garden'), 1, 'two calm: one has somebody wandering');
+    enterRoom(state, 'garden');
+    assert.ok(wandering(state.visit, 0) !== wandering(state.visit, 2));
+    assert.ok(!state.visit.groups[1].wander && !state.visit.groups[3].wander && !state.visit.groups[4].wander, 'and whoever is restless is nobody\'s wanderer');
+    assert.equal(nextGroup(state.visit, GARDEN), 1, 'next is the nearest still restless, not a wanderer');
+    leaveRoom(state);
+    state.rooms.garden.calmed = 0b01111;
+    assert.equal(wanderersMost(state, 'garden'), 3);
+    // The alley is one group wide.
+    state.rooms.garden.clears = 1;
+    state.rooms.alley.calmed = 0b01111;
+    assert.equal(wanderersMost(state, 'alley'), 0);
+    assert.equal(count(state, 'alley'), 0);
+    enterRoom(state, 'alley');
+    assert.deepEqual(state.visit.groups.slice(0, 4), [0, 1, 2, 3].map(() => ({ foes: [], done: true })), 'the way to Baron Pilfer is clear');
+    assert.equal(nextGroup(state.visit, roomOf('alley')), 4);
+    leaveRoom(state);
+    state.rooms.alley.clears = 1;
+    assert.equal(wanderersMost(state, 'alley'), 3, 'calm, it is a stroll like anywhere else');
+  }
+});
+
+test('from outside, only the stops still restless have somebody keeping to cover', () => {
+  const state = newState(1e12, 2);
+  const posts = districtOf('garden').posts;
+  assert.equal(heldBy(state).filter((point) => posts.includes(point)).length, 5);
+  state.rooms.garden.calmed = 0b01010;
+  assert.deepEqual(heldBy(state).filter((point) => posts.includes(point)), [posts[0], posts[2], posts[4]]);
 });

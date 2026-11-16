@@ -82,7 +82,7 @@ const ALLEY = districtOf('alley');
 const SHUT = { x: ALLEY.gate.x, y: ALLEY.gate.y, r: BARRICADE };
 const UP_THE_ALLEY = { x: ALLEY.gate.x, y: ALLEY.gate.y - 90 };
 /** A game in which the garden has been calmed, so the alley is open. */
-const gardenCalm = (seed = 11) => { const game = fresh(seed); game.begin({ name: 'Kit' }); game.state.rooms.garden.clears = 1; game.state.rooms.garden.best = 5; return game; };
+const gardenCalm = (seed = 11) => { const game = fresh(seed); game.begin({ name: 'Kit' }); game.state.rooms.garden.clears = 1; game.state.rooms.garden.calmed = 31; return game; };
 
 test('walking in through the gate, rested, begins a visit; walking back out does not end it', () => {
   const game = fresh();
@@ -278,7 +278,7 @@ test('walk up to any group and you have met it; the boss will not be met until t
   assert.equal(game.nextGroup(), 4);
 });
 
-test('resting is done at home: it ends the visit, and the garden is restless again', () => {
+test('resting is done at home: it ends the visit, and whoever was calmed stays calm', () => {
   const game = fresh(4);
   game.travelTo('garden');
   playOut(game.startEncounter(), {});
@@ -293,9 +293,16 @@ test('resting is done at home: it ends the visit, and the garden is restless aga
   for (const member of game.teamHealth()) assert.equal(member.hp, member.max);
   assert.equal(game.rest(), false);
   assert.equal(game.setTeam(game.state.team.slice(0, 2)), true, 'rested, the team can change');
+  // From outside, nobody keeps to cover where you calmed them; back in, only the others are waiting.
+  assert.equal(game.held().filter((point) => !point.r && POSTS.includes(point)).length, 4);
+  assert.equal(game.held().includes(POSTS[0]), false);
   game.travelTo('garden');
-  assert.equal(game.state.visit.stop, 0);
-  assert.ok(game.state.visit.groups.every((group) => !group.done));
+  assert.equal(game.state.visit.stop, 1, 'the group calmed before the rest is still calm');
+  assert.deepEqual(game.state.visit.groups.map((group) => group.done), [true, false, false, false, false]);
+  assert.deepEqual(game.state.visit.groups[0], { foes: [], done: true }, 'and nobody stands where they stood');
+  assert.equal(game.nextGroup(), 1);
+  assert.equal(game.calmedIn('garden'), 1);
+  assert.equal(game.staysCalm('garden', 0) && !game.staysCalm('garden', 1), true);
   assert.equal(game.goHome(), true);
   assert.equal(game.near(), 'home');
   assert.equal(game.place(), 'lane');
@@ -370,7 +377,7 @@ test('a whole room can be played from the gate to the boss, and clearing it is r
   assert.deepEqual(fights.map((f) => f.stop), [0, 1, 2, 3, 4]);
   assert.ok(fights.every((f) => f.won));
   assert.equal(game.state.rooms.garden.clears, 1);
-  assert.equal(game.state.rooms.garden.best, 5);
+  assert.equal(game.calmedIn('garden'), 5);
   assert.equal(game.state.book.boss_hydra.met, true);
   assert.ok(game.state.friends.length > 3, 'and made friends on the way');
   assert.ok(game.state.friends.every((f) => !SPECIES[f.species].boss));
@@ -402,7 +409,7 @@ test('a whole room can be played from the gate to the boss, and clearing it is r
     assert.equal(game.state.visit.stop, about.length);
   }
   assert.equal(game.state.rooms.garden.clears, 1, 'calming it is counted once');
-  assert.equal(game.state.rooms.garden.best, 5);
+  assert.equal(game.calmedIn('garden'), 5);
 });
 
 test('with fx off no events are kept; with fx on the fight tells its story', () => {

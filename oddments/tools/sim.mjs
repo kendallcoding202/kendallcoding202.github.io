@@ -1,7 +1,10 @@
 // Plays a place many times with a stand-in player and reports two things: how
 // long fights last, and how hard the place is. A place after the first is
 // played by someone who has first calmed every place before it, however many
-// visits that took them.
+// visits that took them. Whoever is calmed stays calm, so a visit after the
+// first picks up where the last one stopped: "calmed on the first visit" is
+// the share who do a place in one go, without going home. The stand-in never
+// goes home early and never stops for wanderers.
 //   node tools/sim.mjs [players=400] [--style=friendly|brawler|careless] [--visits=4] [--room=garden|alley|pantry|wash|stacks|rooftops|attic|dark]
 // friendly  a sensible player who also calms kinds they do not have yet
 // brawler   a sensible player who never reaches out

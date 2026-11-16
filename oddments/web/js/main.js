@@ -149,7 +149,7 @@ function resultDialog(ctx, summary, foes) {
         : 'That is all eight. Every place on the lane is calm, and it is not Monday yet. Everyone is rested. Ines Tock will want to hear, and so will great-aunt Maribel: the telephone is at home.'));
   }
   else if (summary.won) lines.push(h('p', null, 'They are calm now. Everyone catches their breath.'));
-  else lines.push(h('p', null, 'Your friends are worn out. You carry them home for a rest: you keep everything they learned.'));
+  else lines.push(h('p', null, 'Your friends are worn out. You carry them home for a rest. Whoever you calmed stays calm, and you keep everything they learned.'));
 
   for (const joined of summary.joined) {
     lines.push(h('div', { class: 'joined', data: { joined: joined.species } }, sprite(joined.species, joined.heirloom, 'flip'),

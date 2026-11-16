@@ -177,7 +177,8 @@ export function insideScreen(ctx) {
     if (size < 1) return;
     const top = post.y - (boss ? 182 : 92);
     const others = place.path.length - 1 - visit.stop;
-    label(pen, spot.name, post.x, top, spot.boss ? '#ffd9de' : '#fff7e8', spot.boss ? '#ff5a6a' : 'rgba(255,255,255,.28)');
+    if (visit.stroll || visit.groups[index].wander) label(pen, 'wandering', post.x, top, '#cdeed6', 'rgba(205,238,214,.3)', 21);
+    else label(pen, spot.name, post.x, top, spot.boss ? '#ffd9de' : '#fff7e8', spot.boss ? '#ff5a6a' : 'rgba(255,255,255,.28)');
     if (spot.boss && others > 0) label(pen, `calm the other ${others} first`, post.x, top + 38, '#b6b0d6', 'rgba(255,255,255,.14)', 19);
   }
 
@@ -284,13 +285,13 @@ export function insideScreen(ctx) {
       const words = SPOTS[spot.does];
       const resting = spot.does === 'rest';
       card.replaceChildren(...[h('h2', null, words.name),
-        h('small', null, resting && !visit ? 'Everyone is rested. Come back when they are worn out.' : resting ? `${words.about} ${visit.stroll ? 'Others will have wandered in by the time you go back.' : 'Whoever you calmed out there will be restless again by the time you go back.'}` : words.about),
+        h('small', null, resting && !visit ? 'Everyone is rested. Come back when they are worn out.' : resting ? `${words.about} ${visit.stroll ? 'Others will have wandered in by the time you go back.' : 'Whoever you have calmed stays calm.'}` : words.about),
         resting && visit ? teamList() : null,
         h('button', { class: `btn ${resting && !visit ? 'plain' : 'gold'}`, disabled: resting && !visit, data: { act: spot.does }, onclick: () => act(spot) }, words.label)].filter(Boolean));
       return;
     }
     card.replaceChildren(
-      h('div', { class: 'cardhead' }, h('h2', null, place.name, ' ', h('small', null, howItGoes(visit, place))), h('small', { class: 'resthint' }, 'Rest at home')),
+      h('div', { class: 'cardhead' }, h('h2', null, place.name, ' ', h('small', null, howItGoes(visit, place, true))), h('small', { class: 'resthint' }, 'Rest at home')),
       teamList());
   }
 

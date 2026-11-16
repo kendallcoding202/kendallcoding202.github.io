@@ -66,6 +66,7 @@ test('saves built to break the game at launch are repaired, and the game then ru
     { v: 2, friends: REAL.friends, where: 'in the hedge' },
     { v: 2, friends: REAL.friends, where: { x: 480, y: 800 }, visit: REAL.visit },
     { v: 2, friends: REAL.friends, rooms: { garden: { clears: -1, best: 99 }, alley: { clears: 9 } }, visit: { room: 'alley', stop: 0, groups: [], hp: {} } },
+    { v: 2, friends: REAL.friends, rooms: { garden: { calmed: 1e9 }, alley: { calmed: 'all' }, pantry: { calmed: -7 } }, visit: { room: 'garden', stop: 9, groups: [{ wander: true }, { wander: 7, done: true }, null, { foes: [], wander: true }, { wander: true, done: true }], hp: {} } },
     { v: 1, friends: REAL.friends, book: { sockeel: 'yes', constructor: { met: true } }, stats: [], settings: 7, seen: 'everything' },
     { v: 1, friends: REAL.friends, rng: 'seven', nextFriendId: -3, started: 'yes', player: 'me' },
     { v: 0.5, friends: REAL.friends, rng: 1e308 },

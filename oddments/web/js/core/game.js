@@ -4,7 +4,7 @@
 import { TEAM_SIZE, NAME_LENGTH, lookOf, roomOf, roomBuilt } from './balance.js';
 import { createBattle, choices, act, concede } from './battle.js';
 import { settleUp } from './progress.js';
-import { rollEncounter, fairEncounter, enterRoom, leaveRoom, afterFight, canMeet, nextGroup, heldBy, heldIn, roomOpen, placeCalm, teamOf, maxHpOf } from './rooms.js';
+import { rollEncounter, fairEncounter, enterRoom, leaveRoom, afterFight, canMeet, nextGroup, heldBy, heldIn, roomOpen, placeCalm, staysCalm, calmedIn, teamOf, maxHpOf } from './rooms.js';
 import { insideOf, stepIn, routeIn, spotIn, onMat, besidePost } from './indoors.js';
 import { WORLD, POST, stepWalk, routeTo, straighten, roomy, standing, canStand, spotNear, spotOf, districtOf, districtAt, postNear, personNear, personAt, TALK } from './world.js';
 import { goalOf, aimOf, storySoFar, hasNews, talk, takeCall } from './story.js';
@@ -296,9 +296,13 @@ export class Game {
 
   roomOpen(roomId) { return roomOpen(this.state, roomId); }
 
+  /** Whether one stop of a place has been calmed (and so stays calm), and how many of its stops have. */
+  staysCalm(roomId, stop) { return staysCalm(this.state, roomId, stop); }
+  calmedIn(roomId) { return calmedIn(this.state, roomId); }
+
   /**
-   * Rests at home, which ends a visit: everyone is fresh, and whoever was calmed is restless
-   * again. You have to be standing at home's door.
+   * Rests at home, which ends a visit: everyone is fresh. Whoever was calmed stays calm.
+   * You have to be standing at home's door.
    */
   rest() { return this.place() === 'path' && this.near() === 'home' && leaveRoom(this.state); }
 

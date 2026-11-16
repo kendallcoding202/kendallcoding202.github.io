@@ -1,5 +1,10 @@
 // Rooms: who is restless at each stop of a place, and a visit from stepping in
 // to resting at home. Rules only: no DOM, no clock, no storage.
+//
+// Whoever you calm stays calm. A place remembers which of its stops have been
+// calmed (`calmed`, a bit for each stop), through resting and through being
+// carried home, so you never calm the same group twice to get at its
+// ringleader. Calm the ringleader and the whole place is calm for good.
 import { SPECIES, ROOMS, HEIRLOOM, VISITORS, WANDERERS, BREATHER, TEAM_SIZE, roomOf, roomBuilt, statAt } from './balance.js';
 import { nextRandom, rollInt, rollPick, own } from './util.js';
 import { BARRICADE, districtOf, districtAt } from './world.js';
@@ -13,6 +18,16 @@ export function roomOpen(state, roomId) {
 
 /** Whether a place has been calmed at least once. Calm places are where Heirlooms are looked for. */
 export const placeCalm = (state, roomId) => own(state.rooms, roomId) && state.rooms[roomId].clears > 0;
+
+/** Whether one stop of a place has been calmed: whoever was restless there is calm, and stays so. */
+export const staysCalm = (state, roomId, stop) => own(state.rooms, roomId) && (placeCalm(state, roomId) || ((state.rooms[roomId].calmed >> stop) & 1) === 1);
+
+/** How many stops of a place are calm for good: all of a calm place's, else those calmed so far. */
+export function calmedIn(state, roomId) {
+  const room = roomOf(roomId);
+  if (!room || !own(state.rooms, roomId)) return 0;
+  return room.path.filter((_, stop) => staysCalm(state, roomId, stop)).length;
+}
 
 /**
  * Who may turn up at a stop, as [kind, weight]: the stop's own list, and, in a place that has been
@@ -89,7 +104,8 @@ export function heldBy(state, where = state.where) {
     if (state.visit && state.visit.room === room.id) {
       area.posts.forEach((post, i) => { if (!state.visit.groups[i].done) held.push(post); });
     } else if (!placeCalm(state, room.id) && (state.visit || here !== room.id)) {
-      held.push(...area.posts); // (a calm place has nobody keeping to cover: whoever wanders there is seen when you walk in)
+      // (Nobody keeps to cover at a stop that is calm, nor anywhere in a calm place: whoever wanders there is seen when you walk in.)
+      held.push(...area.posts.filter((_, stop) => !staysCalm(state, room.id, stop)));
     }
   }
   return held;
@@ -111,9 +127,13 @@ export function canMeet(visit, room, index) {
   return index < room.path.length - 1 || visit.stop >= room.path.length - 1;
 }
 
-/** The group a sensible visitor meets next: the nearest stop to the gate still restless, the boss last. Or -1. */
+/**
+ * The group a sensible visitor meets next: the nearest stop to the gate still restless, the boss
+ * last. Or -1. (On a stroll that is the nearest wanderer; in a place not yet calm, wanderers are
+ * nobody's next: they are there if you want them.)
+ */
 export function nextGroup(visit, room) {
-  for (let i = 0; i < room.path.length; i++) if (canMeet(visit, room, i)) return i;
+  for (let i = 0; i < room.path.length; i++) if (canMeet(visit, room, i) && !visit.groups[i].wander) return i;
   return -1;
 }
 
@@ -123,21 +143,40 @@ const nobody = () => ({ foes: [], done: true });
 export const someone = (group) => !!group && Array.isArray(group.foes) && group.foes.length > 0;
 /** How many groups of a visit are still about: restless, or wandering. */
 export const stillAbout = (visit) => (visit ? visit.groups.filter((group) => !group.done).length : 0);
+/** Whether the group at a stop of a visit is a wanderer, there if you want it: not somebody who has to be calmed. */
+export const wandering = (visit, index) => !!visit && !!visit.groups[index] && !visit.groups[index].done && (visit.stroll === true || visit.groups[index].wander === true);
 
-/** Which stops of a calm place have wanderers at them this time: a few of those before its ringleader's, by the dice. */
-function wanderedTo(dice, room) {
-  const stops = room.path.map((_, stop) => stop).slice(0, -1);
-  const count = Math.min(stops.length, rollInt(dice, WANDERERS.groups[0], WANDERERS.groups[1]));
+/**
+ * How many groups of wanderers there can be in a place at once. In a calm place, WANDERERS says.
+ * In one not yet calm they come only to stops already calmed, always leaving one of those empty
+ * (so none until two are calm), and never where there is no walking round them: nobody you have
+ * calmed is ever in the way of somebody you have not.
+ */
+export function wanderersMost(state, roomId) {
+  const room = roomOf(roomId);
+  if (placeCalm(state, roomId)) return Math.min(room.path.length - 1, WANDERERS.groups[1]);
+  const area = districtOf(roomId);
+  if (area && area.narrow) return 0;
+  const calm = room.path.slice(0, -1).filter((_, stop) => staysCalm(state, roomId, stop)).length;
+  return Math.max(0, Math.min(calm - 1, WANDERERS.groups[1]));
+}
+
+/** Which of some stops have wanderers at them this time: a few, `most` at the most, by the dice. */
+function wanderedTo(dice, stops, most) {
+  const from = [...stops];
+  const count = Math.min(most, rollInt(dice, WANDERERS.groups[0], WANDERERS.groups[1]));
   const chosen = new Set();
-  while (chosen.size < count) chosen.add(stops.splice(Math.floor(nextRandom(dice) * stops.length), 1)[0]);
+  while (chosen.size < count) chosen.add(from.splice(Math.floor(nextRandom(dice) * from.length), 1)[0]);
   return chosen;
 }
 
 /**
- * Steps into a place with the team rested. Everyone who is restless there is
- * rolled now, one group for each stop of its path, so they can all be seen
- * standing about before any of them is met. `stop` counts the groups calmed
- * so far. Returns false if the place is not open.
+ * Steps into a place with the team rested. Everyone who is still restless
+ * there is rolled now, one group for each stop not yet calmed, so they can
+ * all be seen standing about before any of them is met. A stop calmed on an
+ * earlier visit has nobody at it, or a few wanderers (`wander`): there to be
+ * met if you want the practice, never in the way of the ringleader. `stop`
+ * counts the stops that are calm. Returns false if the place is not open.
  *
  * A place already calm stays calm. Stepping into it is a stroll (`stroll`):
  * a few wanderers at some of its stops, nobody at the rest, and no ringleader.
@@ -146,17 +185,24 @@ export function enterRoom(state, roomId) {
   if (state.visit || !roomOpen(state, roomId) || teamOf(state).length === 0) return false;
   const room = roomOf(roomId);
   const stroll = placeCalm(state, roomId);
-  const about = stroll ? wanderedTo(state, room) : null;
+  const last = room.path.length - 1;
+  const calm = room.path.map((_, stop) => stop).filter((stop) => stop < last && staysCalm(state, roomId, stop));
+  const most = wanderersMost(state, roomId);
+  const about = most > 0 ? wanderedTo(state, calm, most) : new Set();
   state.visit = {
-    room: roomId, stop: 0, stroll,
+    room: roomId, stop: stroll ? 0 : calm.length, stroll,
     hp: Object.fromEntries(teamOf(state).map((friend) => [friend.id, maxHpOf(friend)])),
-    groups: room.path.map((_, stop) => (stroll && !about.has(stop) ? nobody() : { foes: rollEncounter(state, room, stop, stroll), done: false })),
+    groups: room.path.map((_, stop) => {
+      if (about.has(stop)) return stroll ? { foes: rollEncounter(state, room, stop, true), done: false } : { foes: rollEncounter(state, room, stop, false), done: false, wander: true };
+      if (calm.includes(stop) || (stroll && stop === last)) return nobody();
+      return { foes: rollEncounter(state, room, stop, false), done: false };
+    }),
   };
   state.rooms[roomId].visits++;
   return true;
 }
 
-/** Rests at home. Everyone is fresh the next time they set out. In a place not yet calm, whoever was calmed is restless again; in a calm one, others will have wandered in. */
+/** Rests at home. Everyone is fresh the next time they set out. Whoever was calmed stays calm; others may have wandered in by then. */
 export function leaveRoom(state) {
   if (!state.visit) return false;
   state.visit = null;
@@ -165,9 +211,10 @@ export function leaveRoom(state) {
 
 /**
  * Moves the visit on after a fight with group `index`. `left` maps friend id
- * to the Health it finished with. A win calms that group and everyone takes a
- * breather, or the place is cleared and the visit over once its boss is
- * calmed; a loss ends the visit at home.
+ * to the Health it finished with. A win calms that group, for good, and
+ * everyone takes a breather, or the place is cleared and the visit over once
+ * its boss is calmed; a loss ends the visit at home, with everyone calmed
+ * before it still calm.
  * Returns { cleared, home }.
  */
 export function afterFight(state, index, won, left) {
@@ -181,8 +228,11 @@ export function afterFight(state, index, won, left) {
   }
   visit.groups[index].done = true;
   // On a stroll the count is of wanderers calmed; the place's record was made when it was calmed.
-  visit.stop = visit.groups.filter((group) => group.done && someone(group)).length;
-  if (!visit.stroll) record.best = Math.max(record.best, visit.stop);
+  if (visit.stroll) visit.stop = visit.groups.filter((group) => group.done && someone(group)).length;
+  else {
+    record.calmed |= 1 << index; // (a wanderer's stop was calm already)
+    visit.stop = calmedIn(state, visit.room);
+  }
   if (index === room.path.length - 1 && !visit.stroll) {
     record.clears++;
     state.visit = null;

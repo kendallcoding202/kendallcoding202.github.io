@@ -293,7 +293,7 @@ test('the goal leads from the first call to a calm garden, back to Ines Tock, an
   assert.equal(nextPlace(game.state).id, 'alley');
   assert.equal(placesCalm(game.state), 1);
   // Part of the way up the alley, the goal counts how far you have got.
-  game.state.rooms.alley.best = 3;
+  game.state.rooms.alley.calmed = 0b111;
   assert.deepEqual(game.goal().count, [3, 5]);
 
   // And on through every place: the goal is to calm it, then to tell Ines Tock, then the next.

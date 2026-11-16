@@ -15,7 +15,7 @@ function calmGardenGame(seed = 3) {
   const state = newState(NOW, seed);
   state.started = true;
   state.rooms.garden.clears = 1;
-  state.rooms.garden.best = 5;
+  state.rooms.garden.calmed = 31;
   return new Game(state, { now: NOW, fx: false });
 }
 const back = (game, edit = () => {}) => { const raw = JSON.parse(game.serialize(NOW)); edit(raw); return reviveState(raw, NOW); };
@@ -68,7 +68,10 @@ test('a save cannot bring a calm place\'s ringleader back, nor fill it with more
   fresh.travelTo('garden');
   const restless = back(fresh, (raw) => { raw.visit.stroll = true; raw.visit.groups[2] = { foes: [], done: true }; raw.visit.groups[4] = { foes: [], done: true }; });
   assert.equal(restless.visit.stroll, false);
-  assert.ok(restless.visit.groups.every((group) => someone(group)), 'everyone is there, the ringleader too');
+  assert.ok(restless.visit.groups.every((group, stop) => stop === 2 || someone(group)), 'everyone not calmed is there, the ringleader too');
+  assert.deepEqual(restless.visit.groups[2], { foes: [], done: true }, 'a group the save says is calmed, is');
+  assert.equal(restless.rooms.garden.calmed, 0b00100, 'and stays so');
+  assert.equal(restless.visit.stop, 1);
   assert.equal(restless.visit.groups[4].done, false, 'and the ringleader has not been calmed by a save saying so');
 });
 
@@ -88,7 +91,7 @@ test('the heading says how a visit is going: groups calmed while a place is rest
 test('a calm place you walk into is strolled the same way: wanderers on its floor, no ringleader, and it stays calm', () => {
   const state = newState(NOW, 9);
   state.started = true;
-  for (const id of ['garden', 'alley', 'pantry']) { state.rooms[id].clears = 1; state.rooms[id].best = 5; }
+  for (const id of ['garden', 'alley', 'pantry']) { state.rooms[id].clears = 1; state.rooms[id].calmed = 31; }
   for (const friend of state.friends) friend.level = 12;
   const game = new Game(state, { now: NOW, fx: false });
   assert.equal(game.travelTo('pantry'), true);

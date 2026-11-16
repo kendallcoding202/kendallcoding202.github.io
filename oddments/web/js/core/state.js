@@ -4,7 +4,7 @@ import {
   LOOK_IDS, lookOf, xpNeeded, roomOf, roomBuilt, WANDERERS,
 } from './balance.js';
 import { newFriend } from './progress.js';
-import { roomOpen, maxHpOf, rollEncounter, fairEncounter, heldBy, heldIn, placeCalm, someone } from './rooms.js';
+import { roomOpen, maxHpOf, rollEncounter, fairEncounter, heldBy, heldIn, placeCalm, someone, staysCalm, calmedIn, wanderersMost } from './rooms.js';
 import { own } from './util.js';
 import { settleWhere, spotNear } from './world.js';
 import { insideOf, settleIn } from './indoors.js';
@@ -24,9 +24,10 @@ export function newState(now = Date.now(), seed = (now ^ 0x9e3779b9) | 0) {
     team: friends.map((friend) => friend.id), // up to three friend ids, in fighting order
     where: settleWhere(null), // where you are standing in the world; a new game starts at the door of home
     indoors: null, // the building you are inside and where on its floor: { id, x, y }. `where` is then its door
-    rooms: Object.fromEntries(ROOM_IDS.map((id) => [id, { visits: 0, clears: 0, losses: 0, best: 0 }])),
+    // For each place: how often it has been called on, calmed and lost in, and which of its stops are calm for good (a bit each).
+    rooms: Object.fromEntries(ROOM_IDS.map((id) => [id, { visits: 0, clears: 0, losses: 0, calmed: 0 }])),
     // The visit you are on, from stepping into a place until you rest at home:
-    // { room, stop: how many groups are calmed, hp: { friendId: health }, groups: [{ foes: [who], done }] one per stop }
+    // { room, stop: how many stops are calm, hp: { friendId: health }, groups: [{ foes: [who], done, wander: true if a wanderer }] one per stop }
     visit: null,
     // The scrapbook: which kinds have been met, and which as an Heirloom.
     book: Object.fromEntries(SPECIES_IDS.map((id) => [id, { met: friends.some((friend) => friend.species === id), heirloom: false }])),
@@ -109,16 +110,25 @@ function reviveVisit(raw, state) {
     visit.stop = visit.groups.filter((group) => group.done && someone(group)).length;
     return visit;
   }
-  // Each group is kept only if it is a fair roll for its stop; otherwise it is rolled again. The
-  // boss cannot have been calmed already (that ends the visit), nor before everyone else.
+  // Whoever is restless at a stop is kept only if a fair roll for it; otherwise rolled again. A
+  // group the save says is calmed, is: calming is for good. The boss cannot have been calmed
+  // already (that calms the place), nor before everyone else. At a stop that was calm before this
+  // visit there is nobody, or a wanderer: as many as there can be, and no more.
+  const last = room.path.length - 1;
+  const most = wanderersMost(state, room.id);
+  let about = 0;
   visit.groups = room.path.map((_, stop) => {
     const saved = isObj(raw.groups[stop]) ? raw.groups[stop] : {};
-    return {
-      foes: fairEncounter(room, stop, saved.foes) ? kept(saved.foes) : rollEncounter(state, room, stop, false),
-      done: saved.done === true && stop < room.path.length - 1,
-    };
+    const fair = fairEncounter(room, stop, saved.foes);
+    if (stop < last && staysCalm(state, room.id, stop)) {
+      if (saved.done !== true && saved.wander === true && fair && about < most) { about++; return { foes: kept(saved.foes), done: false, wander: true }; }
+      return saved.wander === true && fair ? { foes: kept(saved.foes), done: true, wander: true } : { foes: fair ? kept(saved.foes) : [], done: true };
+    }
+    const done = saved.done === true && stop < last;
+    if (done) state.rooms[room.id].calmed |= 1 << stop;
+    return { foes: fair ? kept(saved.foes) : done ? [] : rollEncounter(state, room, stop, false), done };
   });
-  visit.stop = visit.groups.filter((group) => group.done).length;
+  visit.stop = calmedIn(state, room.id);
   return visit;
 }
 
@@ -155,7 +165,13 @@ export function reviveState(saved, now = Date.now()) {
   for (const id of ROOM_IDS) {
     const raw = isObj(rooms[id]) ? rooms[id] : {};
     const stops = roomBuilt(roomOf(id)) ? roomOf(id).path.length : 0;
-    state.rooms[id] = { visits: int(raw.visits, 0), clears: stops ? int(raw.clears, 0) : 0, losses: int(raw.losses, 0), best: int(raw.best, 0, 0, stops) };
+    const clears = stops ? int(raw.clears, 0) : 0;
+    // Which stops are calm for good: all of a calm place's; otherwise those calmed so far, never the
+    // ringleader's (calming that is calming the place). A save from before groups stayed calm kept
+    // only how many had been calmed in one go (`best`): that many, from the gate, are calm.
+    const others = stops ? (1 << (stops - 1)) - 1 : 0;
+    const calmed = clears > 0 ? (others << 1) | 1 : Number.isInteger(raw.calmed) ? raw.calmed & others : (1 << int(raw.best, 0, 0, Math.max(0, stops - 1))) - 1;
+    state.rooms[id] = { visits: int(raw.visits, 0), clears, losses: int(raw.losses, 0), calmed };
   }
   // The world was laid out afresh in version 2: a save from before it wakes up rested, at home.
   const mapped = saved.v >= 2;

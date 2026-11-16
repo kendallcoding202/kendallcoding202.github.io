@@ -35,12 +35,14 @@ export function lineFor(event, name, kind = null) {
 }
 
 /**
- * How a visit is going, in a few words, for a heading: how many of a restless place's groups are
- * calmed; or, on a stroll through a calm one, how many are wandering about.
+ * How a visit is going, in a few words, for a heading: how many of a restless place's stops are
+ * calm (and whether anyone is wandering about the calm ones); or, on a stroll through a calm
+ * place, how many are wandering about.
  */
-export function howItGoes(visit, room) {
-  if (!visit.stroll) return `${visit.stop} of ${room.path.length} calmed`;
-  const about = visit.groups.filter((group) => !group.done).length;
+export function howItGoes(visit, room, brief = false) {
+  const about = visit.groups.filter((group) => !group.done && (visit.stroll || group.wander)).length;
+  // (`brief`, for where there is no room: a card's heading, beside the place's name.)
+  if (!visit.stroll) return `${visit.stop} of ${room.path.length} calmed${about && !brief ? ` · ${about} wandering` : ''}`;
   return about ? `calm · ${about} wandering` : 'calm';
 }
 

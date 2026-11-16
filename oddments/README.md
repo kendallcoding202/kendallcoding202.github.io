@@ -57,7 +57,7 @@ web/                    the game: what ships
     balance.js          every number and name. Tune here.
     battle.js           the fight: turn order, damage, moves, Calls, reaching out
     progress.js         experience, levels, who comes home
-    rooms.js            who is restless in a place, what ground they hold, and a visit: from stepping in to resting at home; and a stroll through a place that is calm
+    rooms.js            who is restless in a place, what ground they hold, which groups are calm for good, and a visit: from stepping in to resting at home; and a stroll through a place that is calm
     indoors.js          the floors of the buildings you can walk into: where feet can go, what there is to do
     story.js            the people of the lane, what each says and when, and the goal
     world.js            the open world: what stands where, where feet can go, finding the way

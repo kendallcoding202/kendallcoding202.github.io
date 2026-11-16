@@ -450,7 +450,7 @@ await ready(page);
 s = await state(page);
 check(s.player.name === 'Marisol' && s.player.look === 'sitter_c' && s.friends.length === beforeReload.friends.length, 'a reload keeps the house-sitter and every friend');
 check(JSON.stringify(s.team) === JSON.stringify(beforeReload.team) && s.settings.fast === true, 'and the team and settings');
-check((await screen(page)) === 'lane' && s.visit && s.visit.stop === 0, 'a reload in the middle of a fight puts you back in the garden before it');
+check((await screen(page)) === 'lane' && s.visit && s.visit.stop === beforeReload.visit.stop && s.rooms.garden.calmed === beforeReload.rooms.garden.calmed, 'a reload in the middle of a fight puts you back in the garden before it, with whoever was calm still calm');
 check(JSON.stringify(s.visit.groups) === JSON.stringify(beforeReload.visit.groups) && Math.abs(s.where.x - beforeReload.where.x) < 1 && Math.abs(s.where.y - beforeReload.where.y) < 1, 'facing the same ones, standing where you stood');
 await page.waitForTimeout(600);
 check((await screen(page)) === 'lane' && (await game(page, () => window.oddments.game.meeting())) >= 0, 'and nothing starts just because you are standing in front of them');
@@ -472,12 +472,24 @@ check((await screen(page)) === 'lane' && (await state(page)).stats.battles === b
 check((await state(page)).visit !== null, 'walking home is not yet resting');
 await page.waitForSelector('.placecard[data-spot="home"] [data-act="rest"]');
 check((await page.$$('.placecard[data-spot="home"] .teamcard')).length === 3, 'at home the card shows how everyone is, and offers a rest');
+check(await S(page, () => document.querySelector('.placecard[data-spot="home"] small').textContent.includes('Whoever you have calmed stays calm.')), 'and says that whoever you have calmed stays calm');
 await snap(page, 'e2e-home-rest');
 await page.click('.placecard[data-spot="home"] [data-act="rest"]');
 await page.waitForSelector('.placecard[data-spot="home"] [data-act="friends"]');
 s = await state(page);
 check(s.visit === null, 'Rest ends the visit');
 check(await game(page, () => window.oddments.game.teamHealth().every((member) => member.hp === member.max)), 'and everyone has their breath back');
+// Whoever you calmed stays calm: rested, the garden still counts them, and walking back in only the others are waiting.
+const keptCalm = s.rooms.garden.calmed;
+const keptCount = [0, 1, 2, 3, 4].filter((stop) => (keptCalm >> stop) & 1).length;
+check(keptCount >= 1 && keptCalm === beforeReload.rooms.garden.calmed, `resting does not undo anyone: ${keptCount} of the garden's groups are still calm`);
+check(await S(page, (want) => document.querySelector('.goalchip span').textContent.endsWith(`(${want} of 5)`), keptCount), 'the goal still counts them');
+check((await game(page, () => window.oddments.game.held().filter((point) => !point.r && point.x < 1000).length)) === 5 - keptCount, 'from outside, nobody keeps to cover where you calmed them');
+await enterGarden(page);
+s = await state(page);
+check(s.visit.stop === keptCount && s.visit.groups.every((group, stop) => (((keptCalm >> stop) & 1) ? group.done || group.wander === true : !group.done && !group.wander)), 'back in the garden, only the ones not yet calmed are waiting for you');
+check(await S(page, (want) => document.querySelector('#lane .where').textContent.startsWith(`${want} of 5 calmed`), keptCount), 'and the heading says how many are calm already');
+await snap(page, 'e2e-garden-kept');
 
 // =============================================================== the whole room
 section('The whole garden');
@@ -491,8 +503,9 @@ while (!cleared && visits < 6) {
   // The first time round, take them out of order: the far ones before the near ones.
   const order = visits === 1 ? [2, 0, 3, 1, 4] : [0, 1, 2, 3, 4];
   while ((await state(page)).visit) {
-    const calmed = (await state(page)).visit.stop;
-    const index = order[calmed];
+    // (Whoever was calmed on an earlier visit stays calm: the next is the first in that order still restless.)
+    const groups = (await state(page)).visit.groups;
+    const index = order.find((stop) => !groups[stop].done && !groups[stop].wander);
     await onward(page, index);
     await idle(page);
     if (index === 4) {
@@ -511,7 +524,7 @@ while (!cleared && visits < 6) {
 }
 s = await state(page);
 check(cleared, `a sensible player calms the whole garden, taking the groups in any order (took ${visits} visit${visits === 1 ? '' : 's'})`);
-check(s.rooms.garden.clears === 1 && s.rooms.garden.best === 5 && s.visit === null, 'clearing it is recorded and the visit is over');
+check(s.rooms.garden.clears === 1 && s.rooms.garden.calmed === 31 && s.visit === null, 'clearing it is recorded and the visit is over');
 check(s.book.boss_hydra.met && !s.friends.some((f) => SPECIES[f.species].boss), 'the boss was met, and did not come home');
 check(s.friends.length >= 5, `friends were made along the way (${s.friends.length})`);
 check(s.friends.filter((f) => s.team.includes(f.id)).every((f) => f.level > 3), 'and the team grew');
@@ -542,7 +555,7 @@ await botFight(page, { befriend: true });
 check((await modalTitle(page)) === 'Won' || (await modalTitle(page)) === 'Home again', 'and it ends like any other, never as the place being calmed again');
 await page.click('[data-id="next"]');
 s = await state(page);
-check(s.rooms.garden.clears === 1 && s.rooms.garden.best === 5, 'calming the garden is counted once, and its record stands');
+check(s.rooms.garden.clears === 1 && s.rooms.garden.calmed === 31, 'calming the garden is counted once, and its record stands');
 await S(page, () => { window.oddments.game.goHome(); window.oddments.game.standBy('ines'); window.oddments.ctx.show('lane'); });
 await page.waitForSelector('.placecard[data-person="ines"] [data-act="talk"].gold');
 await page.click('[data-act="talk"]');
@@ -606,7 +619,7 @@ while (!alleyCalm && calls < 8) {
 s = await state(page);
 check(alleyCalm, `a sensible player calms the alley (took ${calls} visit${calls === 1 ? '' : 's'})`);
 check(metInTurn.every((group, i) => group === i), 'meeting its groups in turn, from the gate up', metInTurn.join(' '));
-check(s.rooms.alley.clears === 1 && s.rooms.alley.best === 5 && s.visit === null, 'calming it is recorded and the visit is over');
+check(s.rooms.alley.clears === 1 && s.rooms.alley.calmed === 31 && s.visit === null, 'calming it is recorded and the visit is over');
 check(s.book.boss_baron.met && ['cancrab', 'sockgoblin', 'coothug'].filter((kind) => s.book[kind].met).length >= 2, 'the Baron is in the scrapbook, and so are kinds met nowhere else');
 check((await where(page)).district === 'alley', 'you are still standing in the alley');
 await page.waitForTimeout(400);
@@ -786,7 +799,7 @@ for (let calls = 0; calls < 6 && !pantryCalm; calls++) {
   pantryCalm = (await state(page)).rooms.pantry.clears > 0;
 }
 s = await state(page);
-check(pantryCalm && s.rooms.pantry.best === 5 && s.book.boss_crumbwyrm.met, 'the pantry is calmed, and the Crumbwyrm is in the scrapbook');
+check(pantryCalm && s.rooms.pantry.calmed === 31 && s.book.boss_crumbwyrm.met, 'the pantry is calmed, and the Crumbwyrm is in the scrapbook');
 check(['dumpling', 'pepperimp', 'eggknight', 'jellywobble'].filter((kind) => s.book[kind].met).length === 4, 'all four of its kinds have been met');
 check(s.indoors && s.indoors.id === 'pantry' && !!(await page.$('#inside[data-room="pantry"]')) && (await S(page, () => document.querySelector('#inside .where').textContent)) === 'calm', 'you are still standing in it, and it says it is calm');
 await page.waitForTimeout(400);

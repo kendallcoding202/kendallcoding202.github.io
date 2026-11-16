@@ -5,6 +5,7 @@
 // place is calm because its boss was calmed, not because a flag says so). The
 // story keeps only what nothing else records: which conversations were had.
 import { ROOMS, ROOM_IDS, roomOf, roomBuilt } from './balance.js';
+import { calmedIn } from './rooms.js';
 
 export const CAST = {
   maribel: { name: 'Great-aunt Maribel', role: 'on the phone', art: 'cast_maribel' },
@@ -58,7 +59,7 @@ const INES = {
     'Restless, they pick fights, and your three will stand up for you. But you need not flatten everyone. Reach out to one, keep reaching, and it may calm down and come home with you.',
     'Every place on this lane has a ringleader. Calm everyone else there and it will face you. Calm it too, and the whole place settles.',
   ],
-  sendOff: (place) => `Start with ${place}: up the lane, north and west of here. When your friends are worn out, come home and rest. Off you go.`,
+  sendOff: (place) => `Start with ${place}: up the lane, north and west of here. When your friends are worn out, come home and rest: whoever you have calmed stays calm. Off you go.`,
   already: 'And the garden is calm already? Maribel said you were quick.',
   nudge: (place) => `${place} first. Everyone else, then the ringleader. And rest when you need to: there is no prize for limping.`,
   reach: 'And do try Reaching out. A friend made is worth more than a fight won.',
@@ -226,7 +227,7 @@ export function takeCall(state) {
 
 // How the goal of calming each place is put. (A place not listed here gets a plain line.)
 const CALMING = {
-  garden: { title: 'Calm the garden', detail: 'Calm everyone else there and Old Summerlong, the sprinkler, will face you. Rest at home whenever you need to.' },
+  garden: { title: 'Calm the garden', detail: 'Calm everyone else there and Old Summerlong, the sprinkler, will face you. Rest at home whenever you need to: whoever you have calmed stays calm.' },
   alley: { title: 'Calm Tin Can Alley', detail: 'East along the street, past the launderette. A narrow place: they come one after another, and Baron Pilfer is at the far end. Crumb jams Clank.' },
   pantry: { title: 'Calm the Midnight Pantry', detail: 'North of home, left at the fork: go in by its front door. Calm everyone on the floor and the Crumbwyrm will face you. Suds wash away Crumb.' },
   wash: { title: 'Calm the Wash', detail: 'The launderette, east along the street: in by its front door. Mostly Suds, and Fluff mops up Suds. The Spin Cycle is the machine at the far end.' },
@@ -254,8 +255,8 @@ export function goalOf(state) {
       return goal('friend', 'Make a friend in the garden', 'Walk in through the garden gate. In a fight, Reach out to one you like instead of hitting it, and win.', { room: next.id });
     }
     const stops = next.path.length;
-    const about = CALMING[next.id] || { title: `Calm ${next.name}`, detail: 'Calm everyone else there and its ringleader will face you. Rest at home whenever you need to.' };
-    return goal('calm', about.title, about.detail, { room: next.id, count: [Math.min(stops, state.rooms[next.id].best), stops] });
+    const about = CALMING[next.id] || { title: `Calm ${next.name}`, detail: 'Calm everyone else there and its ringleader will face you. Rest at home whenever you need to: whoever you have calmed stays calm.' };
+    return goal('calm', about.title, about.detail, { room: next.id, count: [calmedIn(state, next.id), stops] });
   }
   return goal('more', next ? `${next.name} is next` : 'The lane is quiet',
     next ? 'It is not built yet: this is as far as the slice goes. The places you have calmed stay calm, with a few always wandering about in them: more friends to make, and Heirlooms come out more often among them.' : 'Every place on the lane is calm. Mr. Spick has nothing to collect.',

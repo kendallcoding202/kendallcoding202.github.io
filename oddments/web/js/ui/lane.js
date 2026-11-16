@@ -268,7 +268,7 @@ export function laneScreen(ctx) {
     if (!visit) {
       // Not calling here, you only see that something is in there. Just cleared and still inside, nothing is;
       // and a place that is calm has nobody keeping to cover at all (whoever wanders there is seen when you walk in).
-      if (state.rooms[room.id].clears > 0 || (!state.visit && game.district() === room.id)) { shown.set(key, { what: 'none', since: -1 }); return; }
+      if (game.staysCalm(room.id, index) || (!state.visit && game.district() === room.id)) { shown.set(key, { what: 'none', since: -1 }); return; }
       const big = spot.boss ? 1.5 : 1;
       const size = pop(key, 'bush');
       const sway = Math.sin(clock * 2.2 + index * 2) * 2.5;
@@ -296,7 +296,9 @@ export function laneScreen(ctx) {
     if (size < 1) return;
     const top = post.y - (boss ? 182 : 92);
     const others = room.path.length - 1 - visit.stop;
-    label(pen, spot.name, post.x, top, spot.boss ? '#ffd9de' : '#fff7e8', spot.boss ? '#ff5a6a' : 'rgba(255,255,255,.28)');
+    // (Whoever is only wandering about says so: they are there if you want them, not in your way.)
+    if (visit.stroll || group.wander) label(pen, 'wandering', post.x, top, '#cdeed6', 'rgba(205,238,214,.3)', 21);
+    else label(pen, spot.name, post.x, top, spot.boss ? '#ffd9de' : '#fff7e8', spot.boss ? '#ff5a6a' : 'rgba(255,255,255,.28)');
     // The boss will not be met until everyone else is calm, and says so.
     if (spot.boss && others > 0) label(pen, `calm the other ${others} first`, post.x, top + 38, '#b6b0d6', 'rgba(255,255,255,.14)', 19);
   }
@@ -474,7 +476,7 @@ export function laneScreen(ctx) {
     if (id === 'home') {
       const inside = (kind) => h('button', { class: `btn ${kind}`, data: { act: 'inside' }, onclick: () => goIn('home') }, 'Go inside');
       if (visit) {
-        card.replaceChildren(h('h2', null, HOME.name), h('small', null, `Rest here and everyone gets their breath back. ${visit.stroll ? 'Others will have wandered in by the time you go back.' : 'Whoever you calmed out there will be restless again by the time you go back.'}`), teamList(),
+        card.replaceChildren(h('h2', null, HOME.name), h('small', null, `Rest here and everyone gets their breath back. ${visit.stroll ? 'Others will have wandered in by the time you go back.' : 'Whoever you have calmed stays calm.'}`), teamList(),
           h('div', { class: 'cardrow' },
             h('button', { class: 'btn gold', data: { act: 'rest' }, onclick: () => { if (game.rest()) { ctx.save(); play('rest'); toast('Everyone is rested.', { kind: 'good' }); cardFor = undefined; } } }, 'Rest'),
             inside('plain')));
@@ -494,7 +496,7 @@ export function laneScreen(ctx) {
         h('h2', null, place.name, ' ', elementTag(place.element)),
         h('small', null, place.blurb, ' ', built
           ? (record.clears ? `Calm now, and it will stay calm. A few are always wandering about in there, different each time you have rested: Heirlooms come out more often among them. Mostly ${ELEMENTS[place.element].name}.`
-            : `${place.path.length} groups to calm, the last a boss${bossId && state.book[bossId].met ? ` (${SPECIES[bossId].name})` : ''}. Mostly ${ELEMENTS[place.element].name}.${record.visits ? ` Most calmed in one go: ${record.best} of ${place.path.length}.` : ''}`)
+            : `${place.path.length} groups to calm, the last a boss${bossId && state.book[bossId].met ? ` (${SPECIES[bossId].name})` : ''}. Mostly ${ELEMENTS[place.element].name}.${game.calmedIn(place.id) ? ` ${game.calmedIn(place.id)} of ${place.path.length} calmed so far, and they stay calm.` : ''}`)
           : `Not built yet: this slice ends at ${LAST_BUILT.name}.`),
         // A place you walk into by its door has a button for it (or says why not just now); one you
         // walk into across the grass says so.
@@ -512,7 +514,7 @@ export function laneScreen(ctx) {
     // Out on a visit and not at a door: how everyone is, and how far you have got.
     const room = roomOf(visit.room);
     card.replaceChildren(
-      h('div', { class: 'cardhead' }, h('h2', null, room.name, ' ', h('small', null, howItGoes(visit, room))), h('small', { class: 'resthint' }, inside && inside !== visit.room ? 'Rest at home before calling here' : 'Rest at home')),
+      h('div', { class: 'cardhead' }, h('h2', null, room.name, ' ', h('small', null, howItGoes(visit, room, true))), h('small', { class: 'resthint' }, inside && inside !== visit.room ? 'Rest at home before calling here' : 'Rest at home')),
       teamList());
   }
 
