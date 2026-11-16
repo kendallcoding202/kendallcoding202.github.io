@@ -30,6 +30,10 @@ const TABS = [
 const SCREENS = { fight: fightScreen };
 for (const tab of TABS) SCREENS[tab.id] = tab.build;
 
+// What the loading screen says is being got ready, in order, and how long it is shown at the least (ms).
+const BOOT_LINES = ['Finding the odd socks…', 'Buttering the toast…', 'Dusting under the bed…', 'Lighting the lantern…'];
+const BOOT_SHOWN = 1200;
+
 // Once the save is being erased, nothing may write the old game back
 // (the page saves itself as it unloads, which would undo the change).
 let frozen = false;
@@ -103,12 +107,19 @@ async function boot() {
 
   // Whichever copy of the save was the newer, both places now hold it.
   if (state) ctx.save();
-  return loadAssets((p) => { $('#bootfill').style.width = `${Math.round(p * 100)}%`; }).then(() => {
+  // The loading screen says what is being got ready as its bar fills, and is seen for at least a moment:
+  // on a phone the pictures arrive from the app itself almost at once, and a screen that flashed by would
+  // only be a flicker. (?fast skips the wait, for tests.)
+  const began = performance.now();
+  return loadAssets((p) => {
+    $('#bootfill').style.width = `${Math.round(p * 100)}%`;
+    $('#bootline').textContent = BOOT_LINES[Math.min(BOOT_LINES.length - 1, Math.floor(p * BOOT_LINES.length))];
+  }).then(() => new Promise((resolve) => { setTimeout(resolve, flag('fast') ? 0 : Math.max(0, BOOT_SHOWN - (performance.now() - began))); })).then(() => {
     $('#app').hidden = false;
     ctx.show('lane');
     if (!game.state.started) lookDialog(ctx, true);
     $('#boot').classList.add('done');
-    setTimeout(() => $('#boot').remove(), 500);
+    setTimeout(() => $('#boot').remove(), 600);
   });
 }
 

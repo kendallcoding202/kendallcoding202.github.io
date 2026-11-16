@@ -15,7 +15,8 @@
 | The cast | **Generated for this game** | 1 image holding all four: Ines Tock, Dov, Mr. Spick, Great-aunt Maribel |
 | The world | **Generated for this game** | 2 images, which became 14 pictures (below) |
 | Tin Can Alley | **Generated for this game** | 2 images, which became 13 pictures (below) |
-| App icon and launch image | **Generated for this game** | 1 image: the house-sitter with a lantern and a calm Dust Bunny. `tools/ios-art.py` makes the icon and the launch image from it |
+| App icon | **Generated for this game** | 1 image: the house-sitter with a lantern and a calm Dust Bunny. `tools/ios-art.py` makes the icon from it |
+| Launch image and loading screen | Painted from the game's own world by `tools/postcard.mjs` | A postcard of the lane, home in the middle; nothing generated |
 
 **Fourteen images have been generated in all.** Each was agreed before it was made, and every one came out usable on the first attempt. One has been touched up since, in code and for nothing: on the icon the pencil in her hair was painted lying on top of the bun, and `tools/ios-art.py` grows hair over its lower end so that it comes out of the bun instead. The archived original is as it was painted. Close up, the covered patch is a little softer than the hair round it; a repaint would be one more image.
 
@@ -93,7 +94,8 @@ Optional, not counted: front and back views of the neighbours if they are ever t
 ```sh
 NODE_USE_ENV_PROXY=1 node tools/gen-art.mjs   # generates only what is in the manifest and missing. Costs money.
 python3 tools/process-art.py                  # trims and sizes art/raw/ into web/assets/, cuts the sheets, makes the ground tiles
-python3 tools/ios-art.py                      # makes the app icon and launch image from the icon painting
+python3 tools/ios-art.py                      # makes the app icon from the icon painting
+node tools/postcard.mjs                       # paints the loading screen and launch image from the game's own world (needs Playwright)
 python3 tools/heirlooms.py                    # repaints every Heirloom; contact sheet in art/review/heirlooms.jpg
 ```
 

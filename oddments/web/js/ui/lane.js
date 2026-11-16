@@ -58,6 +58,8 @@ const GROUND = {
 const PAVED = new Set(PLACES.filter(({ dress }) => dress.floor === 'cobbles').map(({ room }) => room.id));
 const FOOTFALL = 36;
 let goalHeard = null;
+/** How the world is laid out for painting: for tools/postcard.mjs, which paints the same world for the loading screen. */
+export const LAID_OUT = { PLACES, WALLS, GROUND };
 /** The last place that is built: where this slice of the game ends. */
 const LAST_BUILT = ROOMS.filter(roomBuilt).pop();
 

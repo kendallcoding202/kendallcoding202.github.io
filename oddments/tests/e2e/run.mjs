@@ -733,6 +733,28 @@ for (const [name, viewport] of [
   await other.context().close();
 }
 
+// =============================================================== the loading screen
+section('The loading screen');
+const opening = await newPage();
+// (The room paintings are held back a moment, so the screen can be looked at while its bar is filling.)
+await opening.route('**/assets/bg/**', async (route) => { await new Promise((resolve) => setTimeout(resolve, 600)); route.continue(); });
+const opened = Date.now();
+await opening.goto(`${base}?debug&reset&seed=7`, { waitUntil: 'domcontentloaded' });
+await opening.waitForFunction(() => { const scene = document.querySelector('#boot .bootscene'); return !!scene && scene.complete && scene.naturalWidth > 0; });
+check(await S(opening, () => document.querySelector('#boot .bootscene').src.endsWith('assets/boot/lane.webp') && document.querySelector('#boot .bootscene').naturalWidth === document.querySelector('#boot .bootscene').naturalHeight), 'the loading screen is a postcard of the lane, painted from the game');
+check(await S(opening, () => { const r = document.querySelector('#boot .bootscene').getBoundingClientRect(); const style = getComputedStyle(document.querySelector('#boot .bootscene')); return r.left <= 0.5 && r.top <= 0.5 && r.right >= innerWidth - 0.5 && r.bottom >= innerHeight - 0.5 && style.objectFit === 'cover' && style.animationName === 'boot-drift'; }), 'it fills the screen from its middle, as the iPhone launch image does, and drifts slowly toward the cottage');
+check(await S(opening, () => document.querySelectorAll('#boot .boottitle span').length === 10 && document.querySelector('#boot .boottitle').textContent === 'Clutterkin' && document.querySelector('#boot .boottag').textContent === 'The house is awake.' && document.querySelectorAll('#boot .bootfly').length === 7), 'with the name over it, and fireflies');
+check(await S(opening, () => [...document.querySelectorAll('#boot .boottitle span, #boot .boottag, #boot .bootbar, #bootline')].every((el) => { const r = el.getBoundingClientRect(); return r.left >= -0.5 && r.right <= innerWidth + 0.5 && r.top >= 0 && r.bottom <= innerHeight + 0.5; })), 'and everything written on it fits the screen');
+await opening.waitForFunction(() => parseInt(document.querySelector('#bootfill') ? document.querySelector('#bootfill').style.width : '100', 10) > 0);
+check(await S(opening, () => !document.querySelector('#bootline') || /…$/.test(document.querySelector('#bootline').textContent)), 'it says what is being got ready');
+await opening.screenshot({ path: `${OUT}e2e-loading.png` });
+await ready(opening);
+const shownFor = Date.now() - opened;
+check(shownFor >= 1100, `it is seen for a moment, not flashed past (${shownFor} ms)`);
+await opening.waitForTimeout(900);
+check(await S(opening, () => !document.querySelector('#boot') && !!document.querySelector('.modal.intro')), 'and then it is gone, and the game begins');
+await opening.context().close();
+
 // =============================================================== sound
 // (A test cannot listen. It can read what the sound code says it is doing: whether the audio clock is
 // running, which tune is playing, and how often each effect has been asked for.)

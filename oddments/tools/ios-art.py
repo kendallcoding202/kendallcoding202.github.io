@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Makes the iOS app's icon and launch image from the icon painting.
+"""Makes the iOS app's icon from the icon painting.
 
 The painting (art/raw/app_icon.webp, generated for this game: see
 docs/ART.md) is the house-sitter in lantern light with a calm Dust Bunny in
@@ -13,8 +13,9 @@ there. `tuck_pencil` grows hair over its lower end, so that it comes out of
 the bun the way a pencil pushed into it would. The archived original is
 left as it was painted.
 
-The launch image is the same picture, small, fading into the game's night
-purple at its edges, so the app opens on what was just tapped.
+(The launch image is not made here any more: it is a postcard of the lane,
+painted from the game's own world by tools/postcard.mjs, and the same picture
+is behind the game's loading screen.)
 
 Run from the project root:  python3 tools/ios-art.py
 """
@@ -26,9 +27,7 @@ from PIL import Image, ImageDraw, ImageFilter
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSETS = os.path.join(ROOT, "ios", "App", "App", "Assets.xcassets")
 PAINTING = os.path.join(ROOT, "art", "raw", "app_icon.webp")
-NIGHT = np.array([23, 19, 46], dtype=np.float32)  # #17132e, the colour behind everything in the game
 ICON = 1024
-LAUNCH = 2732
 
 # The pencil, in the painting's own pixels (it is 1024 square): where its two ends are, half its
 # width with its outline, and how far up from the sharpened end the hair is to cover it.
@@ -95,31 +94,11 @@ def tuck_pencil(art):
     return tucked
 
 
-def launch_image(art, across):
-    """The painting `across` pixels wide in the middle of a night-purple square, its edges faded away."""
-    small = np.asarray(art.resize((across, across), Image.LANCZOS), dtype=np.float32)
-    y, x = np.mgrid[0:across, 0:across].astype(np.float32)
-    far = np.sqrt((x - across / 2) ** 2 + (y - across / 2) ** 2) / (across / 2)
-    # All of the picture out to two thirds of the way; gone by the edge.
-    keep = np.clip((1 - far) / (1 - 0.66), 0, 1)
-    keep = (keep * keep * (3 - 2 * keep))[..., None]
-    faded = small * keep + NIGHT * (1 - keep)
-    canvas = np.empty((LAUNCH, LAUNCH, 3), dtype=np.float32)
-    canvas[:] = NIGHT
-    at = (LAUNCH - across) // 2
-    canvas[at:at + across, at:at + across] = faded
-    return Image.fromarray(canvas.round().clip(0, 255).astype(np.uint8), "RGB")
-
-
 def main():
     art = tuck_pencil(painting())
     # The icon: 1024 square, no transparency (the App Store refuses an icon with any). iOS rounds the corners itself.
     art.save(os.path.join(ASSETS, "AppIcon.appiconset", "AppIcon-512@2x.png"), "PNG", optimize=True)
-    # The launch image: mostly night, the picture in the middle. iOS crops it to the screen.
-    launch = launch_image(art, 900)
-    for name in ("splash-2732x2732.png", "splash-2732x2732-1.png", "splash-2732x2732-2.png"):
-        launch.save(os.path.join(ASSETS, "Splash.imageset", name), "PNG", optimize=True)
-    print("icon and launch image written")
+    print("icon written")
 
 
 if __name__ == "__main__":

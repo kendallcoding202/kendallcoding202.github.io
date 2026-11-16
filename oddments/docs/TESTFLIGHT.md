@@ -8,8 +8,8 @@ The iPhone app is the same game in a thin shell (Capacitor, as Pawst Lives uses)
 | --- | --- |
 | Xcode project (`ios/`), icon and launch image | In the repository |
 | The app compiles, launches in the iOS Simulator, and keeps its save in native storage | Checked by the "Clutterkin iOS" workflow, job "build", which needs no secrets. Its screenshots are attached to each run. |
-| Upload to TestFlight | **Working.** The "Clutterkin iOS" workflow archives, has Apple sign it and uploads it. The first build, 0.1.0 (9), went up on 16 November 2026. An internal tester group, "Team", gets every build and the account holder is invited to it. |
-| A real iPhone | Build 0.1.0 (9) has been installed from TestFlight and run. It is from before Tin Can Alley, the new icon and the stepping-stone fix: those reach a phone with the next upload (run the "Clutterkin iOS" workflow with "testflight" ticked). |
+| Upload to TestFlight | **Working.** The "Clutterkin iOS" workflow archives, has Apple sign it and uploads it. Two builds have gone up, both on 16 November 2026: 0.1.0 (9), and 0.1.0 (13), which was built on the Xcode 27 Mac. Apple has processed both. An internal tester group, "Team", gets every build and the account holder is invited to it. |
+| A real iPhone | Build 0.1.0 (9) has been installed from TestFlight and run. Build 0.1.0 (13) adds Tin Can Alley, the new icon, the stepping-stone fix and the folding-phone layout; nobody has yet reported running it. Sound, the Heirloom hunt and the loading screen came after it and need another upload. |
 
 ## What only you can do
 
@@ -72,9 +72,9 @@ iPhone Duo is Apple's folding iPhone: a 5.4-inch screen when closed and a 7.6-in
 | On Apple's iPhone Duo simulator, closed | Seen. The game launches, fills the outer screen and keeps clear of the strip the phone puts down its right side for the clock and camera. That strip is wide: about 84 of the outer screen's 466 points, so closed, the game has about the room of a small iPhone. Screenshots are kept with every run of the workflow. |
 | On the simulator, open | **Not seen.** The simulator starts closed, and nothing a script can do opens it (switching the inner screen on leaves it blank; opening is done by hand in the Simulator app on a Mac). The inner screen has only been tried at its size, 669x951 points, in a browser. |
 | A real iPhone Duo | **Not tried by anyone.** |
-| The build on TestFlight today | 0.1.0 (9) was built with the older Xcode. By Apple's account an app built that way still runs on an iPhone Duo, but scaled, and without using all of the screen. |
+| The builds on TestFlight | 0.1.0 (13) was built with Xcode 27.1, so it is made for iPhone Duo. 0.1.0 (9) was built with the older Xcode: by Apple's account an app built that way still runs on an iPhone Duo, but scaled, and without using all of the screen. |
 
-To put a build on TestFlight that is made for iPhone Duo: run "Clutterkin iOS" with both "testflight" and "xcode27" ticked. That path has been rehearsed on the Xcode 27 Mac as far as an unsigned archive; a real upload from it has not been done yet.
+To put a build on TestFlight that is made for iPhone Duo: run "Clutterkin iOS" with both "testflight" and "xcode27" ticked. Build 0.1.0 (13) went up that way.
 
 What is not known until someone holds one: how it feels in the hand, whether the fold line crosses anything that matters (nothing has been arranged around it: you stand near the middle of the view, and pop-ups sit in the middle of the screen), and how fast the world draws on the open screen (in a desktop browser at that size it measured 51 to 58 frames a second after the drawing was capped; a phone's graphics chip should do better).
 
@@ -82,6 +82,6 @@ What is not known until someone holds one: how it feels in the hand, whether the
 
 - **This repository is public, and so is every workflow log.** The upload job hides the secrets, prints only errors and the outcome from the signing step, and removes anything in quotes from those lines, because Xcode can print the certificate owner's name there. If you would rather not rely on that, move the game to a private repository of its own, as Pawst Lives is, before the first upload; nothing else needs to change.
 - **Internal testers** (people on your App Store Connect team, up to 100) get builds immediately. **External testers** (anyone, by email or a public link) need a short one-time review by Apple of the first build, and a line or two of "what to test" text; add them under TestFlight in App Store Connect when you want them.
-- **The icon and launch image** are made by `tools/ios-art.py` from one painting: the house-sitter with a lantern and a calm Dust Bunny (`docs/ART.md`). The first build, 0.1.0 (9), still carries the earlier stand-in (the Dust Bunny alone); the new icon arrives with the next upload.
+- **The icon** is made by `tools/ios-art.py` from one painting: the house-sitter with a lantern and a calm Dust Bunny (`docs/ART.md`). **The launch image** is a postcard of the lane painted from the game's own world by `tools/postcard.mjs`, the same picture as the game's loading screen. Build 0.1.0 (13) has the new icon but an earlier launch image; the postcard arrives with the next upload.
 - **Nothing here is the App Store.** A public release also needs a privacy policy page, screenshots, a description, an age rating and Apple's review. Pawst Lives has all of that worked out (`docs/SUBMISSION.md` there) and it can be carried over when the game is ready.
 - **Working on it from a Mac**: `npm install`, `npm run ios:sync`, then open `ios/App/App.xcodeproj`. Run `npm run ios:sync` again whenever anything under `web/` changes.

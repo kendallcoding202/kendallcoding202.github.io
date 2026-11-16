@@ -58,18 +58,45 @@ small { color: var(--muted); font-size: 12px; }
 .flip { transform: scaleX(-1); }
 
 /* ------------------------------------------------------------ boot */
-#boot {
-  position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
-  background: radial-gradient(circle at 50% 38%, #2f2763, #17132e 70%);
-  transition: opacity .35s;
-}
+/* The loading screen: a postcard of the lane. The picture is the game's own world (home with its lights
+   on, lamps, stepping-stone paths, whoever lives along them), painted by tools/postcard.mjs. It fills the
+   screen from its middle and drifts very slowly toward the cottage, a few fireflies winking over it; the
+   name is above, and what is being got ready below. The iOS launch image is the same picture, shown the
+   same way, so opening the app is one unbroken sight. */
+#boot { position: fixed; inset: 0; z-index: 50; overflow: hidden; background: #14202e; transition: opacity .45s; }
 #boot.done { opacity: 0; pointer-events: none; }
-#boot h1 { font-size: 36px; font-weight: 700; letter-spacing: .5px; text-shadow: 0 3px 0 rgba(0,0,0,.35); }
-.bootrow { display: flex; align-items: flex-end; gap: 6px; }
-.bootrow img { height: 84px; width: auto; }
-.bootrow img:nth-child(2) { height: 104px; }
-.bootbar { width: 180px; height: 10px; margin-top: 8px; border-radius: 6px; background: rgba(255,255,255,.14); overflow: hidden; }
-.bootbar i { display: block; height: 100%; width: 0; background: var(--gold); border-radius: 6px; transition: width .15s; }
+.bootscene { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 50%; transform-origin: 52% 44%; animation: boot-drift 26s ease-in-out infinite alternate; }
+/* Night drawn down from the top and up from the foot, so the words can be read over the picture. */
+#boot::after {
+  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: linear-gradient(rgba(13,10,28,.78), rgba(13,10,28,.28) 20%, rgba(13,10,28,0) 34%), linear-gradient(rgba(13,10,28,0) 68%, rgba(13,10,28,.5) 84%, rgba(13,10,28,.86));
+}
+.bootfly { position: absolute; z-index: 2; width: 7px; height: 7px; border-radius: 50%; background: #ffeca0; box-shadow: 0 0 9px 4px rgba(255,224,122,.5); opacity: 0; animation: boot-wink 3.4s ease-in-out infinite; }
+.bootfly:nth-of-type(1) { left: 18%; top: 31%; } .bootfly:nth-of-type(2) { left: 74%; top: 38%; animation-delay: .7s; }
+.bootfly:nth-of-type(3) { left: 33%; top: 57%; animation-delay: 1.5s; } .bootfly:nth-of-type(4) { left: 84%; top: 62%; animation-delay: 2.2s; }
+.bootfly:nth-of-type(5) { left: 12%; top: 71%; animation-delay: 2.9s; } .bootfly:nth-of-type(6) { left: 58%; top: 26%; animation-delay: 1.1s; }
+.bootfly:nth-of-type(7) { left: 64%; top: 74%; animation-delay: .3s; }
+.boothead { position: absolute; left: var(--safe-left); right: var(--safe-right); top: calc(var(--safe-top) + 6vh); z-index: 3; text-align: center; }
+.boottitle {
+  margin: 0; font-size: min(14vw, 9.5vh, 72px); font-weight: 700; letter-spacing: 1px; line-height: 1; color: #fff7e8;
+  text-shadow: 0 .09em 0 #17132e, .05em 0 0 #17132e, -.05em 0 0 #17132e, 0 -.05em 0 #17132e, .04em .04em 0 #17132e, -.04em .04em 0 #17132e, .04em -.04em 0 #17132e, -.04em -.04em 0 #17132e, 0 .16em .35em rgba(8,6,20,.6);
+}
+.boottitle span { display: inline-block; animation: boot-wave 2.4s ease-in-out infinite; }
+.boottitle span:nth-child(2) { animation-delay: .09s; } .boottitle span:nth-child(3) { animation-delay: .18s; }
+.boottitle span:nth-child(4) { animation-delay: .27s; } .boottitle span:nth-child(5) { animation-delay: .36s; }
+.boottitle span:nth-child(6) { animation-delay: .45s; } .boottitle span:nth-child(7) { animation-delay: .54s; }
+.boottitle span:nth-child(8) { animation-delay: .63s; } .boottitle span:nth-child(9) { animation-delay: .72s; }
+.boottitle span:nth-child(10) { animation-delay: .81s; }
+.boottag { margin: 1.1vh 0 0; font-size: min(4.4vw, 2.6vh, 19px); font-weight: 600; color: #ffe9a6; text-shadow: 0 2px 0 #17132e, 0 0 10px rgba(8,6,20,.8); }
+.bootfoot { position: absolute; left: var(--safe-left); right: var(--safe-right); bottom: calc(var(--safe-bottom) + 5.5vh); z-index: 3; display: flex; flex-direction: column; align-items: center; gap: 1.3vh; }
+#bootline { margin: 0; color: #fff7e8; font-weight: 600; font-size: 15px; text-shadow: 0 2px 0 #17132e, 0 0 10px rgba(8,6,20,.8); }
+.bootbar { width: min(64vw, 280px); height: 14px; border-radius: 9px; background: rgba(13,10,28,.72); border: 2.5px solid #17132e; box-shadow: 0 0 0 1.5px rgba(255,233,166,.35); overflow: hidden; }
+.bootbar i { display: block; height: 100%; width: 0; border-radius: 7px; transition: width .15s; background: linear-gradient(#ffe9a6, #ffc83d); }
+@keyframes boot-drift { from { transform: scale(1); } to { transform: scale(1.09); } }
+@keyframes boot-wink { 0%, 100% { opacity: 0; transform: translateY(0); } 50% { opacity: .95; transform: translateY(-1.2vh); } }
+@keyframes boot-wave { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-.12em); } }
+/* For anyone who has asked their phone for less movement: the same picture, holding still. */
+@media (prefers-reduced-motion: reduce) { .bootscene, .boottitle span { animation: none; } .bootfly { animation: none; opacity: .8; } }
 
 /* The way out when the game cannot start. Above everything. */
 #rescue {

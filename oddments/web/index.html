@@ -17,14 +17,19 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+<!-- The loading screen: a postcard of the lane, painted from the game's own art by tools/postcard.mjs. The
+     iOS app's launch image is the same picture, so the one becomes the other without a jump. -->
 <div id="boot">
-  <div class="bootrow">
-    <img src="assets/sprites/sockeel.webp" alt="" class="flip">
-    <img src="assets/sprites/dustbunny.webp" alt="">
-    <img src="assets/sprites/toastghost.webp" alt="">
+  <img class="bootscene" src="assets/boot/lane.webp" alt="">
+  <i class="bootfly"></i><i class="bootfly"></i><i class="bootfly"></i><i class="bootfly"></i><i class="bootfly"></i><i class="bootfly"></i><i class="bootfly"></i>
+  <div class="boothead">
+    <h1 class="boottitle" aria-label="Clutterkin"><span>C</span><span>l</span><span>u</span><span>t</span><span>t</span><span>e</span><span>r</span><span>k</span><span>i</span><span>n</span></h1>
+    <p class="boottag">The house is awake.</p>
   </div>
-  <h1>Clutterkin</h1>
-  <div class="bootbar"><i id="bootfill"></i></div>
+  <div class="bootfoot">
+    <p id="bootline">The house is waking up…</p>
+    <div class="bootbar"><i id="bootfill"></i></div>
+  </div>
 </div>
 
 <div id="app" hidden>
