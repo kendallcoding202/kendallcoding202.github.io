@@ -22,6 +22,15 @@ function calmGarden(game) {
   }
   assert.ok(game.state.rooms.garden.clears > 0, 'the stand-in calmed the garden');
 }
+/** Then the alley the same way, coming home to rest between tries. */
+function calmAlley(game) {
+  for (let tries = 0; tries < 12 && game.state.rooms.alley.clears === 0; tries++) {
+    if (game.place() === 'path') game.goHome();
+    game.travelTo('alley');
+    while (game.place() === 'path') { playOut(game.startEncounter(), { befriend: true, have: game.state.friends.map((f) => f.species) }); game.finishBattle(); }
+  }
+  assert.ok(game.state.rooms.alley.clears > 0, 'the stand-in calmed the alley');
+}
 
 // ---------------------------------------------------------------- who is who
 
@@ -79,7 +88,7 @@ test('every neighbour can be walked up to from home, a frame at a time, and a ta
   for (const person of PEOPLE) {
     let pos = { ...SPOTS[0].door };
     for (const point of straighten(pos, routeTo(pos, person, wide), wide)) {
-      for (let i = 0; i < 3000 && Math.hypot(point.x - pos.x, point.y - pos.y) >= 7; i++) {
+      for (let i = 0; i < 3000 && Math.hypot(point.x - pos.x, point.y - pos.y) >= WORLD.arrive; i++) {
         const next = stepWalk(pos, point, 1 / 60, everyone);
         assert.equal(next.moving, true, `stuck walking to ${person.id}`);
         pos = next;
@@ -122,7 +131,7 @@ test('you have to be standing by someone to talk to them, and never in a fight',
   assert.equal(game.standBy('ines'), false);
 });
 
-test('Ines Tock sends you to the garden, nudges you while it is restless, and hears about it when it is calm', () => {
+test('Ines Tock sends you to the garden, nudges you while it is restless, hears about it when it is calm, and sends you on', () => {
   const game = fresh();
   assert.equal(game.hasNews('ines'), true);
   game.standBy('ines');
@@ -142,9 +151,37 @@ test('Ines Tock sends you to the garden, nudges you while it is restless, and he
   game.standBy('ines');
   const calmed = game.talkTo('ines');
   assert.match(calmed[0].text, /gone quiet/);
+  assert.ok(calmed.some((line) => /Tin Can Alley is next/.test(line.text)), 'and she says where to go next, and how to get there');
+  assert.ok(calmed.some((line) => /east/.test(line.text)));
   assert.equal(game.state.story.ines, 2);
   assert.equal(game.hasNews('ines'), false);
-  assert.match(game.talkTo('ines')[0].text, /^1 of 8 calm/);
+  assert.match(game.talkTo('ines')[0].text, /^Tin Can Alley first/, 'asked again, she nudges you toward it');
+
+  calmAlley(game);
+  assert.equal(game.hasNews('ines'), true);
+  game.standBy('ines');
+  const second = game.talkTo('ines');
+  assert.match(second[0].text, /^Tin Can Alley, quiet/);
+  assert.ok(second.some((line) => /The Midnight Pantry is next/.test(line.text)));
+  assert.equal(game.state.story.ines, 3);
+  assert.equal(game.hasNews('ines'), false);
+  assert.match(game.talkTo('ines')[0].text, /^2 of 8 calm/, 'with nowhere built to send you, she counts');
+});
+
+test('whatever has gone quiet since she last heard, Ines Tock hears it all at once and speaks of the furthest', () => {
+  const game = fresh();
+  game.standBy('ines'); game.talkTo('ines');
+  game.state.rooms.garden.clears = 1;
+  game.state.rooms.alley.clears = 1;
+  assert.match(goalOf(game.state).detail, /^Tin Can Alley is calm/);
+  const lines = game.talkTo('ines');
+  assert.match(lines[0].text, /^Tin Can Alley, quiet/);
+  assert.equal(game.state.story.ines, 3);
+  assert.equal(game.hasNews('ines'), false);
+  // A place with no words written for it yet still gets a plain line, never a blank.
+  game.state.rooms.pantry.clears = 1;
+  assert.deepEqual(game.talkTo('ines').map((line) => line.text), ['The Midnight Pantry is calm. Good. That is one more off Mr. Spick\'s list.']);
+  assert.equal(game.state.story.ines, 4);
 });
 
 test('if you calm the garden before ever meeting her, she takes it in her stride', () => {
@@ -155,7 +192,8 @@ test('if you calm the garden before ever meeting her, she takes it in her stride
   const lines = game.talkTo('ines');
   assert.match(lines[lines.length - 1].text, /calm already/);
   assert.equal(game.state.story.ines, 2);
-  assert.equal(goalOf(game.state).id, 'more');
+  const goal = goalOf(game.state);
+  assert.deepEqual([goal.id, goal.room, goal.title], ['calm', 'alley', 'Calm Tin Can Alley'], 'and the goal moves straight on to the next place');
 });
 
 test('Dov has a first thing to say and then a tip each time, round and round; Mr. Spick keeps count', () => {
@@ -165,9 +203,10 @@ test('Dov has a first thing to say and then a tip each time, round and round; Mr
   assert.equal(game.talkTo('dov').length, 3);
   assert.equal(game.hasNews('dov'), false);
   const tips = [];
-  for (let i = 0; i < 9; i++) { const said = game.talkTo('dov'); assert.equal(said.length, 1); tips.push(said[0].text); }
-  assert.equal(new Set(tips).size, 4, 'four tips');
-  assert.equal(tips[4], tips[0], 'and then round again');
+  for (let i = 0; i < 13; i++) { const said = game.talkTo('dov'); assert.equal(said.length, 1); tips.push(said[0].text); }
+  assert.equal(new Set(tips).size, 6, 'six tips');
+  assert.equal(tips[6], tips[0], 'and then round again');
+  assert.ok(tips.some((tip) => /alley/.test(tip)), 'one or two of them about the alley');
   for (let i = 0; i < 300; i++) game.talkTo('dov');
   assert.ok(game.state.story.dov <= 99, 'however often you ask, the count stays small');
 
@@ -181,7 +220,7 @@ test('Dov has a first thing to say and then a tip each time, round and round; Mr
 
 // ---------------------------------------------------------------- the goal
 
-test('the goal leads from the first call to a calm garden and back to Ines Tock', () => {
+test('the goal leads from the first call to a calm garden, back to Ines Tock, on to the alley, and back again', () => {
   const game = fresh(4);
   assert.deepEqual(aimOf(game.state), { title: 'Calm all eight places before Monday', count: [0, 8] });
   let goal = game.goal();
@@ -206,12 +245,26 @@ test('the goal leads from the first call to a calm garden and back to Ines Tock'
   assert.deepEqual(game.aim().count, [1, 8]);
   game.standBy('ines'); game.talkTo('ines');
   goal = game.goal();
-  assert.equal(goal.id, 'more');
-  assert.match(goal.title, /Tin Can Alley is next/);
-  assert.deepEqual(goal.count, [1, 8]);
-  for (const each of ['meet', 'friend', 'calm', 'report', 'more']) assert.ok(each);
+  assert.deepEqual([goal.id, goal.who, goal.room, goal.title, goal.count], ['calm', null, 'alley', 'Calm Tin Can Alley', [0, 5]]);
+  assert.match(goal.detail, /East along the street/, 'it says where the alley is');
   assert.equal(nextPlace(game.state).id, 'alley');
   assert.equal(placesCalm(game.state), 1);
+  // Part of the way up the alley, the goal counts how far you have got.
+  game.state.rooms.alley.best = 3;
+  assert.deepEqual(game.goal().count, [3, 5]);
+
+  calmAlley(game);
+  goal = game.goal();
+  assert.deepEqual([goal.id, goal.who], ['report', 'ines']);
+  assert.match(goal.detail, /^Tin Can Alley is calm/);
+  assert.deepEqual(game.aim().count, [2, 8]);
+  game.standBy('ines'); game.talkTo('ines');
+  goal = game.goal();
+  assert.equal(goal.id, 'more');
+  assert.match(goal.title, /The Midnight Pantry is next/);
+  assert.match(goal.detail, /not built yet/);
+  assert.deepEqual(goal.count, [2, 8]);
+  assert.equal(nextPlace(game.state).id, 'pantry');
 });
 
 test('every goal says what to do in a line, and points somewhere when there is somewhere to point', () => {
@@ -223,7 +276,9 @@ test('every goal says what to do in a line, and points somewhere when there is s
   game.state.stats.befriended = 2; look();
   calmGarden(game); look();
   game.standBy('ines'); game.talkTo('ines'); look();
-  assert.deepEqual(seen, ['meet', 'friend', 'calm', 'report', 'more']);
+  calmAlley(game); look();
+  game.standBy('ines'); game.talkTo('ines'); look();
+  assert.deepEqual(seen, ['meet', 'friend', 'calm', 'report', 'calm', 'report', 'more']);
 });
 
 test('the journal tells what has happened, in order, and grows as it happens', () => {

@@ -7,7 +7,7 @@ import { playOut } from '../../web/js/core/auto.js';
 import { newFriend } from '../../web/js/core/progress.js';
 import { ROOMS, LOOK_IDS, NAME_LENGTH, BREATHER, SPECIES } from '../../web/js/core/balance.js';
 import { maxHpOf } from '../../web/js/core/rooms.js';
-import { POST, districtOf, spotOf } from '../../web/js/core/world.js';
+import { WORLD, POST, BARRICADE, DISTRICTS, districtOf, districtAt, spotOf } from '../../web/js/core/world.js';
 
 const NOW = 1_800_000_000_000;
 const fresh = (seed = 11) => new Game(newState(NOW, seed), { now: NOW });
@@ -68,7 +68,7 @@ test('you are at ease, out on a visit or in a fight, and each allows different t
 /** Walks the game to a point the way the screen does: find the way, then a frame at a time. */
 function walkTo(game, target) {
   for (const point of game.routeTo(target)) {
-    for (let i = 0; i < 3000 && Math.hypot(point.x - game.state.where.x, point.y - game.state.where.y) >= 7; i++) {
+    for (let i = 0; i < 3000 && Math.hypot(point.x - game.state.where.x, point.y - game.state.where.y) >= WORLD.arrive; i++) {
       if (!game.walk(point, 1 / 60)) break;
     }
   }
@@ -77,6 +77,12 @@ function walkTo(game, target) {
 const GATE = districtOf('garden').gate;
 const POSTS = districtOf('garden').posts;
 const JUST_IN = { x: GATE.x, y: GATE.y - 90 };
+// Tin Can Alley: shut behind a barricade until the garden is calm, its restless ones keeping to their bins.
+const ALLEY = districtOf('alley');
+const SHUT = { x: ALLEY.gate.x, y: ALLEY.gate.y, r: BARRICADE };
+const UP_THE_ALLEY = { x: ALLEY.gate.x, y: ALLEY.gate.y - 90 };
+/** A game in which the garden has been calmed, so the alley is open. */
+const gardenCalm = (seed = 11) => { const game = fresh(seed); game.begin({ name: 'Kit' }); game.state.rooms.garden.clears = 1; game.state.rooms.garden.best = 5; return game; };
 
 test('walking in through the gate, rested, begins a visit; walking back out does not end it', () => {
   const game = fresh();
@@ -98,9 +104,9 @@ test('walking in through the gate, rested, begins a visit; walking back out does
 
 test('from outside they are hidden but in the way; once you are in they hold their ground until calmed', () => {
   const game = fresh();
-  assert.deepEqual(game.held(), POSTS, 'rested and outside: a bush at every post');
+  assert.deepEqual(game.held(), [...POSTS, SHUT, ...ALLEY.posts], 'rested and outside: a bush at every post, and the alley shut');
   game.travelTo('garden');
-  assert.deepEqual(game.held(), POSTS);
+  assert.deepEqual(game.held(), [...POSTS, SHUT, ...ALLEY.posts]);
   const post = POSTS[0];
   // Walk straight at a group: you stop short of where it stands.
   for (let i = 0; i < 600; i++) game.walk(post, 1 / 60);
@@ -108,17 +114,110 @@ test('from outside they are hidden but in the way; once you are in they hold the
   assert.equal(game.meeting(), 0, 'and that is meeting it');
   playOut(game.startEncounter(game.meeting()), {});
   assert.equal(game.finishBattle().won, true);
-  assert.deepEqual(game.held(), POSTS.slice(1), 'calm, they hold nothing');
+  assert.deepEqual(game.held(), [...POSTS.slice(1), SHUT, ...ALLEY.posts], 'calm, they hold nothing');
   assert.equal(game.meeting(), -1);
   walkTo(game, post);
   assert.ok(Math.hypot(game.state.where.x - post.x, game.state.where.y - post.y) < 8, 'and you can stand where they stood');
+});
+
+test('the alley is shut behind a barricade until the garden is calm; then you walk straight in', () => {
+  const game = fresh();
+  game.begin({ name: 'Kit' });
+  assert.equal(game.roomOpen('alley'), false);
+  walkTo(game, spotOf('alley').door);
+  assert.equal(game.near(), 'alley', 'you can walk up to its gate');
+  walkTo(game, UP_THE_ALLEY);
+  assert.equal(game.district(), null, 'but not through it');
+  assert.ok(Math.hypot(game.state.where.x - ALLEY.gate.x, game.state.where.y - ALLEY.gate.y) >= BARRICADE - 1e-6);
+  assert.equal(game.place(), 'lane');
+  // Nor round it: every way to the inside of the alley ends outside.
+  for (const post of ALLEY.posts) { walkTo(game, post); assert.equal(game.district(), null); }
+  // Calm the garden and the barricade is gone.
+  game.state.rooms.garden.clears = 1;
+  assert.equal(game.held().some((point) => point.r === BARRICADE), false);
+  walkTo(game, UP_THE_ALLEY);
+  assert.equal(game.district(), 'alley');
+  assert.equal(game.place(), 'path');
+  assert.equal(game.state.visit.room, 'alley');
+  assert.equal(game.state.visit.groups.length, ROOMS[1].path.length);
+  assert.equal(game.state.rooms.alley.visits, 1);
+});
+
+test('the alley is one group wide: there is no going round, so they are met in turn, the Baron last', () => {
+  const game = gardenCalm();
+  assert.equal(game.travelTo('alley'), true);
+  assert.equal(districtAt(game.state.where), 'alley');
+  const far = ALLEY.posts[ALLEY.posts.length - 1];
+  for (let turn = 0; turn < ALLEY.posts.length; turn++) {
+    // Tap the far end of the alley. The way there is blocked by whoever is next, so that is who you walk up to.
+    assert.equal(game.meeting(), -1);
+    walkTo(game, far);
+    assert.equal(game.meeting(), turn, `tapping past them, you meet group ${turn}`);
+    const post = ALLEY.posts[turn];
+    assert.ok(game.state.where.y > post.y, 'from the gate side');
+    // And walking straight at the far end gets you no further than them.
+    for (let i = 0; i < 400; i++) game.walk(far, 1 / 60);
+    assert.ok(Math.hypot(game.state.where.x - post.x, game.state.where.y - post.y) >= POST.hold - 1e-6);
+    assert.ok(game.state.where.y > post.y - 20, `nobody slips past group ${turn}`);
+    // Calm them (without the fight: this is about the walking), and the way on is open as far as the next.
+    game.state.visit.groups[turn].done = true;
+    game.state.visit.stop = turn + 1;
+  }
+  walkTo(game, far);
+  assert.ok(Math.hypot(game.state.where.x - far.x, game.state.where.y - far.y) < 8, 'with everyone calm you can walk the length of it');
+  // And back out again to home.
+  walkTo(game, spotOf('home').door);
+  assert.equal(game.near(), 'home');
+});
+
+test('every group in the alley can really be fought, in order, by a team that has grown a bit', () => {
+  let cleared = null;
+  for (let seed = 1; seed <= 30 && !cleared; seed++) {
+    const game = gardenCalm(seed);
+    for (const friend of game.state.friends) friend.level = 7;
+    game.travelTo('alley');
+    const stops = [];
+    while (game.place() === 'path') {
+      stops.push(game.nextGroup());
+      playOut(game.startEncounter(), {});
+      game.finishBattle();
+    }
+    if (game.state.rooms.alley.clears) cleared = { game, stops };
+  }
+  assert.ok(cleared, 'a grown team calms the alley within a few tries');
+  assert.deepEqual(cleared.stops, [0, 1, 2, 3, 4]);
+  assert.equal(cleared.game.state.book.boss_baron.met, true);
+  assert.equal(cleared.game.district(), 'alley');
+  assert.deepEqual(cleared.game.held(), POSTS, 'calm, the alley holds nothing; the garden is restless again');
+});
+
+test('one visit at a time: while you are calling on one place, the other keeps to its cover', () => {
+  const game = gardenCalm();
+  assert.equal(game.travelTo('garden'), true);
+  // Walk out of the garden and down into the alley, mid-visit.
+  walkTo(game, spotOf('alley').door);
+  walkTo(game, UP_THE_ALLEY);
+  assert.equal(game.district(), 'alley', 'you can step in');
+  assert.equal(game.state.visit.room, 'garden', 'but your visit is still to the garden');
+  assert.equal(game.state.rooms.alley.visits, 0);
+  walkTo(game, ALLEY.posts[0]);
+  assert.equal(game.meeting(), -1, 'and nobody in the alley comes out to you');
+  assert.ok(Math.hypot(game.state.where.x - ALLEY.posts[0].x, game.state.where.y - ALLEY.posts[0].y) >= POST.hold - 1e-6, 'though they are still in the way');
+  // Rest at home, and then the alley is yours to call on.
+  walkTo(game, spotOf('home').door);
+  assert.equal(game.rest(), true);
+  walkTo(game, spotOf('alley').door);
+  walkTo(game, UP_THE_ALLEY);
+  assert.equal(game.state.visit.room, 'alley');
+  walkTo(game, ALLEY.posts[0]);
+  assert.equal(game.meeting(), 0);
 });
 
 test('the way to one group never brushes past another: you meet who you walked up to, nobody else', () => {
   const others = [0, 1, 2, 3]; // everyone but the boss, who will not be met yet anyway
   const trip = (game, from, to) => {
     for (const point of game.routeTo(POSTS[to])) {
-      for (let i = 0; i < 3000 && Math.hypot(point.x - game.state.where.x, point.y - game.state.where.y) >= 7; i++) {
+      for (let i = 0; i < 3000 && Math.hypot(point.x - game.state.where.x, point.y - game.state.where.y) >= WORLD.arrive; i++) {
         if (!game.walk(point, 1 / 60)) break;
         const met = game.meeting();
         assert.ok(met === -1 || met === to || met === from, `on the way from ${from} to ${to}, brushed past ${met}`);
@@ -147,7 +246,7 @@ test('the way to one group never brushes past another: you meet who you walked u
     game.travelTo('garden');
     game.approach(from);
     for (const point of game.routeTo(spotOf('home').door)) {
-      for (let i = 0; i < 3000 && Math.hypot(point.x - game.state.where.x, point.y - game.state.where.y) >= 7; i++) {
+      for (let i = 0; i < 3000 && Math.hypot(point.x - game.state.where.x, point.y - game.state.where.y) >= WORLD.arrive; i++) {
         if (!game.walk(point, 1 / 60)) break;
         assert.ok([-1, from].includes(game.meeting()), `walking home from group ${from}, brushed past ${game.meeting()}`);
       }
@@ -279,11 +378,11 @@ test('a whole room can be played from the gate to the boss, and clearing it is r
   assert.equal(game.place(), 'lane');
   // You are still standing in the garden, rested, and nobody is about.
   assert.equal(game.district(), 'garden');
-  assert.deepEqual(game.held(), []);
+  assert.deepEqual(game.held(), ALLEY.posts, 'nothing in the garden; and the alley\'s barricade is down');
   for (const member of game.teamHealth()) assert.equal(member.hp, member.max);
   // Step out of the gate and they are back in their bushes; step in again and it is a new visit.
   walkTo(game, spotOf('garden').door);
-  assert.equal(game.held().length, 5);
+  assert.deepEqual(game.held(), [...POSTS, ...ALLEY.posts]);
   assert.equal(game.place(), 'lane');
   walkTo(game, JUST_IN);
   assert.equal(game.place(), 'path');

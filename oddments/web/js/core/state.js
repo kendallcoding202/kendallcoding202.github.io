@@ -4,9 +4,9 @@ import {
   LOOK_IDS, lookOf, xpNeeded, roomOf, roomBuilt,
 } from './balance.js';
 import { newFriend } from './progress.js';
-import { roomOpen, maxHpOf, rollEncounter, fairEncounter } from './rooms.js';
+import { roomOpen, maxHpOf, rollEncounter, fairEncounter, heldBy } from './rooms.js';
 import { own } from './util.js';
-import { settleWhere, districtOf, districtAt, DISTRICTS } from './world.js';
+import { settleWhere, districtOf } from './world.js';
 import { newStory, reviveStory } from './story.js';
 
 export function newState(now = Date.now(), seed = (now ^ 0x9e3779b9) | 0) {
@@ -106,13 +106,6 @@ function reviveVisit(raw, state) {
   return visit;
 }
 
-/** The ground held by whoever is waiting, for a state as it stands: the same answer the game gives. */
-function heldIn(state, where) {
-  if (state.visit) return districtOf(state.visit.room).posts.filter((_, i) => !state.visit.groups[i].done);
-  const here = districtAt(where);
-  return Object.keys(DISTRICTS).filter((id) => id !== here).flatMap((id) => DISTRICTS[id].posts);
-}
-
 /** Turns whatever was in storage into a valid current-version state, or null if it is not a save at all. */
 export function reviveState(saved, now = Date.now()) {
   if (!isObj(saved) || typeof saved.v !== 'number' || !Array.isArray(saved.friends)) return null;
@@ -152,7 +145,8 @@ export function reviveState(saved, now = Date.now()) {
   const mapped = saved.v >= 2;
   state.visit = mapped ? reviveVisit(saved.visit, state) : null;
   const where = mapped && isObj(saved.where) ? saved.where : null;
-  state.where = settleWhere(where, heldIn(state, where));
+  // (Wherever the save says you stand is checked against the ground held as it would be with you standing there.)
+  state.where = settleWhere(where, where ? heldBy(state, where) : []);
 
   const book = isObj(saved.book) ? saved.book : {};
   for (const id of SPECIES_IDS) {

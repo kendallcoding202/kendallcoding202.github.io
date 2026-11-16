@@ -33,7 +33,7 @@ function follow(from, way, can, frame = 1 / 60) {
   let pos = { ...from };
   let stuck = false;
   for (const point of way) {
-    for (let i = 0; i < 3000 && Math.hypot(point.x - pos.x, point.y - pos.y) >= 7; i++) {
+    for (let i = 0; i < 3000 && Math.hypot(point.x - pos.x, point.y - pos.y) >= WORLD.arrive; i++) {
       const next = stepWalk(pos, point, frame, can);
       if (!next.moving) { stuck = true; break; }
       pos = next;
@@ -300,6 +300,42 @@ test('the garden is walled: the only way in is through its gate', () => {
     if (!gap) assert.equal(canStand(x, GARDEN.y + GARDEN.h + 20), false, `a gap in the hedge at x=${x}`);
   }
   for (let y = WORLD.edge; y < GARDEN.y + GARDEN.h; y += 10) assert.equal(canStand(GARDEN.x + GARDEN.w + 20, y), false, `a gap in the hedge at y=${y}`);
+});
+
+test('the alley is walled too, with junk down one side, the edge of the world down the other and a fence at its foot', () => {
+  const ALLEY = DISTRICTS.alley;
+  const up = { x: ALLEY.gate.x, y: 700 };
+  const open = follow(HOME, wayTo(HOME, up), canStand).pos;
+  assert.equal(districtAt(open), 'alley');
+  const shut = standing([ALLEY.gate]);
+  assert.equal(districtAt(follow(HOME, wayTo(HOME, up, shut), shut).pos), null, 'with the gateway held, you stay outside');
+  for (let y = WORLD.edge; y < ALLEY.y + ALLEY.h; y += 10) {
+    assert.equal(canStand(ALLEY.x - 20, y), false, `a gap in the junk at y=${y}`);
+    assert.equal(canStand(ALLEY.x + ALLEY.w + 4, y), false, 'and nothing past the edge of the world');
+  }
+  for (let x = ALLEY.x - 40; x < WORLD.w; x += 10) {
+    const gap = Math.abs(x - ALLEY.gate.x) < 70;
+    if (!gap) assert.equal(canStand(x, ALLEY.y + ALLEY.h + 20), false, `a gap in the fence at x=${x}`);
+  }
+  assert.equal(ALLEY.narrow, true);
+  assert.equal(GARDEN.narrow, undefined, 'the garden is open ground');
+});
+
+test('the alley is one group wide: whoever waits there fills it from wall to wall', () => {
+  const ALLEY = DISTRICTS.alley;
+  ALLEY.posts.forEach((post, i) => {
+    const held = standing([post]);
+    for (let x = ALLEY.x; x <= WORLD.w; x += 2) assert.equal(held(x, post.y), false, `room to slip past group ${i} at x=${x}`);
+    assert.ok(canStand(post.x, post.y + POST.hold + 8), 'you can stand in front of them');
+    if (i > 0) assert.ok(post.y < ALLEY.posts[i - 1].y, 'each further up the alley than the last');
+    // With them standing there, no way leads from the gate to anywhere beyond them.
+    const beyond = { x: post.x, y: post.y - POST.hold - 30 };
+    const start = { x: ALLEY.gate.x, y: ALLEY.gate.y - 60 };
+    const end = follow(start, wayTo(start, beyond, held), held).pos;
+    assert.ok(end.y > post.y || districtAt(end) !== 'alley', `a way past group ${i}`);
+  });
+  // The garden is not like that: there is room round everyone.
+  for (const post of GARDEN.posts) assert.ok([-1, 1].some((side) => standing([post])(post.x + side * (POST.hold + 20), post.y)));
 });
 
 test('whoever is waiting holds their ground: you cannot walk through them, but you can walk up to every one', () => {

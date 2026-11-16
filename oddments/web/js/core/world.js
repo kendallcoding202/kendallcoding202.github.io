@@ -7,12 +7,15 @@ import { ROOM_IDS } from './balance.js';
 import { own } from './util.js';
 
 export const WORLD = {
-  w: 2000, h: 2200, // the size of the neighbourhood, in its own units
+  w: 2280, h: 2200, // the size of the neighbourhood, in its own units
   edge: 34, // how close to the edge of the world feet may go
   speed: 280, // walking, in units a second
   reach: 86, // how near a door counts as being at it
   body: 15, // half the width of whoever is walking
   maxStep: 0.1, // seconds; a longer gap is walked as this, so nobody steps through a wall
+  // How near a point of the way counts as having got to it, before turning for the next. Less than
+  // the room a way keeps from things (see `roomy`), or turning that much early could clip a corner.
+  arrive: 3,
 };
 
 // ---------------------------------------------------------------- places you walk into
@@ -27,7 +30,15 @@ export const DISTRICTS = {
     gate: { x: 700, y: 962 },
     posts: [{ x: 480, y: 800 }, { x: 810, y: 620 }, { x: 220, y: 640 }, { x: 350, y: 400 }, { x: 680, y: 250 }],
   },
+  // Tin Can Alley: a lane down the east edge of the world, walled with junk, one group wide. There
+  // is no going round anyone in it: they are met in turn, from the gate at its foot to the far end.
+  alley: {
+    x: 2040, y: 0, w: 240, h: 1560, narrow: true,
+    gate: { x: 2150, y: 1582 },
+    posts: [{ x: 2150, y: 1300 }, { x: 2150, y: 1040 }, { x: 2150, y: 780 }, { x: 2150, y: 520 }, { x: 2150, y: 240 }],
+  },
 };
+export const BARRICADE = 76; // how much of a gateway a barricade fills, while the place behind it is still shut
 export const POST = { hold: 100, meet: 118 }; // how much ground a waiting group holds, and how near is meeting it
 export const districtOf = (roomId) => (typeof roomId === 'string' && own(DISTRICTS, roomId) ? DISTRICTS[roomId] : null);
 
@@ -46,7 +57,7 @@ export function districtAt(pos) {
 // Every building: x is the middle of its front, y the foot of its front wall. Fronts face down the
 // map, so streets run along the foot of each row. The garden's shed stands inside the garden.
 const AT = {
-  home: [1180, 1420], garden: [250, 262], alley: [1560, 880], pantry: [1290, 520], wash: [1790, 1330],
+  home: [1180, 1420], garden: [250, 262], alley: [1880, 1860], pantry: [1290, 520], wash: [1790, 1330],
   stacks: [1660, 1960], rooftops: [1090, 1990], attic: [470, 1960], dark: [1750, 330],
 };
 // Most buildings are much of a size; home is broader, and two are tall and thin.
@@ -64,23 +75,28 @@ export const SPOTS = SPOT_IDS.map((id) => {
 });
 export const spotOf = (id) => SPOTS.find((spot) => spot.id === id) || null;
 
-// Hedges: solid blocks of ground. These three wall the garden off, leaving its gate.
+// Walls: solid blocks of ground, each made of whatever suits the place (`look`). The first three
+// are the garden's hedge, leaving its gate; the rest wall Tin Can Alley off with junk, and fence
+// its foot either side of its gate.
 export const HEDGES = [
-  { x: 0, y: 940, w: 630, h: 44 }, { x: 770, y: 940, w: 214, h: 44 },
-  { x: 940, y: 0, w: 44, h: 940 },
+  { x: 0, y: 940, w: 630, h: 44, look: 'bush' }, { x: 770, y: 940, w: 214, h: 44, look: 'bush' },
+  { x: 940, y: 0, w: 44, h: 940, look: 'bush' },
+  { x: 2000, y: 0, w: 40, h: 1560, look: 'junk' },
+  { x: 2000, y: 1560, w: 80, h: 44, look: 'fence' }, { x: 2220, y: 1560, w: 60, h: 44, look: 'fence' },
 ];
 
 // The streets, as the points each one bends through. Looks and a guide only: you can walk anywhere.
 export const ROADS = [
   [[400, 1540], [700, 1570], [980, 1500], [1180, 1500], [1420, 1500], [1640, 1490], [1790, 1390]], // the street past home
   [[980, 1500], [860, 1300], [720, 1130], [700, 960]], // up to the garden gate
-  [[1420, 1500], [1500, 1200], [1560, 935]], // up to the alley
-  [[1500, 1200], [1370, 900], [1290, 575]], // and on to the pantry
-  [[1560, 940], [1740, 950], [1770, 650], [1750, 385]], // round the alley to the far shed
+  [[1420, 1500], [1500, 1200], [1560, 935]], // north from home to the fork
+  [[1500, 1200], [1370, 900], [1290, 575]], // one way on to the pantry
+  [[1560, 940], [1740, 950], [1770, 650], [1750, 385]], // the other round to the far shed
   [[900, 1530], [850, 1800], [820, 2040]], // two ways down
   [[1420, 1500], [1450, 1780], [1400, 2040]],
   [[400, 2050], [820, 2040], [1090, 2045], [1400, 2040], [1700, 2030]], // the bottom street, past three doors
   [[400, 1540], [320, 1800], [400, 2050]], // and round the west side to meet it
+  [[1640, 1490], [1870, 1570], [1990, 1740], [2150, 1770], [2150, 1640]], // east, and round to the foot of Tin Can Alley
 ].map((road) => road.map(([x, y]) => ({ x, y })));
 
 /**
@@ -120,28 +136,22 @@ export const personAt = (id) => PEOPLE.find((person) => person.id === id) || nul
 
 // A lamp beside every building, on the side nearer home; two at the garden gate; a few along the streets. Thin, but solid.
 export const LAMPS = [
-  ...SPOTS.map((spot) => ({ x: spot.x + (spot.id === 'home' || spot.x < AT.home[0] ? 1 : -1) * (spot.w / 2 + 30), y: spot.y + 26, r: 7 })),
-  ...[[602, 1012], [798, 1012], [800, 1470], [785, 1790], [1515, 1780], [1415, 1225], [1835, 800], [250, 1790]].map(([x, y]) => ({ x, y, r: 7 })),
+  ...SPOTS.filter((spot) => spot.id !== 'alley').map((spot) => ({ x: spot.x + (spot.id === 'home' || spot.x < AT.home[0] ? 1 : -1) * (spot.w / 2 + 30), y: spot.y + 26, r: 7 })),
+  ...[[602, 1012], [798, 1012], [800, 1470], [785, 1790], [1515, 1780], [1415, 1225], [1835, 800], [250, 1790], [2080, 1644], [2220, 1644], [1560, 900]].map(([x, y]) => ({ x, y, r: 7 })),
 ];
 
-// Trees, as circles to walk round. A few are planted by hand in the garden; the rest are scattered
-// by a fixed run of numbers, keeping off the streets, the doors, the green and each other.
-export const TREES = (() => {
-  const trees = [[110, 120, 26], [870, 120, 26], [110, 860, 26], [560, 545, 24]].map(([x, y, r]) => ({ x, y, r }));
-  let s = 4711;
-  const next = () => ((s = (s * 16807) % 2147483647) / 2147483647);
-  const clear = (x, y, list, room) => list.every((p) => Math.hypot(p.x - x, p.y - y) >= room);
-  for (let tries = 0; tries < 900 && trees.length < 46; tries++) {
-    const x = 70 + next() * (WORLD.w - 140);
-    const y = 90 + next() * (WORLD.h - 150);
-    if (x < 1050 && y < 1060) continue; // the garden, and a clear look at its hedge
-    if (x > GREEN.x - 40 && x < GREEN.x + GREEN.w + 40 && y > GREEN.y - 40 && y < GREEN.y + GREEN.h + 40) continue;
-    if (SPOTS.some((spot) => Math.abs(x - spot.x) < spot.w / 2 + 70 && y > spot.y - spot.tall - 60 && y < spot.y + 150)) continue;
-    if (!ROAD_POINTS.every((road) => clear(x, y, road, 92)) || !clear(x, y, trees, 170) || !clear(x, y, LAMPS, 90) || !clear(x, y, PEOPLE, 130)) continue;
-    trees.push({ x: Math.round(x), y: Math.round(y), r: 24 + Math.round(next() * 6) });
-  }
-  return trees;
-})();
+// Trees, as circles to walk round: [x, y, how big]. They were scattered once by a fixed run of
+// numbers, keeping off the streets, the doors, the green and each other, and are kept as they fell,
+// so that the lane people know does not shuffle about each time the map grows. New ones are planted
+// by hand.
+export const TREES = [
+  [110, 120, 26], [870, 120, 26], [110, 860, 26], [560, 545, 24], [139, 1473, 28], [1732, 1682, 26], [529, 1345, 29], [645, 1159, 28],
+  [1515, 316, 29], [230, 1110, 26], [662, 1772, 29], [1776, 975, 29], [78, 2051, 30], [1151, 258, 28], [1648, 558, 29], [1153, 1054, 24],
+  [1253, 1919, 29], [111, 1815, 25], [307, 2117, 26], [1339, 139, 28], [952, 1191, 28], [1924, 2032, 27], [1910, 588, 25], [475, 1077, 26],
+  [1343, 1064, 28], [1055, 466, 29], [1118, 834, 26], [1051, 654, 27], [940, 1835, 28], [82, 1205, 26], [1632, 2140, 26], [1606, 1235, 30],
+  [1930, 205, 30], [1470, 615, 28], [360, 1385, 30], [1550, 1603, 25],
+  [2110, 1940, 26], [2195, 2110, 25], [1930, 1330, 26],
+].map(([x, y, r]) => ({ x, y, r }));
 
 // ---------------------------------------------------------------- where feet can go
 
@@ -262,7 +272,15 @@ export function routeTo(from, to, can, size = WORLD) {
   if (prev[goal] !== -1) best = goal;
   const way = [];
   for (let cell = best; cell !== start; cell = prev[cell]) way.unshift({ x: (cell % cols) * CELL + CELL / 2, y: Math.floor(cell / cols) * CELL + CELL / 2 });
-  if (best === goal && can(to.x, to.y) && Math.hypot(to.x - from.x, to.y - from.y) > 2) { if (way.length) way.pop(); way.push({ x: to.x, y: to.y }); }
+  if (best === goal && can(to.x, to.y) && Math.hypot(to.x - from.x, to.y - from.y) > 2) { if (way.length) way.pop(); way.push({ x: to.x, y: to.y }); return way; }
+  // The point itself is somewhere feet cannot be. The way so far ends at the middle of the nearest
+  // square; go on from there straight toward the point for as long as feet can, so that a tap on
+  // whoever is waiting really does walk you up to them.
+  const last = way.length ? way[way.length - 1] : from;
+  const gap = Math.hypot(to.x - last.x, to.y - last.y);
+  let reach = 0;
+  for (let far2 = 2; far2 < gap && can(last.x + ((to.x - last.x) * far2) / gap, last.y + ((to.y - last.y) * far2) / gap); far2 += 2) reach = far2;
+  if (reach > 0) way.push({ x: last.x + ((to.x - last.x) * reach) / gap, y: last.y + ((to.y - last.y) * reach) / gap });
   return way;
 }
 

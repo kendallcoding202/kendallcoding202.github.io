@@ -1,7 +1,8 @@
 // Rooms: who is restless at each stop of a place, and a visit from stepping in to resting at home.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rollEncounter, fairEncounter, canMeet, nextGroup, roomOpen, enterRoom, leaveRoom, afterFight, maxHpOf, teamOf } from '../../web/js/core/rooms.js';
+import { rollEncounter, fairEncounter, canMeet, nextGroup, roomOpen, enterRoom, leaveRoom, afterFight, heldBy, maxHpOf, teamOf } from '../../web/js/core/rooms.js';
+import { BARRICADE, districtOf } from '../../web/js/core/world.js';
 import { newState } from '../../web/js/core/state.js';
 import { ROOMS, SPECIES, BREATHER, TEAM_SIZE, statAt } from '../../web/js/core/balance.js';
 
@@ -41,14 +42,44 @@ test('the same seed meets the same company', () => {
   assert.deepEqual(rollEncounter({ rng: 77 }, GARDEN, 2), rollEncounter({ rng: 77 }, GARDEN, 2));
 });
 
-test('only the first room is open at the start; a room that is not built never opens', () => {
+test('only the first place is open at the start; each opens when the one before is calm; one that is not built never opens', () => {
   const state = newState(1e12, 1);
   assert.equal(roomOpen(state, 'garden'), true);
   for (const room of ROOMS.slice(1)) assert.equal(roomOpen(state, room.id), false, room.id);
   state.rooms.garden.clears = 1;
-  assert.equal(roomOpen(state, 'alley'), false, 'cleared the way to it, but it is not built in this slice');
+  assert.equal(roomOpen(state, 'alley'), true);
+  assert.equal(roomOpen(state, 'pantry'), false);
+  state.rooms.alley.clears = 1;
+  assert.equal(roomOpen(state, 'pantry'), false, 'cleared the way to it, but it is not built in this slice');
   assert.equal(roomOpen(state, 'nowhere'), false);
   assert.equal(roomOpen(state, 'constructor'), false);
+});
+
+test('ground is held by a barricade while a place is shut, by cover while you are elsewhere, by groups while you call', () => {
+  const garden = districtOf('garden');
+  const alley = districtOf('alley');
+  const shut = { x: alley.gate.x, y: alley.gate.y, r: BARRICADE };
+  const state = newState(1e12, 1);
+  // A new game: everyone in the garden is in the bushes; the alley is barricaded, and its bins are full.
+  assert.deepEqual(heldBy(state), [...garden.posts, shut, ...alley.posts]);
+  assert.ok(BARRICADE * 2 > 140, 'a barricade fills the gateway from post to post');
+  // Calling on the garden, its groups hold their ground until calmed.
+  enterRoom(state, 'garden');
+  state.visit.groups[1].done = true;
+  assert.deepEqual(heldBy(state), [...garden.posts.filter((_, i) => i !== 1), shut, ...alley.posts]);
+  // Calm the garden: the barricade comes down. Standing in the garden with no visit on, nothing is held there.
+  state.visit = null;
+  state.rooms.garden.clears = 1;
+  assert.deepEqual(heldBy(state, garden.posts[0]), alley.posts);
+  assert.deepEqual(heldBy(state, { x: 1180, y: 1454 }), [...garden.posts, ...alley.posts]);
+  // One visit at a time: while you are calling on one place, the other keeps to its cover, even if you walk in.
+  enterRoom(state, 'alley');
+  assert.deepEqual(heldBy(state, garden.posts[0]), [...garden.posts, ...alley.posts]);
+  // And the answer is for wherever is asked about, which need not be where the save says you stand.
+  state.visit = null;
+  state.where = { ...alley.posts[2] };
+  assert.deepEqual(heldBy(state), garden.posts);
+  assert.deepEqual(heldBy(state, null), [...garden.posts, ...alley.posts]);
 });
 
 test('you step in rested, with every group already waiting, and cannot step in twice', () => {

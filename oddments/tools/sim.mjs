@@ -1,12 +1,14 @@
-// Plays the first room many times with a stand-in player and reports two
-// things: how long fights last, and how hard the room is.
-//   node tools/sim.mjs [players=400] [--style=friendly|brawler|careless] [--visits=4]
+// Plays a place many times with a stand-in player and reports two things: how
+// long fights last, and how hard the place is. A place after the first is
+// played by someone who has first calmed every place before it, however many
+// visits that took them.
+//   node tools/sim.mjs [players=400] [--style=friendly|brawler|careless] [--visits=4] [--room=garden|alley]
 // friendly  a sensible player who also calms kinds they do not have yet
 // brawler   a sensible player who never reaches out
 // careless  taps any move at random and never makes a Call
 import { Game } from '../web/js/core/game.js';
 import { newState } from '../web/js/core/state.js';
-import { ROOMS, HEIRLOOM } from '../web/js/core/balance.js';
+import { ROOMS, HEIRLOOM, roomOf, roomBuilt } from '../web/js/core/balance.js';
 import { playOut } from '../web/js/core/auto.js';
 
 // Rough seconds of real time: a choice takes a moment's thought and every
@@ -41,30 +43,47 @@ export function playVisit(game, style, roomId = ROOMS[0].id) {
   return fights;
 }
 
-/** One player from a new game through `visits` visits to the first room. */
-export function playPlayer({ seed, visits = 4, style = 'friendly' }) {
+const MOST_VISITS = 12; // nobody is made to try a place more often than this on the way to the one being measured
+
+/**
+ * One player from a new game through `visits` visits to a place (the first, unless told which).
+ * On the way to a later place they calm each one before it. `before` is what that took: visits,
+ * minutes of fighting, and whether they got there at all.
+ */
+export function playPlayer({ seed, visits = 4, style = 'friendly', room = ROOMS[0].id }) {
   const start = 1_800_000_000_000;
   const state = newState(start, seed);
   state.started = true;
   const game = new Game(state, { now: start, fx: false });
+  const before = { visits: 0, minutes: 0, arrived: true };
+  for (const earlier of ROOMS.slice(0, ROOMS.findIndex((r) => r.id === room))) {
+    for (let tries = 0; tries < MOST_VISITS && state.rooms[earlier.id].clears === 0; tries++) {
+      const fights = playVisit(game, style, earlier.id);
+      before.visits++;
+      before.minutes += fights.reduce((sum, f) => sum + f.seconds, 0) / 60;
+      if (game.place() === 'path') game.goHome();
+    }
+    if (state.rooms[earlier.id].clears === 0) before.arrived = false;
+  }
   const record = [];
   for (let v = 0; v < visits; v++) {
-    const fights = playVisit(game, style);
+    const fights = playVisit(game, style, room);
     record.push({
       fights, cleared: fights.some((f) => f.cleared),
       level: Math.max(...game.team().map((f) => f.level)), friends: state.friends.length,
     });
+    if (game.place() === 'path') game.goHome();
   }
-  return { state, visits: record };
+  return { state, visits: record, before };
 }
 
 const mean = (list) => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0);
 const at = (sorted, q) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
 
 /** Plays `players` players and gathers the numbers the report prints. */
-export function simulate({ players = 400, visits = 4, style = 'friendly' } = {}) {
-  const all = Array.from({ length: players }, (_, i) => playPlayer({ seed: 1000 + i * 7919, visits, style }));
-  const room = ROOMS[0];
+export function simulate({ players = 400, visits = 4, style = 'friendly', room: roomId = ROOMS[0].id } = {}) {
+  const all = Array.from({ length: players }, (_, i) => playPlayer({ seed: 1000 + i * 7919, visits, style, room: roomId }));
+  const room = roomOf(roomId);
 
   // How long fights last: every fight of every player's first visit, by stop.
   const stops = room.path.map((spot, stop) => {
@@ -93,15 +112,17 @@ export function simulate({ players = 400, visits = 4, style = 'friendly' } = {})
   const firstLoss = room.path.map((spot, stop) => mean(all.map((p) => (p.visits[0].fights.some((f) => f.stop === stop && !f.won) ? 1 : 0))));
   const fights = all.reduce((sum, p) => sum + p.visits.reduce((n, v) => n + v.fights.length, 0), 0);
   const heirloomFights = all.reduce((sum, p) => sum + p.visits.reduce((n, v) => n + v.fights.filter((f) => f.heirloom).length, 0), 0);
-  return { players, visits, style, stops, byVisit, firstLoss, heirloomFightShare: heirloomFights / fights, heirloomsKept: mean(all.map((p) => p.state.stats.heirlooms)) };
+  const before = { arrived: mean(all.map((p) => (p.before.arrived ? 1 : 0))), visits: mean(all.map((p) => p.before.visits)), minutes: mean(all.map((p) => p.before.minutes)) };
+  return { players, visits, style, room: roomId, before, stops, byVisit, firstLoss, heirloomFightShare: heirloomFights / fights, heirloomsKept: mean(all.map((p) => p.state.stats.heirlooms)) };
 }
 
 const pc = (v) => `${Math.round(v * 100)}%`.padStart(4);
 
 export function report(result) {
   const lines = [];
-  const room = ROOMS[0];
+  const room = roomOf(result.room);
   lines.push(`${room.name}: ${result.players} ${result.style} players, ${result.visits} visits each`);
+  if (result.before.visits > 0) lines.push(`Getting here took ${result.before.visits.toFixed(1)} visits and ${result.before.minutes.toFixed(1)} minutes of fighting in the places before it; ${pc(result.before.arrived).trim()} got here.`);
   lines.push('');
   lines.push('How long fights last (first visit)');
   lines.push('stop                    reached   won   rounds (10%-90%)   choices   about    Health left   knocked out');
@@ -111,7 +132,7 @@ export function report(result) {
   }
   lines.push('* boss');
   lines.push('');
-  lines.push('How hard the room is');
+  lines.push('How hard the place is');
   lines.push('visit   cleared this visit   cleared by now   top level   friends   minutes played');
   for (const v of result.byVisit) {
     lines.push(`${String(v.visit).padStart(3)}     ${pc(v.clearedThisVisit).padStart(8)}             ${pc(v.clearedByNow).padStart(6)}          ${v.level.toFixed(1).padStart(4)}       ${v.friends.toFixed(1).padStart(4)}      ${v.minutes.toFixed(1).padStart(5)}`);
@@ -130,5 +151,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const players = Number(args.find((a) => !a.startsWith('--'))) || 400;
   const style = option('style', 'friendly');
   if (!STYLES[style]) { console.error(`unknown style "${style}": friendly, brawler or careless`); process.exit(1); }
-  console.log(report(simulate({ players, visits: Number(option('visits', 4)), style })));
+  const room = option('room', ROOMS[0].id);
+  if (!roomOf(room) || !roomBuilt(roomOf(room))) { console.error(`"${room}" is not a place that is built: ${ROOMS.filter(roomBuilt).map((r) => r.id).join(' or ')}`); process.exit(1); }
+  console.log(report(simulate({ players, visits: Number(option('visits', 4)), style, room })));
 }

@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { existsSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
-  WORLD_ART, BUILDING_WIDE, worldSrc, paintGround, paintBuilding, paintProp, paintLamp, paintGate, bushesOf, steppingStones, stood, label, mix,
+  WORLD_ART, BUILDING_WIDE, worldSrc, paintGround, paintBuilding, paintProp, paintLamp, paintGate, bushesOf, wallOf, steppingStones, stood, label, mix,
 } from '../../web/js/ui/scenery.js';
 import { WORLD, SPOTS, LAMPS, HEDGES, ROAD_POINTS, GREEN, DISTRICTS, canStand } from '../../web/js/core/world.js';
 
@@ -51,7 +51,7 @@ const here = { complete: true, naturalWidth: 360, naturalHeight: 340 }; // a pai
 const coming = { complete: false, naturalWidth: 0, naturalHeight: 0 }; // one that has not yet
 const GROUND = {
   w: WORLD.w, h: WORLD.h, roads: ROAD_POINTS, spots: SPOTS, lamps: LAMPS, hedges: HEDGES, green: GREEN,
-  lawns: [{ ...DISTRICTS.garden, tint: '#7ac74f' }],
+  lawns: [{ ...DISTRICTS.garden, tint: '#7ac74f' }, { ...DISTRICTS.alley, tint: '#8c9bb5', floor: 'cobbles' }],
 };
 
 test('every painting the world needs is in the game, and home and every place has a building', () => {
@@ -98,19 +98,27 @@ test('every building paints, open and shut, with its painting and before it arri
   }
 });
 
-test('the ground of the whole world is the grass painting, with streets of earth and stepping stones and a lawn for the garden', () => {
-  const art = { grass: here, earth: here, bush: here };
+test('the ground of the whole world is the grass painting, with streets of earth and stepping stones, a lawn for the garden and cobbles for the alley', () => {
+  const art = { grass: here, earth: here, cobbles: here, bush: here, tree: here };
   const world = standIn();
   paintGround(world, GROUND, art);
   assert.ok(count(world, 'drawImage') > 200, 'grass laid over everything, and a hedge of bushes round the edge');
   assert.ok(count(world, 'createPattern') >= 2, 'the streets and the garden path are earth');
   assert.ok(count(world, 'lineTo') > 400, 'every street is traced');
   assert.ok(count(world, 'fill') > 600, 'stones, pebbles, flowers');
-  assert.equal(count(world, 'clip'), 1, 'the lawn is kept inside its hedge');
+  assert.equal(count(world, 'clip'), 2, 'the lawn is kept inside its hedge, and the cobbles between their walls');
   assert.equal(count(world, 'save'), count(world, 'restore'));
+  // The cobbles are a painting of their own, and a paved place has no hedge along the edge of the world: it has its wall.
+  const unpaved = standIn();
+  paintGround(unpaved, { ...GROUND, lawns: GROUND.lawns.map((lawn) => ({ ...lawn, floor: 'grass' })) }, art);
+  assert.equal(count(unpaved, 'clip'), 2);
+  const bare = standIn();
+  paintGround(bare, GROUND, { ...art, cobbles: coming });
+  assert.ok(count(bare, 'drawImage') < count(world, 'drawImage'), 'fewer pictures laid before the cobbles arrive');
+  assert.ok(count(bare, 'drawImage') > 200);
   // Before the paintings arrive the ground still paints: plain, but there.
   const early = standIn();
-  assert.doesNotThrow(() => paintGround(early, GROUND, { grass: coming, earth: coming, bush: coming }));
+  assert.doesNotThrow(() => paintGround(early, GROUND, { grass: coming, earth: coming, cobbles: coming, bush: coming, tree: coming }));
   assert.equal(count(early, 'drawImage'), 0);
   assert.ok(count(early, 'fillRect') >= 2);
   // With no place to walk into, it is all lane.
@@ -133,8 +141,9 @@ test('stepping stones never pile up, even where streets meet', () => {
 });
 
 test('a hedge is bushes shoulder to shoulder, standing on the ground the hedge holds', () => {
-  for (const block of HEDGES) {
+  for (const block of HEDGES.filter((wall) => wall.look === 'bush')) {
     const bushes = bushesOf(block);
+    assert.deepEqual(wallOf(block), bushes.map((bush) => ({ ...bush, art: 'p_bush', wide: 96 })), 'and that is what its wall is built of');
     const long = Math.max(block.w, block.h);
     assert.ok(bushes.length >= long / 60 && bushes.length <= long / 38, `${bushes.length} bushes along ${long}`);
     for (const bush of bushes) {
@@ -143,6 +152,29 @@ test('a hedge is bushes shoulder to shoulder, standing on the ground the hedge h
     }
   }
   assert.equal(bushesOf({ x: 0, y: 0, w: 60, h: 44 }).length, 2);
+  assert.equal(HEDGES.filter((wall) => wall.look === 'bush').length, 3, 'the garden has three hedges');
+});
+
+test('the alley is walled with junk and fenced at its foot: every piece a painting, standing where feet cannot go', () => {
+  const junk = HEDGES.filter((wall) => wall.look === 'junk');
+  const fence = HEDGES.filter((wall) => wall.look === 'fence');
+  assert.equal(junk.length, 1);
+  assert.equal(fence.length, 2, 'a stretch of fence either side of the gate');
+  for (const block of [...junk, ...fence]) {
+    const pieces = wallOf(block);
+    assert.deepEqual(wallOf(block), pieces, 'the same pile every time');
+    for (const piece of pieces) {
+      assert.ok(WORLD_ART.includes(piece.art), `${piece.art} is a painting in the game`);
+      assert.ok(piece.wide >= 30 && piece.wide <= 110, `${piece.art} ${piece.wide} wide`);
+      assert.ok(piece.x >= block.x - 6 && piece.x <= block.x + block.w + 6 && piece.y >= block.y && piece.y <= block.y + block.h + 6, 'each stands in its wall');
+      if (piece.y > WORLD.edge + 10 && piece.x < WORLD.w - WORLD.edge) assert.equal(canStand(piece.x, piece.y - 8), false, 'and where it is drawn, feet cannot go');
+    }
+  }
+  const pile = wallOf(junk[0]);
+  assert.ok(pile.length >= junk[0].h / 60 && pile.length <= junk[0].h / 48, `${pile.length} things piled along ${junk[0].h}`);
+  for (let i = 1; i < pile.length; i++) assert.ok(pile[i].y - pile[i - 1].y <= 60, 'with no gap anyone could think to squeeze through');
+  assert.ok(new Set(pile.map((piece) => piece.art)).size >= 7, 'a mixed lot');
+  for (const block of fence) assert.ok(wallOf(block).every((piece) => piece.art === 'a_fence'));
 });
 
 test('trees, lamps, the gate and name plates all paint', () => {
@@ -156,6 +188,14 @@ test('trees, lamps, the gate and name plates all paint', () => {
   const gate = standIn();
   paintGate(gate);
   assert.ok(count(gate, 'fill') >= 6);
+  // A gateway is wood unless told iron; anything else it has not heard of is wood too.
+  const iron = standIn();
+  paintGate(iron, 'iron');
+  assert.deepEqual(iron.calls, gate.calls);
+  assert.notDeepEqual(iron.sets, gate.sets);
+  const odd = standIn();
+  paintGate(odd, 'marzipan');
+  assert.deepEqual(odd.sets, gate.sets);
   const plate = standIn();
   label(plate, 'The Garden Gate', 100, 100);
   assert.equal(count(plate, 'fillText'), 1);

@@ -4,7 +4,7 @@
 import { TEAM_SIZE, NAME_LENGTH, lookOf, roomOf } from './balance.js';
 import { createBattle, choices, act, concede } from './battle.js';
 import { settleUp } from './progress.js';
-import { rollEncounter, fairEncounter, enterRoom, leaveRoom, afterFight, canMeet, nextGroup, roomOpen, teamOf, maxHpOf } from './rooms.js';
+import { rollEncounter, fairEncounter, enterRoom, leaveRoom, afterFight, canMeet, nextGroup, heldBy, roomOpen, teamOf, maxHpOf } from './rooms.js';
 import { WORLD, DISTRICTS, POST, stepWalk, routeTo, straighten, roomy, standing, canStand, spotNear, spotOf, districtOf, districtAt, postNear, personNear, personAt, TALK } from './world.js';
 import { goalOf, aimOf, storySoFar, hasNews, talk, takeCall } from './story.js';
 
@@ -33,16 +33,8 @@ export class Game {
 
   // ------------------------------------------------------------ walking the world
 
-  /**
-   * The ground being held just now by whoever is waiting. On a visit, every group not yet calmed.
-   * Otherwise the bushes they hide in, which are there whenever you are not in among them.
-   */
-  held() {
-    const { visit, where } = this.state;
-    if (visit) return districtOf(visit.room).posts.filter((_, i) => !visit.groups[i].done);
-    const here = districtAt(where);
-    return Object.keys(DISTRICTS).filter((id) => id !== here).flatMap((id) => DISTRICTS[id].posts);
-  }
+  /** The ground being held just now: by whoever is waiting, in every place, and by any barricade. See rooms.heldBy. */
+  held() { return heldBy(this.state); }
 
   /**
    * Walks toward a point for `dt` seconds. Returns whether you moved. Never during a fight.
@@ -73,10 +65,38 @@ export class Game {
     // you are heading for, and whoever you are already standing beside (you have to get away somehow).
     const berth = POST.meet + 14;
     const beside = (post, point) => Math.hypot(point.x - post.x, point.y - post.y) <= berth;
-    const held = this.held().map((post) => (beside(post, target) || beside(post, from) ? post : { x: post.x, y: post.y, r: berth }));
+    const all = this.held();
+    const wide = (start) => all.map((post) => (post.r || beside(post, target) || beside(post, start) ? post : { x: post.x, y: post.y, r: berth }));
     // And it is found with room to spare on every side; walking it then touches nothing.
-    const can = roomy(standing(held));
-    return straighten(from, routeTo(from, target, can, WORLD), can);
+    const find = (start, to, can) => straighten(start, routeTo(start, to, can, WORLD), can);
+    const into = districtAt(target);
+    const area = districtOf(into);
+    if (!area || !area.narrow) return find(from, target, roomy(standing(wide(from))));
+
+    // A narrow place is one group wide, with no going round anyone. "As near as feet can get" to a
+    // point beyond someone would be the far side of its wall, out in the lane, which is not what a
+    // tap up the alley means. So the way there goes to its gate, and from then on stays inside it
+    // (a narrow place is entered from its foot); and if someone stands in the way, it walks up to
+    // them: whoever blocks the way is who you meet.
+    const inside = (x, y) => x >= area.x && x < area.x + area.w && y >= area.y && y <= area.gate.y + WORLD.reach + 46;
+    const lead = [];
+    let start = from;
+    if (!inside(from.x, from.y)) {
+      const door = spotOf(into).door;
+      lead.push(...find(from, door, roomy(standing(wide(from)))));
+      start = lead.length ? lead[lead.length - 1] : from;
+      if (Math.hypot(start.x - door.x, start.y - door.y) > 40) return lead;
+    }
+    const kept = (can) => (x, y) => inside(x, y) && can(x, y);
+    const short = (way) => { const end = way.length ? way[way.length - 1] : start; return Math.hypot(end.x - target.x, end.y - target.y); };
+    const careful = kept(roomy(standing(wide(start))));
+    let rest = find(start, target, careful);
+    if (short(rest) > 40) {
+      const plain = kept(roomy(standing(all)));
+      const near = find(start, target, plain);
+      if (short(near) < short(rest) - 20) rest = near;
+    }
+    return [...lead, ...rest];
   }
 
   /** On a visit: the group you have walked up to and can meet (its number), or -1. */

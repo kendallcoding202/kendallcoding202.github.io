@@ -13,7 +13,7 @@ import { h, sprite, spriteSrc } from './dom.js';
 import { elementTag, bar } from './parts.js';
 import { modal, toast, modalOpen } from './modals.js';
 import { converse } from './talk.js';
-import { FONT, oval, paint, glow, label, worldSrc, paintGround, paintBuilding, paintProp, paintLamp, paintGate, bushesOf } from './scenery.js';
+import { FONT, oval, paint, glow, label, worldSrc, paintGround, paintBuilding, paintProp, paintLamp, paintGate, wallOf } from './scenery.js';
 
 // How much of the world fits across the screen. People and Clutterkin are small in a big place.
 const VIEW = 760;
@@ -29,15 +29,27 @@ const picture = (src) => images[src] || (images[src] = Object.assign(new Image()
 /** A fixed run of numbers from 0 to 1: looks only, so not the game's dice. */
 const run = (seed) => { let s = seed; return () => ((s = (s * 16807) % 2147483647) / 2147483647); };
 
-// Fireflies, and every bush of every hedge: fixed, so worked out once.
-const FLIES = (() => { const next = run(29); return Array.from({ length: 120 }, () => ({ x: next() * WORLD.w, y: next() * WORLD.h, r: next() })); })();
-const BUSHES = HEDGES.flatMap(bushesOf);
+// How each place you walk into is dressed: what is underfoot, what its gateway is made of, and what
+// whoever is restless there hides in or behind when you are not in among them. (The garden: grass,
+// wood, bushes.)
+const DRESS = { alley: { floor: 'cobbles', gate: 'iron', cover: 'a_bin', coverWide: 62 } };
+const PLAIN = { floor: 'grass', gate: 'wood', cover: 'p_bush', coverWide: 100 };
 // The places you walk into that are built: their ground, and who waits where.
-const PLACES = ROOMS.filter((room) => roomBuilt(room) && DISTRICTS[room.id]).map((room) => ({ room, area: DISTRICTS[room.id] }));
+const PLACES = ROOMS.filter((room) => roomBuilt(room) && DISTRICTS[room.id]).map((room) => ({ room, area: DISTRICTS[room.id], dress: DRESS[room.id] || PLAIN }));
+const EAST = 150; // how far past the east edge of the world the view may travel, so a place along that edge is not seen pressed to the side of the screen
+// Fireflies, and every piece of every wall: fixed, so worked out once. A paved place along the east
+// edge of the world gets a wall of junk there too. That one is looks only: the edge is what stops you.
+const FLIES = (() => { const next = run(29); return Array.from({ length: 120 }, () => ({ x: next() * WORLD.w, y: next() * WORLD.h, r: next() })); })();
+const WALLS = [
+  ...HEDGES,
+  ...PLACES.filter(({ area, dress }) => dress.floor === 'cobbles' && area.x + area.w >= WORLD.w).map(({ area }) => ({ x: WORLD.w - 34, y: area.y, w: 44, h: area.h, look: 'junk' })),
+].flatMap(wallOf);
 const GROUND = {
   w: WORLD.w, h: WORLD.h, roads: ROAD_POINTS, spots: SPOTS.filter((spot) => !DISTRICTS[spot.id]), lamps: LAMPS, hedges: HEDGES, green: GREEN,
-  lawns: PLACES.map(({ room, area }) => ({ x: area.x, y: area.y, w: area.w, h: area.h, tint: room.tint, gate: area.gate, posts: area.posts })),
+  lawns: PLACES.map(({ room, area, dress }) => ({ x: area.x, y: area.y, w: area.w, h: area.h, tint: room.tint, gate: area.gate, posts: area.posts, floor: dress.floor })),
 };
+/** The last place that is built: where this slice of the game ends. */
+const LAST_BUILT = ROOMS.filter(roomBuilt).pop();
 
 export function laneScreen(ctx) {
   const { game } = ctx;
@@ -120,7 +132,7 @@ export function laneScreen(ctx) {
     if (!image.complete) image.addEventListener('load', () => kept.clear(), { once: true });
     return image;
   };
-  const groundArt = () => ({ grass: painting('grass'), earth: painting('earth'), bush: painting('p_bush') });
+  const groundArt = () => ({ grass: painting('grass'), earth: painting('earth'), cobbles: painting('cobbles'), bush: painting('p_bush'), tree: painting('p_tree') });
 
   // ------------------------------------------------------------ the camera
 
@@ -140,15 +152,16 @@ export function laneScreen(ctx) {
   }
 
   // How far past the top and bottom of the world the view may travel, so they can scroll out from
-  // under the title and the card.
+  // under the title and the card. With no card up, the bottom has nothing to get out from under.
   const over = () => ({ top: 62 / cam.k, bottom: 168 / cam.k });
+  const pastFoot = () => (card.hidden ? 44 : 168) / cam.k;
   const within = (lo, hi, v) => (hi < lo ? (lo + hi) / 2 : Math.max(lo, Math.min(hi, v)));
 
   function look(dt) {
     const { top, bottom } = over();
     const at = here();
-    const wantX = within(0, WORLD.w - cam.w, at.x - cam.w / 2);
-    const wantY = within(-top, WORLD.h - cam.h + bottom, at.y - top - (cam.h - top - bottom) * 0.56);
+    const wantX = within(0, WORLD.w + EAST - cam.w, at.x - cam.w / 2);
+    const wantY = within(-top, WORLD.h - cam.h + pastFoot(), at.y - top - (cam.h - top - bottom) * 0.56);
     const ease = cam.set ? 1 - Math.exp(-dt * 6.5) : 1;
     cam.x += (wantX - cam.x) * ease;
     cam.y += (wantY - cam.y) * ease;
@@ -169,8 +182,9 @@ export function laneScreen(ctx) {
     const { top, bottom } = over();
     const y0 = -top - 20;
     const tall = WORLD.h + top + bottom + 40;
-    const sharp = Math.min(1, 1.7 / (cam.k * cam.dpr), Math.sqrt(9e6 / (WORLD.w * tall)) / (cam.k * cam.dpr));
-    const full = bake('ground', 0, y0, WORLD.w, tall, (brush) => paintGround(brush, GROUND, groundArt()), sharp);
+    const wide = WORLD.w + EAST;
+    const sharp = Math.min(1, 1.7 / (cam.k * cam.dpr), Math.sqrt(9e6 / (wide * tall)) / (cam.k * cam.dpr));
+    const full = bake('ground', 0, y0, wide, tall, (brush) => paintGround(brush, GROUND, groundArt()), sharp);
     const scale = full.sheet.width / full.w;
     const x0 = Math.max(0, cam.x - 2);
     const x1 = Math.min(full.w, cam.x + cam.w + 2);
@@ -214,20 +228,20 @@ export function laneScreen(ctx) {
     return t >= 1 ? 1 : Math.max(0.05, 1 + 2.7 * u * u * u + 1.7 * u * u); // out quickly, a touch past full size, and back
   }
 
-  /** Whoever is at one post of a place: a rustle in a bush from outside, the group itself once you are in. */
+  /** Whoever is at one post of a place: a rustle in a bush (or a rattle in a bin) until you call on the place, then the group itself. */
   function waiting(place, index) {
-    const { room, area } = place;
+    const { room, area, dress } = place;
     const post = area.posts[index];
     const spot = room.path[index];
     const visit = state.visit && state.visit.room === room.id ? state.visit : null;
     const key = `${room.id}|${index}`;
     if (!visit) {
-      // Rested and outside, you only see that something is in there. Just cleared and still inside, nothing is.
-      if (game.district() === room.id) { shown.set(key, { what: 'none', since: -1 }); return; }
+      // Not calling here, you only see that something is in there. Just cleared and still inside, nothing is.
+      if (!state.visit && game.district() === room.id) { shown.set(key, { what: 'none', since: -1 }); return; }
       const big = spot.boss ? 1.5 : 1;
       const size = pop(key, 'bush');
       const sway = Math.sin(clock * 2.2 + index * 2) * 2.5;
-      put(bake(`bush|${big}`, -90, -150, 180, 180, (brush) => paintProp(brush, painting('p_bush'), 100 * big)), post.x + sway, post.y, size);
+      put(bake(`cover|${dress.cover}|${big}`, -90, -150, 180, 180, (brush) => paintProp(brush, painting(dress.cover), dress.coverWide * big)), post.x + sway, post.y, size);
       pen.font = `700 ${Math.round(34 * big * size)}px ${FONT}`; pen.textAlign = 'center'; pen.textBaseline = 'middle';
       pen.fillStyle = spot.boss ? '#ff8a96' : '#fff7e8';
       pen.lineWidth = 6; pen.strokeStyle = 'rgba(13,10,28,.85)'; pen.lineJoin = 'round'; pen.strokeText('?', post.x + sway, post.y - 44 * big * size);
@@ -239,11 +253,12 @@ export function laneScreen(ctx) {
     const size = pop(key, 'group');
     const foes = group.foes;
     const boss = foes.some((foe) => SPECIES[foe.species].boss);
-    const gap = boss ? 86 : foes.length > 2 ? 60 : 72;
+    // Where there is no room either side of a boss, its company stands in front of it instead.
+    const gap = boss ? (area.narrow ? 60 : 86) : foes.length > 2 ? 60 : 72;
     foes.forEach((foe, i) => {
       const kind = SPECIES[foe.species];
       const x = post.x + (i - (foes.length - 1) / 2) * gap * size;
-      const y = post.y + (kind.boss ? -14 : boss ? 20 : 0);
+      const y = post.y + (kind.boss ? -14 : boss ? (area.narrow ? 36 : 20) : 0);
       if (foe.heirloom) glow(pen, x, y - 22, 54, '255,200,61', 0.42 + 0.2 * Math.sin(clock * 5));
       stand(spriteSrc(foe.species, foe.heirloom), x, y - (kind.fly ? 9 + Math.sin(clock * 3 + i) * 4 : 0) * size, (kind.boss ? 140 : 58) * size, false, false, kind.fly ? 0 : Math.max(0, Math.sin(clock * 3.2 + i * 1.7)) * 3 * size);
     });
@@ -319,14 +334,19 @@ export function laneScreen(ctx) {
     for (const spot of SPOTS) if (seen(spot.x, spot.y)) things.push({ y: spot.y, draw: () => building(spot) });
     for (const t of TREES) if (seen(t.x, t.y)) things.push({ y: t.y, draw: () => put(bake(`tree|${t.r}`, -t.r * 1.9, -t.r * 3.8, t.r * 3.8, t.r * 3.8 + 24, (brush) => paintProp(brush, painting('p_tree'), t.r * 3.3)), t.x, t.y) });
     for (const lamp of LAMPS) if (seen(lamp.x, lamp.y)) things.push({ y: lamp.y, draw: () => put(bake('lamp', -60, -160, 120, 172, (brush) => paintLamp(brush, painting('p_lamp'))), lamp.x, lamp.y) });
-    for (const bush of BUSHES) if (seen(bush.x, bush.y, 120)) things.push({ y: bush.y, draw: () => put(bake('hedge', -60, -110, 120, 130, (brush) => paintProp(brush, painting('p_bush'), 96)), bush.x, bush.y) });
+    for (const piece of WALLS) if (seen(piece.x, piece.y, 120)) things.push({ y: piece.y, draw: () => put(bake(`wall|${piece.art}|${Math.round(piece.wide)}`, -70, -120, 140, 140, (brush) => paintProp(brush, painting(piece.art), piece.wide)), piece.x, piece.y) });
     for (const place of PLACES) {
-      const { room, area } = place;
+      const { room, area, dress } = place;
       const cleared = state.rooms[room.id].clears > 0;
+      const open = game.roomOpen(room.id);
       if (seen(area.gate.x, area.gate.y)) {
         things.push({ y: area.gate.y + 14, draw: () => {
-          put(bake('gate', -100, -90, 200, 130, paintGate), area.gate.x, area.gate.y + 16);
-          label(pen, `${cleared ? '✓ ' : ''}${room.name}`, area.gate.x, area.gate.y - 86, cleared ? '#58d77a' : '#fff7e8', cleared ? '#58d77a' : 'rgba(255,255,255,.3)');
+          put(bake(`gate|${dress.gate}`, -100, -90, 200, 130, (brush) => paintGate(brush, dress.gate)), area.gate.x, area.gate.y + 16);
+          if (open) { label(pen, `${cleared ? '✓ ' : ''}${room.name}`, area.gate.x, area.gate.y - 86, cleared ? '#58d77a' : '#fff7e8', cleared ? '#58d77a' : 'rgba(255,255,255,.3)'); return; }
+          // Shut: whoever is in there has piled up everything they have in the gateway.
+          put(bake('barricade', -100, -150, 200, 170, (brush) => paintProp(brush, painting('a_barricade'), 172)), area.gate.x, area.gate.y + 34);
+          label(pen, room.name, area.gate.x, area.gate.y - 132, '#b6b0d6', 'rgba(255,255,255,.14)');
+          label(pen, `calm ${ROOMS[ROOMS.indexOf(room) - 1].name} first`, area.gate.x, area.gate.y - 96, '#b6b0d6', 'rgba(255,255,255,.14)', 19);
         } });
       }
       area.posts.forEach((post, index) => { if (seen(post.x, post.y)) things.push({ y: post.y + 22, draw: () => waiting(place, index) }); });
@@ -427,16 +447,18 @@ export function laneScreen(ctx) {
         h('h2', null, place.name, ' ', elementTag(place.element)),
         h('small', null, place.blurb, ' ', built
           ? `${place.path.length} groups to calm, the last a boss${bossId && state.book[bossId].met ? ` (${SPECIES[bossId].name})` : ''}. Mostly ${ELEMENTS[place.element].name}.${record.visits ? ` Most calmed in one go: ${record.best} of ${place.path.length}.` : ''}`
-          : 'Not built yet: this slice ends at the garden.'),
+          : `Not built yet: this slice ends at ${LAST_BUILT.name}.`),
         built && game.roomOpen(place.id)
-          ? h('p', { class: 'cardnote', data: { act: 'enter' } }, visit ? 'Rest at home whenever you need to: it is not far.' : 'The gate is open. Walk on in.')
+          ? h('p', { class: 'cardnote', data: { act: 'enter' } }, !visit ? 'The gate is open. Walk on in.'
+            : visit.room === place.id ? 'Rest at home whenever you need to: it is not far.'
+              : `You are still out calling on ${roomOf(visit.room).name}. Rest at home first: nobody here will come out to you until you have.`)
           : h('button', { class: 'btn gold', disabled: true, data: { act: 'enter' } }, built ? `Clear ${before.name} first` : 'Not built yet'));
       return;
     }
     // Out on a visit and not at a door: how everyone is, and how far you have got.
     const room = roomOf(visit.room);
     card.replaceChildren(
-      h('div', { class: 'cardhead' }, h('h2', null, room.name, ' ', h('small', null, `${visit.stop} of ${room.path.length} calmed`)), h('small', { class: 'resthint' }, 'Rest at home')),
+      h('div', { class: 'cardhead' }, h('h2', null, room.name, ' ', h('small', null, `${visit.stop} of ${room.path.length} calmed`)), h('small', { class: 'resthint' }, inside && inside !== visit.room ? 'Rest at home before calling here' : 'Rest at home')),
       teamList());
   }
 
@@ -517,7 +539,7 @@ export function laneScreen(ctx) {
       if (dx || dy) way = [{ x: before.x + dx * 60, y: before.y + dy * 60 }];
     }
     // Head for each point of the way in turn.
-    while (way.length && Math.hypot(way[0].x - before.x, way[0].y - before.y) < 7) way.shift();
+    while (way.length && Math.hypot(way[0].x - before.x, way[0].y - before.y) < WORLD.arrive) way.shift();
     if (modalOpen()) { way = []; held.clear(); }
     // The call that starts the story rings as soon as the game has begun and nothing else is on the
     // screen (and once, for a save from before there was a story).

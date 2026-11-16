@@ -4,7 +4,7 @@
 // What has happened is worked out from the save itself wherever it can be (a
 // place is calm because its boss was calmed, not because a flag says so). The
 // story keeps only what nothing else records: which conversations were had.
-import { ROOMS, ROOM_IDS, roomOf } from './balance.js';
+import { ROOMS, ROOM_IDS, roomOf, roomBuilt } from './balance.js';
 
 export const CAST = {
   maribel: { name: 'Great-aunt Maribel', role: 'on the phone', art: 'cast_maribel' },
@@ -62,11 +62,20 @@ const INES = {
   already: 'And the garden is calm already? Maribel said you were quick.',
   nudge: (place) => `${place} first. Everyone else, then the ringleader. And rest when you need to: there is no prize for limping.`,
   reach: 'And do try Reaching out. A friend made is worth more than a fight won.',
-  calmed: [
-    'The garden has gone quiet. I could hear it from here: that sprinkler has been hissing since Tuesday.',
-    'That is one place of eight. Tin Can Alley is next, but the bins have barricaded themselves in and I cannot get you past them yet.',
-    'So keep walking the garden. They are restless again every time you rest, and there are kinds in there you have not met. Bring a few more home: you will want them for what is further up the lane.',
-  ],
+  // What she says on hearing that each place is calm, in the order the places come.
+  calmed: {
+    garden: [
+      'The garden has gone quiet. I could hear it from here: that sprinkler has been hissing since Tuesday.',
+      'That is one place of eight. Tin Can Alley is next: east along the street, past the launderette, and in at the foot of it. The bins had it barricaded all week. Word of a calm garden travels, and they have let it down.',
+      'It is a narrow place. They come at you one after another, and the Bandit Baron holds court at the far end. Most of them are Clank, and Crumb jams Clank: take the Toast Ghost.',
+    ],
+    alley: [
+      'Tin Can Alley, quiet. I never thought I would hear the day. The Baron has held court in there since the bin men changed their round.',
+      'Two places of eight. The Midnight Pantry is next, and that I cannot get you into yet: this is as far as the lane is built.',
+      'So walk the garden and the alley again. They are restless every time you rest, and there are kinds in both you have not met.',
+    ],
+  },
+  heard: (place) => `${place} is calm. Good. That is one more off Mr. Spick's list.`,
   later: (state) => `${placesCalm(state)} of ${ROOMS.length} calm, and Monday coming. We will get there.`,
 };
 
@@ -78,6 +87,8 @@ const DOV = {
   ],
   tips: [
     'Tap one of them in a fight and it tells you its soft spot. Nobody ever taps them. I tap everything.',
+    'Down the alley they come one at a time. There is no going round. I tried. I got pecked.',
+    'Crumb jams Clank. Take the Toast Ghost down Tin Can Alley and watch the tins dent.',
     'If you hit the one you are making friends with, it gets in a Huff again. So pick one, and hit the others.',
     'My nan says the Sprinkler was never turned off. Imagine being left on for a week. I would be cross too.',
     'You can only have one of each kind. If you calm a kind you have already got, it goes off happy and yours learns from it.',
@@ -98,10 +109,15 @@ const SPICK = {
   },
 };
 
+/** How many calm places Ines Tock has heard about. */
+const reported = (state) => Math.max(0, state.story.ines - 1);
+/** The furthest place along the lane that is calm, or null. */
+const latestCalm = (state) => ROOMS.filter((room) => calm(state, room.id)).pop() || null;
+
 /** Whether someone has something new to say: talking to them now would move the story on. */
 export function hasNews(state, who) {
   const story = state.story;
-  if (who === 'ines') return story.ines === 0 || (story.ines === 1 && calm(state, FIRST.id));
+  if (who === 'ines') return story.ines === 0 || placesCalm(state) > reported(state);
   if (who === 'dov' || who === 'spick') return story[who] === 0;
   return false;
 }
@@ -115,14 +131,21 @@ export function talk(state, who) {
   if (!NEIGHBOURS.includes(who)) return null;
   const say = (texts) => texts.map((text) => line(who, text));
   if (who === 'ines') {
-    const done = calm(state, FIRST.id);
+    const calmNow = placesCalm(state);
     if (story.ines === 0) {
-      story.ines = done ? 2 : 1;
-      return say([...INES.first, done ? INES.already : INES.sendOff(FIRST.name)]);
+      // Met for the first time. Whatever is calm already, she takes as read.
+      story.ines = Math.min(MOST, 1 + calmNow);
+      return say([...INES.first, calmNow ? INES.already : INES.sendOff(FIRST.name)]);
     }
-    if (story.ines === 1 && done) { story.ines = 2; return say(INES.calmed); }
-    if (story.ines === 1) return say(state.stats.befriended === 0 ? [INES.nudge(FIRST.name), INES.reach] : [INES.nudge(FIRST.name)]);
-    return say([INES.later(state)]);
+    if (calmNow > reported(state)) {
+      // However much has gone quiet since she last heard, she hears it all at once, and speaks of the furthest.
+      const place = latestCalm(state);
+      story.ines = Math.min(MOST, 1 + calmNow);
+      return say(INES.calmed[place.id] || [INES.heard(place.name)]);
+    }
+    const next = nextPlace(state);
+    if (!next || !roomBuilt(next)) return say([INES.later(state)]);
+    return say(state.stats.befriended === 0 ? [INES.nudge(next.name), INES.reach] : [INES.nudge(next.name)]);
   }
   if (who === 'dov') {
     const told = story.dov;
@@ -143,6 +166,12 @@ export function takeCall(state) {
 
 // ---------------------------------------------------------------- what you are trying to do
 
+// How the goal of calming each place is put. (A place not listed here gets a plain line.)
+const CALMING = {
+  garden: { title: 'Calm the garden', detail: 'Calm everyone else there and the Sprinkler will face you. Rest at home whenever you need to.' },
+  alley: { title: 'Calm Tin Can Alley', detail: 'East along the street, past the launderette. A narrow place: they come one after another, and the Bandit Baron is at the far end. Crumb jams Clank.' },
+};
+
 /**
  * The thing to do next: { id, title, detail, who, room, count }. `who` is a
  * neighbour to go and see and `room` a place to go to (either may be null);
@@ -150,20 +179,23 @@ export function takeCall(state) {
  */
 export function goalOf(state) {
   const story = state.story;
-  const record = state.rooms[FIRST.id];
-  const stops = FIRST.path.length;
   const goal = (id, title, detail, extra = {}) => ({ id, title, detail, who: null, room: null, count: null, ...extra });
   if (story.ines === 0) return goal('meet', 'Find Ines Tock', 'She mends clocks and knows about Clutterkin. She is waiting on the green, just below home.', { who: 'ines' });
-  if (!calm(state, FIRST.id)) {
-    if (state.stats.befriended === 0) {
-      return goal('friend', 'Make a friend in the garden', 'Walk in through the garden gate. In a fight, Reach out to one you like instead of hitting it, and win.', { room: FIRST.id });
-    }
-    return goal('calm', 'Calm the garden', 'Calm everyone else there and the Sprinkler will face you. Rest at home whenever you need to.', { room: FIRST.id, count: [Math.min(stops, record.best), stops] });
+  if (placesCalm(state) > reported(state)) {
+    return goal('report', 'Tell Ines Tock', `${latestCalm(state).name} is calm. She will want to know.`, { who: 'ines' });
   }
-  if (story.ines === 1) return goal('report', 'Tell Ines Tock', 'The garden is calm. She will want to know.', { who: 'ines' });
   const next = nextPlace(state);
+  if (next && roomBuilt(next)) {
+    if (next === FIRST && state.stats.befriended === 0) {
+      return goal('friend', 'Make a friend in the garden', 'Walk in through the garden gate. In a fight, Reach out to one you like instead of hitting it, and win.', { room: next.id });
+    }
+    const stops = next.path.length;
+    const about = CALMING[next.id] || { title: `Calm ${next.name}`, detail: 'Calm everyone else there and its ringleader will face you. Rest at home whenever you need to.' };
+    return goal('calm', about.title, about.detail, { room: next.id, count: [Math.min(stops, state.rooms[next.id].best), stops] });
+  }
   return goal('more', next ? `${next.name} is next` : 'The lane is quiet',
-    'It is not built yet: this is as far as the slice goes. The garden is restless again whenever you have rested, with more friends to make.', { count: [placesCalm(state), ROOMS.length] });
+    next ? 'It is not built yet: this is as far as the slice goes. The places you have calmed are restless again whenever you have rested, with more friends to make.' : 'Every place on the lane is calm. Mr. Spick has nothing to collect.',
+    { count: [placesCalm(state), ROOMS.length] });
 }
 
 /** The one line that is the point of the whole game, with how far along it is. */

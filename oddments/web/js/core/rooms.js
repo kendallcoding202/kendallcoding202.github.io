@@ -2,6 +2,7 @@
 // to resting at home. Rules only: no DOM, no clock, no storage.
 import { SPECIES, ROOMS, HEIRLOOM, BREATHER, TEAM_SIZE, roomOf, roomBuilt, statAt } from './balance.js';
 import { nextRandom, rollInt, rollPick, own } from './util.js';
+import { BARRICADE, districtOf, districtAt } from './world.js';
 
 /** A room is open once it is built and the room before it has been cleared. */
 export function roomOpen(state, roomId) {
@@ -53,6 +54,28 @@ export function fairEncounter(room, stop, list) {
     }
   }
   return bosses === (spot.boss ? 1 : 0) && company >= spot.size[0] && company <= spot.size[1];
+}
+
+/**
+ * The ground being held just now, as points to keep off (see world.canStand): a barricade in the
+ * gateway of any place that is still shut; on a visit, every group there not yet calmed; and in a
+ * place you are not visiting, the cover its restless ones keep to. A place you are standing in
+ * with no visit on (you have just calmed it) holds nothing.
+ */
+export function heldBy(state, where = state.where) {
+  const held = [];
+  const here = districtAt(where);
+  for (const room of ROOMS) {
+    const area = districtOf(room.id);
+    if (!area) continue;
+    if (!roomOpen(state, room.id)) held.push({ x: area.gate.x, y: area.gate.y, r: BARRICADE });
+    if (state.visit && state.visit.room === room.id) {
+      area.posts.forEach((post, i) => { if (!state.visit.groups[i].done) held.push(post); });
+    } else if (state.visit || here !== room.id) {
+      held.push(...area.posts);
+    }
+  }
+  return held;
 }
 
 /** Whether a group can be met now: it is still there, and the boss only once everyone else is calm. */

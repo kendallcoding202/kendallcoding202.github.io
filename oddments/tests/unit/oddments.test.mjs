@@ -1,4 +1,4 @@
-// The data: the first twelve Clutterkin, their moves and the first room.
+// The data: the first sixteen Clutterkin, their moves and the first two places.
 // These tests hold the tables to the rules the engine relies on.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,9 +11,9 @@ import {
 
 const ASSETS = fileURLToPath(new URL('../../web/assets/', import.meta.url));
 
-test('there are twelve Clutterkin: eleven who can be friends and one boss', () => {
-  assert.equal(SPECIES_IDS.length, 12);
-  assert.deepEqual(SPECIES_IDS.filter((id) => SPECIES[id].boss), ['boss_hydra']);
+test('there are sixteen Clutterkin: fourteen who can be friends and two bosses', () => {
+  assert.equal(SPECIES_IDS.length, 16);
+  assert.deepEqual(SPECIES_IDS.filter((id) => SPECIES[id].boss), ['boss_hydra', 'boss_baron']);
 });
 
 test('every Clutterkin has an element, four sensible stats, a line of text and its sprite', () => {
@@ -26,7 +26,7 @@ test('every Clutterkin has an element, four sensible stats, a line of text and i
   }
 });
 
-test('every element has at least one of the twelve', () => {
+test('every element has at least one kind', () => {
   for (const element of Object.keys(ELEMENTS)) assert.ok(SPECIES_IDS.some((id) => SPECIES[id].element === element), element);
 });
 
@@ -111,30 +111,42 @@ test('you start with three friends of three different elements, each knowing two
   }
 });
 
-test('the house has eight rooms; the first is built and ends in its boss', () => {
+test('the lane has eight places; the first two are built and each ends in its boss', () => {
   assert.equal(ROOMS.length, 8);
   assert.equal(new Set(ROOMS.map((room) => room.id)).size, 8);
   for (const room of ROOMS) {
     assert.ok(room.name && room.blurb && ELEMENTS[room.element]);
     assert.ok(existsSync(`${ASSETS}bg/${room.bg}.webp`), `${room.id} background`);
   }
-  assert.deepEqual(ROOMS.filter(roomBuilt).map((room) => room.id), ['garden']);
-  const { path } = ROOMS[0];
-  assert.equal(path.length, 5);
-  path.forEach((spot, i) => {
-    const last = i === path.length - 1;
-    assert.equal(!!spot.boss, last, 'only the last stop has a boss');
-    if (spot.boss) assert.ok(SPECIES[spot.boss].boss && spot.bossLevel >= 1);
-    assert.ok(spot.name && spot.size[0] >= 1 && spot.size[0] <= spot.size[1] && spot.size[1] <= TEAM_SIZE - (last ? 1 : 0));
-    assert.ok(spot.level[0] >= 1 && spot.level[0] <= spot.level[1]);
-    for (const [id, weight] of spot.pool) assert.ok(SPECIES[id] && !SPECIES[id].boss && weight > 0, `${spot.name}: ${id}`);
-  });
-  for (let i = 1; i < path.length; i++) assert.ok(path[i].level[1] >= path[i - 1].level[1] || path[i].boss, 'the path gets harder');
+  assert.deepEqual(ROOMS.filter(roomBuilt).map((room) => room.id), ['garden', 'alley']);
+  const bosses = [];
+  for (const { path } of ROOMS.filter(roomBuilt)) {
+    assert.equal(path.length, 5);
+    path.forEach((spot, i) => {
+      const last = i === path.length - 1;
+      assert.equal(!!spot.boss, last, 'only the last stop has a boss');
+      if (spot.boss) { assert.ok(SPECIES[spot.boss].boss && spot.bossLevel >= 1); bosses.push(spot.boss); }
+      assert.ok(spot.name && spot.size[0] >= 1 && spot.size[0] <= spot.size[1] && spot.size[1] <= TEAM_SIZE - (last ? 1 : 0));
+      assert.ok(spot.level[0] >= 1 && spot.level[0] <= spot.level[1]);
+      for (const [id, weight] of spot.pool) assert.ok(SPECIES[id] && !SPECIES[id].boss && weight > 0, `${spot.name}: ${id}`);
+    });
+    for (let i = 1; i < path.length; i++) assert.ok(path[i].level[1] >= path[i - 1].level[1] || path[i].boss, 'the path gets harder');
+  }
+  assert.equal(new Set(bosses).size, bosses.length, 'each place has a boss of its own');
+  assert.equal(new Set(ROOMS.filter(roomBuilt).flatMap((room) => room.path.map((spot) => spot.name))).size, 10, 'and every stop a name of its own');
+  // The second place starts about where the first left off, and ends higher.
+  const [garden, alley] = ROOMS;
+  assert.ok(alley.path[0].level[0] >= garden.path[3].level[0]);
+  assert.ok(alley.path[4].bossLevel > garden.path[4].bossLevel);
 });
 
-test('every kind that can be a friend turns up somewhere in the first room, or is with you from the start', () => {
-  const met = new Set([...START_TEAM.map(([id]) => id), ...ROOMS[0].path.flatMap((spot) => spot.pool.map(([id]) => id))]);
+test('every kind that can be a friend turns up somewhere in a place that is built, or is with you from the start', () => {
+  const met = new Set([...START_TEAM.map(([id]) => id), ...ROOMS.filter(roomBuilt).flatMap((room) => room.path.flatMap((spot) => spot.pool.map(([id]) => id)))]);
   for (const id of SPECIES_IDS.filter((k) => !SPECIES[k].boss)) assert.ok(met.has(id), id);
+  // And the second place has kinds of its own, not met in the first.
+  const inGarden = new Set(ROOMS[0].path.flatMap((spot) => spot.pool.map(([id]) => id)));
+  const onlyAlley = [...new Set(ROOMS[1].path.flatMap((spot) => spot.pool.map(([id]) => id)))].filter((id) => !inGarden.has(id));
+  assert.deepEqual(onlyAlley.sort(), ['cancrab', 'coothug', 'sockgoblin']);
 });
 
 test('the house-sitter has three Calls and four looks, each with its sprite', () => {

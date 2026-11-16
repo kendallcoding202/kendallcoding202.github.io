@@ -109,6 +109,22 @@ export const MOVES = {
   forkjab: hit('Fork Jab', 'crumb', 1.0, 0, 'Bent, but it still has four points.'),
   binraid: hit('Bin Raid', 'crumb', 1.6, 2, 'Whatever was in there, it is on you now.'),
   scrapsforall: mend('Scraps for All', 'crumb', 0.15, 'allies', 4, 'Shares the haul: mends its whole side a little.'),
+  // Can Crab
+  tinnip: hit('Tin Nip', 'clank', 1.0, 0, 'A claw, from somewhere inside the tin.'),
+  liddown: boost('Pull the Lid Down', 'clank', 'grit', 0.5, 3, 'self', 3, 'Back inside, lid shut: raises Grit.'),
+  canopener: hit('Can Opener', 'clank', 1.2, 3, 'Finds the seam and works at it: lowers Grit.', { sap: { stat: 'grit', by: 0.3, turns: 2 } }),
+  // Sock Goblin
+  buttonflick: hit('Button Flick', 'fluff', 1.0, 0, 'It has spares.'),
+  pullathread: hit('Pull a Thread', 'fluff', 0.8, 2, 'Finds the loose end and keeps pulling: lowers Grit.', { sap: { stat: 'grit', by: 0.3, turns: 2 } }),
+  darnit: hit('Darn It', 'fluff', 1.75, 3, 'A needle, and a very short temper.'),
+  // Coo-Thug
+  peckingorder: hit('Pecking Order', 'crumb', 1.0, 0, 'You are at the bottom of it.'),
+  shakedown: hit('Shakedown', 'crumb', 1.1, 2, 'Hand over the crumbs: lowers Oomph.', { sap: { stat: 'oomph', by: 0.25, turns: 2 } }),
+  flocktogether: sweep('Flock Together', 'crumb', 0.65, 3, 'Suddenly there are forty of it.'),
+  // The Bandit Baron
+  lidbash: hit('Lid Bash', 'clank', 1.0, 0, 'A dustbin lid, edge on.'),
+  fishbonesweep: sweep('Fishbone Sweep', 'clank', 0.6, 2, 'The sceptre comes round, and so does the smell.'),
+  standanddeliver: hit('Stand and Deliver', 'clank', 1.3, 3, 'Takes the fight out of you, and your lunch: lowers Oomph.', { sap: { stat: 'oomph', by: 0.25, turns: 2 } }),
   // Sprinkler Hydra
   nozzlejet: hit('Nozzle Jet', 'suds', 1.0, 0, 'One head, full pressure.'),
   fullsprinkle: sweep('Full Sprinkle', 'suds', 0.6, 2, 'Round and round and round.'),
@@ -195,10 +211,33 @@ export const SPECIES = {
     blurb: 'Knows what is in every bin on the street.',
     grown: { at: 12, name: 'Ratscallion' },
   },
+  cancrab: {
+    name: 'Can Crab', element: 'clank', hp: 54, oomph: 11, grit: 15, pep: 6, huff: 5,
+    moves: [['tinnip', 1], ['liddown', 3], ['canopener', 6]],
+    blurb: 'Moved into a tin of tomatoes one winter and has not been out since.',
+    grown: { at: 12, name: 'Dustbin Lobster' },
+  },
+  sockgoblin: {
+    name: 'Sock Goblin', element: 'fluff', hp: 44, oomph: 14, grit: 9, pep: 14, huff: 4,
+    moves: [['buttonflick', 1], ['pullathread', 3], ['darnit', 6]],
+    blurb: 'The other sock. It has been looking for you.',
+    grown: { at: 12, name: 'Jumper Troll' },
+  },
+  coothug: {
+    name: 'Coo-Thug', element: 'crumb', hp: 46, oomph: 13, grit: 10, pep: 12, huff: 4,
+    moves: [['peckingorder', 1], ['shakedown', 3], ['flocktogether', 6]],
+    blurb: 'A feather duster that fell in with a bad crowd.',
+    grown: { at: 12, name: 'Coo-Kingpin' },
+  },
   boss_hydra: {
     name: 'Sprinkler Hydra', element: 'suds', hp: 118, oomph: 11, grit: 12, pep: 9, huff: 0, boss: true, turns: 2,
     moves: [['nozzlejet', 1], ['fullsprinkle', 1], ['hosedown', 1]],
     blurb: 'Left on all summer. Three heads, one opinion.',
+  },
+  boss_baron: {
+    name: 'The Bandit Baron', element: 'clank', hp: 120, oomph: 12, grit: 13, pep: 10, huff: 0, boss: true, turns: 2,
+    moves: [['lidbash', 1], ['fishbonesweep', 1], ['standanddeliver', 1]],
+    blurb: 'A fur stole somebody threw out. It crowned itself the same night.',
   },
 };
 export const SPECIES_IDS = Object.keys(SPECIES);
@@ -258,8 +297,8 @@ export const BENCH_SHARE = 0.5; // friends left at home learn half as much
 //
 // The eight rooms of the house, in the order they open. A room is a path of
 // encounters ending in a boss. `size` is how many restless Clutterkin turn up,
-// `pool` who they may be (kind, weight) and `level` how strong. Only the
-// first room is built; the rest are on the map and locked.
+// `pool` who they may be (kind, weight) and `level` how strong. The first two
+// are built; the rest are on the map and locked.
 export const BREATHER = 0.3; // share of Health everyone regains between encounters
 
 export const ROOMS = [
@@ -274,7 +313,17 @@ export const ROOMS = [
       { name: 'The Sprinkler', boss: 'boss_hydra', bossLevel: 5, size: [2, 2], level: [3, 3], pool: [['snailor', 1], ['dandepuff', 2]] },
     ],
   },
-  { id: 'alley', name: 'Tin Can Alley', bg: 'bg_alley', tint: '#8c9bb5', element: 'clank', blurb: 'Bins, bottle caps and whoever is in charge of them.', path: null },
+  {
+    id: 'alley', name: 'Tin Can Alley', bg: 'bg_alley', tint: '#8c9bb5', element: 'clank',
+    blurb: 'Bins, bottle caps and whoever is in charge of them. A narrow place: they come one after another.',
+    path: [
+      { name: 'The Dented Bins', size: [2, 2], level: [4, 4], pool: [['cancrab', 3], ['ratscal', 2]] },
+      { name: 'The Bottle Bank', size: [2, 3], level: [4, 5], pool: [['capbeetle', 3], ['sockgoblin', 2], ['cancrab', 1]] },
+      { name: 'The Fire Escape', size: [3, 3], level: [4, 5], pool: [['coothug', 3], ['sockgoblin', 2], ['sparkplug', 1]] },
+      { name: 'The Loading Bay', size: [3, 3], level: [5, 5], pool: [['cancrab', 2], ['coothug', 2], ['capbeetle', 2], ['ratscal', 1]] },
+      { name: 'The Baron\'s Court', boss: 'boss_baron', bossLevel: 6, size: [1, 2], level: [4, 4], pool: [['coothug', 2], ['ratscal', 2]] },
+    ],
+  },
   { id: 'pantry', name: 'The Midnight Pantry', bg: 'bg_pantry', tint: '#f2a65a', element: 'crumb', blurb: 'Everything in here is past its date and wide awake.', path: null },
   { id: 'wash', name: 'The Wash', bg: 'bg_wash', tint: '#4fc4cf', element: 'suds', blurb: 'Where socks go in as pairs.', path: null },
   { id: 'stacks', name: 'The Dusty Stacks', bg: 'bg_stacks', tint: '#c08552', element: 'fluff', blurb: 'Overdue books and what lives between the pages.', path: null },

@@ -1,9 +1,9 @@
 // Painting the world: the ground, the buildings and the things that stand on
-// it. The buildings, the tree, the lamp, the hedge bush and the grass are
-// painted art (web/assets/world/, made by tools/process-art.py from one sheet
-// and one texture); this lays them out, and draws in code the few things that
-// have no painting yet: the path, its stepping stones, the gate and the name
-// plates.
+// it. The buildings, the tree, the lamp, the hedge bush, the grass, and the
+// alley's junk, fence and cobbles are painted art (web/assets/world/, made by
+// tools/process-art.py from two sheets and two textures); this lays them out,
+// and draws in code the few things that have no painting yet: the path, its
+// stepping stones, the gateways and the name plates.
 //
 // Nothing here moves or knows about the game. Each painter draws one thing
 // once; lane.js keeps the results and puts them on screen every frame.
@@ -13,7 +13,10 @@ export const INK = '#0d0a1c';
 export const FONT = 'Fredoka, ui-rounded, system-ui, sans-serif';
 
 /** The painted pictures of the world, by name, and where each lives. */
-export const WORLD_ART = ['grass', 'earth', 'p_tree', 'p_lamp', 'p_bush', 'b_home', 'b_garden', 'b_alley', 'b_pantry', 'b_wash', 'b_stacks', 'b_rooftops', 'b_attic', 'b_dark'];
+export const WORLD_ART = [
+  'grass', 'earth', 'cobbles', 'p_tree', 'p_lamp', 'p_bush', 'b_home', 'b_garden', 'b_alley', 'b_pantry', 'b_wash', 'b_stacks', 'b_rooftops', 'b_attic', 'b_dark',
+  'a_bin', 'a_bin2', 'a_crate', 'a_tyres', 'a_drum', 'a_boxes', 'a_pallets', 'a_bottles', 'a_cone', 'a_heap', 'a_fence', 'a_barricade',
+];
 export const worldSrc = (name) => `assets/world/${name}.webp`;
 /** How wide each building stands, in the world's units. Its height follows from its painting. */
 export const BUILDING_WIDE = { home: 240, garden: 214, alley: 208, pantry: 214, wash: 190, stacks: 208, rooftops: 148, attic: 170, dark: 214 };
@@ -146,21 +149,83 @@ function wornWays(pen, ways, earth, tone) {
   }
 }
 
-/** A hedge of painted bushes all the way round the world, in the dark at the edge of things. */
-function border(pen, bush, w, h) {
+/**
+ * A hedge of painted bushes all the way round the world, in the dark at the edge of things. Where a
+ * paved place runs along the east edge there is no hedge: it has a wall of its own (`paved` is those
+ * stretches, as { y0, y1 }). Past the east edge, which the view can travel a little beyond, trees.
+ */
+function border(pen, art, w, h, paved = []) {
   const next = run(97);
   pen.fillStyle = '#10222c';
   pen.fillRect(-400, -400, w + 800, 412); pen.fillRect(-400, h - 4, w + 800, 700);
   pen.fillRect(-400, -400, 412, h + 1100); pen.fillRect(w - 12, -400, 412, h + 1100);
-  for (let x = -20; x <= w + 20; x += 46) stood(pen, bush, x + next() * 8, 26 + next() * 6, 88);
+  for (let x = -20; x <= w + 20; x += 46) stood(pen, art.bush, x + next() * 8, 26 + next() * 6, 88);
+  const far = run(53);
+  for (let y = 60; y <= h + 80; y += 74) stood(pen, art.tree, w + 96 + far() * 250, y + far() * 40, 96 + far() * 34);
   for (let y = 20; y <= h; y += 46) {
-    stood(pen, bush, -14 + next() * 8, y + 30, 88);
-    stood(pen, bush, w + 14 - next() * 8, y + 30 + 23, 88);
+    stood(pen, art.bush, -14 + next() * 8, y + 30, 88);
+    const east = w + 14 - next() * 8;
+    if (!paved.some((stretch) => y + 53 > stretch.y0 && y + 53 < stretch.y1)) stood(pen, art.bush, east, y + 30 + 23, 88);
   }
-  for (let x = -20; x <= w + 20; x += 46) stood(pen, bush, x + next() * 8, h + 34 + next() * 6, 88);
+  for (let x = -20; x <= w + 20; x += 46) stood(pen, art.bush, x + next() * 8, h + 34 + next() * 6, 88);
   pen.fillStyle = 'rgba(8,10,30,.4)';
   pen.fillRect(-400, -400, w + 800, 418); pen.fillRect(-400, h - 12, w + 800, 700);
   pen.fillRect(-400, 18, 430, h - 30); pen.fillRect(w - 30, 18, 430, h - 30);
+}
+
+const COBBLE = 250; // how much ground one tile of the cobble painting covers
+const CAPS = ['#e2574c', '#f2c14e', '#5aa9e6', '#7ac74f', '#f4f0ff'];
+
+/**
+ * A paved place: cobbles from wall to wall and out through its gateway, dark where they meet the
+ * walls, with puddles, a few dropped bottle caps, and light falling across from windows out of sight.
+ */
+function cobbled(pen, yard, cobbles) {
+  const x0 = yard.x - 30;
+  const x1 = yard.x + yard.w + 30;
+  const y0 = yard.y - 400;
+  const y1 = yard.y + yard.h + 8;
+  const gate = yard.gate;
+  pen.save();
+  pen.beginPath(); pen.rect(x0, y0, x1 - x0, y1 - y0); pen.rect(gate.x - 72, y1 - 2, 144, 44); pen.clip();
+  pen.fillStyle = '#2a2a4a';
+  pen.fillRect(x0, y0, x1 - x0, y1 - y0 + 60);
+  if (arrived(cobbles)) {
+    for (let y = Math.floor(y0 / COBBLE) * COBBLE; y < y1 + 60; y += COBBLE) {
+      for (let x = Math.floor(x0 / COBBLE) * COBBLE; x < x1; x += COBBLE) pen.drawImage(cobbles, x, y, COBBLE + 0.5, COBBLE + 0.5);
+    }
+  }
+  pen.fillStyle = 'rgba(14,16,44,.3)';
+  pen.fillRect(x0, y0, x1 - x0, y1 - y0 + 60);
+  const next = run(61);
+  // Puddles: a darker pool with a little sky in it
+  for (let y = yard.y + 150; y < yard.y + yard.h - 60; y += 190 + next() * 90) {
+    const x = yard.x + 60 + next() * (yard.w - 120);
+    const wide = 30 + next() * 26;
+    oval(pen, x, y, wide, wide * 0.42); paint(pen, 'rgba(10,12,36,.5)');
+    oval(pen, x - wide * 0.1, y - wide * 0.06, wide * 0.72, wide * 0.24); paint(pen, 'rgba(150,180,240,.13)');
+    oval(pen, x - wide * 0.3, y - wide * 0.14, wide * 0.2, wide * 0.05); paint(pen, 'rgba(255,255,255,.2)');
+  }
+  // Light from windows, now from one side, now the other
+  let side = 0;
+  for (let y = yard.y + 110; y < yard.y + yard.h; y += 270) { glow(pen, side++ % 2 ? yard.x + yard.w - 30 : yard.x + 30, y, 170, '255,200,61', 0.17); }
+  // Bottle caps, dropped
+  for (let i = 0; i < Math.round(yard.h / 26); i++) {
+    const x = yard.x + 24 + next() * (yard.w - 48);
+    const y = yard.y + 30 + next() * (yard.h - 50);
+    disc(pen, x, y + 1.2, 3.4); paint(pen, 'rgba(8,10,30,.5)');
+    disc(pen, x, y, 3.4); paint(pen, CAPS[Math.floor(next() * CAPS.length)]);
+    disc(pen, x - 0.9, y - 0.9, 1.2); paint(pen, 'rgba(255,255,255,.4)');
+  }
+  // The foot of each wall is in shadow
+  for (const [edge, toward] of [[yard.x, 1], [yard.x + yard.w, -1]]) {
+    const shade = pen.createLinearGradient(edge, 0, edge + toward * 56, 0);
+    shade.addColorStop(0, 'rgba(8,10,30,.6)');
+    shade.addColorStop(1, 'rgba(8,10,30,0)');
+    pen.fillStyle = shade;
+    pen.fillRect(Math.min(edge, edge + toward * 56), y0, 56, y1 - y0);
+  }
+  pen.restore();
 }
 
 const flower = (pen, x, y, colour) => {
@@ -182,7 +247,8 @@ function drifts(pen, next, x0, y0, x1, y1, count, colours) {
 /**
  * The ground of the whole world, and a little past every edge of it (the view can scroll that far).
  * `world` says what is where: { w, h, roads, spots, lamps, hedges, green, lawns }, a lawn being a
- * place you walk into: { x, y, w, h, tint, gate, posts }.
+ * place you walk into: { x, y, w, h, tint, gate, posts, floor }. Its floor is grass unless it says
+ * 'cobbles'.
  */
 export function paintGround(pen, world, art) {
   const { w, h } = world;
@@ -195,6 +261,11 @@ export function paintGround(pen, world, art) {
 
   // Each place you walk into: its own light on the grass, mown in stripes, flower beds along its hedges
   for (const lawn of world.lawns) {
+    if (lawn.floor === 'cobbles') {
+      cobbled(pen, lawn, art.cobbles);
+      glow(pen, lawn.gate.x, lawn.gate.y + 30, 130, '255,200,61', 0.2);
+      continue;
+    }
     const [r, g, b] = parts(lawn.tint);
     pen.save();
     pen.beginPath(); pen.rect(lawn.x, lawn.y, lawn.w, lawn.h); pen.clip();
@@ -218,7 +289,7 @@ export function paintGround(pen, world, art) {
   }
   // Lamplight pooling on the ground
   for (const lamp of world.lamps) glow(pen, lamp.x, lamp.y + 4, 150, '255,200,61', 0.22);
-  border(pen, art.bush, w, h);
+  border(pen, art, w, h, world.lawns.filter((lawn) => lawn.floor === 'cobbles' && lawn.x + lawn.w >= w).map((lawn) => ({ y0: lawn.y, y1: lawn.y + lawn.h + 60 })));
 }
 
 // ---------------------------------------------------------------- things that stand on the ground
@@ -246,14 +317,41 @@ export function bushesOf(block) {
   return Array.from({ length: count }, (_, i) => ({ x: block.x + block.w / 2, y: block.y + 34 + (i * (block.h - 34)) / (count - 1) }));
 }
 
-/** The gateway of a place, its opening centred on (0, 0): two posts and a bar across. */
-export function paintGate(pen) {
+// What each kind of wall is made of, and how wide each piece of it is painted.
+const JUNK = [['a_bin', 58], ['a_crate', 68], ['a_tyres', 64], ['a_bin2', 62], ['a_drum', 50], ['a_boxes', 72], ['a_pallets', 76], ['a_bottles', 60], ['a_bin', 58], ['a_heap', 66], ['a_cone', 38]];
+
+/**
+ * What a wall is built of: a list of { x, y, art, wide }, each a painting to stand with its foot
+ * there. A hedge is bushes; a wall of junk is whatever was to hand, piled along it; a fence is panels.
+ */
+export function wallOf(block) {
+  if (block.look === 'junk') {
+    const next = run(block.x * 7 + 13);
+    const pieces = [];
+    for (let y = block.y + 40; y <= block.y + block.h + 4; y += 50 + next() * 8) {
+      const [art, wide] = JUNK[Math.floor(next() * JUNK.length)];
+      pieces.push({ x: block.x + block.w / 2 + (next() - 0.5) * 8, y, art, wide });
+    }
+    return pieces;
+  }
+  if (block.look === 'fence') {
+    const count = Math.max(1, Math.round(block.w / 84));
+    return Array.from({ length: count }, (_, i) => ({ x: block.x + ((i + 0.5) * block.w) / count, y: block.y + block.h + 2, art: 'a_fence', wide: Math.max(92, block.w / count + 12) }));
+  }
+  return bushesOf(block).map((bush) => ({ ...bush, art: 'p_bush', wide: 96 }));
+}
+
+const GATES = { wood: ['#7a5340', '#9a6a48'], iron: ['#4c5270', '#7d86a8'] };
+
+/** The gateway of a place, its opening centred on (0, 0): two posts and a bar across, of wood or of iron. */
+export function paintGate(pen, look = 'wood') {
+  const [post, bar] = GATES[look] || GATES.wood;
   oval(pen, 0, 18, 84, 12); paint(pen, 'rgba(8,6,20,.35)');
   for (const side of [-1, 1]) {
-    rounded(pen, side * 62 - 10, -54, 20, 74, 7); paint(pen, '#7a5340'); outline(pen, 4.5);
-    disc(pen, side * 62, -58, 9); paint(pen, '#9a6a48'); outline(pen, 4);
+    rounded(pen, side * 62 - 10, -54, 20, 74, 7); paint(pen, post); outline(pen, 4.5);
+    disc(pen, side * 62, -58, 9); paint(pen, bar); outline(pen, 4);
   }
-  rounded(pen, -70, -70, 140, 16, 8); paint(pen, '#9a6a48'); outline(pen, 4.5);
+  rounded(pen, -70, -70, 140, 16, 8); paint(pen, bar); outline(pen, 4.5);
 }
 
 /**
