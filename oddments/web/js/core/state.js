@@ -6,7 +6,7 @@ import {
 import { newFriend } from './progress.js';
 import { roomOpen, maxHpOf, rollEncounter, fairEncounter } from './rooms.js';
 import { own } from './util.js';
-import { settleWhere, settleInside, areaOf } from './world.js';
+import { settleWhere, districtOf, districtAt, DISTRICTS } from './world.js';
 
 export function newState(now = Date.now(), seed = (now ^ 0x9e3779b9) | 0) {
   const friends = START_TEAM.map(([species, level], i) => newFriend(i + 1, species, level));
@@ -20,9 +20,11 @@ export function newState(now = Date.now(), seed = (now ^ 0x9e3779b9) | 0) {
     friends, // everyone who has come home: { id, species, level, xp, heirloom }
     nextFriendId: friends.length + 1,
     team: friends.map((friend) => friend.id), // up to three friend ids, in fighting order
-    where: settleWhere(null), // where you are standing in the lane; a new game starts at the door of home
+    where: settleWhere(null), // where you are standing in the world; a new game starts at the door of home
     rooms: Object.fromEntries(ROOM_IDS.map((id) => [id, { visits: 0, clears: 0, losses: 0, best: 0 }])),
-    visit: null, // the place you are inside: { room, stop, hp: { friendId: health }, at: { x, y }, waiting: [who is at the next stop] }
+    // The visit you are on, from stepping into a place until you rest at home:
+    // { room, stop: how many groups are calmed, hp: { friendId: health }, groups: [{ foes: [who], done }] one per stop }
+    visit: null,
     // The scrapbook: which kinds have been met, and which as an Heirloom.
     book: Object.fromEntries(SPECIES_IDS.map((id) => [id, { met: friends.some((friend) => friend.species === id), heirloom: false }])),
     stats: { battles: 0, wins: 0, losses: 0, rounds: 0, knockouts: 0, befriended: 0, heirlooms: 0 },
@@ -77,22 +79,36 @@ function reviveFriend(raw) {
 }
 
 function reviveVisit(raw, state) {
-  if (!isObj(raw) || typeof raw.room !== 'string' || !roomOpen(state, raw.room)) return null;
+  if (!isObj(raw) || typeof raw.room !== 'string' || !roomOpen(state, raw.room) || !Array.isArray(raw.groups)) return null;
   const room = roomOf(raw.room);
   const hp = isObj(raw.hp) ? raw.hp : {};
-  const visit = { room: room.id, stop: int(raw.stop, 0, 0, room.path.length - 1), hp: {} };
+  const visit = { room: room.id, stop: 0, hp: {} };
   for (const id of state.team) {
     const friend = state.friends.find((f) => f.id === id);
     visit.hp[id] = int(hp[id], maxHpOf(friend), 0, maxHpOf(friend));
   }
   // Nobody on their feet is not a visit: they are at home.
   if (!Object.values(visit.hp).some((left) => left > 0)) return null;
-  visit.at = settleInside(areaOf(room.id), raw.at, visit.stop);
-  // Who is waiting is kept only if it is a fair roll for that stop; otherwise it is rolled again.
-  visit.waiting = fairEncounter(room, visit.stop, raw.waiting)
-    ? raw.waiting.map((foe) => ({ species: foe.species, level: foe.level, heirloom: foe.heirloom }))
-    : rollEncounter(state, room, visit.stop);
+  // Each group is kept only if it is a fair roll for its stop; otherwise it is rolled again. The
+  // boss cannot have been calmed already (that ends the visit), nor before everyone else.
+  visit.groups = room.path.map((_, stop) => {
+    const saved = isObj(raw.groups[stop]) ? raw.groups[stop] : {};
+    return {
+      foes: fairEncounter(room, stop, saved.foes)
+        ? saved.foes.map((foe) => ({ species: foe.species, level: foe.level, heirloom: foe.heirloom }))
+        : rollEncounter(state, room, stop),
+      done: saved.done === true && stop < room.path.length - 1,
+    };
+  });
+  visit.stop = visit.groups.filter((group) => group.done).length;
   return visit;
+}
+
+/** The ground held by whoever is waiting, for a state as it stands: the same answer the game gives. */
+function heldIn(state, where) {
+  if (state.visit) return districtOf(state.visit.room).posts.filter((_, i) => !state.visit.groups[i].done);
+  const here = districtAt(where);
+  return Object.keys(DISTRICTS).filter((id) => id !== here).flatMap((id) => DISTRICTS[id].posts);
 }
 
 /** Turns whatever was in storage into a valid current-version state, or null if it is not a save at all. */
@@ -130,8 +146,11 @@ export function reviveState(saved, now = Date.now()) {
     const stops = roomBuilt(roomOf(id)) ? roomOf(id).path.length : 0;
     state.rooms[id] = { visits: int(raw.visits, 0), clears: stops ? int(raw.clears, 0) : 0, losses: int(raw.losses, 0), best: int(raw.best, 0, 0, stops) };
   }
-  state.where = settleWhere(saved.where);
-  state.visit = reviveVisit(saved.visit, state);
+  // The world was laid out afresh in version 2: a save from before it wakes up rested, at home.
+  const mapped = saved.v >= 2;
+  state.visit = mapped ? reviveVisit(saved.visit, state) : null;
+  const where = mapped && isObj(saved.where) ? saved.where : null;
+  state.where = settleWhere(where, heldIn(state, where));
 
   const book = isObj(saved.book) ? saved.book : {};
   for (const id of SPECIES_IDS) {

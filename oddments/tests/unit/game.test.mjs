@@ -7,6 +7,7 @@ import { playOut } from '../../web/js/core/auto.js';
 import { newFriend } from '../../web/js/core/progress.js';
 import { ROOMS, LOOK_IDS, NAME_LENGTH, BREATHER, SPECIES } from '../../web/js/core/balance.js';
 import { maxHpOf } from '../../web/js/core/rooms.js';
+import { POST, districtOf, spotOf } from '../../web/js/core/world.js';
 
 const NOW = 1_800_000_000_000;
 const fresh = (seed = 11) => new Game(newState(NOW, seed), { now: NOW });
@@ -28,28 +29,176 @@ test('an empty name keeps the old one; an unknown look falls back to the first',
   assert.deepEqual(game.setLook({ name: 42 }), { name: '42', look: LOOK_IDS[0] });
 });
 
-test('you are at home, on a path or in a fight, and each allows different things', () => {
+test('you are at ease, out on a visit or in a fight, and each allows different things', () => {
   const game = fresh();
   assert.equal(game.place(), 'lane');
-  assert.equal(game.startEncounter(), null, 'no fight at home');
-  assert.equal(game.leaveRoom(), false);
+  assert.equal(game.startEncounter(), null, 'no fight when nobody is about');
+  assert.equal(game.rest(), false);
+  assert.equal(game.goHome(), false);
+  assert.equal(game.meeting(), -1);
+  assert.equal(game.nextGroup(), -1);
+  assert.equal(game.approach(), false);
   assert.equal(game.finishBattle(), null);
   assert.equal(game.choices(), null);
   assert.equal(game.act({ type: 'move', id: 'brace' }), false);
+  for (const nowhere of ['alley', 'home', 'nowhere', 'constructor', null]) assert.equal(game.travelTo(nowhere), false, String(nowhere));
 
   assert.equal(game.travelTo('garden'), true);
   assert.equal(game.place(), 'path');
+  assert.equal(game.district(), 'garden');
   assert.equal(game.travelTo('garden'), false);
-  assert.equal(game.setTeam([1, 2]), false, 'nobody is swapped half way down a path');
+  assert.equal(game.setTeam([1, 2]), false, 'nobody is swapped half way through a visit');
+  assert.equal(game.rest(), false, 'resting is done at home');
 
   assert.ok(game.startEncounter());
   assert.equal(game.place(), 'fight');
+  assert.equal(game.standing(), null);
+  assert.equal(game.walk({ x: 1000, y: 1500 }, 0.1), false, 'no walking off mid-fight');
+  assert.equal(game.standAt('home'), false);
   assert.equal(game.startEncounter(), null, 'one fight at a time');
-  assert.equal(game.leaveRoom(), false, 'no slipping out of a fight by the side door');
+  assert.equal(game.goHome(), false, 'no slipping out of a fight by the side door');
   assert.equal(game.finishBattle(), null, 'not until it is over');
   assert.ok(game.choices().unit);
   assert.equal(game.concede(), true);
   assert.ok(game.finishBattle());
+  assert.equal(game.place(), 'lane');
+  assert.equal(game.near(), 'home', 'worn out, they are carried home');
+});
+
+/** Walks the game to a point the way the screen does: find the way, then a frame at a time. */
+function walkTo(game, target) {
+  for (const point of game.routeTo(target)) {
+    for (let i = 0; i < 3000 && Math.hypot(point.x - game.state.where.x, point.y - game.state.where.y) >= 7; i++) {
+      if (!game.walk(point, 1 / 60)) break;
+    }
+  }
+  return game.state.where;
+}
+const GATE = districtOf('garden').gate;
+const POSTS = districtOf('garden').posts;
+const JUST_IN = { x: GATE.x, y: GATE.y - 90 };
+
+test('walking in through the gate, rested, begins a visit; walking back out does not end it', () => {
+  const game = fresh();
+  walkTo(game, spotOf('garden').door);
+  assert.equal(game.near(), 'garden');
+  assert.equal(game.district(), null);
+  assert.equal(game.place(), 'lane', 'reading the sign is not a visit');
+  walkTo(game, JUST_IN);
+  assert.equal(game.district(), 'garden');
+  assert.equal(game.place(), 'path');
+  assert.equal(game.state.rooms.garden.visits, 1);
+  assert.equal(game.state.visit.groups.length, 5);
+  walkTo(game, spotOf('garden').door);
+  assert.equal(game.district(), null);
+  assert.equal(game.place(), 'path', 'still out on the same visit');
+  walkTo(game, JUST_IN);
+  assert.equal(game.state.rooms.garden.visits, 1, 'and stepping back in is not a new one');
+});
+
+test('from outside they are hidden but in the way; once you are in they hold their ground until calmed', () => {
+  const game = fresh();
+  assert.deepEqual(game.held(), POSTS, 'rested and outside: a bush at every post');
+  game.travelTo('garden');
+  assert.deepEqual(game.held(), POSTS);
+  const post = POSTS[0];
+  // Walk straight at a group: you stop short of where it stands.
+  for (let i = 0; i < 600; i++) game.walk(post, 1 / 60);
+  assert.ok(Math.hypot(game.state.where.x - post.x, game.state.where.y - post.y) >= POST.hold - 1e-6);
+  assert.equal(game.meeting(), 0, 'and that is meeting it');
+  playOut(game.startEncounter(game.meeting()), {});
+  assert.equal(game.finishBattle().won, true);
+  assert.deepEqual(game.held(), POSTS.slice(1), 'calm, they hold nothing');
+  assert.equal(game.meeting(), -1);
+  walkTo(game, post);
+  assert.ok(Math.hypot(game.state.where.x - post.x, game.state.where.y - post.y) < 8, 'and you can stand where they stood');
+});
+
+test('the way to one group never brushes past another: you meet who you walked up to, nobody else', () => {
+  const others = [0, 1, 2, 3]; // everyone but the boss, who will not be met yet anyway
+  const trip = (game, from, to) => {
+    for (const point of game.routeTo(POSTS[to])) {
+      for (let i = 0; i < 3000 && Math.hypot(point.x - game.state.where.x, point.y - game.state.where.y) >= 7; i++) {
+        if (!game.walk(point, 1 / 60)) break;
+        const met = game.meeting();
+        assert.ok(met === -1 || met === to || met === from, `on the way from ${from} to ${to}, brushed past ${met}`);
+        if (met === to) return true;
+      }
+    }
+    return game.meeting() === to;
+  };
+  for (const to of others) {
+    const game = fresh();
+    game.travelTo('garden');
+    assert.equal(trip(game, -1, to), true, `from the gate to group ${to}`);
+  }
+  for (const from of others) {
+    for (const to of others) {
+      if (from === to) continue;
+      const game = fresh();
+      game.travelTo('garden');
+      game.approach(from); // standing right beside one group, having thought better of it
+      assert.equal(trip(game, from, to), true, `from beside group ${from} to group ${to}`);
+    }
+  }
+  // And walking home from beside any of them meets nobody on the way.
+  for (const from of others) {
+    const game = fresh();
+    game.travelTo('garden');
+    game.approach(from);
+    for (const point of game.routeTo(spotOf('home').door)) {
+      for (let i = 0; i < 3000 && Math.hypot(point.x - game.state.where.x, point.y - game.state.where.y) >= 7; i++) {
+        if (!game.walk(point, 1 / 60)) break;
+        assert.ok([-1, from].includes(game.meeting()), `walking home from group ${from}, brushed past ${game.meeting()}`);
+      }
+    }
+    assert.equal(game.near(), 'home', `home from beside group ${from}`);
+  }
+});
+
+test('walk up to any group and you have met it; the boss will not be met until the rest are calm', () => {
+  const game = fresh();
+  game.travelTo('garden');
+  assert.equal(game.nextGroup(), 0);
+  assert.equal(game.approach(3), true, 'the fourth group first, if you like');
+  assert.equal(game.meeting(), 3);
+  const battle = game.startEncounter(game.meeting());
+  assert.deepEqual(battle.units.filter((u) => u.side === 'foe').map((u) => u.species), game.state.visit.groups[3].foes.map((foe) => foe.species));
+  assert.equal(game.facing, 3);
+  game.concede(); game.finishBattle();
+
+  game.travelTo('garden');
+  assert.equal(game.approach(4), false, 'the boss is not to be approached yet');
+  game.state.where = { x: POSTS[4].x, y: POSTS[4].y + POST.hold + 8 };
+  assert.equal(game.meeting(), -1, 'standing right in front of it meets nobody');
+  assert.equal(game.startEncounter(4), null);
+  for (const odd of [-1, 5, 1.5, '0', null]) assert.equal(game.startEncounter(odd), null, String(odd));
+  for (let i = 0; i < 4; i++) { playOut(game.startEncounter(i), {}); game.finishBattle(); if (game.place() !== 'path') return; }
+  game.state.where = { x: POSTS[4].x, y: POSTS[4].y + POST.hold + 8 };
+  assert.equal(game.meeting(), 4, 'with everyone else calm, it faces you');
+  assert.equal(game.nextGroup(), 4);
+});
+
+test('resting is done at home: it ends the visit, and the garden is restless again', () => {
+  const game = fresh(4);
+  game.travelTo('garden');
+  playOut(game.startEncounter(), {});
+  assert.equal(game.finishBattle().won, true);
+  assert.equal(game.state.visit.stop, 1);
+  assert.equal(game.rest(), false, 'not out here');
+  walkTo(game, spotOf('home').door);
+  assert.equal(game.near(), 'home');
+  assert.equal(game.place(), 'path', 'walking home is not yet resting');
+  assert.equal(game.rest(), true);
+  assert.equal(game.place(), 'lane');
+  for (const member of game.teamHealth()) assert.equal(member.hp, member.max);
+  assert.equal(game.rest(), false);
+  assert.equal(game.setTeam(game.state.team.slice(0, 2)), true, 'rested, the team can change');
+  game.travelTo('garden');
+  assert.equal(game.state.visit.stop, 0);
+  assert.ok(game.state.visit.groups.every((group) => !group.done));
+  assert.equal(game.goHome(), true);
+  assert.equal(game.near(), 'home');
   assert.equal(game.place(), 'lane');
 });
 
@@ -128,6 +277,17 @@ test('a whole room can be played from the gate to the boss, and clearing it is r
   assert.ok(game.state.friends.every((f) => !SPECIES[f.species].boss));
   assert.ok(game.team().every((f) => f.level > 3));
   assert.equal(game.place(), 'lane');
+  // You are still standing in the garden, rested, and nobody is about.
+  assert.equal(game.district(), 'garden');
+  assert.deepEqual(game.held(), []);
+  for (const member of game.teamHealth()) assert.equal(member.hp, member.max);
+  // Step out of the gate and they are back in their bushes; step in again and it is a new visit.
+  walkTo(game, spotOf('garden').door);
+  assert.equal(game.held().length, 5);
+  assert.equal(game.place(), 'lane');
+  walkTo(game, JUST_IN);
+  assert.equal(game.place(), 'path');
+  assert.equal(game.state.rooms.garden.visits, 2);
 });
 
 test('with fx off no events are kept; with fx on the fight tells its story', () => {

@@ -2,7 +2,7 @@
 // Nothing in this module touches the DOM, the clock or storage.
 
 export const VERSION = '0.1.0';
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 export const TITLE = 'Oddments'; // working title: the name is not decided
 
 export const TEAM_SIZE = 3;

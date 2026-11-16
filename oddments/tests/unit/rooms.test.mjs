@@ -1,7 +1,7 @@
-// Rooms: who turns up at each stop, and a visit from walking in to going home.
+// Rooms: who is restless at each stop of a place, and a visit from stepping in to resting at home.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rollEncounter, roomOpen, enterRoom, leaveRoom, afterFight, maxHpOf, teamOf } from '../../web/js/core/rooms.js';
+import { rollEncounter, fairEncounter, canMeet, nextGroup, roomOpen, enterRoom, leaveRoom, afterFight, maxHpOf, teamOf } from '../../web/js/core/rooms.js';
 import { newState } from '../../web/js/core/state.js';
 import { ROOMS, SPECIES, BREATHER, TEAM_SIZE, statAt } from '../../web/js/core/balance.js';
 
@@ -51,26 +51,56 @@ test('only the first room is open at the start; a room that is not built never o
   assert.equal(roomOpen(state, 'constructor'), false);
 });
 
-test('you walk in rested, at the first stop, and cannot walk in twice', () => {
+test('you step in rested, with every group already waiting, and cannot step in twice', () => {
   const state = newState(1e12, 1);
   assert.equal(enterRoom(state, 'alley'), false);
   assert.equal(state.visit, null);
   assert.equal(enterRoom(state, 'garden'), true);
   assert.equal(state.visit.room, 'garden');
   assert.equal(state.visit.stop, 0);
+  assert.equal(state.visit.groups.length, GARDEN.path.length);
+  state.visit.groups.forEach((group, stop) => {
+    assert.equal(group.done, false);
+    assert.equal(fairEncounter(GARDEN, stop, group.foes), true, `${GARDEN.path[stop].name} is a fair roll for its stop`);
+  });
   for (const friend of teamOf(state)) assert.equal(state.visit.hp[friend.id], maxHpOf(friend));
   assert.equal(state.rooms.garden.visits, 1);
   assert.equal(enterRoom(state, 'garden'), false);
   assert.equal(state.rooms.garden.visits, 1);
 });
 
-test('after a win everyone takes a breather and the visit moves to the next stop', () => {
+test('groups can be met in any order, but the boss only once everyone else is calm', () => {
+  const state = newState(1e12, 1);
+  enterRoom(state, 'garden');
+  const last = GARDEN.path.length - 1;
+  for (let stop = 0; stop < last; stop++) assert.equal(canMeet(state.visit, GARDEN, stop), true);
+  assert.equal(canMeet(state.visit, GARDEN, last), false, 'not the boss yet');
+  assert.equal(nextGroup(state.visit, GARDEN), 0);
+  for (const odd of [-1, last + 1, 1.5, '0', null, undefined, NaN]) assert.equal(canMeet(state.visit, GARDEN, odd), false, String(odd));
+  assert.equal(canMeet(null, GARDEN, 0), false);
+
+  afterFight(state, 3, true, {});
+  afterFight(state, 0, true, {});
+  assert.equal(canMeet(state.visit, GARDEN, 3), false, 'nobody is met twice');
+  assert.equal(nextGroup(state.visit, GARDEN), 1);
+  assert.equal(canMeet(state.visit, GARDEN, last), false);
+  afterFight(state, 2, true, {});
+  afterFight(state, 1, true, {});
+  assert.equal(state.visit.stop, last);
+  assert.equal(canMeet(state.visit, GARDEN, last), true, 'now the boss will face you');
+  assert.equal(nextGroup(state.visit, GARDEN), last);
+});
+
+test('after a win that group is calm, everyone takes a breather, and the rest are still waiting', () => {
   const state = newState(1e12, 1);
   enterRoom(state, 'garden');
   const [a, b, c] = teamOf(state);
-  const moved = afterFight(state, true, { [a.id]: 10, [b.id]: 0, [c.id]: maxHpOf(c) });
+  const before = JSON.stringify(state.visit.groups.map((group) => group.foes));
+  const moved = afterFight(state, 2, true, { [a.id]: 10, [b.id]: 0, [c.id]: maxHpOf(c) });
   assert.deepEqual(moved, { cleared: false, home: false });
   assert.equal(state.visit.stop, 1);
+  assert.deepEqual(state.visit.groups.map((group) => group.done), [false, false, true, false, false]);
+  assert.equal(JSON.stringify(state.visit.groups.map((group) => group.foes)), before, 'nobody else changes while you fight');
   assert.equal(state.visit.hp[a.id], 10 + Math.ceil(maxHpOf(a) * BREATHER));
   assert.equal(state.visit.hp[b.id], Math.ceil(maxHpOf(b) * BREATHER), 'whoever was knocked down gets up again');
   assert.equal(state.visit.hp[c.id], maxHpOf(c), 'never past full');
@@ -80,28 +110,29 @@ test('after a win everyone takes a breather and the visit moves to the next stop
 test('a loss sends you home and is counted; nothing else is taken', () => {
   const state = newState(1e12, 1);
   enterRoom(state, 'garden');
-  afterFight(state, true, {});
+  afterFight(state, 0, true, {});
   const friends = JSON.stringify(state.friends);
-  assert.deepEqual(afterFight(state, false, {}), { cleared: false, home: true });
+  assert.deepEqual(afterFight(state, 1, false, {}), { cleared: false, home: true });
   assert.equal(state.visit, null);
   assert.deepEqual(state.rooms.garden, { visits: 1, clears: 0, losses: 1, best: 1 });
   assert.equal(JSON.stringify(state.friends), friends);
   assert.equal(enterRoom(state, 'garden'), true, 'and you can set straight out again, rested');
   assert.equal(state.visit.stop, 0);
+  assert.ok(state.visit.groups.every((group) => !group.done), 'with everyone restless again');
 });
 
-test('beating the boss clears the room and sends you home', () => {
+test('calming the boss clears the place and ends the visit where you stand', () => {
   const state = newState(1e12, 1);
   enterRoom(state, 'garden');
-  for (let stop = 0; stop < GARDEN.path.length - 1; stop++) assert.deepEqual(afterFight(state, true, {}), { cleared: false, home: false });
-  assert.deepEqual(afterFight(state, true, {}), { cleared: true, home: true });
+  for (let stop = 0; stop < GARDEN.path.length - 1; stop++) assert.deepEqual(afterFight(state, stop, true, {}), { cleared: false, home: false });
+  assert.deepEqual(afterFight(state, GARDEN.path.length - 1, true, {}), { cleared: true, home: false });
   assert.equal(state.visit, null);
   assert.deepEqual(state.rooms.garden, { visits: 1, clears: 1, losses: 0, best: GARDEN.path.length });
 });
 
-test('going home early is allowed and costs nothing', () => {
+test('resting early is allowed and costs nothing', () => {
   const state = newState(1e12, 1);
-  assert.equal(leaveRoom(state), false, 'not when already at home');
+  assert.equal(leaveRoom(state), false, 'not when already rested');
   enterRoom(state, 'garden');
   assert.equal(leaveRoom(state), true);
   assert.equal(state.visit, null);

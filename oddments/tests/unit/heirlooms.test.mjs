@@ -79,8 +79,8 @@ test('meeting one is written in the scrapbook even if it gets away', () => {
   for (let seed = 1; seed < 5000 && !game; seed++) {
     const candidate = new Game(newState(1e12, seed), { now: 1e12, fx: false });
     candidate.travelTo('garden');
-    // Whoever is at the first stop is rolled as you walk in, so they can be seen waiting.
-    if (candidate.state.visit.waiting.some((foe) => foe.heirloom)) game = candidate;
+    // Everyone is rolled as you step in, so they can be seen waiting.
+    if (candidate.state.visit.groups[0].foes.some((foe) => foe.heirloom)) game = candidate;
   }
   assert.ok(game, 'found a seed with an Heirloom at the gate');
   const battle = game.startEncounter();

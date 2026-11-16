@@ -28,7 +28,7 @@ test('two new games started at different moments are not the same game', () => {
   assert.notEqual(newState(NOW).rng, newState(NOW + 1).rng);
 });
 
-test('a new save, and one in the middle of a room, come back exactly as they went in', () => {
+test('a new save, and one in the middle of a visit, come back exactly as they went in', () => {
   const fresh = newState(NOW, 3);
   assert.deepEqual(reviveState(JSON.parse(JSON.stringify(fresh)), NOW), fresh);
 
@@ -53,7 +53,9 @@ test('the fight in progress is not part of the save', () => {
   const saved = JSON.parse(game.serialize(NOW));
   assert.equal(saved.battle, undefined);
   assert.equal(JSON.stringify(saved).includes('events'), false);
-  assert.equal(saved.visit.stop, 0, 'reloading puts you back on the path before it');
+  assert.equal(saved.visit.stop, 0, 'reloading puts you back in front of them');
+  assert.equal(saved.visit.groups[0].done, false);
+  assert.equal(saved.facing, undefined);
 });
 
 test('saving stamps the time; loading never trusts a time in the future', () => {

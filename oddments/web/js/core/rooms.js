@@ -1,8 +1,7 @@
-// Rooms: who turns up at each stop on a path, and a visit from walking in to
-// going home. Rules only: no DOM, no clock, no storage.
+// Rooms: who is restless at each stop of a place, and a visit from stepping in
+// to resting at home. Rules only: no DOM, no clock, no storage.
 import { SPECIES, ROOMS, HEIRLOOM, BREATHER, TEAM_SIZE, roomOf, roomBuilt, statAt } from './balance.js';
 import { nextRandom, rollInt, rollPick, own } from './util.js';
-import { areaOf } from './world.js';
 
 /** A room is open once it is built and the room before it has been cleared. */
 export function roomOpen(state, roomId) {
@@ -56,26 +55,37 @@ export function fairEncounter(room, stop, list) {
   return bosses === (spot.boss ? 1 : 0) && company >= spot.size[0] && company <= spot.size[1];
 }
 
+/** Whether a group can be met now: it is still there, and the boss only once everyone else is calm. */
+export function canMeet(visit, room, index) {
+  if (!visit || !Number.isInteger(index) || index < 0 || index >= room.path.length || visit.groups[index].done) return false;
+  return index < room.path.length - 1 || visit.stop >= room.path.length - 1;
+}
+
+/** The group a sensible visitor meets next: the nearest stop to the gate still restless, the boss last. Or -1. */
+export function nextGroup(visit, room) {
+  for (let i = 0; i < room.path.length; i++) if (canMeet(visit, room, i)) return i;
+  return -1;
+}
+
 /**
- * Walks into a room with the team rested: you stand at its gate, and whoever
- * is at the first stop is already waiting where you can see them. Returns
- * false if the room is not open.
+ * Steps into a place with the team rested. Everyone who is restless there is
+ * rolled now, one group for each stop of its path, so they can all be seen
+ * standing about before any of them is met. `stop` counts the groups calmed
+ * so far. Returns false if the place is not open.
  */
 export function enterRoom(state, roomId) {
   if (state.visit || !roomOpen(state, roomId) || teamOf(state).length === 0) return false;
   const room = roomOf(roomId);
-  const area = areaOf(roomId);
   state.visit = {
     room: roomId, stop: 0,
     hp: Object.fromEntries(teamOf(state).map((friend) => [friend.id, maxHpOf(friend)])),
-    at: area ? { x: area.gate.x, y: area.gate.y } : { x: 0, y: 0 }, // where you are standing inside
-    waiting: rollEncounter(state, room, 0), // who is at the next stop: rolled now, so they can be seen before they are met
+    groups: room.path.map((_, stop) => ({ foes: rollEncounter(state, room, stop), done: false })),
   };
   state.rooms[roomId].visits++;
   return true;
 }
 
-/** Goes home. Everyone is rested the next time they set out. */
+/** Rests at home. Everyone is fresh the next time they set out, and whoever was calmed is restless again. */
 export function leaveRoom(state) {
   if (!state.visit) return false;
   state.visit = null;
@@ -83,12 +93,13 @@ export function leaveRoom(state) {
 }
 
 /**
- * Moves the visit on after a fight. `left` maps friend id to the Health it
- * finished with. A win takes a breather and steps to the next stop, or home
- * with the room cleared after the boss; a loss goes home.
+ * Moves the visit on after a fight with group `index`. `left` maps friend id
+ * to the Health it finished with. A win calms that group and everyone takes a
+ * breather, or the place is cleared and the visit over once its boss is
+ * calmed; a loss ends the visit at home.
  * Returns { cleared, home }.
  */
-export function afterFight(state, won, left) {
+export function afterFight(state, index, won, left) {
   const visit = state.visit;
   const room = roomOf(visit.room);
   const record = state.rooms[visit.room];
@@ -97,14 +108,14 @@ export function afterFight(state, won, left) {
     state.visit = null;
     return { cleared: false, home: true };
   }
-  record.best = Math.max(record.best, visit.stop + 1);
-  if (visit.stop + 1 >= room.path.length) {
+  visit.groups[index].done = true;
+  visit.stop = visit.groups.filter((group) => group.done).length;
+  record.best = Math.max(record.best, visit.stop);
+  if (index === room.path.length - 1) {
     record.clears++;
     state.visit = null;
-    return { cleared: true, home: true };
+    return { cleared: true, home: false };
   }
-  visit.stop++;
-  visit.waiting = rollEncounter(state, room, visit.stop);
   for (const friend of teamOf(state)) {
     const max = maxHpOf(friend);
     visit.hp[friend.id] = Math.min(max, Math.max(0, left[friend.id] || 0) + Math.ceil(max * BREATHER));

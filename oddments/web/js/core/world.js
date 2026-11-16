@@ -1,24 +1,53 @@
-// The lane: the small open world you walk around between places. Rules only:
-// where things stand, where feet can go, and how one step of walking works.
-// No drawing, no clock: the caller says how much time has passed.
+// The lane: one open neighbourhood, bigger than the screen every way, that you
+// walk around freely. Home is in the middle; the places stand round it; the
+// garden is a hedged corner of the same map that you walk straight into.
+// Rules only: where things stand, where feet can go, and how one step of
+// walking works. No drawing, no clock: the caller says how much time has passed.
 import { ROOM_IDS } from './balance.js';
+import { own } from './util.js';
 
 export const WORLD = {
-  // The size of the lane, in its own units. It is exactly one screen wide, so the view only ever
-  // travels up and down it, and nothing is ever cut off at the sides.
-  w: 640, h: 1860,
-  edge: 26, // how close to the edge of the world feet may go
-  speed: 255, // walking, in units a second
-  reach: 82, // how near a door counts as being at it
+  w: 2000, h: 2200, // the size of the neighbourhood, in its own units
+  edge: 34, // how close to the edge of the world feet may go
+  speed: 280, // walking, in units a second
+  reach: 86, // how near a door counts as being at it
   body: 15, // half the width of whoever is walking
   maxStep: 0.1, // seconds; a longer gap is walked as this, so nobody steps through a wall
 };
 
-// Where every place stands: x is the middle of its front, y the foot of its
-// front wall. Home is where you are staying; the rest are the eight rooms.
+// ---------------------------------------------------------------- places you walk into
+//
+// A place is a stretch of the same map with a way in (`gate`). Whoever is
+// restless there waits in the open at its `posts`, one group per stop of the
+// room's path, the boss last. Each group holds the ground it stands on; walk
+// up to one and you have met it.
+export const DISTRICTS = {
+  garden: {
+    x: 0, y: 0, w: 940, h: 940,
+    gate: { x: 700, y: 962 },
+    posts: [{ x: 480, y: 800 }, { x: 810, y: 620 }, { x: 220, y: 640 }, { x: 350, y: 400 }, { x: 680, y: 250 }],
+  },
+};
+export const POST = { hold: 100, meet: 118 }; // how much ground a waiting group holds, and how near is meeting it
+export const districtOf = (roomId) => (typeof roomId === 'string' && own(DISTRICTS, roomId) ? DISTRICTS[roomId] : null);
+
+/** Which place a point is inside, or null out in the lane. Standing in a gateway is still outside. */
+export function districtAt(pos) {
+  if (!pos) return null;
+  for (const id of Object.keys(DISTRICTS)) {
+    const d = DISTRICTS[id];
+    if (pos.x >= d.x && pos.x < d.x + d.w && pos.y >= d.y && pos.y < d.y + d.h) return id;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------- what stands where
+
+// Every building: x is the middle of its front, y the foot of its front wall. Fronts face down the
+// map, so streets run along the foot of each row. The garden's shed stands inside the garden.
 const AT = {
-  home: [320, 1700], garden: [165, 1460], alley: [475, 1290], pantry: [165, 1120], wash: [475, 950],
-  stacks: [165, 780], rooftops: [475, 610], attic: [165, 440], dark: [372, 250],
+  home: [1180, 1420], garden: [250, 262], alley: [1560, 880], pantry: [1290, 520], wash: [1790, 1330],
+  stacks: [1660, 1960], rooftops: [1090, 1990], attic: [470, 1960], dark: [1750, 330],
 };
 // Most buildings are much of a size; home is broader, and two are tall and thin.
 const WIDE = { home: 226, wash: 176, rooftops: 136, attic: 158 };
@@ -28,43 +57,131 @@ export const SPOTS = SPOT_IDS.map((id) => {
   const [x, y] = AT[id];
   const w = WIDE[id] || 196; // how much ground the building takes, side to side
   const tall = TALL[id] || 200; // about how tall it stands
-  // Feet cannot go where the lower part of the building stands; behind its roof is fine.
-  return { id, x, y, w, tall, block: { x: x - w / 2, y: y - 64, w, h: 64 }, door: { x, y: y + 34 } };
+  const district = districtOf(id);
+  // Feet cannot go where the lower part of the building stands; behind its roof is fine. Where you
+  // stand to be "at" a place is its front door, or, for a place you walk into, just outside its gate.
+  return { id, x, y, w, tall, block: { x: x - w / 2, y: y - 64, w, h: 64 }, door: district ? { x: district.gate.x, y: district.gate.y + 84 } : { x, y: y + 34 } };
 });
 export const spotOf = (id) => SPOTS.find((spot) => spot.id === id) || null;
 
-// Trees, as circles to walk round.
-export const TREES = [
-  [48, 1800, 28], [592, 1806, 30], [596, 1580, 28], [44, 1610, 26], [598, 1440, 28], [42, 1280, 28], [598, 1100, 28],
-  [42, 940, 26], [598, 765, 28], [42, 600, 26], [598, 430, 28], [44, 250, 26], [560, 150, 26], [604, 60, 22],
-].map(([x, y, r]) => ({ x, y, r }));
+// Hedges: solid blocks of ground. These three wall the garden off, leaving its gate.
+export const HEDGES = [
+  { x: 0, y: 940, w: 630, h: 44 }, { x: 770, y: 940, w: 214, h: 44 },
+  { x: 940, y: 0, w: 44, h: 940 },
+];
 
-// A lamp beside every building, on the side the lane is (the last building's on its open side). Thin, but solid.
-export const LAMPS = SPOTS.map((spot) => ({ x: spot.x + (spot.id === 'dark' || spot.x <= WORLD.w / 2 ? 1 : -1) * (spot.w / 2 + 30), y: spot.y + 26, r: 7 }));
+// The streets, as the points each one bends through. Looks and a guide only: you can walk anywhere.
+export const ROADS = [
+  [[400, 1540], [700, 1570], [980, 1500], [1180, 1500], [1420, 1500], [1640, 1490], [1790, 1390]], // the street past home
+  [[980, 1500], [860, 1300], [720, 1130], [700, 960]], // up to the garden gate
+  [[1420, 1500], [1500, 1200], [1560, 935]], // up to the alley
+  [[1500, 1200], [1370, 900], [1290, 575]], // and on to the pantry
+  [[1560, 940], [1740, 950], [1770, 650], [1750, 385]], // round the alley to the far shed
+  [[900, 1530], [850, 1800], [820, 2040]], // two ways down
+  [[1420, 1500], [1450, 1780], [1400, 2040]],
+  [[400, 2050], [820, 2040], [1090, 2045], [1400, 2040], [1700, 2030]], // the bottom street, past three doors
+  [[400, 1540], [320, 1800], [400, 2050]], // and round the west side to meet it
+].map((road) => road.map(([x, y]) => ({ x, y })));
 
-/** Whether feet can be at this point: inside the lane, and not in a building, a tree or a lamp post. */
-export function canStand(x, y) {
-  if (!(x >= WORLD.edge && x <= WORLD.w - WORLD.edge && y >= WORLD.edge && y <= WORLD.h - WORLD.edge)) return false;
+/**
+ * Points along a line of points, a step apart, each with the way it is heading. `smooth` rounds the
+ * corners: the curve runs through the middle of each stretch and bends toward each corner.
+ */
+export function along(points, step, smooth) {
+  const out = [];
+  const add = (p0, c, p1) => {
+    const far = Math.hypot(c.x - p0.x, c.y - p0.y) + Math.hypot(p1.x - c.x, p1.y - c.y);
+    const n = Math.max(1, Math.round(far / step));
+    for (let i = 0; i < n; i++) {
+      const t = i / n;
+      const u = 1 - t;
+      out.push({ x: u * u * p0.x + 2 * u * t * c.x + t * t * p1.x, y: u * u * p0.y + 2 * u * t * c.y + t * t * p1.y, a: Math.atan2(2 * u * (c.y - p0.y) + 2 * t * (p1.y - c.y), 2 * u * (c.x - p0.x) + 2 * t * (p1.x - c.x)) });
+    }
+  };
+  const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  if (!smooth || points.length < 3) { for (let i = 0; i < points.length - 1; i++) add(points[i], mid(points[i], points[i + 1]), points[i + 1]); return out; }
+  let from = points[0];
+  for (let i = 1; i < points.length - 1; i++) { const to = mid(points[i], points[i + 1]); add(from, points[i], to); from = to; }
+  add(from, mid(from, points[points.length - 1]), points[points.length - 1]);
+  return out;
+}
+/** Every street as the points it actually runs through, a few steps apart. */
+export const ROAD_POINTS = ROADS.map((road) => along(road, 24, true));
+
+// The green: the open grass below home, kept clear, where friends who stayed home potter about.
+export const GREEN = { x: 930, y: 1570, w: 460, h: 200 };
+
+// A lamp beside every building, on the side nearer home; two at the garden gate; a few along the streets. Thin, but solid.
+export const LAMPS = [
+  ...SPOTS.map((spot) => ({ x: spot.x + (spot.id === 'home' || spot.x < AT.home[0] ? 1 : -1) * (spot.w / 2 + 30), y: spot.y + 26, r: 7 })),
+  ...[[602, 1012], [798, 1012], [800, 1470], [785, 1790], [1515, 1780], [1415, 1225], [1835, 800], [250, 1790]].map(([x, y]) => ({ x, y, r: 7 })),
+];
+
+// Trees, as circles to walk round. A few are planted by hand in the garden; the rest are scattered
+// by a fixed run of numbers, keeping off the streets, the doors, the green and each other.
+export const TREES = (() => {
+  const trees = [[110, 120, 26], [870, 120, 26], [110, 860, 26], [560, 545, 24]].map(([x, y, r]) => ({ x, y, r }));
+  let s = 4711;
+  const next = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  const clear = (x, y, list, room) => list.every((p) => Math.hypot(p.x - x, p.y - y) >= room);
+  for (let tries = 0; tries < 900 && trees.length < 46; tries++) {
+    const x = 70 + next() * (WORLD.w - 140);
+    const y = 90 + next() * (WORLD.h - 150);
+    if (x < 1050 && y < 1060) continue; // the garden, and a clear look at its hedge
+    if (x > GREEN.x - 40 && x < GREEN.x + GREEN.w + 40 && y > GREEN.y - 40 && y < GREEN.y + GREEN.h + 40) continue;
+    if (SPOTS.some((spot) => Math.abs(x - spot.x) < spot.w / 2 + 70 && y > spot.y - spot.tall - 60 && y < spot.y + 150)) continue;
+    if (!ROAD_POINTS.every((road) => clear(x, y, road, 92)) || !clear(x, y, trees, 170) || !clear(x, y, LAMPS, 90)) continue;
+    trees.push({ x: Math.round(x), y: Math.round(y), r: 24 + Math.round(next() * 6) });
+  }
+  return trees;
+})();
+
+// ---------------------------------------------------------------- where feet can go
+
+// Everything that never moves, sorted into squares of ground so a point is only checked against
+// what is near it. Each thing is kept already grown by half a body's width.
+const SQUARE = 200;
+const ACROSS = Math.ceil(WORLD.w / SQUARE);
+const DOWN = Math.ceil(WORLD.h / SQUARE);
+const solid = Array.from({ length: ACROSS * DOWN }, () => []);
+function stand(thing, x0, y0, x1, y1) {
+  for (let r = Math.max(0, Math.floor(y0 / SQUARE)); r <= Math.min(DOWN - 1, Math.floor(y1 / SQUARE)); r++) {
+    for (let c = Math.max(0, Math.floor(x0 / SQUARE)); c <= Math.min(ACROSS - 1, Math.floor(x1 / SQUARE)); c++) solid[r * ACROSS + c].push(thing);
+  }
+}
+for (const block of [...SPOTS.map((spot) => spot.block), ...HEDGES]) {
   const b = WORLD.body;
-  for (const { block } of SPOTS) {
-    if (x > block.x - b && x < block.x + block.w + b && y > block.y - b && y < block.y + block.h + b) return false;
+  stand({ x0: block.x - b, y0: block.y - b, x1: block.x + block.w + b, y1: block.y + block.h + b }, block.x - b, block.y - b, block.x + block.w + b, block.y + block.h + b);
+}
+for (const tree of TREES) { const reach = tree.r * 0.55 + WORLD.body; stand({ x: tree.x, y: tree.y, rr: reach * reach }, tree.x - reach, tree.y - reach, tree.x + reach, tree.y + reach); } // the trunk, not the leaves
+for (const lamp of LAMPS) { const reach = lamp.r + WORLD.body; stand({ x: lamp.x, y: lamp.y, rr: reach * reach }, lamp.x - reach, lamp.y - reach, lamp.x + reach, lamp.y + reach); }
+
+const NOBODY = [];
+
+/**
+ * Whether feet can be at this point: inside the world, and not in a building, a hedge, a tree or a
+ * lamp post. `held` is the ground being held just now by whoever is waiting: a list of points,
+ * each holding POST.hold around it unless it says otherwise ({ x, y, r }).
+ */
+export function canStand(x, y, held = NOBODY) {
+  if (!(x >= WORLD.edge && x <= WORLD.w - WORLD.edge && y >= WORLD.edge && y <= WORLD.h - WORLD.edge)) return false;
+  for (const thing of solid[Math.floor(y / SQUARE) * ACROSS + Math.floor(x / SQUARE)]) {
+    if (thing.rr === undefined) { if (x > thing.x0 && x < thing.x1 && y > thing.y0 && y < thing.y1) return false; }
+    else if ((x - thing.x) * (x - thing.x) + (y - thing.y) * (y - thing.y) < thing.rr) return false;
   }
-  for (const tree of TREES) {
-    const reach = tree.r * 0.55 + b; // the trunk, not the leaves
-    if ((x - tree.x) * (x - tree.x) + (y - tree.y) * (y - tree.y) < reach * reach) return false;
-  }
-  for (const lamp of LAMPS) {
-    const reach = lamp.r + b;
-    if ((x - lamp.x) * (x - lamp.x) + (y - lamp.y) * (y - lamp.y) < reach * reach) return false;
+  for (const post of held) {
+    const reach = post.r || POST.hold; // a point may say how much ground it holds; otherwise as much as a group does
+    if ((x - post.x) * (x - post.x) + (y - post.y) * (y - post.y) < reach * reach) return false;
   }
   return true;
 }
+/** The same question as one thing to hand round: where feet can be while this ground is held. */
+export const standing = (held = NOBODY) => (x, y) => canStand(x, y, held);
 
 /**
  * One step of walking from `pos` toward `target`, `dt` seconds long. Returns
  * the new position and whether anything moved. A wall is slid along rather
- * than stuck to; if there is no way on, you stop. `can` says where feet may
- * be: the lane by default, or the inside of a place.
+ * than stuck to; if there is no way on, you stop. `can` says where feet may be.
  */
 export function stepWalk(pos, target, dt, can = canStand) {
   const dx = target.x - pos.x;
@@ -97,7 +214,7 @@ export const roomy = (can, room = 6) => (x, y) => can(x, y) && can(x + room, y) 
  * on a building, or on whoever is waiting), the way ends as near to it as
  * feet can get. `can(x, y)` says where feet may be; `size` is { w, h }.
  */
-export function routeTo(from, to, can, size) {
+export function routeTo(from, to, can, size = WORLD) {
   const cols = Math.ceil(size.w / CELL);
   const rows = Math.ceil(size.h / CELL);
   if (!Number.isFinite(to.x) || !Number.isFinite(to.y)) return [];
@@ -105,7 +222,9 @@ export function routeTo(from, to, can, size) {
   const row = (y) => Math.min(rows - 1, Math.max(0, Math.floor(y / CELL)));
   const start = row(from.y) * cols + col(from.x);
   const goal = row(to.y) * cols + col(to.x);
-  const open = (cell) => can((cell % cols) * CELL + CELL / 2, Math.floor(cell / cols) * CELL + CELL / 2);
+  // Each square is looked at once and remembered: 0 not yet, 1 free, 2 not.
+  const known = new Uint8Array(cols * rows);
+  const open = (cell) => known[cell] === 1 || (known[cell] === 0 && (known[cell] = can((cell % cols) * CELL + CELL / 2, Math.floor(cell / cols) * CELL + CELL / 2) ? 1 : 2) === 1);
   const far = (cell) => Math.hypot((cell % cols) * CELL + CELL / 2 - to.x, Math.floor(cell / cols) * CELL + CELL / 2 - to.y);
   // Breadth-first outward from where you stand, remembering how each square was reached.
   const prev = new Int32Array(cols * rows).fill(-1);
@@ -113,10 +232,11 @@ export function routeTo(from, to, can, size) {
   prev[start] = start;
   let best = start;
   let bestFar = far(start);
-  for (let head = 0; head < queue.length && best !== goal; head++) {
+  for (let head = 0; head < queue.length && prev[goal] === -1; head++) {
     const cell = queue[head];
     const c = cell % cols;
     const r = Math.floor(cell / cols);
+    // Straight neighbours first, so that of two ways equally short the one with fewer bends is found.
     for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
       const nc = c + dc;
       const nr = r + dr;
@@ -131,6 +251,8 @@ export function routeTo(from, to, can, size) {
       if (d < bestFar) { best = next; bestFar = d; }
     }
   }
+  // Got there: then that is where the way ends, even if a square beside it is as near to the exact point.
+  if (prev[goal] !== -1) best = goal;
   const way = [];
   for (let cell = best; cell !== start; cell = prev[cell]) way.unshift({ x: (cell % cols) * CELL + CELL / 2, y: Math.floor(cell / cols) * CELL + CELL / 2 });
   if (best === goal && can(to.x, to.y) && Math.hypot(to.x - from.x, to.y - from.y) > 2) { if (way.length) way.pop(); way.push({ x: to.x, y: to.y }); }
@@ -146,7 +268,8 @@ export function straighten(from, way, can) {
   const out = [];
   let at = from;
   for (let i = 0; i < way.length;) {
-    let j = way.length - 1;
+    // Look as far ahead as a long stride of the map, no further: the world is big and most of it is open.
+    let j = Math.min(way.length - 1, i + 40);
     while (j > i && !clearWay(at, way[j], can)) j--;
     out.push(way[j]);
     at = way[j];
@@ -164,7 +287,7 @@ export function clearWay(a, b, can) {
   return true;
 }
 
-/** The place whose door you are standing at, or null. */
+/** The place whose door (or gate) you are standing at, or null. */
 export function spotNear(pos) {
   let best = null;
   let bestFar = WORLD.reach;
@@ -175,65 +298,18 @@ export function spotNear(pos) {
   return best;
 }
 
-/** A position from anywhere (a save, say) made safe: a real point feet can be at, or the door of home. */
-export function settleWhere(raw) {
+/** Whoever is waiting at one of these posts that you have walked up to: its number, or -1. */
+export function postNear(posts, pos) {
+  for (let i = 0; i < posts.length; i++) {
+    if (posts[i] && Math.hypot(pos.x - posts[i].x, pos.y - posts[i].y) <= POST.meet) return i;
+  }
+  return -1;
+}
+
+/** A position from anywhere (a save, say) made safe: a real point feet can be at just now, or the door of home. */
+export function settleWhere(raw, held = NOBODY) {
   const home = spotOf('home').door;
   if (!raw || typeof raw !== 'object' || typeof raw.x !== 'number' || typeof raw.y !== 'number') return { x: home.x, y: home.y };
-  if (!Number.isFinite(raw.x) || !Number.isFinite(raw.y) || !canStand(raw.x, raw.y)) return { x: home.x, y: home.y };
+  if (!Number.isFinite(raw.x) || !Number.isFinite(raw.y) || !canStand(raw.x, raw.y, held)) return { x: home.x, y: home.y };
   return { x: raw.x, y: raw.y };
-}
-
-// ---------------------------------------------------------------- inside a place
-//
-// Walk through a door and you are inside the place: a map of its own that you
-// cross on foot. Hedges (`blocks`) leave one winding way from the gate to the
-// far end, and whoever is waiting at each stop stands in a gap of it (`posts`,
-// one per stop of the room's path, in order): there is no getting past them
-// without meeting them. `gate` is where you come in and where you go out.
-export const AREAS = {
-  garden: {
-    w: 640, h: 1620,
-    gate: { x: 320, y: 1530 },
-    blocks: [
-      { x: 0, y: 1240, w: 440, h: 44 }, { x: 200, y: 960, w: 440, h: 44 },
-      { x: 0, y: 680, w: 440, h: 44 }, { x: 200, y: 400, w: 440, h: 44 },
-    ],
-    // Each gap is narrower than the ground a group holds, so there is no squeezing by.
-    posts: [{ x: 535, y: 1262 }, { x: 105, y: 982 }, { x: 535, y: 702 }, { x: 105, y: 422 }, { x: 320, y: 215 }],
-  },
-};
-export const POST = { hold: 100, meet: 118 }; // how much ground a waiting group holds, and how near is meeting it
-export const areaOf = (roomId) => (typeof roomId === 'string' && Object.prototype.hasOwnProperty.call(AREAS, roomId) ? AREAS[roomId] : null);
-
-/**
- * Whether feet can be at this point inside a place. `stop` is how far you
- * have got: whoever is waiting at that stop, and at every stop after it,
- * still holds their ground.
- */
-export function canStandIn(area, x, y, stop) {
-  if (!(x >= WORLD.edge && x <= area.w - WORLD.edge && y >= WORLD.edge && y <= area.h - WORLD.edge)) return false;
-  const b = WORLD.body;
-  for (const block of area.blocks) {
-    if (x > block.x - b && x < block.x + block.w + b && y > block.y - b && y < block.y + block.h + b) return false;
-  }
-  for (let i = Math.max(0, stop); i < area.posts.length; i++) {
-    const post = area.posts[i];
-    if ((x - post.x) * (x - post.x) + (y - post.y) * (y - post.y) < POST.hold * POST.hold) return false;
-  }
-  return true;
-}
-
-/** Whether you have walked up to whoever is waiting at this stop. */
-export function meetingAt(area, pos, stop) {
-  const post = area.posts[stop];
-  return !!post && Math.hypot(pos.x - post.x, pos.y - post.y) <= POST.meet;
-}
-
-export const atGate = (area, pos) => Math.hypot(pos.x - area.gate.x, pos.y - area.gate.y) <= WORLD.reach;
-
-/** A position inside a place made safe: somewhere feet can be given how far you have got, or the gate. */
-export function settleInside(area, raw, stop) {
-  const ok = raw && typeof raw === 'object' && typeof raw.x === 'number' && typeof raw.y === 'number'
-    && Number.isFinite(raw.x) && Number.isFinite(raw.y) && canStandIn(area, raw.x, raw.y, stop);
-  return ok ? { x: raw.x, y: raw.y } : { x: area.gate.x, y: area.gate.y };
 }

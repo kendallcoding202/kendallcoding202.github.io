@@ -4,8 +4,8 @@
 import { TEAM_SIZE, NAME_LENGTH, lookOf, roomOf } from './balance.js';
 import { createBattle, choices, act, concede } from './battle.js';
 import { settleUp } from './progress.js';
-import { rollEncounter, fairEncounter, enterRoom, leaveRoom, afterFight, roomOpen, teamOf, maxHpOf } from './rooms.js';
-import { WORLD, stepWalk, routeTo, straighten, roomy, canStand, spotNear, spotOf, areaOf, canStandIn, meetingAt, atGate } from './world.js';
+import { rollEncounter, fairEncounter, enterRoom, leaveRoom, afterFight, canMeet, nextGroup, roomOpen, teamOf, maxHpOf } from './rooms.js';
+import { WORLD, DISTRICTS, POST, stepWalk, routeTo, straighten, roomy, standing, canStand, spotNear, spotOf, districtOf, districtAt, postNear } from './world.js';
 
 export class Game {
   /**
@@ -18,94 +18,110 @@ export class Game {
     this.now = now;
     this.fx = fx;
     this.battle = null; // the fight in progress; never saved
+    this.facing = -1; // which group that fight is with
   }
 
-  /** Where the player is: out in the 'lane', on a room's 'path', or in a 'fight'. */
+  /**
+   * How things stand: in a 'fight'; out on a 'path' (you have stepped into a place and not yet
+   * rested, wherever you have since walked); or at ease in the 'lane'.
+   */
   place() {
     if (this.battle) return 'fight';
     return this.state.visit ? 'path' : 'lane';
   }
 
-  // ------------------------------------------------------------ the lane
+  // ------------------------------------------------------------ walking the world
 
   /**
-   * Walks toward a point for `dt` seconds. Returns whether you moved. Out in
-   * the lane, or inside a place; never during a fight.
+   * The ground being held just now by whoever is waiting. On a visit, every group not yet calmed.
+   * Otherwise the bushes they hide in, which are there whenever you are not in among them.
+   */
+  held() {
+    const { visit, where } = this.state;
+    if (visit) return districtOf(visit.room).posts.filter((_, i) => !visit.groups[i].done);
+    const here = districtAt(where);
+    return Object.keys(DISTRICTS).filter((id) => id !== here).flatMap((id) => DISTRICTS[id].posts);
+  }
+
+  /**
+   * Walks toward a point for `dt` seconds. Returns whether you moved. Never during a fight.
+   * Step through an open place's gate, rested, and your visit to it begins.
    */
   walk(target, dt) {
-    const place = this.place();
-    if (place === 'fight' || !target || !Number.isFinite(target.x) || !Number.isFinite(target.y)) return false;
-    if (place === 'lane') {
-      const next = stepWalk(this.state.where, target, dt);
-      this.state.where = { x: next.x, y: next.y };
-      return next.moving;
-    }
-    const visit = this.state.visit;
-    const area = areaOf(visit.room);
-    const next = stepWalk(visit.at, target, dt, (x, y) => canStandIn(area, x, y, visit.stop));
-    visit.at = { x: next.x, y: next.y };
+    const { state } = this;
+    if (this.place() === 'fight' || !target || !Number.isFinite(target.x) || !Number.isFinite(target.y)) return false;
+    const from = districtAt(state.where);
+    const next = stepWalk(state.where, target, dt, standing(this.held()));
+    state.where = { x: next.x, y: next.y };
+    const into = districtAt(state.where);
+    if (into && into !== from && !state.visit) enterRoom(state, into);
     return next.moving;
   }
 
-  /** Where you are standing: in the lane, or inside a place. Null during a fight. */
-  standing() {
-    const place = this.place();
-    if (place === 'fight') return null;
-    return place === 'lane' ? this.state.where : this.state.visit.at;
-  }
+  /** Where you are standing. Null during a fight. */
+  standing() { return this.place() === 'fight' ? null : this.state.where; }
+
+  /** The place you are inside (a room id), or null out in the lane. */
+  district() { return districtAt(this.state.where); }
 
   /** The way to walk to a point from where you stand, round whatever is between: points to head for in turn. */
   routeTo(target) {
     const from = this.standing();
     if (!from || !target) return [];
-    // The way is found with room to spare on every side; walking it then touches nothing.
-    if (this.place() === 'lane') return straighten(from, routeTo(from, target, roomy(canStand), WORLD), roomy(canStand));
-    const visit = this.state.visit;
-    const area = areaOf(visit.room);
-    const can = roomy((x, y) => canStandIn(area, x, y, visit.stop));
-    return straighten(from, routeTo(from, target, can, area), can);
+    // Brushing past a group is meeting it. So the way gives everyone a wide berth, except whoever
+    // you are heading for, and whoever you are already standing beside (you have to get away somehow).
+    const berth = POST.meet + 14;
+    const beside = (post, point) => Math.hypot(point.x - post.x, point.y - post.y) <= berth;
+    const held = this.held().map((post) => (beside(post, target) || beside(post, from) ? post : { x: post.x, y: post.y, r: berth }));
+    // And it is found with room to spare on every side; walking it then touches nothing.
+    const can = roomy(standing(held));
+    return straighten(from, routeTo(from, target, can, WORLD), can);
   }
 
-  /** Inside a place: whether you have walked up to whoever is waiting at the next stop. */
+  /** On a visit: the group you have walked up to and can meet (its number), or -1. */
   meeting() {
     const visit = this.state.visit;
-    return this.place() === 'path' && meetingAt(areaOf(visit.room), visit.at, visit.stop);
+    if (this.place() !== 'path') return -1;
+    const room = roomOf(visit.room);
+    return postNear(districtOf(visit.room).posts.map((post, i) => (canMeet(visit, room, i) ? post : null)), this.state.where);
   }
 
-  /** Inside a place: whether you are standing at its gate. */
-  atGate() {
-    const visit = this.state.visit;
-    return this.place() === 'path' && atGate(areaOf(visit.room), visit.at);
-  }
+  /** The group a sensible visitor would meet next (its number), or -1. */
+  nextGroup() { return this.place() === 'path' ? nextGroup(this.state.visit, roomOf(this.state.visit.room)) : -1; }
 
-  /** Goes straight up to whoever is waiting at the next stop. For the simulator and tests; a player walks. */
-  approach() {
-    if (this.place() !== 'path') return false;
+  /** Goes straight up to a group: the next one, unless told which. For the simulator and tests; a player walks. */
+  approach(index = this.nextGroup()) {
     const visit = this.state.visit;
-    const area = areaOf(visit.room);
-    const post = area.posts[visit.stop];
-    // Stand just short of them, on the side the gate is: straight below, or failing that either side.
+    if (this.place() !== 'path' || !canMeet(visit, roomOf(visit.room), index)) return false;
+    const post = districtOf(visit.room).posts[index];
+    const held = this.held();
+    // Stand just short of them: straight below, or failing that either side or above.
     for (const [dx, dy] of [[0, 1], [-1, 0], [1, 0], [0, -1]]) {
-      const x = post.x + dx * 108;
-      const y = post.y + dy * 108;
-      if (canStandIn(area, x, y, visit.stop)) { visit.at = { x, y }; return true; }
+      const x = post.x + dx * (POST.hold + 8);
+      const y = post.y + dy * (POST.hold + 8);
+      if (canStand(x, y, held)) { this.state.where = { x, y }; return true; }
     }
     return false;
   }
 
-  /** The place whose door you are standing at: 'home', a room id, or null. */
+  /** The place whose door or gate you are standing at: 'home', a room id, or null. */
   near() { return spotNear(this.state.where); }
 
   /** Goes straight to a place's door. For the simulator and tests; a player walks. */
   standAt(spotId) {
     const spot = spotOf(spotId);
-    if (this.place() !== 'lane' || !spot) return false;
+    if (this.place() === 'fight' || !spot) return false;
     this.state.where = { x: spot.door.x, y: spot.door.y };
     return true;
   }
 
-  /** Goes straight to a room and walks in. For the simulator and tests. */
-  travelTo(roomId) { return this.standAt(roomId) && this.enterRoom(roomId); }
+  /** Goes straight through a place's gate, rested, and so begins a visit. For the simulator and tests. */
+  travelTo(roomId) {
+    const district = districtOf(roomId);
+    if (this.place() !== 'lane' || !district || !roomOpen(this.state, roomId)) return false;
+    this.state.where = { x: district.gate.x, y: district.gate.y - 70 };
+    return enterRoom(this.state, roomId);
+  }
 
   // ------------------------------------------------------------ the house-sitter
 
@@ -130,8 +146,8 @@ export class Game {
   team() { return teamOf(this.state); }
 
   /**
-   * Chooses who walks with you: one to three friend ids, each once. Only out
-   * in the lane: nobody is swapped half way down a path.
+   * Chooses who walks with you: one to three friend ids, each once. Only when
+   * rested: nobody is swapped half way through a visit.
    */
   setTeam(ids) {
     if (this.place() !== 'lane' || !Array.isArray(ids)) return false;
@@ -144,11 +160,21 @@ export class Game {
   // ------------------------------------------------------------ rooms
 
   roomOpen(roomId) { return roomOpen(this.state, roomId); }
-  /** Walks in. You have to be standing at its door. */
-  enterRoom(roomId) { return this.place() === 'lane' && this.near() === roomId && enterRoom(this.state, roomId); }
-  leaveRoom() { return this.place() === 'path' && leaveRoom(this.state); }
 
-  /** The Health each team member has right now: as left on the path, or full out in the lane. */
+  /**
+   * Rests at home, which ends a visit: everyone is fresh, and whoever was calmed is restless
+   * again. You have to be standing at home's door.
+   */
+  rest() { return this.place() === 'path' && this.near() === 'home' && leaveRoom(this.state); }
+
+  /** Goes straight home and rests. For the simulator and tests; a player walks there. */
+  goHome() {
+    if (this.place() !== 'path') return false;
+    this.standAt('home');
+    return leaveRoom(this.state);
+  }
+
+  /** The Health each team member has right now: as the visit has left it, or full when rested. */
   teamHealth() {
     const visit = this.state.visit;
     return this.team().map((friend) => ({ id: friend.id, max: maxHpOf(friend), hp: visit ? Math.min(maxHpOf(friend), visit.hp[friend.id] || 0) : maxHpOf(friend) }));
@@ -157,22 +183,24 @@ export class Game {
   // ------------------------------------------------------------ fights
 
   /**
-   * Meets whoever is waiting at the next stop. Returns the fight, or null.
+   * Meets a group: the next one, unless told which. Returns the fight, or null.
    * (The screen calls this when you walk into them; see `meeting`.)
    */
-  startEncounter() {
+  startEncounter(index = this.nextGroup()) {
     if (this.place() !== 'path') return null;
     const { state } = this;
     const visit = state.visit;
     const room = roomOf(visit.room);
-    if (!fairEncounter(room, visit.stop, visit.waiting)) visit.waiting = rollEncounter(state, room, visit.stop);
-    const foes = visit.waiting;
-    for (const foe of foes) {
+    if (!canMeet(visit, room, index)) return null;
+    const group = visit.groups[index];
+    if (!fairEncounter(room, index, group.foes)) group.foes = rollEncounter(state, room, index);
+    for (const foe of group.foes) {
       state.book[foe.species].met = true;
       if (foe.heirloom) state.book[foe.species].heirloom = true;
     }
     const allies = this.team().map((friend) => ({ species: friend.species, level: friend.level, hp: visit.hp[friend.id] || 0, friendId: friend.id, heirloom: friend.heirloom }));
-    this.battle = createBattle(state, { allies, foes, fx: this.fx });
+    this.facing = index;
+    this.battle = createBattle(state, { allies, foes: group.foes, fx: this.fx });
     return this.battle;
   }
 
@@ -181,9 +209,10 @@ export class Game {
   concede() { return !!this.battle && concede(this.battle); }
 
   /**
-   * Banks a fight that is over and moves on: along the path after a win,
-   * back out to the lane after a loss or once the room's boss is beaten. Returns what
-   * happened, or null if there is no finished fight.
+   * Banks a fight that is over. After a win you are where you were, with that
+   * group calmed (and the place cleared if it was the boss); after a loss the
+   * team is carried home to rest. Returns what happened, or null if there is
+   * no finished fight.
    */
   finishBattle() {
     const { battle, state } = this;
@@ -192,12 +221,12 @@ export class Game {
     const left = {};
     for (const unit of battle.units) if (unit.side === 'ally') left[unit.friendId] = unit.hp;
     const room = state.visit.room;
-    const stop = state.visit.stop;
-    const moved = afterFight(state, summary.won, left);
-    // Worn out, they are carried home; otherwise you step back out of the door you went in by.
+    const stop = this.facing;
+    const moved = afterFight(state, stop, summary.won, left);
     if (!summary.won) state.where = { ...spotOf('home').door };
     for (const friend of state.friends) if (friend.heirloom) state.book[friend.species].heirloom = true;
     this.battle = null;
+    this.facing = -1;
     return { ...summary, room, stop, cleared: moved.cleared, home: moved.home };
   }
 
