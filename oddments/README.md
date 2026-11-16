@@ -8,6 +8,7 @@ This is the **framework and a playable slice**, not the finished game: the whole
 
 - The design on one page: [docs/DESIGN.md](docs/DESIGN.md)
 - The art that exists and the art still needed, with counts: [docs/ART.md](docs/ART.md)
+- Getting it onto TestFlight, and what only you can do: [docs/TESTFLIGHT.md](docs/TESTFLIGHT.md)
 - Play the slice: <https://kendallcoding202.github.io/oddments/web/> (this repository is a public website, so that address is public)
 
 No ads, no analytics, no accounts, no purchases, no network calls. The save lives on the device and nowhere else.
@@ -57,6 +58,7 @@ web/                    the game: what ships
     battle.js           the fight: turn order, damage, moves, Calls, reaching out
     progress.js         experience, levels, who comes home
     rooms.js            who is restless in a place, and a visit: from stepping in to resting at home
+    story.js            the people of the lane, what each says and when, and the goal
     world.js            the open world: what stands where, where feet can go, finding the way
     game.js             the Game object: every action a player can take
     state.js            the save format and repair of old or damaged saves
@@ -64,11 +66,12 @@ web/                    the game: what ships
     auto.js             a plain stand-in player, for the simulator and the rehearsal
     util.js             the seeded random generator
   js/ui/                the screens: the world you walk in, the fight, friends, scrapbook
-  js/platform/          storage. The only code that knows where the save lives.
+  js/platform/          storage, and the one file that knows about the iOS app's native side
   assets/               sprites, room paintings, font (about 1 MB)
 tests/unit/             a test per rule (node:test)
 tests/e2e/              the browser test, the preview smoke test, a screenshot tool
-tools/                  simulator, art pipeline, Heirloom recolours, preview build, local server
+ios/                    the Xcode project for the iPhone app (the same game in a thin shell)
+tools/                  simulator, art pipeline, Heirloom recolours, preview build, local server, App Store Connect helper
 art/raw/                full-size originals of the art made for this game
 docs/                   the design and the art list
 ```
@@ -80,4 +83,4 @@ docs/                   the design and the art list
 
 ## Not done
 
-One place of eight can be played: the other seven are buildings you can walk up to, with nothing behind their doors. The world is one neighbourhood about two and a half screens across; it has no people in it yet, nothing to pick up or do besides meeting Oddments, and friends on the green are for looking at, not talking to. You see it from above in 2D; you always face left or right, never toward or away. No sound, no iOS wrapper, no App Store work, no purchases. Oddments do not grow up yet (the table says into what; the rule and the art are not there). The buildings, trees, lamps, hedges and grass are painted (two generated images, see `docs/ART.md`); the streets, their stepping stones, the garden gate and the name plates are still drawn in code. The house-sitter is one of four candidate looks, not a final sprite. The rest of the cast are names in the design, not people in the game. The balance has only been played by bots. Everything has been run in Chromium at phone sizes; nothing has been run on an iPhone or in Safari.
+One place of eight can be played: the other seven are buildings you can walk up to, with nothing behind their doors, and the story stops where the garden does. Three neighbours stand in the world and talk, but they stand still, and there is nothing to pick up or do besides meeting Oddments. Friends on the green are for looking at, not talking to. You see it from above in 2D. The house-sitter turns to face the way they walk; Oddments and neighbours have one view each and only turn left or right. No sound, no purchases. The iPhone app builds and runs in Apple's Simulator, but it has not been uploaded to TestFlight or run on a real iPhone: that needs your Apple account (`docs/TESTFLIGHT.md`). Oddments do not grow up yet (the table says into what; the rule and the art are not there). The buildings, trees, lamps, hedges and grass are painted (two generated images, see `docs/ART.md`); the streets, their stepping stones, the garden gate and the name plates are still drawn in code. The four house-sitter looks are still candidates, taller and slimmer than the Pawst Lives cats. The app's icon is a stand-in. The balance has only been played by bots. The browser test runs in Chromium at phone sizes. In iOS's own web engine the game has only been launched and looked at (first screen, and resumed from a save), not played through.

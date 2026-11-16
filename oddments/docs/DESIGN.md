@@ -4,6 +4,8 @@
 
 **The pitch.** You are house-sitting for your great-aunt. The cats sleep all day because they fight the house all night (that is Pawst Lives). You try something else: you talk to it. The odd socks, burnt toast and dust under the bed have woken up restless, here and all along the lane, and you befriend them and battle alongside them before the clearance van comes on Monday.
 
+**The goal.** Calm all eight places on the lane before Monday, when Mr. Spick's clearance van takes away anything that will not sit still. It is said in the first minute, by great-aunt Maribel on the phone, and it is always on screen as one line: the next thing to do, with a gold arrow at the edge of the view when that thing is out of sight. Tap the line for the story so far and how many places are calm.
+
 **The loop.** Roam the lane → walk into a place through its gate → walk up to whoever is restless there, in any order you like → each meeting is a three-against-three, turn-based fight → win experience, and bring home any restless Oddment you calmed → walk home to rest and change your team of three → go further. Every place has a boss, who will face you once everyone else there is calm; calming it opens the next place.
 
 **The world.** One open neighbourhood, seen from above, several screens across and down, that you roam freely: tap or drag and you go there, round whatever is in the way, your team trailing behind and the view following. There are no menus between places and no change of screen: it is all one map. Home (great-aunt Maribel's house) is in the middle with a green below it, where friends who are not walking with you potter about. Streets run out to eight places, the eight rooms of Pawst Lives: The Garden Gate, Tin Can Alley, The Midnight Pantry, The Wash, The Dusty Stacks, Moonlit Rooftops, The Tick-Tock Attic, The Roaring Dark. A place is a corner of the same map with its own boundary and a way in. From outside you see only that its bushes are rustling. Step through the gate, rested, and everyone restless there comes out into the open: four groups and the boss, each holding the ground it stands on. Walk up to a group and the fight starts; the way you are sent to one group never brushes past another. Home is where you rest: that ends the visit, and whoever you calmed is restless again by the time you go back.
@@ -30,14 +32,14 @@ One element per Oddment and per move; no double types. An Oddment's *soft spot* 
 
 **The human cast.** People, not animals; the cats are a cameo, asleep on things.
 
-- **The house-sitter** (you; named by the player). Up all night in pyjamas with a lamp. Patient rather than brave.
-- **Great-aunt Maribel**, whose house it is and who has always known. On the phone from her trip; teaches Calls.
-- **Dov**, the kid by the alley, who collects bottle caps and swaps news.
-- **Ines Tock**, who mends clocks in the attic and knows how things grow up.
-- **Mr. Spick** of Spick & Span Clearances, who is paid to empty the lane on Monday and sees only junk. Not a villain so much as a deadline. THE VACUUM is his.
+- **The house-sitter** (you; named by the player). Up all night in pyjamas with a lamp. Patient rather than brave. Painted from the side, the front and behind, so they turn to face whichever way they walk.
+- **Great-aunt Maribel**, whose house it is and who has always known. Away on a trip; she rings at the very start and sets the goal.
+- **Ines Tock**, who mends clocks and has lived among Oddments all her life. She waits on the green below home and is the one who shows you how it is done: stand up for yourself if you must, Reach out if you can, and every place has a ringleader. You report back to her as each place is calmed.
+- **Dov**, the kid who collects bottle caps. By the garden gate with a tip every time you ask (soft spots, Heirlooms, one of each kind).
+- **Mr. Spick** of Spick & Span Clearances, who is paid to empty the lane on Monday and sees only junk. Not a villain so much as a deadline: he stands by the green counting how many places are still restless. THE VACUUM is his.
 
-Later, cast members walk with you and each brings a different set of Calls.
+The three neighbours stand in the world; you walk up to one and talk. Someone with something new to say has a gold mark over their head. Later, cast members walk with you and each brings a different set of Calls.
 
-**What is saved.** One versioned record on the device, nowhere else: the random seed, the house-sitter's name and look, every friend (kind, level, experience, Heirloom or not), the team of three, where you are standing in the world, progress in each place, the visit in progress (team Health, every group that is restless there and which of them are calm), which kinds have been met, a few counters and settings. A fight in progress is not saved; reloading puts you back in front of it, free to meet them or walk off. A save is rebuilt field by field when loaded, so an old, damaged or edited one cannot stop the game from starting.
+**What is saved.** One versioned record on the device, nowhere else: the random seed, the house-sitter's name and look, every friend (kind, level, experience, Heirloom or not), the team of three, where you are standing in the world, progress in each place, the visit in progress (team Health, every group that is restless there and which of them are calm), which conversations have been had, which kinds have been met, a few counters and settings. In the iOS app the same record is also kept in the app's native storage, which iOS does not clear. A fight in progress is not saved; reloading puts you back in front of it, free to meet them or walk off. A save is rebuilt field by field when loaded, so an old, damaged or edited one cannot stop the game from starting.
 
 **Not in the game.** Ads, analytics, accounts, network calls, purchases. Throwing things at monsters to catch them.

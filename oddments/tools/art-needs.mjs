@@ -7,20 +7,19 @@ import { ART } from './art-manifest.mjs';
 
 // The whole game: every monster and boss painted for Pawst Lives.
 export const FULL = { kinds: 40, bosses: 8, places: ROOMS.length };
-const CAST = ['Great-aunt Maribel', 'Dov', 'Ines Tock', 'Mr. Spick'];
 
 export function artNeeds() {
   const friendsNow = SPECIES_IDS.filter((id) => !SPECIES[id].boss);
   const named = friendsNow.filter((id) => SPECIES[id].grown).length;
   const rows = [
     ['People', 'The house-sitter, final sprite (one of the four candidate looks, or a repaint)', 1],
-    ['People', `The cast: ${CAST.join(', ')}`, CAST.length],
     ['Grown-up forms', `One per kind (${named} are named in the tables; ${FULL.kinds - named} still to design). Bosses do not grow`, FULL.kinds],
     ['The world', 'A painted gateway and fence, and one special thing to stand in each place', 2 + FULL.places],
     ['Icons', `Elements (${ELEMENT_IDS.length}), Calls (${CALL_IDS.length}), stats (${STAT_IDS.length - 1}; Health exists), tabs (4), the Heirloom mark (1)`, ELEMENT_IDS.length + CALL_IDS.length + (STAT_IDS.length - 1) + 4 + 1],
     ['Identity', 'App icon and title art, once the game has its name', 2],
   ];
   const free = [
+    ['People', 'The cast (Ines Tock, Dov, Mr. Spick, Great-aunt Maribel) and the house-sitter from the front and behind: painted', 0],
     ['The world', 'The open neighbourhood: nine buildings, trees, lamps, hedges and grass, from the two world images already made', 0],
     ['Heirlooms', `Rare colours for all ${FULL.kinds} kinds and their ${FULL.kinds} grown forms: recoloured in code by tools/heirlooms.py`, FULL.kinds * 2],
     ['Fights', `The ${FULL.places} room paintings and all ${FULL.kinds + FULL.bosses} monster sprites from Pawst Lives, as they are`, FULL.places + FULL.kinds + FULL.bosses],
