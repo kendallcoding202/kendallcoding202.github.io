@@ -21,6 +21,12 @@
 #                A "preflight" job on Linux proves all of that against Apple
 #                first, so a wrong secret costs seconds, not Mac minutes.
 #
+#   "xcode27"    (a second box) runs whichever of the above on GitHub's Xcode 27
+#                Mac instead of the one used so far. An app fills all of both
+#                screens of an iPhone Duo (Apple's folding iPhone) only when it
+#                is built with an Xcode that knows that phone. Left unticked,
+#                everything runs as it always has.
+#
 #   This repository is public, and so is everything these jobs print. The
 #   bundle id is a secret for that reason (yours has your name in it), and the
 #   signing step prints only its errors, with anything in quotes removed.
@@ -35,6 +41,10 @@ on:
         default: false
       check_only:
         description: Only check the Apple credentials and report on uploaded builds (no build, no upload)
+        type: boolean
+        default: false
+      xcode27:
+        description: Build on the Xcode 27 Mac, so the app uses all of an iPhone Duo's screens (unticked - the Mac used so far)
         type: boolean
         default: false
 
@@ -54,7 +64,7 @@ defaults:
 jobs:
   build:
     if: ${{ !inputs.testflight && !inputs.check_only }}
-    runs-on: macos-15
+    runs-on: ${{ inputs.xcode27 && 'xcode-27' || 'macos-15' }}
     timeout-minutes: 30
     env:
       BUNDLE_ID: app.oddments.game # a stand-in: fine for the Simulator, never uploaded
@@ -83,7 +93,8 @@ jobs:
         run: |
           DEVICE=$(xcrun simctl list devices available -j | python3 -c "
           import json, sys
-          devices = [d for runtime in json.load(sys.stdin)['devices'].values() for d in runtime if d['name'].startswith('iPhone')]
+          # Not an iPhone Duo: it has two screens, and a workflow of its own.
+          devices = [d for runtime in json.load(sys.stdin)['devices'].values() for d in runtime if d['name'].startswith('iPhone') and 'Duo' not in d['name']]
           print(devices[-1]['udid'])")
           xcrun simctl boot "$DEVICE"
           xcrun simctl bootstatus "$DEVICE" -b
@@ -133,7 +144,7 @@ jobs:
   # Apple's side. It runs beside "build", on a Mac of its own, and is done in a few minutes.
   rehearsal:
     if: ${{ !inputs.testflight && !inputs.check_only }}
-    runs-on: macos-15
+    runs-on: ${{ inputs.xcode27 && 'xcode-27' || 'macos-15' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -203,7 +214,7 @@ jobs:
   testflight:
     needs: preflight
     if: ${{ inputs.testflight && !inputs.check_only }}
-    runs-on: macos-15
+    runs-on: ${{ inputs.xcode27 && 'xcode-27' || 'macos-15' }}
     timeout-minutes: 45
     env:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
