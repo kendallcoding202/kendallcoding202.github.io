@@ -5,7 +5,8 @@ import { TEAM_SIZE, NAME_LENGTH, lookOf, roomOf } from './balance.js';
 import { createBattle, choices, act, concede } from './battle.js';
 import { settleUp } from './progress.js';
 import { rollEncounter, fairEncounter, enterRoom, leaveRoom, afterFight, canMeet, nextGroup, roomOpen, teamOf, maxHpOf } from './rooms.js';
-import { WORLD, DISTRICTS, POST, stepWalk, routeTo, straighten, roomy, standing, canStand, spotNear, spotOf, districtOf, districtAt, postNear } from './world.js';
+import { WORLD, DISTRICTS, POST, stepWalk, routeTo, straighten, roomy, standing, canStand, spotNear, spotOf, districtOf, districtAt, postNear, personNear, personAt, TALK } from './world.js';
+import { goalOf, aimOf, storySoFar, hasNews, talk, takeCall } from './story.js';
 
 export class Game {
   /**
@@ -121,6 +122,36 @@ export class Game {
     if (this.place() !== 'lane' || !district || !roomOpen(this.state, roomId)) return false;
     this.state.where = { x: district.gate.x, y: district.gate.y - 70 };
     return enterRoom(this.state, roomId);
+  }
+
+  // ------------------------------------------------------------ the story
+
+  /** The thing to do next, and the aim of the whole game: see story.js. */
+  goal() { return goalOf(this.state); }
+  aim() { return aimOf(this.state); }
+  journal() { return storySoFar(this.state); }
+
+  /** The neighbour you are standing near enough to talk to (their id), or null. Nobody during a fight. */
+  personNear() { return this.place() === 'fight' ? null : personNear(this.state.where); }
+  hasNews(who) { return hasNews(this.state, who); }
+
+  /** Talks to whoever you are standing by. Returns what they say (lines of { who, text }), or null. */
+  talkTo(who) { return this.personNear() === who ? talk(this.state, who) : null; }
+
+  /** Takes great-aunt Maribel's first call, once the game has begun. Its lines the first time; null after. */
+  takeCall() { return this.state.started && this.place() !== 'fight' ? takeCall(this.state) : null; }
+
+  /** Goes straight up to a neighbour. For the simulator and tests; a player walks. */
+  standBy(who) {
+    const person = personAt(who);
+    if (this.place() === 'fight' || !person) return false;
+    const held = this.held();
+    for (const [dx, dy] of [[0, 1], [-1, 0], [1, 0], [0, -1]]) {
+      const x = person.x + dx * (TALK - 20);
+      const y = person.y + dy * (TALK - 20);
+      if (canStand(x, y, held)) { this.state.where = { x, y }; return true; }
+    }
+    return false;
   }
 
   // ------------------------------------------------------------ the house-sitter

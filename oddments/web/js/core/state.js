@@ -7,6 +7,7 @@ import { newFriend } from './progress.js';
 import { roomOpen, maxHpOf, rollEncounter, fairEncounter } from './rooms.js';
 import { own } from './util.js';
 import { settleWhere, districtOf, districtAt, DISTRICTS } from './world.js';
+import { newStory, reviveStory } from './story.js';
 
 export function newState(now = Date.now(), seed = (now ^ 0x9e3779b9) | 0) {
   const friends = START_TEAM.map(([species, level], i) => newFriend(i + 1, species, level));
@@ -28,6 +29,7 @@ export function newState(now = Date.now(), seed = (now ^ 0x9e3779b9) | 0) {
     // The scrapbook: which kinds have been met, and which as an Heirloom.
     book: Object.fromEntries(SPECIES_IDS.map((id) => [id, { met: friends.some((friend) => friend.species === id), heirloom: false }])),
     stats: { battles: 0, wins: 0, losses: 0, rounds: 0, knockouts: 0, befriended: 0, heirlooms: 0 },
+    story: newStory(), // which conversations have been had; the rest of the story is read from everything else here
     settings: { fast: false },
     seen: {}, // one-time hints already shown
   };
@@ -161,6 +163,7 @@ export function reviveState(saved, now = Date.now()) {
 
   const stats = isObj(saved.stats) ? saved.stats : {};
   for (const key of Object.keys(state.stats)) state.stats[key] = int(stats[key], 0);
+  state.story = reviveStory(saved.story);
   const settings = isObj(saved.settings) ? saved.settings : {};
   for (const key of Object.keys(state.settings)) state.settings[key] = settings[key] === true;
   const seen = isObj(saved.seen) ? saved.seen : {};

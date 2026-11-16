@@ -111,6 +111,13 @@ export const ROAD_POINTS = ROADS.map((road) => along(road, 24, true));
 // The green: the open grass below home, kept clear, where friends who stayed home potter about.
 export const GREEN = { x: 930, y: 1570, w: 460, h: 200 };
 
+// The people of the lane, and where each stands: Ines Tock and Mr. Spick either side of the top of
+// the green, in sight of home's door; Dov by the garden gate. Solid, like a lamp post; you talk to
+// one from a step or two away.
+export const PEOPLE = [{ id: 'ines', x: 1048, y: 1572 }, { id: 'spick', x: 1330, y: 1556 }, { id: 'dov', x: 862, y: 1092 }].map((person) => ({ ...person, r: 13 }));
+export const TALK = 78; // how near counts as near enough to talk
+export const personAt = (id) => PEOPLE.find((person) => person.id === id) || null;
+
 // A lamp beside every building, on the side nearer home; two at the garden gate; a few along the streets. Thin, but solid.
 export const LAMPS = [
   ...SPOTS.map((spot) => ({ x: spot.x + (spot.id === 'home' || spot.x < AT.home[0] ? 1 : -1) * (spot.w / 2 + 30), y: spot.y + 26, r: 7 })),
@@ -130,7 +137,7 @@ export const TREES = (() => {
     if (x < 1050 && y < 1060) continue; // the garden, and a clear look at its hedge
     if (x > GREEN.x - 40 && x < GREEN.x + GREEN.w + 40 && y > GREEN.y - 40 && y < GREEN.y + GREEN.h + 40) continue;
     if (SPOTS.some((spot) => Math.abs(x - spot.x) < spot.w / 2 + 70 && y > spot.y - spot.tall - 60 && y < spot.y + 150)) continue;
-    if (!ROAD_POINTS.every((road) => clear(x, y, road, 92)) || !clear(x, y, trees, 170) || !clear(x, y, LAMPS, 90)) continue;
+    if (!ROAD_POINTS.every((road) => clear(x, y, road, 92)) || !clear(x, y, trees, 170) || !clear(x, y, LAMPS, 90) || !clear(x, y, PEOPLE, 130)) continue;
     trees.push({ x: Math.round(x), y: Math.round(y), r: 24 + Math.round(next() * 6) });
   }
   return trees;
@@ -154,13 +161,13 @@ for (const block of [...SPOTS.map((spot) => spot.block), ...HEDGES]) {
   stand({ x0: block.x - b, y0: block.y - b, x1: block.x + block.w + b, y1: block.y + block.h + b }, block.x - b, block.y - b, block.x + block.w + b, block.y + block.h + b);
 }
 for (const tree of TREES) { const reach = tree.r * 0.55 + WORLD.body; stand({ x: tree.x, y: tree.y, rr: reach * reach }, tree.x - reach, tree.y - reach, tree.x + reach, tree.y + reach); } // the trunk, not the leaves
-for (const lamp of LAMPS) { const reach = lamp.r + WORLD.body; stand({ x: lamp.x, y: lamp.y, rr: reach * reach }, lamp.x - reach, lamp.y - reach, lamp.x + reach, lamp.y + reach); }
+for (const post of [...LAMPS, ...PEOPLE]) { const reach = post.r + WORLD.body; stand({ x: post.x, y: post.y, rr: reach * reach }, post.x - reach, post.y - reach, post.x + reach, post.y + reach); }
 
 const NOBODY = [];
 
 /**
- * Whether feet can be at this point: inside the world, and not in a building, a hedge, a tree or a
- * lamp post. `held` is the ground being held just now by whoever is waiting: a list of points,
+ * Whether feet can be at this point: inside the world, and not in a building, a hedge, a tree, a
+ * lamp post or a person. `held` is the ground being held just now by whoever is waiting: a list of points,
  * each holding POST.hold around it unless it says otherwise ({ x, y, r }).
  */
 export function canStand(x, y, held = NOBODY) {
@@ -294,6 +301,17 @@ export function spotNear(pos) {
   for (const spot of SPOTS) {
     const far = Math.hypot(pos.x - spot.door.x, pos.y - spot.door.y);
     if (far <= bestFar) { best = spot.id; bestFar = far; }
+  }
+  return best;
+}
+
+/** The person you are standing near enough to talk to (their id), or null. */
+export function personNear(pos) {
+  let best = null;
+  let bestFar = TALK;
+  for (const person of PEOPLE) {
+    const far = Math.hypot(pos.x - person.x, pos.y - person.y);
+    if (far <= bestFar) { best = person.id; bestFar = far; }
   }
   return best;
 }
