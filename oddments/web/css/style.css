@@ -236,6 +236,10 @@ small { color: var(--muted); font-size: 12px; }
 .lanewrap::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse 85% 70% at 50% 46%, rgba(8,6,20,0) 55%, rgba(8,6,20,.5) 100%); }
 .bar-top.over { position: absolute; top: 0; left: 0; right: 0; z-index: 2; pointer-events: none; text-shadow: 0 2px 0 rgba(0,0,0,.55); background: linear-gradient(rgba(8,6,20,.94), rgba(8,6,20,.86) 58%, rgba(8,6,20,0)); padding-bottom: 26px; }
 .bar-top.over .where { display: block; margin-top: -2px; font-weight: 600; color: var(--ink); opacity: .82; }
+/* The name of where you are stays on one line, however long it is and however narrow the phone: a second line would lie over the goal. */
+.bar-top.over > div { min-width: 0; }
+.bar-top.over h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 350px) { .bar-top.over h1 { font-size: 19px; } }
 .lanehint { position: absolute; left: 50%; bottom: 176px; z-index: 2; transform: translateX(-50%); padding: 6px 14px; border-radius: 14px; white-space: nowrap; font-weight: 600; background: rgba(13,10,28,.8); border: 1.5px solid rgba(255,255,255,.18); pointer-events: none; animation: pulse-hint 1.2s infinite alternate; }
 @keyframes pulse-hint { to { opacity: .6; } }
 .placecard { position: absolute; left: 10px; right: 10px; bottom: 10px; max-width: 520px; margin: 0 auto; z-index: 2; display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 18px; background: rgba(33,27,64,.96); border: 1.5px solid var(--line); box-shadow: 0 10px 30px rgba(0,0,0,.5); animation: rise-card .22s cubic-bezier(.2,.8,.3,1); }
