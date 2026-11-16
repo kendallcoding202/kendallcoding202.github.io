@@ -3,7 +3,7 @@
 // a new friend, resting at home, the whole garden, a reload and damaged saves.
 // node tests/e2e/run.mjs        (exit code 1 on any failure)
 import { createRequire } from 'node:module';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readdirSync } from 'node:fs';
 import { serve } from '../../tools/serve.mjs';
 import { newState } from '../../web/js/core/state.js';
 import { enterRoom } from '../../web/js/core/rooms.js';
@@ -1266,6 +1266,8 @@ section('Nothing leaves the device');
 const foreign = requests.filter((url) => !url.startsWith(base));
 check(foreign.length === 0, 'every request the game made was for one of its own files', foreign.slice(0, 3).join(' '));
 check(requests.length > 40, `(${requests.length} requests watched)`);
+const roomPaintings = readdirSync(new URL('../../web/assets/rooms/', import.meta.url));
+check(roomPaintings.length === 98 && roomPaintings.every((file) => requests.some((url) => url.endsWith(`assets/rooms/${file}`))), `every painting of every room was fetched (${roomPaintings.length} of them)`);
 check(errors.length === 0, 'no errors, and nothing refused by the content security policy', errors.slice(0, 5).join(' | '));
 
 await browser.close();

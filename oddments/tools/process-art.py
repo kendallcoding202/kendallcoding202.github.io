@@ -85,6 +85,33 @@ INSIDES = {
         "wall": (103, 911, 800),
         "floor": 512,
     },
+    "wash": {
+        "sheet": [("basket", 150), ("ironing", 180), ("towels", 150), ("soapbox", 150), ("airer", 180), ("bucket", 150), ("hamper", 150), ("socks", 150), ("chair", 150), ("sign", 150), ("trolley", 150), ("mat", 220)],
+        "wall": (0, 808, 800),
+        "floor": 512,
+    },
+    "stacks": {
+        "sheet": [("pile", 150), ("tomes", 150), ("desk", 180), ("globe", 150), ("steps", 150), ("trolley", 150), ("catalogue", 180), ("armchair", 180), ("lectern", 150), ("plant", 150), ("inkdesk", 150), ("mat", 220)],
+        "wall": (22, 830, 800),
+        "floor": 512,
+    },
+    # (The rooftops' "wall" is the sky, and the attic's the gable end: each is one painting right across, and taller.
+    # Their way out is a hatch, where another room has a mat. A skylight and a ladder lie flat on the slates.)
+    "rooftops": {
+        "sheet": [("chimney", 180), ("pot", 150), ("aerial", 180), ("skylight", 230), ("tank", 180), ("dovecote", 170), ("planter", 200), ("slates", 150), ("ladder", 220), ("finial", 150), ("dish", 150), ("mat", 230)],
+        "wall": (154, 760, 1400),
+        "floor": 512,
+    },
+    "attic": {
+        "sheet": [("trunk", 180), ("sheet", 170), ("boxes", 160), ("horse", 180), ("dummy", 170), ("cage", 170), ("cases", 170), ("toys", 180), ("mirror", 170), ("gramophone", 170), ("rug", 170), ("mat", 230)],
+        "wall": (95, 802, 1400),
+        "floor": 512,
+    },
+    "dark": {
+        "sheet": [("shoes", 170), ("shoeboxes", 150), ("toolbox", 150), ("ladder", 160), ("umbrellas", 160), ("broom", 160), ("paint", 150), ("cables", 170), ("reel", 150), ("board", 160), ("papers", 150), ("mat", 220)],
+        "wall": (34, 842, 800),
+        "floor": 512,
+    },
 }
 
 
@@ -119,6 +146,53 @@ def cut_sheet(im):
     for top, bottom in bands(solid.any(axis=1), SHEET_ROWS):
         for left, right in bands(solid[top:bottom].any(axis=0), SHEET_COLS):
             pieces.append(im.crop((left, top, right, bottom)))
+    return pieces
+
+
+def cut_cells(im, rows, cols):
+    """
+    Cuts a sheet of things laid out in a grid into its things, row by row. A thing is whatever paint
+    has its middle in that cell of the grid. So it may be in two parts (a broom and its dustpan), may
+    reach over the line into the next cell without being cut by it, and two rows may come so close
+    that no clear line runs between them. Specks of stray paint are dropped.
+    """
+    im = im.convert("RGBA")
+    data = np.asarray(im)
+    solid = data[..., 3] > 40
+    cell = 4  # worked out on a coarse grid, as cut_row does
+    h, w = solid.shape[0] // cell, solid.shape[1] // cell
+    coarse = solid[: h * cell, : w * cell].reshape(h, cell, w, cell).any(axis=(1, 3))
+    label = np.zeros((h, w), dtype=np.int32)
+    where = {}  # for each blob of paint that is not a speck: which cell of the grid its middle is in
+    number = 0
+    for y0, x0 in zip(*np.nonzero(coarse)):
+        if label[y0, x0]:
+            continue
+        number += 1
+        label[y0, x0] = number
+        stack = [(y0, x0)]
+        cells, across, down = 0, 0, 0
+        while stack:
+            y, x = stack.pop()
+            cells += 1
+            across += x
+            down += y
+            for ny, nx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1), (y + 1, x + 1), (y - 1, x - 1), (y + 1, x - 1), (y - 1, x + 1)):
+                if 0 <= ny < h and 0 <= nx < w and coarse[ny, nx] and not label[ny, nx]:
+                    label[ny, nx] = number
+                    stack.append((ny, nx))
+        if cells >= 8:
+            where[number] = (min(rows - 1, int(down / cells / h * rows)), min(cols - 1, int(across / cells / w * cols)))
+    fine = np.kron(label, np.ones((cell, cell), dtype=np.int32))
+    pieces = []
+    for row in range(rows):
+        for col in range(cols):
+            mine = [blob for blob, at in where.items() if at == (row, col)]
+            if not mine:
+                raise SystemExit(f"nothing is painted in row {row + 1}, column {col + 1} of the sheet")
+            figure = data[: h * cell, : w * cell].copy()
+            figure[~np.isin(fine, mine)] = 0
+            pieces.append(trimmed(Image.fromarray(figure, "RGBA")))
     return pieces
 
 
@@ -238,7 +312,7 @@ def process_room(name, im, rooms):
     plan = INSIDES[room]
     written = []
     if part == "sheet":
-        for (thing, longest), piece in zip(plan["sheet"], cut_sheet(im)):
+        for (thing, longest), piece in zip(plan["sheet"], cut_cells(im, SHEET_ROWS, SHEET_COLS)):
             dest = os.path.join(rooms, f"{room}_{thing}.webp")
             fit(trimmed(piece), longest).save(dest, "WEBP", quality=90, method=6)
             written.append(dest)

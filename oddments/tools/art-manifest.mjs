@@ -196,4 +196,44 @@ export const ART = [
   ]),
   roomWall('pantry', 'an old pantry at night, long wooden shelves from one side to the other crowded with glass jars, tins, packets, bottles and a hanging string of garlic, dark blue-grey plaster behind them, warm light spilling in from the left.'),
   roomFloor('pantry', 'old kitchen floor tiles in a checkerboard of terracotta red and cream squares, a little worn, with thin dark grout.'),
+  // ---- the Wash: the launderette ----
+  roomSheet('wash', 'a launderette at night', [
+    ['a wicker laundry basket heaped with colourful clothes', 'an ironing board with an iron on it', 'a neat stack of folded towels', 'a big cardboard box of washing powder with no words on it'],
+    ['a folding clothes airer hung with odd socks', 'a metal mop bucket with a mop in it', 'a tall wicker hamper with its lid on', 'a pile of odd socks'],
+    ['a plastic waiting-room chair', 'a yellow folding wet-floor sign with no words on it', 'a wheeled laundry trolley full of sheets', 'a striped blue doormat lying flat, seen from directly above'],
+  ]),
+  roomWall('wash', 'a launderette at night, a row of five white front-loading washing machines with round glass doors standing side by side along the lower part of the wall, small pale blue tiles above them, one long shelf with boxes of soap powder and folded towels, and a round wall clock with no numbers. Under the machines is a plain dark skirting band.'),
+  roomFloor('wash', 'small square floor tiles in pale blue and white, a little wet and shiny, with thin grey grout.'),
+  // ---- the Dusty Stacks: the old library ----
+  roomSheet('stacks', 'an old dusty library at night', [
+    ['a tall wobbly pile of old books', 'a short pile of three thick books', 'a wooden reading desk with a green glass lamp on it', 'an old globe on a wooden stand'],
+    ['a small wooden library step stool', 'a wooden book trolley full of books', 'a wooden card-catalogue cabinet with many small drawers', 'a worn leather armchair'],
+    ['a wooden lectern with a big open book on it', 'a leafy plant in a brass pot', 'a small table with an inkwell and a feather quill', 'a dark red doormat lying flat, seen from directly above'],
+  ]),
+  roomWall('stacks', 'an old library at night, tall dark wooden bookcases standing side by side from one edge to the other, packed with old books in faded colours, a brass rolling ladder leaning on one of them, and a small brass lamp fixed between two of them giving a warm glow.'),
+  roomFloor('stacks', 'a dark polished wooden parquet floor in a herringbone pattern, deep brown.'),
+  // ---- Moonlit Rooftops ----
+  roomSheet('rooftops', 'the rooftops of a town at night', [
+    ['a red brick chimney stack with two clay chimney pots', 'a single tall clay chimney pot with a metal cowl', 'an old television aerial on a short pole', 'a glowing skylight window set in a wooden frame, seen from above'],
+    ['a round metal water tank on short legs', 'a wooden dovecote on a post', 'a long window box planter full of flowers', 'a neat stack of loose grey roof slates'],
+    ['a short wooden roof ladder lying flat, seen from above', 'a stone ball finial on a square stone base', 'a small satellite dish on a bracket', 'an open wooden roof hatch with the top of a ladder showing, seen from above'],
+  ]),
+  roomWall('rooftops', 'the night sky over a town, seen from a rooftop: a deep blue sky with a big crescent moon a little right of the middle and many stars, and along the lower part the dark silhouettes of distant rooftops, chimneys and one church spire, with a few small windows lit warm yellow. A low stone parapet runs along the very bottom of the middle band.'),
+  roomFloor('rooftops', 'blue-grey roof slates in neat overlapping rows, at night.'),
+  // ---- the Tick-Tock Attic ----
+  roomSheet('attic', 'a dusty attic at night', [
+    ['an old leather travelling trunk with straps', 'a piece of furniture hidden under a white dust sheet', 'a stack of three cardboard boxes', 'a wooden rocking horse'],
+    ['a dressmaker\'s dummy on a stand', 'an empty brass birdcage on a stand', 'a pile of three old suitcases', 'an open wooden toy chest with toys poking out'],
+    ['a tall standing mirror half covered by a sheet', 'an old gramophone with a big brass horn', 'a rolled-up rug tied with string leaning on a box', 'an open attic hatch in the floor with the top of a ladder showing, seen from above'],
+  ]),
+  roomWall('attic', 'the gable end of an attic at night, dark wooden boards with two big sloping rafters meeting at the top in the middle, a round window between them showing the moon, cobwebs in the corners, and one long shelf crowded with many small old clocks of different shapes, all showing different times.'),
+  roomFloor('attic', 'old pale bare floorboards, dusty, planks running left to right.'),
+  // ---- the Roaring Dark: the cupboard under the stairs ----
+  roomSheet('dark', 'a cupboard under the stairs, at night', [
+    ['a wooden shoe rack with shoes and wellington boots on it', 'a stack of shoe boxes', 'a metal toolbox', 'a folded wooden stepladder leaning against nothing, standing upright'],
+    ['an umbrella stand with three umbrellas', 'a broom and a dustpan standing together', 'a stack of old paint tins', 'a cardboard box full of tangled cables and light bulbs'],
+    ['an extension lead wound on a reel', 'a folded ironing board standing upright', 'a pile of old newspapers tied with string', 'a dark grey doormat lying flat, seen from directly above'],
+  ]),
+  roomWall('dark', 'the inside of a cupboard under the stairs at night, very dark: dark wooden boards, a long row of coats, scarves and umbrellas hanging on hooks, one shelf above them with old boxes, jars of screws and a torch, old pipes running along the top, and cobwebs.'),
+  roomFloor('dark', 'very dark old floorboards, almost black with a hint of purple, planks running left to right.'),
 ];

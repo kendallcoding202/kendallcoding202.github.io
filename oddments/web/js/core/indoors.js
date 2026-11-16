@@ -86,57 +86,86 @@ export const INSIDES = {
     spots: [],
     posts: [{ x: 250, y: 1290 }, { x: 520, y: 1070 }, { x: 250, y: 840 }, { x: 520, y: 610 }, { x: 380, y: 350 }],
   },
-  // The Wash: the launderette. A row of machines along the back wall; Machine Six is the one that roars.
+  // The Wash: the launderette. Ten machines along the back wall; Machine Six is the one that glows.
   wash: {
     kind: 'place', view: 760, w: 760, h: 1640, wall: 200, people: 1,
     door: { x: 380, y: 1610 }, start: { x: 380, y: 1500 },
     blocks: [
-      { id: 'hamper', x: 646, y: 1440, w: 84, h: 50 }, { id: 'bottles', x: 30, y: 1210, w: 80, h: 48 }, { id: 'hamper2', x: 646, y: 960, w: 84, h: 50 },
-      { id: 'boxes', x: 30, y: 730, w: 84, h: 50 }, { id: 'hamper3', x: 646, y: 480, w: 84, h: 50 },
+      { id: 'trolley', x: 30, y: 1456, w: 62, h: 28 }, { id: 'basket', x: 96, y: 1480, w: 54, h: 26 },
+      { id: 'chair', x: 682, y: 1300, w: 46, h: 24 }, { id: 'chair2', x: 632, y: 1300, w: 46, h: 24 },
+      { id: 'airer', x: 30, y: 1200, w: 78, h: 26 }, { id: 'socks', x: 112, y: 1226, w: 58, h: 22 },
+      { id: 'hamper', x: 680, y: 960, w: 48, h: 26 }, { id: 'towels', x: 628, y: 984, w: 48, h: 24 },
+      { id: 'ironing', x: 30, y: 730, w: 72, h: 26 }, { id: 'soapbox', x: 106, y: 752, w: 42, h: 24 },
+      { id: 'bucket', x: 690, y: 470, w: 40, h: 24 }, { id: 'sign', x: 640, y: 492, w: 44, h: 22 },
+      { id: 'hamper2', x: 40, y: 204, w: 48, h: 26 }, { id: 'towels2', x: 94, y: 208, w: 48, h: 24 },
+      { id: 'trolley2', x: 668, y: 204, w: 62, h: 28 }, { id: 'soapbox2', x: 620, y: 210, w: 42, h: 24 },
     ],
     spots: [],
     posts: [{ x: 510, y: 1290 }, { x: 240, y: 1070 }, { x: 510, y: 840 }, { x: 240, y: 610 }, { x: 380, y: 350 }],
   },
-  // The Dusty Stacks: the old library. Bookcases the length of the back wall, a runner down the middle.
+  // The Dusty Stacks: the old library. Bookcases the length of the back wall.
   stacks: {
     kind: 'place', view: 760, w: 760, h: 1640, wall: 200, people: 1,
     door: { x: 380, y: 1610 }, start: { x: 380, y: 1500 },
     blocks: [
-      { id: 'books', x: 30, y: 1420, w: 84, h: 50 }, { id: 'boxes', x: 646, y: 1160, w: 84, h: 50 }, { id: 'books2', x: 30, y: 820, w: 84, h: 50 },
-      { id: 'books3', x: 646, y: 600, w: 84, h: 50 }, { id: 'boxes2', x: 30, y: 420, w: 84, h: 50 },
+      { id: 'trolley', x: 30, y: 1440, w: 64, h: 26 }, { id: 'pile', x: 98, y: 1462, w: 46, h: 24 },
+      { id: 'armchair', x: 656, y: 1420, w: 72, h: 30 }, { id: 'plant', x: 612, y: 1452, w: 40, h: 24 },
+      { id: 'desk', x: 654, y: 1150, w: 74, h: 28 }, { id: 'tomes', x: 600, y: 1176, w: 50, h: 22 },
+      { id: 'catalogue', x: 30, y: 830, w: 74, h: 30 }, { id: 'steps', x: 108, y: 858, w: 50, h: 24 },
+      { id: 'lectern', x: 664, y: 610, w: 64, h: 28 }, { id: 'pile2', x: 612, y: 636, w: 46, h: 24 },
+      { id: 'globe', x: 40, y: 420, w: 44, h: 24 }, { id: 'inkdesk', x: 88, y: 440, w: 52, h: 24 },
+      { id: 'plant2', x: 40, y: 204, w: 40, h: 24 }, { id: 'tomes2', x: 86, y: 210, w: 50, h: 22 },
+      { id: 'armchair2', x: 650, y: 204, w: 72, h: 30 },
     ],
     spots: [],
     posts: [{ x: 380, y: 1300 }, { x: 220, y: 1060 }, { x: 540, y: 860 }, { x: 240, y: 620 }, { x: 380, y: 350 }],
   },
-  // Moonlit Rooftops: in at the door, up the stairs and out onto the slates. The sky is the back wall.
+  // Moonlit Rooftops: in at the door, up the stairs and out by a hatch onto the slates. The back
+  // wall is the sky over the town, so it stands taller than a room's.
   rooftops: {
-    kind: 'place', view: 760, w: 760, h: 1640, wall: 200, people: 1,
+    kind: 'place', view: 760, w: 760, h: 1640, wall: 300, people: 1,
     door: { x: 380, y: 1610 }, start: { x: 380, y: 1500 },
     blocks: [
-      { id: 'chimney', x: 646, y: 1380, w: 84, h: 50 }, { id: 'chimney2', x: 30, y: 1060, w: 84, h: 50 }, { id: 'chimney3', x: 646, y: 800, w: 84, h: 50 },
-      { id: 'chimney4', x: 30, y: 400, w: 84, h: 50 }, { id: 'chimney5', x: 646, y: 500, w: 84, h: 50 },
+      { id: 'planter', x: 30, y: 1440, w: 90, h: 26 },
+      { id: 'chimney', x: 650, y: 1380, w: 70, h: 34 }, { id: 'slates', x: 590, y: 1410, w: 56, h: 24 },
+      { id: 'tank', x: 34, y: 1060, w: 74, h: 30 }, { id: 'pot', x: 112, y: 1090, w: 34, h: 22 },
+      { id: 'dovecote', x: 664, y: 800, w: 56, h: 24 }, { id: 'dish', x: 610, y: 826, w: 50, h: 22 },
+      { id: 'finial', x: 690, y: 540, w: 40, h: 26 }, { id: 'pot2', x: 650, y: 562, w: 34, h: 22 },
+      { id: 'chimney2', x: 36, y: 420, w: 70, h: 34 }, { id: 'aerial', x: 116, y: 450, w: 30, h: 20 },
+      { id: 'planter2', x: 640, y: 318, w: 90, h: 26 },
     ],
     spots: [],
-    posts: [{ x: 240, y: 1300 }, { x: 520, y: 1120 }, { x: 380, y: 860 }, { x: 220, y: 620 }, { x: 400, y: 350 }],
+    posts: [{ x: 240, y: 1300 }, { x: 520, y: 1120 }, { x: 380, y: 860 }, { x: 220, y: 620 }, { x: 400, y: 390 }],
   },
-  // The Tick-Tock Attic: under the rafters, among the trunks and the dust sheets.
+  // The Tick-Tock Attic: under the rafters, among the trunks and the dust sheets. Its back wall is
+  // the gable end, taller than a room's, with the shelf of clocks along it.
   attic: {
-    kind: 'place', view: 760, w: 760, h: 1640, wall: 200, people: 1,
+    kind: 'place', view: 760, w: 760, h: 1640, wall: 350, people: 1,
     door: { x: 380, y: 1610 }, start: { x: 380, y: 1500 },
     blocks: [
-      { id: 'trunk', x: 30, y: 1400, w: 84, h: 50 }, { id: 'sheet', x: 646, y: 1080, w: 84, h: 50 }, { id: 'boxes', x: 30, y: 860, w: 84, h: 50 },
-      { id: 'trunk2', x: 646, y: 620, w: 84, h: 50 }, { id: 'sheet2', x: 30, y: 400, w: 84, h: 50 },
+      { id: 'trunk', x: 30, y: 1400, w: 76, h: 30 }, { id: 'dummy', x: 112, y: 1430, w: 34, h: 22 },
+      { id: 'toys', x: 650, y: 1440, w: 76, h: 30 },
+      { id: 'sheet', x: 656, y: 1080, w: 70, h: 28 }, { id: 'cage', x: 614, y: 1108, w: 36, h: 22 },
+      { id: 'boxes', x: 30, y: 860, w: 60, h: 28 }, { id: 'rug', x: 94, y: 884, w: 60, h: 26 },
+      { id: 'cases', x: 656, y: 620, w: 68, h: 28 }, { id: 'mirror', x: 608, y: 646, w: 44, h: 24 },
+      { id: 'horse', x: 34, y: 470, w: 78, h: 28 }, { id: 'gramophone', x: 116, y: 496, w: 50, h: 24 },
+      { id: 'boxes2', x: 60, y: 356, w: 60, h: 28 }, { id: 'trunk2', x: 630, y: 354, w: 76, h: 30 },
     ],
     spots: [],
-    posts: [{ x: 520, y: 1300 }, { x: 250, y: 1100 }, { x: 500, y: 860 }, { x: 250, y: 640 }, { x: 380, y: 360 }],
+    posts: [{ x: 520, y: 1300 }, { x: 250, y: 1100 }, { x: 500, y: 860 }, { x: 250, y: 680 }, { x: 380, y: 440 }],
   },
   // The Roaring Dark: the cupboard under the stairs. `dim`: you see only as far as your own lantern.
   dark: {
     kind: 'place', view: 760, w: 760, h: 1640, wall: 200, people: 1, dim: true,
     door: { x: 380, y: 1610 }, start: { x: 380, y: 1500 },
     blocks: [
-      { id: 'boxes', x: 646, y: 1400, w: 84, h: 50 }, { id: 'bucket', x: 30, y: 1080, w: 84, h: 50 }, { id: 'crates', x: 646, y: 860, w: 84, h: 50 },
-      { id: 'boxes2', x: 30, y: 640, w: 84, h: 50 }, { id: 'bucket2', x: 646, y: 420, w: 84, h: 50 },
+      { id: 'shoes', x: 654, y: 1400, w: 70, h: 28 }, { id: 'umbrellas', x: 612, y: 1426, w: 38, h: 22 },
+      { id: 'cables', x: 30, y: 1440, w: 70, h: 26 },
+      { id: 'ladder', x: 34, y: 1080, w: 56, h: 24 }, { id: 'paint', x: 94, y: 1104, w: 52, h: 24 },
+      { id: 'toolbox', x: 660, y: 860, w: 64, h: 24 }, { id: 'reel', x: 604, y: 884, w: 52, h: 24 },
+      { id: 'papers', x: 30, y: 640, w: 58, h: 24 }, { id: 'board', x: 92, y: 664, w: 28, h: 20 },
+      { id: 'shoeboxes', x: 680, y: 420, w: 46, h: 24 }, { id: 'broom', x: 626, y: 444, w: 52, h: 24 },
+      { id: 'paint2', x: 36, y: 404, w: 52, h: 24 }, { id: 'cables2', x: 92, y: 430, w: 70, h: 26 },
     ],
     spots: [],
     posts: [{ x: 260, y: 1290 }, { x: 520, y: 1090 }, { x: 260, y: 880 }, { x: 520, y: 660 }, { x: 380, y: 380 }],

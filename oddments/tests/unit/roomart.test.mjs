@@ -1,9 +1,10 @@
 // The insides of buildings. Nothing here can look at a picture, but it can
-// make sure that every painting a room needs is in the game, that everything
-// feet are kept out of has something standing on it to see, that a thing is
-// about as wide as the floor the rules give it, and that every room paints
-// from start to finish on a stand-in canvas, with its paintings and before
-// they arrive, asking for nothing an iPhone on iOS 15 lacks.
+// make sure that every room you can walk into has its paintings, that every
+// painting a room needs is in the game, that everything feet are kept out of
+// has something standing on it to see, that a thing is about as wide as the
+// floor the rules give it, and that every room paints from start to finish
+// on a stand-in canvas, with its paintings and before they arrive, asking
+// for nothing an iPhone on iOS 15 lacks.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, statSync, readdirSync } from 'node:fs';
@@ -49,20 +50,25 @@ const count = (pen, name) => pen.calls.filter((call) => call === name).length;
 const arrivedArt = (id, room) => Object.fromEntries([['maribel', { complete: true, naturalWidth: 200, naturalHeight: 300 }], ...roomArt(id, room).map(([name]) => [name, { complete: true, naturalWidth: 300, naturalHeight: 280, name }])]);
 const comingArt = (id, room) => Object.fromEntries([['maribel', { complete: false, naturalWidth: 0, naturalHeight: 0 }], ...roomArt(id, room).map(([name]) => [name, { complete: false, naturalWidth: 0, naturalHeight: 0 }])]);
 
-test('every painting a painted room needs is in the game, and nothing is in the folder that no room uses', () => {
-  assert.ok(painted('home') && painted('pantry'), 'home and the Midnight Pantry are painted');
-  assert.equal(painted('garden'), false);
+test('every room you can walk into is painted; every painting it needs is in the game, and nothing is in the folder that no room uses', () => {
+  for (const id of INSIDE_IDS) assert.ok(painted(id), `${id} is painted`);
+  assert.equal(INSIDE_IDS.length, 7);
+  assert.equal(painted('garden'), false, 'the garden is a corner of the lane, not a room');
   assert.equal(painted('constructor'), false);
   assert.equal(new Set(ROOM_ART).size, ROOM_ART.length);
   for (const src of ROOM_ART) {
     assert.ok(existsSync(`${WEB}${src}`), `${src} is there`);
     assert.ok(statSync(`${WEB}${src}`).size > 2500, `${src} is a real picture`);
   }
-  for (const id of INSIDE_IDS.filter(painted)) {
+  const used = new Set();
+  for (const id of INSIDE_IDS) {
     const needs = roomArt(id, INSIDES[id]);
     for (const part of ['wall', 'floor', 'mat']) assert.ok(needs.some(([name, src]) => name === `${id}_${part}` && src === roomSrc(`${id}_${part}`)), `${id} has a ${part}`);
-    for (const [, src] of needs) assert.ok(ROOM_ART.includes(src), `${src} is fetched before the game shows`);
+    for (const [, src] of needs) { assert.ok(ROOM_ART.includes(src), `${src} is fetched before the game shows`); used.add(src); }
   }
+  // Each room's sheet was twelve things: with its wall and floor, fourteen pictures, and every one of them is used in its room.
+  assert.equal(ROOM_ART.length, 7 * 14);
+  assert.deepEqual(ROOM_ART.filter((src) => !used.has(src)), [], 'no picture is fetched that its room does not show');
   const folder = readdirSync(`${WEB}assets/rooms`).map((file) => `assets/rooms/${file}`);
   assert.deepEqual(folder.filter((file) => !ROOM_ART.includes(file)), [], 'no picture ships that nothing shows');
 });
@@ -80,8 +86,7 @@ test('everything feet are kept out of can be seen: each block of every floor has
       const pen = standIn();
       thing.paint(pen, art, 1.5);
       assert.equal(pen.depth, 0, `${id} ${thing.id}: every save has its restore`);
-      if (!painted(id)) continue;
-      // A painted thing is one picture, standing centred on its block, a little wider than the floor it takes: never a wall of air.
+      // A thing is one picture, standing centred on its block, a little wider than the floor it takes: never a wall of air.
       assert.equal(pen.drawn.length, 1, `${id} ${thing.id} is one painting`);
       const [image, x, , wide] = pen.drawn[0];
       assert.equal(image.name, `${id}_${thing.id.replace(/\d+$/, '')}`);
@@ -106,8 +111,7 @@ test('every room paints from start to finish, with its paintings and before they
     paintRoom(early, id, room, comingArt(id, room));
     assert.equal(count(early, 'drawImage'), 0, `${id}: nothing is drawn from a painting that has not arrived`);
     assert.ok(count(early, 'fillRect') >= 2, `${id}: but there is a floor and a wall to stand in`);
-    if (!painted(id)) continue;
-    // A painted room: its wall across the whole width (once, or as a pair), its floor repeated to cover it, its mat at the door.
+    // Its wall across the whole width (once, or as a pair), its floor repeated to cover it, its mat at the door.
     const wall = pen.drawn.filter(([image]) => image.name === `${id}_wall`);
     assert.ok(wall.length === 1 || wall.length === 2, `${id}: the wall is one painting or a pair`);
     for (const [, , y, wide, tall] of wall) { assert.equal(y, 0); assert.equal(tall, room.wall); assert.ok(Math.abs(wide * wall.length - room.w) <= 1); }
