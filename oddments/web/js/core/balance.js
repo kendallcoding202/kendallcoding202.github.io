@@ -336,6 +336,12 @@ export const HEIRLOOM = {
 // Heirloom. `weight` is how likely each is beside the place's own kinds, which weigh 1 to 3.
 export const VISITORS = { kinds: START_TEAM.map(([id]) => id), weight: 0.4 };
 
+// A place that has been calmed stays calm: its five groups and its ringleader do not come back.
+// What you find there instead is a few wanderers: this many small groups (at least, at most),
+// strolling about some of its stops, different each time you come back from a rest. Nobody has
+// to be met; they are there for the friends still to be made, and for Heirlooms.
+export const WANDERERS = { groups: [1, 3] };
+
 // ---------------------------------------------------------------- the house-sitter
 //
 // The human makes one Call a round. `every`: 1 = any round, 2 = every other.

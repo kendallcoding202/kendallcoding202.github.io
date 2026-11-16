@@ -9,7 +9,7 @@ import { unitOf } from '../core/battle.js';
 import { h, sprite, setText, wait } from './dom.js';
 import { modal } from './modals.js';
 import { elementTag, moveLine, oddmentCard } from './parts.js';
-import { lineFor, toGo } from './text.js';
+import { lineFor, toGo, howItGoes } from './text.js';
 import { howToFight, EDGE_WORDS } from './howto.js';
 import { play as sound } from '../platform/sound.js'; // (this screen has a `play` of its own: playing back the fight)
 
@@ -62,7 +62,7 @@ export function fightScreen(ctx) {
   const arena = h('div', { class: `arena${foes.some((unit) => unit.boss) ? ' bossfight' : ''}` },
     h('img', { class: 'bg', src: `assets/bg/${room.bg}.webp`, alt: '' }),
     h('div', { class: 'topline' },
-      h('div', { class: 'roundpill' }, roundEl, h('span', null, `${spot.name} · ${visit.stop} of ${room.path.length} calmed`)),
+      h('div', { class: 'roundpill' }, roundEl, h('span', null, visit.stroll ? `${spot.name} · calm` : `${spot.name} · ${howItGoes(visit, room)}`)),
       h('button', { class: 'iconbtn menu', 'aria-label': 'Menu', data: { act: 'menu' }, onclick: openMenu }, '⋯')),
     units, floaters);
   const orderEl = h('div', { class: 'order' });

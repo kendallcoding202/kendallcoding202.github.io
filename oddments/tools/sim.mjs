@@ -28,6 +28,7 @@ export function playVisit(game, style, roomId = ROOMS[0].id) {
   while (game.place() === 'path') {
     const stop = game.state.visit.stop;
     const battle = game.startEncounter();
+    if (!battle) break; // a stroll through a calm place, with every wanderer met
     const heirloom = battle.units.some((unit) => unit.side === 'foe' && unit.heirloom);
     playOut(battle, STYLES[style](game.state));
     const allies = battle.units.filter((unit) => unit.side === 'ally');
@@ -102,9 +103,12 @@ export function simulate({ players = 400, visits = 4, style = 'friendly', room: 
   let done = new Array(players).fill(false);
   const byVisit = [];
   for (let v = 0; v < visits; v++) {
+    // Once a place is calm it stays calm, and a later visit to it is a stroll. So "this visit" is
+    // asked only of the players who had not calmed it yet (null if nobody had not).
+    const trying = all.filter((_, i) => !done[i]);
     done = done.map((d, i) => d || all[i].visits[v].cleared);
     byVisit.push({
-      visit: v + 1, clearedThisVisit: mean(all.map((p) => (p.visits[v].cleared ? 1 : 0))), clearedByNow: mean(done.map((d) => (d ? 1 : 0))),
+      visit: v + 1, clearedThisVisit: trying.length ? mean(trying.map((p) => (p.visits[v].cleared ? 1 : 0))) : null, clearedByNow: mean(done.map((d) => (d ? 1 : 0))),
       level: mean(all.map((p) => p.visits[v].level)), friends: mean(all.map((p) => p.visits[v].friends)),
       minutes: mean(all.map((p) => p.visits[v].fights.reduce((sum, f) => sum + f.seconds, 0))) / 60,
     });
@@ -138,9 +142,9 @@ export function report(result) {
   lines.push('* boss');
   lines.push('');
   lines.push('How hard the place is');
-  lines.push('visit   cleared this visit   cleared by now   top level   friends   minutes played');
+  lines.push('visit   of those still trying   calmed by now   top level   friends   minutes played');
   for (const v of result.byVisit) {
-    lines.push(`${String(v.visit).padStart(3)}     ${pc(v.clearedThisVisit).padStart(8)}             ${pc(v.clearedByNow).padStart(6)}          ${v.level.toFixed(1).padStart(4)}       ${v.friends.toFixed(1).padStart(4)}      ${v.minutes.toFixed(1).padStart(5)}`);
+    lines.push(`${String(v.visit).padStart(3)}     ${(v.clearedThisVisit === null ? '   -' : pc(v.clearedThisVisit)).padStart(8)}             ${pc(v.clearedByNow).padStart(6)}          ${v.level.toFixed(1).padStart(4)}       ${v.friends.toFixed(1).padStart(4)}      ${v.minutes.toFixed(1).padStart(5)}`);
   }
   const worst = result.firstLoss.indexOf(Math.max(...result.firstLoss));
   lines.push('');

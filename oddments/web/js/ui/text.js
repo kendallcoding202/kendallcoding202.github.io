@@ -34,6 +34,16 @@ export function lineFor(event, name, kind = null) {
   }
 }
 
+/**
+ * How a visit is going, in a few words, for a heading: how many of a restless place's groups are
+ * calmed; or, on a stroll through a calm one, how many are wandering about.
+ */
+export function howItGoes(visit, room) {
+  if (!visit.stroll) return `${visit.stop} of ${room.path.length} calmed`;
+  const about = visit.groups.filter((group) => !group.done).length;
+  return about ? `calm · ${about} wandering` : 'calm';
+}
+
 /** How far a Clutterkin that was not ready still is from coming with you: said once it has had its say. */
 export const toGo = (huff) => `${huff} more pip${huff === 1 ? '' : 's'} to go.`;
 

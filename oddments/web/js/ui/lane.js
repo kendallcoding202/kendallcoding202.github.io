@@ -10,6 +10,7 @@ import { ROOMS, SPECIES, ELEMENTS, roomOf, roomBuilt } from '../core/balance.js'
 import { WORLD, POST, SPOTS, TREES, LAMPS, HEDGES, ROAD_POINTS, GREEN, DISTRICTS, PEOPLE, spotOf, personAt, districtAt } from '../core/world.js';
 import { CAST } from '../core/story.js';
 import { h, sprite, spriteSrc } from './dom.js';
+import { howItGoes } from './text.js';
 import { elementTag, bar } from './parts.js';
 import { modal, toast, modalOpen } from './modals.js';
 import { converse } from './talk.js';
@@ -265,8 +266,9 @@ export function laneScreen(ctx) {
     const visit = state.visit && state.visit.room === room.id ? state.visit : null;
     const key = `${room.id}|${index}`;
     if (!visit) {
-      // Not calling here, you only see that something is in there. Just cleared and still inside, nothing is.
-      if (!state.visit && game.district() === room.id) { shown.set(key, { what: 'none', since: -1 }); return; }
+      // Not calling here, you only see that something is in there. Just cleared and still inside, nothing is;
+      // and a place that is calm has nobody keeping to cover at all (whoever wanders there is seen when you walk in).
+      if (state.rooms[room.id].clears > 0 || (!state.visit && game.district() === room.id)) { shown.set(key, { what: 'none', since: -1 }); return; }
       const big = spot.boss ? 1.5 : 1;
       const size = pop(key, 'bush');
       const sway = Math.sin(clock * 2.2 + index * 2) * 2.5;
@@ -446,7 +448,7 @@ export function laneScreen(ctx) {
     goalChip.dataset.goal = goal.id;
     // The heading says where you are, and how a visit is going.
     title.textContent = inside ? roomOf(inside).name : LANE;
-    sub.textContent = visit ? `${visit.stop} of ${roomOf(visit.room).path.length} calmed` : '';
+    sub.textContent = visit ? howItGoes(visit, roomOf(visit.room)) : '';
     card.hidden = !who && !id && !visit;
     card.dataset.spot = id || '';
     card.dataset.person = who || '';
@@ -472,7 +474,7 @@ export function laneScreen(ctx) {
     if (id === 'home') {
       const inside = (kind) => h('button', { class: `btn ${kind}`, data: { act: 'inside' }, onclick: () => goIn('home') }, 'Go inside');
       if (visit) {
-        card.replaceChildren(h('h2', null, HOME.name), h('small', null, 'Rest here and everyone gets their breath back. Whoever you calmed out there will be restless again by the time you go back.'), teamList(),
+        card.replaceChildren(h('h2', null, HOME.name), h('small', null, `Rest here and everyone gets their breath back. ${visit.stroll ? 'Others will have wandered in by the time you go back.' : 'Whoever you calmed out there will be restless again by the time you go back.'}`), teamList(),
           h('div', { class: 'cardrow' },
             h('button', { class: 'btn gold', data: { act: 'rest' }, onclick: () => { if (game.rest()) { ctx.save(); play('rest'); toast('Everyone is rested.', { kind: 'good' }); cardFor = undefined; } } }, 'Rest'),
             inside('plain')));
@@ -491,7 +493,8 @@ export function laneScreen(ctx) {
       card.replaceChildren(
         h('h2', null, place.name, ' ', elementTag(place.element)),
         h('small', null, place.blurb, ' ', built
-          ? `${place.path.length} groups to calm, the last a boss${bossId && state.book[bossId].met ? ` (${SPECIES[bossId].name})` : ''}. Mostly ${ELEMENTS[place.element].name}.${record.visits ? ` Most calmed in one go: ${record.best} of ${place.path.length}.` : ''}${record.clears ? ' Calm now: Heirlooms come out more often here.' : ''}`
+          ? (record.clears ? `Calm now, and it will stay calm. A few are always wandering about in there, different each time you have rested: Heirlooms come out more often among them. Mostly ${ELEMENTS[place.element].name}.`
+            : `${place.path.length} groups to calm, the last a boss${bossId && state.book[bossId].met ? ` (${SPECIES[bossId].name})` : ''}. Mostly ${ELEMENTS[place.element].name}.${record.visits ? ` Most calmed in one go: ${record.best} of ${place.path.length}.` : ''}`)
           : `Not built yet: this slice ends at ${LAST_BUILT.name}.`),
         // A place you walk into by its door has a button for it (or says why not just now); one you
         // walk into across the grass says so.
@@ -509,7 +512,7 @@ export function laneScreen(ctx) {
     // Out on a visit and not at a door: how everyone is, and how far you have got.
     const room = roomOf(visit.room);
     card.replaceChildren(
-      h('div', { class: 'cardhead' }, h('h2', null, room.name, ' ', h('small', null, `${visit.stop} of ${room.path.length} calmed`)), h('small', { class: 'resthint' }, inside && inside !== visit.room ? 'Rest at home before calling here' : 'Rest at home')),
+      h('div', { class: 'cardhead' }, h('h2', null, room.name, ' ', h('small', null, howItGoes(visit, room))), h('small', { class: 'resthint' }, inside && inside !== visit.room ? 'Rest at home before calling here' : 'Rest at home')),
       teamList());
   }
 

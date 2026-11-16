@@ -77,7 +77,7 @@ const INES = {
     pantry: [
       'The pantry, quiet? I thought I could smell toast. That thing has been popping all night for a fortnight.',
       'Three places of eight. The Wash is next, and that I cannot get you into yet: this is as far as the lane is built.',
-      'So walk the garden, the alley and the pantry again. They are restless every time you rest, and there are kinds in all three you have not met.',
+      'So walk the garden, the alley and the pantry again. A calm place stays calm, but a few are always wandering about in it, and there are kinds in all three you have not met.',
     ],
   },
   heard: (place) => `${place} is calm. Good. That is one more off Mr. Spick's list.`,
@@ -203,7 +203,7 @@ export function goalOf(state) {
     return goal('calm', about.title, about.detail, { room: next.id, count: [Math.min(stops, state.rooms[next.id].best), stops] });
   }
   return goal('more', next ? `${next.name} is next` : 'The lane is quiet',
-    next ? 'It is not built yet: this is as far as the slice goes. The places you have calmed are restless again whenever you have rested, with more friends to make, and Heirlooms come out more often where it is calm.' : 'Every place on the lane is calm. Mr. Spick has nothing to collect.',
+    next ? 'It is not built yet: this is as far as the slice goes. The places you have calmed stay calm, with a few always wandering about in them: more friends to make, and Heirlooms come out more often among them.' : 'Every place on the lane is calm. Mr. Spick has nothing to collect.',
     { count: [placesCalm(state), ROOMS.length] });
 }
 

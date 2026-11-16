@@ -1,10 +1,10 @@
 // Rooms: who is restless at each stop of a place, and a visit from stepping in to resting at home.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rollEncounter, fairEncounter, poolOf, placeCalm, canMeet, nextGroup, roomOpen, enterRoom, leaveRoom, afterFight, heldBy, maxHpOf, teamOf } from '../../web/js/core/rooms.js';
+import { rollEncounter, fairEncounter, poolOf, placeCalm, canMeet, nextGroup, roomOpen, enterRoom, leaveRoom, afterFight, heldBy, maxHpOf, teamOf, someone, stillAbout } from '../../web/js/core/rooms.js';
 import { BARRICADE, districtOf } from '../../web/js/core/world.js';
 import { newState } from '../../web/js/core/state.js';
-import { ROOMS, SPECIES, BREATHER, TEAM_SIZE, VISITORS, START_TEAM, statAt } from '../../web/js/core/balance.js';
+import { ROOMS, SPECIES, BREATHER, TEAM_SIZE, VISITORS, WANDERERS, START_TEAM, statAt } from '../../web/js/core/balance.js';
 
 const GARDEN = ROOMS[0];
 
@@ -74,15 +74,22 @@ test('ground is held by a barricade while a place is shut, by cover while you ar
   state.visit = null;
   state.rooms.garden.clears = 1;
   assert.deepEqual(heldBy(state, garden.posts[0]), alley.posts);
-  assert.deepEqual(heldBy(state, { x: 1180, y: 1454 }), [...garden.posts, ...alley.posts]);
-  // One visit at a time: while you are calling on one place, the other keeps to its cover, even if you walk in.
+  // A calm place stays calm: nobody is back in its bushes, from wherever you look.
+  assert.deepEqual(heldBy(state, { x: 1180, y: 1454 }), alley.posts);
+  // One visit at a time: strolling in the calm garden, the alley keeps to its cover, even if you walk in.
+  enterRoom(state, 'garden');
+  const strolling = garden.posts.filter((_, i) => !state.visit.groups[i].done);
+  assert.ok(strolling.length >= 1 && strolling.length <= 3);
+  assert.deepEqual(heldBy(state, alley.posts[2]), [...strolling, ...alley.posts]);
+  // Calling on the alley, its groups hold their ground, and the calm garden holds none.
+  state.visit = null;
   enterRoom(state, 'alley');
-  assert.deepEqual(heldBy(state, garden.posts[0]), [...garden.posts, ...alley.posts]);
+  assert.deepEqual(heldBy(state, garden.posts[0]), alley.posts);
   // And the answer is for wherever is asked about, which need not be where the save says you stand.
   state.visit = null;
   state.where = { ...alley.posts[2] };
-  assert.deepEqual(heldBy(state), garden.posts);
-  assert.deepEqual(heldBy(state, null), [...garden.posts, ...alley.posts]);
+  assert.deepEqual(heldBy(state), [], 'standing in the alley with no visit on, nothing is held there; nor in the calm garden');
+  assert.deepEqual(heldBy(state, null), alley.posts);
 });
 
 test('once a place is calm, kinds like your first three come calling there: never before, never beside its ringleader', () => {
@@ -114,26 +121,78 @@ test('once a place is calm, kinds like your first three come calling there: neve
   assert.equal(fairEncounter(GARDEN, 4, [{ species: 'dustbunny', level: 3, heirloom: false }, { species: 'boss_hydra', level: 5, heirloom: false }, { species: 'dandepuff', level: 3, heirloom: false }]), false, 'not beside the boss');
 });
 
-test('stepping into a place you have calmed rolls it as calm; a seed throws the same dice either way', () => {
+test('a place you have calmed stays calm: stepping in is a stroll, with a few wanderers and no ringleader', () => {
   assert.equal(placeCalm(newState(1e12, 1), 'garden'), false);
   for (const odd of ['nowhere', 'constructor', null]) assert.equal(placeCalm(newState(1e12, 1), odd), false);
+  assert.deepEqual(WANDERERS.groups, [1, 3]);
+  const garden = ROOMS[0];
   let visitors = 0;
-  for (let seed = 1; seed <= 60; seed++) {
+  const counts = new Set();
+  const stops = new Set();
+  for (let seed = 1; seed <= 200; seed++) {
     const first = newState(1e12, seed);
+    enterRoom(first, 'garden');
+    assert.equal(first.visit.stroll, false);
+    assert.ok(first.visit.groups.every((group) => someone(group) && !group.done), 'restless, every stop has its group');
+    for (const group of first.visit.groups) for (const foe of group.foes) assert.equal(VISITORS.kinds.includes(foe.species), false);
+
     const again = newState(1e12, seed);
     again.rooms.garden.clears = 1;
     assert.equal(placeCalm(again, 'garden'), true);
-    enterRoom(first, 'garden');
     enterRoom(again, 'garden');
-    assert.equal(first.rng, again.rng, 'the same number of dice thrown');
-    first.visit.groups.forEach((group, stop) => {
-      assert.equal(group.foes.length, again.visit.groups[stop].foes.length, 'the same numbers of them');
-      assert.deepEqual(group.foes.map((foe) => foe.level), again.visit.groups[stop].foes.map((foe) => foe.level), 'at the same levels');
-      for (const foe of group.foes) assert.equal(VISITORS.kinds.includes(foe.species), false);
+    const visit = again.visit;
+    assert.equal(visit.stroll, true);
+    assert.equal(visit.stop, 0);
+    assert.equal(visit.groups.length, garden.path.length, 'a place for every stop still, most of them with nobody at them');
+    const about = visit.groups.filter((group) => !group.done);
+    assert.equal(stillAbout(visit), about.length);
+    assert.ok(about.length >= 1 && about.length <= 3);
+    counts.add(about.length);
+    assert.deepEqual(visit.groups[garden.path.length - 1], { foes: [], done: true }, 'no ringleader');
+    visit.groups.forEach((group, stop) => {
+      if (group.done) { assert.deepEqual(group, { foes: [], done: true }); assert.equal(someone(group), false); return; }
+      stops.add(stop);
+      assert.ok(fairEncounter(garden, stop, group.foes), 'a wanderer is a fair roll for the stop it is at');
+      assert.ok(group.foes.every((foe) => !SPECIES[foe.species].boss));
     });
-    visitors += again.visit.groups.flatMap((group) => group.foes).filter((foe) => VISITORS.kinds.includes(foe.species)).length;
+    visitors += about.flatMap((group) => group.foes).filter((foe) => VISITORS.kinds.includes(foe.species)).length;
+    assert.equal(again.rooms.garden.clears, 1);
+    // The same seed strolls the same stroll.
+    const twin = newState(1e12, seed);
+    twin.rooms.garden.clears = 1;
+    enterRoom(twin, 'garden');
+    assert.deepEqual(twin.visit, visit);
   }
-  assert.ok(visitors >= 20, `${visitors} visitors in 60 calm gardens`);
+  assert.deepEqual([...counts].sort(), [1, 2, 3], 'one, two or three groups of them');
+  assert.deepEqual([...stops].sort(), [0, 1, 2, 3], 'at any stop but the ringleader\'s');
+  assert.ok(visitors >= 20, `${visitors} visitors among the wanderers of 200 calm gardens`);
+});
+
+test('a stroll is counted in wanderers calmed, cannot calm the place again, and ends when you rest', () => {
+  const state = newState(1e12, 4);
+  state.rooms.garden.clears = 1;
+  state.rooms.garden.best = 5;
+  enterRoom(state, 'garden');
+  const garden = ROOMS[0];
+  const about = state.visit.groups.map((group, stop) => (group.done ? -1 : stop)).filter((stop) => stop >= 0);
+  assert.equal(canMeet(state.visit, garden, 4), false, 'there is no ringleader to meet');
+  assert.equal(nextGroup(state.visit, garden), about[0]);
+  about.forEach((stop, i) => {
+    assert.equal(canMeet(state.visit, garden, stop), true);
+    const left = Object.fromEntries(Object.keys(state.visit.hp).map((id) => [id, 5]));
+    assert.deepEqual(afterFight(state, stop, true, left), { cleared: false, home: false });
+    assert.equal(state.visit.stop, i + 1);
+  });
+  assert.equal(nextGroup(state.visit, garden), -1, 'everyone met: nobody about until you have rested');
+  assert.equal(stillAbout(state.visit), 0);
+  assert.deepEqual([state.rooms.garden.clears, state.rooms.garden.best], [1, 5], 'the record of calming it stands as it was');
+  assert.equal(leaveRoom(state), true);
+  assert.equal(enterRoom(state, 'garden'), true);
+  assert.ok(stillAbout(state.visit) >= 1, 'and after a rest, others have wandered in');
+  // A loss on a stroll is a loss like any other: carried home.
+  const stop = state.visit.groups.findIndex((group) => !group.done);
+  assert.deepEqual(afterFight(state, stop, false, {}), { cleared: false, home: true });
+  assert.equal(state.visit, null);
 });
 
 test('you step in rested, with every group already waiting, and cannot step in twice', () => {

@@ -144,8 +144,8 @@ function resultDialog(ctx, summary, foes) {
   if (summary.cleared) {
     const next = ROOMS[ROOMS.indexOf(room) + 1];
     lines.push(h('p', { class: 'big' }, `${room.name} is calm!`), h('p', null, next && roomBuilt(next)
-      ? `Everyone is rested, and the way on is open: ${next.name} is next. Ines Tock will want to hear. (Step out of the gate and back in and ${room.name} is restless again, with more friends to make.)`
-      : `Everyone is rested. That is as far as the lane is built: ${next ? `${next.name} comes next, and is not there yet` : 'every place is calm'}. (Step out of the gate and back in and ${room.name} is restless again, with more friends to make.)`));
+      ? `Everyone is rested, and the way on is open: ${next.name} is next. Ines Tock will want to hear. (${room.name} will stay calm now. A few will always be wandering about in it: go back for the friends still to make.)`
+      : `Everyone is rested. That is as far as the lane is built: ${next ? `${next.name} comes next, and is not there yet` : 'every place is calm'}. (${room.name} will stay calm now. A few will always be wandering about in it: go back for the friends still to make.)`));
   }
   else if (summary.won) lines.push(h('p', null, 'They are calm now. Everyone catches their breath.'));
   else lines.push(h('p', null, 'Your friends are worn out. You carry them home for a rest: you keep everything they learned.'));

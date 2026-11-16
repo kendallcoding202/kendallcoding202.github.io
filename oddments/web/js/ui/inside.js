@@ -8,6 +8,7 @@ import { insideOf } from '../core/indoors.js';
 import { CAST } from '../core/story.js';
 import { h, sprite, spriteSrc } from './dom.js';
 import { bar } from './parts.js';
+import { howItGoes } from './text.js';
 import { toast, modalOpen } from './modals.js';
 import { converse } from './talk.js';
 import { play } from '../platform/sound.js';
@@ -265,7 +266,7 @@ export function insideScreen(ctx) {
     goalText.textContent = goal.count ? `${goal.title} (${goal.count[0]} of ${goal.count[1]})` : goal.title;
     goalChip.dataset.goal = goal.id;
     const mine = visit && visit.room === id;
-    sub.textContent = mine ? `${visit.stop} of ${place.path.length} calmed` : place ? (state.rooms[id].clears > 0 ? 'calm' : '') : '';
+    sub.textContent = mine ? howItGoes(visit, place) : place ? (state.rooms[id].clears > 0 ? 'calm' : '') : '';
     card.hidden = !spot && !mine;
     card.dataset.thing = spot ? spot.id : '';
     card.dataset.visit = mine ? visit.room : '';
@@ -276,13 +277,13 @@ export function insideScreen(ctx) {
       const words = SPOTS[spot.does];
       const resting = spot.does === 'rest';
       card.replaceChildren(...[h('h2', null, words.name),
-        h('small', null, resting && !visit ? 'Everyone is rested. Come back when they are worn out.' : resting ? `${words.about} Whoever you calmed out there will be restless again by the time you go back.` : words.about),
+        h('small', null, resting && !visit ? 'Everyone is rested. Come back when they are worn out.' : resting ? `${words.about} ${visit.stroll ? 'Others will have wandered in by the time you go back.' : 'Whoever you calmed out there will be restless again by the time you go back.'}` : words.about),
         resting && visit ? teamList() : null,
         h('button', { class: `btn ${resting && !visit ? 'plain' : 'gold'}`, disabled: resting && !visit, data: { act: spot.does }, onclick: () => act(spot) }, words.label)].filter(Boolean));
       return;
     }
     card.replaceChildren(
-      h('div', { class: 'cardhead' }, h('h2', null, place.name, ' ', h('small', null, `${visit.stop} of ${place.path.length} calmed`)), h('small', { class: 'resthint' }, 'Rest at home')),
+      h('div', { class: 'cardhead' }, h('h2', null, place.name, ' ', h('small', null, howItGoes(visit, place))), h('small', { class: 'resthint' }, 'Rest at home')),
       teamList());
   }
 

@@ -1,10 +1,10 @@
 // The save file: its shape, a fresh one, and repair of old or damaged ones.
 import {
   SAVE_VERSION, SPECIES, SPECIES_IDS, START_TEAM, ROOM_IDS, TEAM_SIZE, ROSTER_MAX, MAX_LEVEL, NAME_LENGTH, DEFAULT_NAME,
-  LOOK_IDS, lookOf, xpNeeded, roomOf, roomBuilt,
+  LOOK_IDS, lookOf, xpNeeded, roomOf, roomBuilt, WANDERERS,
 } from './balance.js';
 import { newFriend } from './progress.js';
-import { roomOpen, maxHpOf, rollEncounter, fairEncounter, heldBy, heldIn, placeCalm } from './rooms.js';
+import { roomOpen, maxHpOf, rollEncounter, fairEncounter, heldBy, heldIn, placeCalm, someone } from './rooms.js';
 import { own } from './util.js';
 import { settleWhere, spotNear } from './world.js';
 import { insideOf, settleIn } from './indoors.js';
@@ -93,14 +93,28 @@ function reviveVisit(raw, state) {
   }
   // Nobody on their feet is not a visit: they are at home.
   if (!Object.values(visit.hp).some((left) => left > 0)) return null;
+  const kept = (foes) => foes.map((foe) => ({ species: foe.species, level: foe.level, heirloom: foe.heirloom }));
+  // A calm place stays calm, whatever the save says of it: this is a stroll. Wanderers are kept
+  // where they are a fair roll for their stop, as many as there can be and no more, and never at
+  // its ringleader's. Nobody is rolled afresh: a stroll with nobody left is still a stroll.
+  visit.stroll = placeCalm(state, room.id);
+  if (visit.stroll) {
+    let about = 0;
+    visit.groups = room.path.map((_, stop) => {
+      const saved = isObj(raw.groups[stop]) ? raw.groups[stop] : {};
+      if (stop === room.path.length - 1 || about >= WANDERERS.groups[1] || !fairEncounter(room, stop, saved.foes)) return { foes: [], done: true };
+      about++;
+      return { foes: kept(saved.foes), done: saved.done === true };
+    });
+    visit.stop = visit.groups.filter((group) => group.done && someone(group)).length;
+    return visit;
+  }
   // Each group is kept only if it is a fair roll for its stop; otherwise it is rolled again. The
   // boss cannot have been calmed already (that ends the visit), nor before everyone else.
   visit.groups = room.path.map((_, stop) => {
     const saved = isObj(raw.groups[stop]) ? raw.groups[stop] : {};
     return {
-      foes: fairEncounter(room, stop, saved.foes)
-        ? saved.foes.map((foe) => ({ species: foe.species, level: foe.level, heirloom: foe.heirloom }))
-        : rollEncounter(state, room, stop, placeCalm(state, room.id)),
+      foes: fairEncounter(room, stop, saved.foes) ? kept(saved.foes) : rollEncounter(state, room, stop, false),
       done: saved.done === true && stop < room.path.length - 1,
     };
   });

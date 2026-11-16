@@ -15,6 +15,8 @@ export function playable(state, now = Date.now()) {
     for (const friend of game.state.friends) if (!SPECIES[friend.species].name) return false;
     game.teamHealth();
     for (let fights = 0; fights < 2; fights++) {
+      // Out on a visit with nobody left to meet (a stroll through a calm place, every wanderer met): home for a rest first.
+      if (game.place() === 'path' && game.nextGroup() < 0) game.goHome();
       if (game.place() === 'lane' && !game.travelTo(ROOMS[0].id)) return false;
       if (!game.startEncounter()) return false;
       if (game.battle.phase === 'fight' && !game.choices()) return false;

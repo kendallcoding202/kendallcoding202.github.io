@@ -188,7 +188,7 @@ test('every group in the alley can really be fought, in order, by a team that ha
   assert.deepEqual(cleared.stops, [0, 1, 2, 3, 4]);
   assert.equal(cleared.game.state.book.boss_baron.met, true);
   assert.equal(cleared.game.district(), 'alley');
-  assert.deepEqual(cleared.game.held(), POSTS, 'calm, the alley holds nothing; the garden is restless again');
+  assert.deepEqual(cleared.game.held(), [], 'calm, the alley holds nothing; and the garden, calm before it, has stayed calm');
 });
 
 test('one visit at a time: while you are calling on one place, the other keeps to its cover', () => {
@@ -380,13 +380,29 @@ test('a whole room can be played from the gate to the boss, and clearing it is r
   assert.equal(game.district(), 'garden');
   assert.deepEqual(game.held(), ALLEY.posts, 'nothing in the garden; and the alley\'s barricade is down');
   for (const member of game.teamHealth()) assert.equal(member.hp, member.max);
-  // Step out of the gate and they are back in their bushes; step in again and it is a new visit.
+  // Step out of the gate and it stays calm: nobody goes back into the bushes. Step in again and
+  // it is a stroll: a few wanderers at some of its stops, and no ringleader.
   walkTo(game, spotOf('garden').door);
-  assert.deepEqual(game.held(), [...POSTS, ...ALLEY.posts]);
+  assert.deepEqual(game.held(), ALLEY.posts);
   assert.equal(game.place(), 'lane');
   walkTo(game, JUST_IN);
   assert.equal(game.place(), 'path');
   assert.equal(game.state.rooms.garden.visits, 2);
+  const stroll = game.state.visit;
+  assert.equal(stroll.stroll, true);
+  const about = stroll.groups.filter((group) => !group.done);
+  assert.ok(about.length >= 1 && about.length <= 3, `${about.length} groups wandering`);
+  assert.deepEqual(stroll.groups[4], { foes: [], done: true }, 'the ringleader does not come back');
+  assert.ok(about.every((group) => group.foes.length >= 1 && group.foes.every((foe) => !SPECIES[foe.species].boss)));
+  assert.equal(game.held().filter((point) => !point.r && POSTS.includes(point)).length, about.length, 'only the wanderers hold ground');
+  // Meet them all and the garden is empty until you have rested; its record stands.
+  while (game.nextGroup() >= 0) { playOut(game.startEncounter(), {}); assert.equal(game.finishBattle().cleared, false); if (game.place() !== 'path') break; }
+  if (game.place() === 'path') {
+    assert.equal(game.startEncounter(), null, 'nobody left to meet');
+    assert.equal(game.state.visit.stop, about.length);
+  }
+  assert.equal(game.state.rooms.garden.clears, 1, 'calming it is counted once');
+  assert.equal(game.state.rooms.garden.best, 5);
 });
 
 test('with fx off no events are kept; with fx on the fight tells its story', () => {
