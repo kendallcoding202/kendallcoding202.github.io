@@ -16,7 +16,10 @@ import { converse } from './talk.js';
 import { FONT, oval, paint, glow, label, worldSrc, paintGround, paintBuilding, paintProp, paintLamp, paintGate, wallOf } from './scenery.js';
 
 // How much of the world fits across the screen. People and Clutterkin are small in a big place.
+// On a wider screen (a folding phone, open) you see more of the world, not the same view blown up:
+// past ZOOM_MOST screen points to a unit, extra width goes to showing more.
 const VIEW = 760;
+const ZOOM_MOST = 0.66;
 const HOME = { name: 'Home', blurb: 'Great-aunt Maribel\'s house, where you are staying.' };
 const GAP = 60; // how far apart the team walks behind you: a little more than any of them is tall
 const LANE = 'The Lane';
@@ -141,8 +144,8 @@ export function laneScreen(ctx) {
     const dpr = Math.min(2.5, window.devicePixelRatio || 1);
     canvas.width = Math.max(1, Math.round(box.width * dpr));
     canvas.height = Math.max(1, Math.round(box.height * dpr));
-    cam.k = box.width / VIEW; // screen pixels to a unit
-    cam.w = VIEW;
+    cam.w = Math.max(VIEW, box.width / ZOOM_MOST);
+    cam.k = box.width / cam.w; // screen pixels to a unit
     cam.h = box.height / cam.k;
     cam.dpr = dpr;
     cam.set = false;

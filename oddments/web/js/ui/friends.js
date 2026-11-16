@@ -1,6 +1,6 @@
 // The screens at home: your friends and team, the scrapbook, and settings.
 import { BUILD } from '../platform/build.js';
-import { SPECIES, SPECIES_IDS, ELEMENTS, ELEMENT_IDS, TEAM_SIZE, LOOKS, NAME_LENGTH, VERSION, TITLE, HEIRLOOM, xpNeeded, MAX_LEVEL } from '../core/balance.js';
+import { SPECIES, SPECIES_IDS, ELEMENTS, ELEMENT_IDS, TEAM_SIZE, LOOKS, NAME_LENGTH, VERSION, TITLE, HEIRLOOM, ROOMS, roomBuilt, xpNeeded, MAX_LEVEL } from '../core/balance.js';
 import { h, sprite } from './dom.js';
 import { modal, toast } from './modals.js';
 import { elementTag, heirloomTag, bar, oddmentCard } from './parts.js';
@@ -104,7 +104,7 @@ export function settingsScreen(ctx) {
       h('small', null, `Fights ${stats.battles} · won ${stats.wins} · friends made ${stats.befriended} · Heirlooms ${stats.heirlooms}`)),
     h('div', { class: 'card' },
       h('p', null, 'No ads, no tracking, no accounts, no purchases. This game never uses the network: your save lives on this device only.'),
-      h('small', { data: { build: BUILD } }, `${TITLE} ${VERSION}${BUILD === 'dev' ? '' : `, build ${BUILD}`}. A playable slice: one place of eight.`)),
+      h('small', { data: { build: BUILD } }, `${TITLE} ${VERSION}${BUILD === 'dev' ? '' : `, build ${BUILD}`}. A playable slice: ${ROOMS.filter(roomBuilt).length} places of ${ROOMS.length}.`)),
     h('button', {
       class: 'btn danger', data: { act: 'reset' },
       onclick: () => modal({

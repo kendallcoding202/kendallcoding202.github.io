@@ -680,7 +680,12 @@ check(s.friends.length === 3 && !s.started && s.rooms.garden.clears === 0, 'eras
 
 // =============================================================== other phones
 section('Other screen sizes');
-for (const [name, viewport] of [['small phone (320x568)', { width: 320, height: 568 }], ['iPhone SE (375x667)', { width: 375, height: 667 }], ['large phone (430x932)', { width: 430, height: 932 }]]) {
+// (iPhone Duo's point sizes are not published by Apple; these assume three pixels to a point on the outer screen and
+// the size one developer measured the inner one drawing at. The game does not depend on the exact numbers.)
+for (const [name, viewport] of [
+  ['small phone (320x568)', { width: 320, height: 568 }], ['iPhone SE (375x667)', { width: 375, height: 667 }], ['large phone (430x932)', { width: 430, height: 932 }],
+  ['folding phone, closed (466x678)', { width: 466, height: 678 }], ['folding phone, open (669x951)', { width: 669, height: 951 }],
+]) {
   const other = await newPage(viewport);
   await other.goto(`${base}?debug&fast&reset&seed=7`);
   await ready(other);
@@ -707,6 +712,69 @@ for (const [name, viewport] of [['small phone (320x568)', { width: 320, height: 
   await snap(other, `e2e-size-${viewport.width}`);
   await other.context().close();
 }
+
+// =============================================================== a folding phone
+section('A folding phone, opened and closed in the middle of things');
+const CLOSED = { width: 466, height: 678 };
+const OPEN = { width: 669, height: 951 };
+const fold = await newPage(CLOSED);
+await fold.goto(`${base}?debug&fast&reset&seed=7`);
+await ready(fold);
+await begin(fold);
+await fold.waitForTimeout(300);
+const fills = (p) => S(p, () => {
+  const app = document.querySelector('#app').getBoundingClientRect();
+  const canvas = document.querySelector('.lanecanvas');
+  const box = canvas ? canvas.getBoundingClientRect() : app;
+  return Math.abs(app.width - innerWidth) < 1 && Math.abs(box.width - innerWidth) < 1 && document.documentElement.scrollWidth <= innerWidth;
+});
+const fightFits = (p) => S(p, () => {
+  const inside = (el) => { const r = el.getBoundingClientRect(); return r.left >= -0.5 && r.right <= innerWidth + 0.5 && r.bottom <= innerHeight + 0.5 && r.top >= -0.5; };
+  return document.documentElement.scrollWidth <= innerWidth && [...document.querySelectorAll('.move, .call, .unit, .order')].every(inside);
+});
+const shut = await view(fold);
+const stoodAt = await where(fold);
+check(await fills(fold), 'closed, the game fills the screen from edge to edge');
+await fold.setViewportSize(OPEN);
+await fold.waitForTimeout(500);
+const wide = await view(fold);
+check(await fills(fold), 'opened, it fills the bigger screen too: no bars down the sides');
+check(wide.w > shut.w + 150 && wide.h > shut.h, `and shows more of the world, not the same view blown up (${Math.round(shut.w)} units across, then ${Math.round(wide.w)})`);
+const still = await where(fold);
+check(still.x === stoodAt.x && still.y === stoodAt.y && still.near === 'home', 'you are standing where you were');
+check(wide.x < still.x && still.x < wide.x + wide.w && wide.y < still.y && still.y < wide.y + wide.h, 'and still in view');
+await fold.waitForTimeout(200);
+await snap(fold, 'e2e-fold-open');
+check(await walkUpTo(fold, 'ines'), 'walking works as before on the open screen');
+// Into a fight, then close the phone half way through it.
+await enterGarden(fold);
+await onward(fold);
+await idle(fold);
+await fold.waitForTimeout(500);
+check(await fightFits(fold), 'a fight fits the open screen');
+check(await S(fold, () => getComputedStyle(document.querySelector('.moves')).gridTemplateColumns.split(' ').length === 2 && getComputedStyle(document.querySelector('.move .long')).display !== 'none'), 'with the moves two to a row and all their words');
+await snap(fold, 'e2e-fold-fight-open');
+check(await botTurn(fold, {}), 'a move can be made');
+await idle(fold);
+const midFight = await battle(fold);
+await fold.setViewportSize(CLOSED);
+await fold.waitForTimeout(500);
+check(await fightFits(fold), 'closed in the middle of the fight, everything still fits');
+const afterFold = await battle(fold);
+check(afterFold.round === midFight.round && JSON.stringify(afterFold.units.map((u) => u.hp)) === JSON.stringify(midFight.units.map((u) => u.hp)), 'and the fight is exactly where it was');
+await snap(fold, 'e2e-fold-fight-closed');
+await botFight(fold, {});
+await fold.click('[data-id="next"]');
+await fold.waitForTimeout(300);
+await fold.setViewportSize(OPEN);
+await fold.waitForTimeout(500);
+check((await screen(fold)) === 'lane' && await fills(fold), 'opened again afterwards, you are back in the world and it fills the screen');
+await tab(fold, 'book');
+check(await S(fold, () => getComputedStyle(document.querySelector('.grid')).gridTemplateColumns.split(' ').length === 4), 'the scrapbook has four to a row on the open screen');
+await fold.setViewportSize(CLOSED);
+await fold.waitForTimeout(300);
+check(await S(fold, () => getComputedStyle(document.querySelector('.grid')).gridTemplateColumns.split(' ').length === 3), 'and three closed');
+await fold.context().close();
 
 // =============================================================== the page keeps to itself
 section('Nothing leaves the device');

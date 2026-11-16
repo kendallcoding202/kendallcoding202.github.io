@@ -24,6 +24,8 @@
   --radius: 14px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
   --el-spark: #ffc83d;
   --el-fluff: #c9b8e8;
   --el-suds: #4fc4cf;
@@ -80,8 +82,12 @@ small { color: var(--muted); font-size: 12px; }
 #rescue .btn { min-width: 220px; }
 
 /* ------------------------------------------------------------ frame */
+/* The game fills a phone from edge to edge, whatever its shape: a tall one, or a folding one open
+   to a screen half as wide again. Only on something much wider (a tablet, a desktop window) does it
+   stop growing and sit in the middle. It keeps clear of anything the phone puts down its sides. */
 #app {
-  position: relative; height: 100%; max-width: 500px; margin: 0 auto; display: flex; flex-direction: column;
+  position: relative; height: 100%; max-width: 760px; margin: 0 auto; display: flex; flex-direction: column;
+  padding-left: var(--safe-left); padding-right: var(--safe-right);
   background: var(--bg); box-shadow: 0 0 60px rgba(0,0,0,.6);
 }
 #screen { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; }
@@ -201,7 +207,7 @@ small { color: var(--muted); font-size: 12px; }
 .bar-top.over .where { display: block; margin-top: -2px; font-weight: 600; color: var(--ink); opacity: .82; }
 .lanehint { position: absolute; left: 50%; bottom: 176px; z-index: 2; transform: translateX(-50%); padding: 6px 14px; border-radius: 14px; white-space: nowrap; font-weight: 600; background: rgba(13,10,28,.8); border: 1.5px solid rgba(255,255,255,.18); pointer-events: none; animation: pulse-hint 1.2s infinite alternate; }
 @keyframes pulse-hint { to { opacity: .6; } }
-.placecard { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 2; display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 18px; background: rgba(33,27,64,.96); border: 1.5px solid var(--line); box-shadow: 0 10px 30px rgba(0,0,0,.5); animation: rise-card .22s cubic-bezier(.2,.8,.3,1); }
+.placecard { position: absolute; left: 10px; right: 10px; bottom: 10px; max-width: 520px; margin: 0 auto; z-index: 2; display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 18px; background: rgba(33,27,64,.96); border: 1.5px solid var(--line); box-shadow: 0 10px 30px rgba(0,0,0,.5); animation: rise-card .22s cubic-bezier(.2,.8,.3,1); }
 .placecard h2 { font-size: 19px; }
 .placecard h2 small { font-weight: 600; }
 .placecard > small { font-size: 12.5px; line-height: 1.3; }
@@ -388,6 +394,8 @@ small { color: var(--muted); font-size: 12px; }
 .calls .set > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; flex: 1; }
 .call { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 42px; padding: 0 4px; border-radius: 10px; background: #1b2b4d; border: 2px solid var(--blue); }
 .call b { font-size: 13px; } .call small { font-size: 10px; }
+/* On a wide screen the moves go two to a row and keep all their words. */
+@media (min-width: 600px) { .moves { grid-template-columns: 1fr 1fr; } }
 /* On a short screen the moves go two to a row and say less. */
 @media (max-height: 740px) {
   #fight .panel { gap: 6px; padding-top: 6px; }
@@ -418,6 +426,8 @@ small { color: var(--muted); font-size: 12px; }
 .page .bar-top { padding-left: 0; padding-right: 0; }
 .page h3 { font-size: 14px; color: var(--muted); font-weight: 600; margin-top: 4px; }
 .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+/* On a wide screen (a folding phone, open) there is room for more to a row. */
+@media (min-width: 600px) { .grid { grid-template-columns: repeat(4, 1fr); } }
 .friend, .page-tile { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 6px; border-radius: var(--radius); background: var(--card); border: 2px solid transparent; min-width: 0; }
 .friend img, .page-tile img { height: 64px; width: 100%; object-fit: contain; }
 .friend b, .page-tile b { font-size: 13px; text-align: center; line-height: 1.1; }
