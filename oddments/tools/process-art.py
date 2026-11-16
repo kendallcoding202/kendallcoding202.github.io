@@ -222,6 +222,12 @@ def main():
         kind = kind_of(name)
         im = Image.open(os.path.join(RAW, fname))
         im.load()
+        if name.startswith("app_"):
+            # The app's own art (its icon) is not part of the game's pictures: tools/ios-art.py uses it. Only archived here.
+            if fname.endswith(".png"):
+                im.convert("RGB").save(os.path.join(RAW, name + ".webp"), "WEBP", lossless=True, method=6)
+                os.remove(os.path.join(RAW, fname))
+            continue
         if name.startswith(("world_", "alley_")) or name.endswith("_turn") or name == "cast_sheet":
             written = (process_world(name, im, os.path.join(OUT, "world")) if name.startswith(("world_", "alley_"))
                        else process_people(name, im, os.path.join(OUT, "sprites")))

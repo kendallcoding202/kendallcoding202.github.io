@@ -99,6 +99,21 @@ export const ART = [
       'a round leafy tree with a short trunk; an old iron street lamp post with a glowing yellow lantern; a round clipped green hedge bush. ' +
       WORLD_STYLE,
   },
+  // ---- the app's icon: what the game is about, in one picture ----
+  // (Painted from the first house-sitter look, so it is the same person. tools/ios-art.py sizes it for the app.)
+  {
+    id: 'app_icon', kind: 'icon', ref: 'sitter_a', size: '1024x1024', quality: 'medium', transparent: false,
+    prompt:
+      'An app icon for a mobile game: a square illustration that fills the whole image from edge to edge. ' +
+      'The character from the reference picture, a young woman house-sitter with warm brown skin and curly dark hair in a messy bun held by a pencil, ' +
+      'in an oversized mustard-yellow knitted cardigan over teal pyjamas, shown from the waist up, smiling warmly, holding up a small glowing brass lantern in one hand. ' +
+      'Snuggled against her other arm is a small round fluffy grey dust bunny creature with long tattered grey ears that are pink inside, a brown button stuck in its fur, ' +
+      'its eyes closed in a happy, contented smile. They are friends. Warm golden lantern light on both of them. ' +
+      'Background: deep night purple, darker toward the corners, a soft warm glow behind them and a few tiny fireflies. ' +
+      'Big simple shapes that read clearly at a very small size, centred. ' +
+      'The same drawing style as the reference: clean 2D mobile game art, bold dark outline, flat cel shading with soft highlights, vibrant saturated colours. ' +
+      'No text, no letters, no border, no frame, no rounded corners.',
+  },
   // ---- Tin Can Alley: the things that stand in it, on one sheet ----
   // (tools/process-art.py cuts the sheet into its twelve sprites, in this order.)
   {
