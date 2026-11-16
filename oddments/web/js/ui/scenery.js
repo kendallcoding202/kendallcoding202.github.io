@@ -252,7 +252,7 @@ function drifts(pen, next, x0, y0, x1, y1, count, colours) {
  */
 export function paintGround(pen, world, art) {
   const { w, h } = world;
-  turf(pen, art.grass, -400, -400, w + 400, h + 700, 'rgba(14,16,44,.42)');
+  turf(pen, art.grass, -400, -640, w + 400, h + 700, 'rgba(14,16,44,.42)');
   drifts(pen, run(5), 40, 40, w - 40, h - 40, 90, ['#fff0c8', '#a8dcff']);
 
   // The green below home: a lighter sweep of grass

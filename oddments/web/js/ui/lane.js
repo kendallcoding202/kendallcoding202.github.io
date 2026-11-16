@@ -25,6 +25,8 @@ const MOST_DOTS = 2.4e6; // the most pixels the world is ever drawn with: about 
 const HOME = { name: 'Home', blurb: 'Great-aunt Maribel\'s house, where you are staying.' };
 const GAP = 60; // how far apart the team walks behind you: a little more than any of them is tall
 const LANE = 'The Lane';
+const HEAD = 62; // how far down the screen the heading reaches at the very least, in screen points
+const HEADROOM = 52; // how far above the top edge of the world whoever stands right against it reaches, in the world's units
 
 const images = {};
 // Everything painted so far, kept between visits to this screen (coming back from a fight should not
@@ -100,7 +102,7 @@ export function laneScreen(ctx) {
   let spring = 0; // 0 standing still, 1 walking: eased, so a step never snaps
   let cardFor; // what the card is showing (undefined: not drawn yet)
   let everything = false; // true while painting the whole world once, before the first frame
-  const cam = { x: 0, y: 0, k: 1, w: VIEW, h: VIEW, dpr: 1, set: false };
+  const cam = { x: 0, y: 0, k: 1, w: VIEW, h: VIEW, dpr: 1, top: HEAD, set: false };
   // Where you have just been, newest first, for the friends walking behind you.
   const start = here();
   const trail = Array.from({ length: 12 }, (_, i) => ({ x: start.x - i * 16, y: start.y + i * 2.5 }));
@@ -161,6 +163,11 @@ export function laneScreen(ctx) {
     cam.h = box.height / cam.k;
     cam.dpr = dpr;
     cam.set = false;
+    // How far down the screen the heading and the goal reach. They sit below a phone's status bar
+    // (its clock, its camera), so this differs from phone to phone: measured, not assumed. The top of
+    // the world must be able to come out from under all of it.
+    const chip = goalChip.getBoundingClientRect();
+    cam.top = chip.height ? Math.max(HEAD, chip.bottom - box.top + 12) : HEAD;
     // At a new size everything is painted afresh; at the same size what was painted before still serves.
     const size = `${canvas.width}x${canvas.height}@${dpr}`;
     if (painted.size !== size) { painted.size = size; kept.clear(); }
@@ -168,7 +175,7 @@ export function laneScreen(ctx) {
 
   // How far past the top and bottom of the world the view may travel, so they can scroll out from
   // under the title and the card. With no card up, the bottom has nothing to get out from under.
-  const over = () => ({ top: 62 / cam.k, bottom: 168 / cam.k });
+  const over = () => ({ top: cam.top / cam.k, bottom: 168 / cam.k });
   const pastFoot = () => (card.hidden ? 44 : 168) / cam.k;
   const within = (lo, hi, v) => (hi < lo ? (lo + hi) / 2 : Math.max(lo, Math.min(hi, v)));
 
@@ -176,7 +183,7 @@ export function laneScreen(ctx) {
     const { top, bottom } = over();
     const at = here();
     const wantX = within(0, WORLD.w + EAST - cam.w, at.x - cam.w / 2);
-    const wantY = within(-top, WORLD.h - cam.h + pastFoot(), at.y - top - (cam.h - top - bottom) * 0.56);
+    const wantY = within(-top - HEADROOM, WORLD.h - cam.h + pastFoot(), at.y - top - (cam.h - top - bottom) * 0.56);
     const ease = cam.set ? 1 - Math.exp(-dt * 6.5) : 1;
     cam.x += (wantX - cam.x) * ease;
     cam.y += (wantY - cam.y) * ease;
@@ -195,8 +202,8 @@ export function laneScreen(ctx) {
     // The whole ground is one picture; only the part in view is copied to the screen. On a big
     // screen it is kept a little soft rather than let it grow past what a phone will hold.
     const { top, bottom } = over();
-    const y0 = -top - 20;
-    const tall = WORLD.h + top + bottom + 40;
+    const y0 = -top - HEADROOM - 20;
+    const tall = WORLD.h + top + HEADROOM + bottom + 40;
     const wide = WORLD.w + EAST;
     const sharp = Math.min(1, 1.7 / (cam.k * cam.dpr), Math.sqrt(9e6 / (wide * tall)) / (cam.k * cam.dpr));
     const full = bake('ground', 0, y0, wide, tall, (brush) => paintGround(brush, GROUND, groundArt()), sharp);
