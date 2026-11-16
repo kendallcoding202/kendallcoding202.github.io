@@ -51,7 +51,7 @@ GitHub → this repository → Settings → Secrets and variables → Actions �
 
 GitHub → Actions → **Clutterkin iOS** → Run workflow → tick **Upload to TestFlight** → Run.
 
-- A first job checks the secrets against Apple in a few seconds and says in plain words what is wrong if anything is.
+- A first job checks the secrets against Apple in a few seconds and says in plain words what is wrong if anything is. The one thing it cannot check is that the key has Admin access (step 3): that only shows when Apple is asked to sign. To run just this check, tick "Only check the Apple credentials" instead.
 - The second archives the app, has Apple sign it, and uploads it. About ten minutes.
 - It finishes by making an internal tester group called "Team" that gets every build, and inviting the account holder (you), if nobody can test yet.
 

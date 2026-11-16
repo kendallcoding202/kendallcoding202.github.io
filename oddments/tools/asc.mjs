@@ -145,16 +145,12 @@ async function check(env) {
   if (apps.status !== 200) fail(`App Store Connect answered ${apps.status}. ${apps.detail}`);
   say('Apple accepted the key, key id and issuer id.');
 
-  // Apple signs an upload with a certificate it keeps itself, and will only do that for a key with
-  // Admin access; with any other, the upload stops at "Cloud signing permission error". There is no
-  // way to ask a key what access it has, so what it is allowed to read is printed here instead
-  // (200 allowed, 403 not). Nothing in these answers is secret. An earlier version of this check
-  // assumed only an Admin key could list users; an App Manager key can too, so that is not the test.
-  const seen = [];
-  for (const name of ['users', 'userInvitations', 'certificates', 'profiles', 'devices']) {
-    seen.push(`${name} ${(await get(`/v1/${name}?limit=1`, jwt)).status}`);
-  }
-  say(`What this key may read: ${seen.join(', ')}.`);
+  // One thing this check cannot see: whether the key has Admin access. Apple signs an upload with a
+  // certificate it keeps itself and only does so for an Admin key; with any other the upload stops at
+  // "Cloud signing permission error". An App Manager key was tried against everything a key can read
+  // here (users, invitations, certificates, profiles, devices) and was allowed all of it, exactly as
+  // an Admin key would be. So the only test is the upload itself.
+  say('Not checked here, because it cannot be: that the key has Admin access, which Apple needs to sign the upload.');
 
   const ids = await get(`/v1/bundleIds?filter[identifier]=${encodeURIComponent(bundleId)}&fields[bundleIds]=identifier,seedId&limit=50`, jwt);
   const registered = ids.data.find((b) => b.attributes?.identifier === bundleId);
