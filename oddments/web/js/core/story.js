@@ -67,7 +67,7 @@ const INES = {
     garden: [
       'The garden has gone quiet. I could hear it from here: that sprinkler has been hissing since Tuesday.',
       'That is one place of eight. Tin Can Alley is next: east along the street, past the launderette, and in at the foot of it. The bins had it barricaded all week. Word of a calm garden travels, and they have let it down.',
-      'It is a narrow place. They come at you one after another, and the Bandit Baron holds court at the far end. Most of them are Clank, and Crumb jams Clank: take the Toast Ghost.',
+      'It is a narrow place. They come at you one after another, and Baron Pilfer holds court at the far end. Most of them are Clank, and Crumb jams Clank: take your Crumbwisp.',
     ],
     alley: [
       'Tin Can Alley, quiet. I never thought I would hear the day. The Baron has held court in there since the bin men changed their round.',
@@ -88,10 +88,10 @@ const DOV = {
   tips: [
     'Tap one of them in a fight and it tells you its soft spot. Nobody ever taps them. I tap everything.',
     'Down the alley they come one at a time. There is no going round. I tried. I got pecked.',
-    'Crumb jams Clank. Take the Toast Ghost down Tin Can Alley and watch the tins dent.',
+    'Crumb jams Clank. Take your Crumbwisp down Tin Can Alley and watch the tins dent.',
     'Want an Heirloom? Go back where it is calm. They feel safe there and bring out their best colours. I saw three in the garden in one week. Three!',
     'If you hit the one you are making friends with, it gets in a Huff again. So pick one, and hit the others.',
-    'My nan says the Sprinkler was never turned off. Imagine being left on for a week. I would be cross too.',
+    'My nan says Old Summerlong was never turned off. Imagine being left on all summer. I would be cross too.',
     'You can only have one of each kind. If you calm a kind you have already got, it goes off happy and yours learns from it.',
   ],
 };
@@ -169,8 +169,8 @@ export function takeCall(state) {
 
 // How the goal of calming each place is put. (A place not listed here gets a plain line.)
 const CALMING = {
-  garden: { title: 'Calm the garden', detail: 'Calm everyone else there and the Sprinkler will face you. Rest at home whenever you need to.' },
-  alley: { title: 'Calm Tin Can Alley', detail: 'East along the street, past the launderette. A narrow place: they come one after another, and the Bandit Baron is at the far end. Crumb jams Clank.' },
+  garden: { title: 'Calm the garden', detail: 'Calm everyone else there and Old Summerlong, the sprinkler, will face you. Rest at home whenever you need to.' },
+  alley: { title: 'Calm Tin Can Alley', detail: 'East along the street, past the launderette. A narrow place: they come one after another, and Baron Pilfer is at the far end. Crumb jams Clank.' },
 };
 
 /**

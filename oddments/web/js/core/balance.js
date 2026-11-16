@@ -65,67 +65,67 @@ const boost = (name, element, stat, by, turns, aim, wait, desc) => ({ name, elem
 const sap = (name, element, stat, by, turns, aim, wait, desc) => ({ name, element, kind: 'sap', aim, sap: { stat, by, turns }, wait, desc });
 
 export const MOVES = {
-  // Dust Bunny
+  // Hopmote
   lintflurry: hit('Lint Flurry', 'fluff', 1.0, 0, 'A puff of lint in the face.'),
   underbed: hit('Under-the-Bed Pounce', 'fluff', 1.7, 2, 'Out of the dark, all at once.'),
   kickupdust: sweep('Kick Up Dust', 'fluff', 0.65, 3, 'Everyone on the other side gets a lungful.'),
-  // Sock Eel
+  // Eelastic
   wringout: hit('Wring Out', 'suds', 1.0, 0, 'A cold, wet squeeze.'),
   oddsocksnap: hit('Odd-Sock Snap', 'suds', 1.65, 2, 'Stretches right back and lets go.'),
   soakthrough: hit('Soak Through', 'suds', 0.7, 3, 'Sodden things take hits badly: lowers Grit.', { sap: { stat: 'grit', by: 0.3, turns: 2 } }),
-  // Toast Ghost
+  // Crumbwisp
   crumbtoss: hit('Crumb Toss', 'crumb', 1.0, 0, 'A handful of very dry crumbs.'),
   butterup: mend('Butter Up', 'crumb', 0.3, 'ally', 2, 'A warm pat of butter mends a friend.'),
   burntoffering: sweep('Burnt Offering', 'crumb', 0.7, 3, 'Smoke gets in everyone\'s eyes.'),
-  // Dandepuff
+  // Wishclock
   puffscatter: hit('Puff Scatter', 'sprout', 1.0, 0, 'A sneeze of seeds.'),
   takeroot: mend('Take Root', 'sprout', 0.25, 'self', 3, 'Digs in and drinks.'),
   seedstorm: sweep('Seed Storm', 'sprout', 0.65, 3, 'The whole clock blows at once.'),
-  // Thornhog
+  // Pricklebud
   brambleshove: hit('Bramble Shove', 'sprout', 1.0, 0, 'Shoulder first, thorns out.'),
   bristleup: boost('Bristle Up', 'sprout', 'grit', 0.4, 3, 'self', 3, 'Every thorn stands on end: raises Grit.'),
   rosebudjab: hit('Rosebud Jab', 'sprout', 1.7, 2, 'Pretty, then painful.'),
-  // Grumblebee
+  // Grumbuzz
   needlework: hit('Needlework', 'sprout', 1.0, 0, 'Small, neat, sharp stitches.'),
   beeline: hit('Beeline', 'sprout', 1.6, 2, 'The shortest way to a sore spot.'),
   grumble: sap('Grumble', 'sprout', 'oomph', 0.2, 2, 'foes', 3, 'A drone that takes the fight out of everyone: lowers Oomph.'),
-  // Snailor
+  // Shellfarer
   saltspray: hit('Salt Spray', 'suds', 1.0, 0, 'It stings, and it knows it.'),
   battendown: boost('Batten Down', 'suds', 'grit', 0.5, 3, 'self', 3, 'Hatches shut: raises Grit.'),
   slowtide: sweep('Slow Tide', 'suds', 0.7, 3, 'Comes in gently and soaks everyone.'),
-  // Grumpy Gnome
+  // Gnomudgeon
   rodwhack: hit('Rod Whack', 'clank', 1.0, 0, 'Not what a fishing rod is for.'),
   hookandyank: hit('Hook and Yank', 'clank', 1.1, 2, 'Trips its catch: lowers Pep.', { sap: { stat: 'pep', by: 0.3, turns: 2 } }),
   lawnorder: hit('Lawn Order', 'clank', 1.8, 3, 'Keep off the grass.'),
-  // Cap Beetle
+  // Crimpet
   pincerpop: hit('Pincer Pop', 'clank', 1.0, 0, 'Opens things. You are a thing.'),
   capclamp: hit('Cap Clamp', 'clank', 0.8, 2, 'Holds on and squeezes: lowers Oomph.', { sap: { stat: 'oomph', by: 0.25, turns: 2 } }),
   shakenfizz: hit('Shaken Fizz', 'clank', 1.8, 3, 'Somebody shook the bottle.'),
-  // Sparkplug
+  // Strayglow
   staticsnap: hit('Static Snap', 'spark', 1.0, 0, 'A crack off the carpet.'),
   shortcircuit: hit('Short Circuit', 'spark', 1.6, 2, 'The quick way through.'),
   tripthefuse: sweep('Trip the Fuse', 'spark', 0.65, 3, 'Lights out for everybody.'),
-  // Ratscal
+  // Snaffle
   forkjab: hit('Fork Jab', 'crumb', 1.0, 0, 'Bent, but it still has four points.'),
   binraid: hit('Bin Raid', 'crumb', 1.6, 2, 'Whatever was in there, it is on you now.'),
   scrapsforall: mend('Scraps for All', 'crumb', 0.15, 'allies', 4, 'Shares the haul: mends its whole side a little.'),
-  // Can Crab
+  // Hermitin
   tinnip: hit('Tin Nip', 'clank', 1.0, 0, 'A claw, from somewhere inside the tin.'),
   liddown: boost('Pull the Lid Down', 'clank', 'grit', 0.5, 3, 'self', 3, 'Back inside, lid shut: raises Grit.'),
   canopener: hit('Can Opener', 'clank', 1.2, 3, 'Finds the seam and works at it: lowers Grit.', { sap: { stat: 'grit', by: 0.3, turns: 2 } }),
-  // Sock Goblin
+  // Frayling
   buttonflick: hit('Button Flick', 'fluff', 1.0, 0, 'It has spares.'),
   pullathread: hit('Pull a Thread', 'fluff', 0.8, 2, 'Finds the loose end and keeps pulling: lowers Grit.', { sap: { stat: 'grit', by: 0.3, turns: 2 } }),
   darnit: hit('Darn It', 'fluff', 1.75, 3, 'A needle, and a very short temper.'),
-  // Coo-Thug
+  // Preenager
   peckingorder: hit('Pecking Order', 'crumb', 1.0, 0, 'You are at the bottom of it.'),
   shakedown: hit('Shakedown', 'crumb', 1.1, 2, 'Hand over the crumbs: lowers Oomph.', { sap: { stat: 'oomph', by: 0.25, turns: 2 } }),
   flocktogether: sweep('Flock Together', 'crumb', 0.65, 3, 'Suddenly there are forty of it.'),
-  // The Bandit Baron
+  // Baron Pilfer
   lidbash: hit('Lid Bash', 'clank', 1.0, 0, 'A dustbin lid, edge on.'),
   fishbonesweep: sweep('Fishbone Sweep', 'clank', 0.6, 2, 'The sceptre comes round, and so does the smell.'),
   standanddeliver: hit('Stand and Deliver', 'clank', 1.3, 3, 'Takes the fight out of you, and your lunch: lowers Oomph.', { sap: { stat: 'oomph', by: 0.25, turns: 2 } }),
-  // Sprinkler Hydra
+  // Old Summerlong
   nozzlejet: hit('Nozzle Jet', 'suds', 1.0, 0, 'One head, full pressure.'),
   fullsprinkle: sweep('Full Sprinkle', 'suds', 0.6, 2, 'Round and round and round.'),
   hosedown: hit('Hose Down', 'suds', 1.3, 3, 'Drenched and dragging: lowers Pep.', { sap: { stat: 'pep', by: 0.3, turns: 2 } }),
@@ -145,112 +145,112 @@ export const moveOf = (id) => (id === BRACE.id ? BRACE : MOVES[id]);
 // `notYet` is what it does when you Reach out and it is not ready to come.
 export const SPECIES = {
   dustbunny: {
-    name: 'Dust Bunny', element: 'fluff', hp: 44, oomph: 13, grit: 9, pep: 15, huff: 4,
+    name: 'Hopmote', element: 'fluff', hp: 44, oomph: 13, grit: 9, pep: 15, huff: 4,
     moves: [['lintflurry', 1], ['underbed', 3], ['kickupdust', 6]],
     blurb: 'Lives under the bed. Has always lived under the bed.',
     notYet: 'scoots back under something',
-    grown: { at: 12, name: 'Dust Jackalope' },
+    grown: { at: 12, name: 'Lintelope' },
   },
   sockeel: {
-    name: 'Sock Eel', element: 'suds', hp: 52, oomph: 12, grit: 11, pep: 10, huff: 4,
+    name: 'Eelastic', element: 'suds', hp: 52, oomph: 12, grit: 11, pep: 10, huff: 4,
     moves: [['wringout', 1], ['oddsocksnap', 3], ['soakthrough', 6]],
     blurb: 'Went into the wash as one of a pair.',
     notYet: 'ties itself in a knot',
-    grown: { at: 12, name: 'Stocking Serpent' },
+    grown: { at: 12, name: 'Toeviathan' },
   },
   toastghost: {
-    name: 'Toast Ghost', element: 'crumb', hp: 50, oomph: 10, grit: 12, pep: 8, huff: 4,
+    name: 'Crumbwisp', element: 'crumb', hp: 50, oomph: 10, grit: 12, pep: 8, huff: 4,
     moves: [['crumbtoss', 1], ['butterup', 3], ['burntoffering', 6]],
     fly: true,
     blurb: 'Somebody forgot it in the toaster. It has not forgotten.',
     notYet: 'pops back down out of sight',
-    grown: { at: 12, name: 'Toastie Phantom' },
+    grown: { at: 12, name: 'Crustwraith' },
   },
   dandepuff: {
-    name: 'Dandepuff', element: 'sprout', hp: 36, oomph: 10, grit: 8, pep: 12, huff: 3,
+    name: 'Wishclock', element: 'sprout', hp: 36, oomph: 10, grit: 8, pep: 12, huff: 3,
     moves: [['puffscatter', 1], ['takeroot', 3], ['seedstorm', 6]],
     blurb: 'One good sneeze from being a hundred of itself.',
     notYet: 'puffs up and turns its back',
-    grown: { at: 12, name: 'Dandemane' },
+    grown: { at: 12, name: 'Wishmane' },
   },
   thornhog: {
-    name: 'Thornhog', element: 'sprout', hp: 56, oomph: 10, grit: 13, pep: 6, huff: 5,
+    name: 'Pricklebud', element: 'sprout', hp: 56, oomph: 10, grit: 13, pep: 6, huff: 5,
     moves: [['brambleshove', 1], ['bristleup', 3], ['rosebudjab', 6]],
     blurb: 'Grew out of the rose bush nobody prunes.',
     notYet: 'bristles',
-    grown: { at: 12, name: 'Bramble Boar' },
+    grown: { at: 12, name: 'Briartusk' },
   },
   grumblebee: {
-    name: 'Grumblebee', element: 'sprout', hp: 38, oomph: 13, grit: 8, pep: 16, huff: 4,
+    name: 'Grumbuzz', element: 'sprout', hp: 38, oomph: 13, grit: 8, pep: 16, huff: 4,
     moves: [['needlework', 1], ['beeline', 3], ['grumble', 6]],
     fly: true,
     blurb: 'Furious about something. Will not say what.',
     notYet: 'buzzes a tight, cross circle',
-    grown: { at: 12, name: 'Rumblebee' },
+    grown: { at: 12, name: 'Rumblepatch' },
   },
   snailor: {
-    name: 'Snailor', element: 'suds', hp: 58, oomph: 9, grit: 14, pep: 4, huff: 5,
+    name: 'Shellfarer', element: 'suds', hp: 58, oomph: 9, grit: 14, pep: 4, huff: 5,
     moves: [['saltspray', 1], ['battendown', 3], ['slowtide', 6]],
     blurb: 'Sailed here from the water butt. It took a year.',
     notYet: 'pulls its head in',
-    grown: { at: 12, name: 'Snadmiral' },
+    grown: { at: 12, name: 'Seawhorl' },
   },
   gnome: {
-    name: 'Grumpy Gnome', element: 'clank', hp: 50, oomph: 12, grit: 11, pep: 9, huff: 5,
+    name: 'Gnomudgeon', element: 'clank', hp: 50, oomph: 12, grit: 11, pep: 9, huff: 5,
     moves: [['rodwhack', 1], ['hookandyank', 3], ['lawnorder', 6]],
     blurb: 'Chipped in 1987 and still not over it.',
     notYet: 'folds its arms',
     grown: { at: 12, name: 'Gnomarch' },
   },
   capbeetle: {
-    name: 'Cap Beetle', element: 'clank', hp: 46, oomph: 11, grit: 13, pep: 8, huff: 4,
+    name: 'Crimpet', element: 'clank', hp: 46, oomph: 11, grit: 13, pep: 8, huff: 4,
     moves: [['pincerpop', 1], ['capclamp', 3], ['shakenfizz', 6]],
     blurb: 'Wandered in from the alley wearing somebody\'s lemonade.',
     notYet: 'clacks its pincers at you',
-    grown: { at: 12, name: 'Corkscrew Stag' },
+    grown: { at: 12, name: 'Corkhorn' },
   },
   sparkplug: {
-    name: 'Sparkplug', element: 'spark', hp: 40, oomph: 13, grit: 9, pep: 14, huff: 4,
+    name: 'Strayglow', element: 'spark', hp: 40, oomph: 13, grit: 9, pep: 14, huff: 4,
     moves: [['staticsnap', 1], ['shortcircuit', 3], ['tripthefuse', 6]],
     blurb: 'Fell off the garden lights and kept the charge.',
     notYet: 'crackles and backs off',
-    grown: { at: 12, name: 'Surge Protector' },
+    grown: { at: 12, name: 'Floodglow' },
   },
   ratscal: {
-    name: 'Ratscal', element: 'crumb', hp: 42, oomph: 12, grit: 9, pep: 13, huff: 3,
+    name: 'Snaffle', element: 'crumb', hp: 42, oomph: 12, grit: 9, pep: 13, huff: 3,
     moves: [['forkjab', 1], ['binraid', 3], ['scrapsforall', 6]],
     blurb: 'Knows what is in every bin on the street.',
     notYet: 'hides its fork behind it',
-    grown: { at: 12, name: 'Ratscallion' },
+    grown: { at: 12, name: 'Snafflemore' },
   },
   cancrab: {
-    name: 'Can Crab', element: 'clank', hp: 54, oomph: 11, grit: 15, pep: 6, huff: 5,
+    name: 'Hermitin', element: 'clank', hp: 54, oomph: 11, grit: 15, pep: 6, huff: 5,
     moves: [['tinnip', 1], ['liddown', 3], ['canopener', 6]],
     blurb: 'Moved into a tin of tomatoes one winter and has not been out since.',
     notYet: 'pulls its lid down',
-    grown: { at: 12, name: 'Dustbin Lobster' },
+    grown: { at: 12, name: 'Clangster' },
   },
   sockgoblin: {
-    name: 'Sock Goblin', element: 'fluff', hp: 44, oomph: 14, grit: 9, pep: 14, huff: 4,
+    name: 'Frayling', element: 'fluff', hp: 44, oomph: 14, grit: 9, pep: 14, huff: 4,
     moves: [['buttonflick', 1], ['pullathread', 3], ['darnit', 6]],
     blurb: 'The other sock. It has been looking for you.',
     notYet: 'sticks out a woolly tongue',
-    grown: { at: 12, name: 'Jumper Troll' },
+    grown: { at: 12, name: 'Woolligan' },
   },
   coothug: {
-    name: 'Coo-Thug', element: 'crumb', hp: 46, oomph: 13, grit: 10, pep: 12, huff: 4,
+    name: 'Preenager', element: 'crumb', hp: 46, oomph: 13, grit: 10, pep: 12, huff: 4,
     moves: [['peckingorder', 1], ['shakedown', 3], ['flocktogether', 6]],
     blurb: 'A feather duster that fell in with a bad crowd.',
     notYet: 'ruffles up and struts off',
-    grown: { at: 12, name: 'Coo-Kingpin' },
+    grown: { at: 12, name: 'Kingpinion' },
   },
   boss_hydra: {
-    name: 'Sprinkler Hydra', element: 'suds', hp: 118, oomph: 11, grit: 12, pep: 9, huff: 0, boss: true, turns: 2,
+    name: 'Old Summerlong', element: 'suds', hp: 118, oomph: 11, grit: 12, pep: 9, huff: 0, boss: true, turns: 2,
     moves: [['nozzlejet', 1], ['fullsprinkle', 1], ['hosedown', 1]],
     blurb: 'Left on all summer. Three heads, one opinion.',
   },
   boss_baron: {
-    name: 'The Bandit Baron', element: 'clank', hp: 120, oomph: 12, grit: 13, pep: 10, huff: 0, boss: true, turns: 2,
+    name: 'Baron Pilfer', element: 'clank', hp: 120, oomph: 12, grit: 13, pep: 10, huff: 0, boss: true, turns: 2,
     moves: [['lidbash', 1], ['fishbonesweep', 1], ['standanddeliver', 1]],
     blurb: 'A fur stole somebody threw out. It crowned itself the same night.',
   },
