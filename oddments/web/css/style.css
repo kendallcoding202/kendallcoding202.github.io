@@ -191,6 +191,8 @@ small { color: var(--muted); font-size: 12px; }
 .moverow .at { display: inline; }
 .moverow.locked { opacity: .6; }
 
+/* A notice about something rare is gold. */
+.toast.gold { border-color: var(--gold); color: var(--gold); }
 #toasts { position: fixed; left: var(--safe-left); right: var(--safe-right); top: calc(var(--safe-top) + 10px); z-index: 30; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
 .toast { padding: 8px 16px; border-radius: 16px; background: var(--card-hi); border: 1.5px solid var(--line); font-weight: 600; box-shadow: 0 6px 20px rgba(0,0,0,.5); animation: pop .2s; transition: opacity .4s, transform .4s; }
 .toast.good { border-color: var(--good); } .toast.bad { border-color: var(--bad); }
@@ -442,7 +444,12 @@ small { color: var(--muted); font-size: 12px; }
 .page-tile.unmet { opacity: .8; }
 .page-tile:disabled { cursor: default; }
 .stamps { position: absolute; top: 4px; right: 5px; display: flex; gap: 3px; }
-.stamp { font-style: normal; font-size: 13px; } .stamp.pal { color: #ff7aa8; } .stamp.gold { color: var(--gold); }
+.stamp { font-style: normal; font-size: 13px; } .stamp.pal { color: #ff7aa8; } .stamp.gold { color: var(--gold); } .stamp.seen { color: var(--gold); opacity: .6; }
+/* The hunt for Heirlooms: how many are kept, how it works, and who is still out there. */
+.hunt { display: flex; flex-direction: column; gap: 8px; border: 1.5px solid rgba(255,200,61,.45); }
+.hunt p { margin: 0; font-size: 13.5px; line-height: 1.35; }
+.hunt small { line-height: 1.35; } .hunt small.gold { color: var(--gold); font-weight: 600; }
+.huntline { display: flex; align-items: center; gap: 12px; } .huntline b { color: var(--gold); font-size: 16px; } .huntline .bar { flex: 1; }
 .ring { display: flex; flex-direction: column; gap: 6px; }
 .card { padding: 12px; border-radius: var(--radius); background: var(--card); display: flex; flex-direction: column; gap: 6px; }
 .card.you { flex-direction: row; align-items: center; gap: 10px; }

@@ -461,7 +461,7 @@ export function laneScreen(ctx) {
       card.replaceChildren(
         h('h2', null, place.name, ' ', elementTag(place.element)),
         h('small', null, place.blurb, ' ', built
-          ? `${place.path.length} groups to calm, the last a boss${bossId && state.book[bossId].met ? ` (${SPECIES[bossId].name})` : ''}. Mostly ${ELEMENTS[place.element].name}.${record.visits ? ` Most calmed in one go: ${record.best} of ${place.path.length}.` : ''}`
+          ? `${place.path.length} groups to calm, the last a boss${bossId && state.book[bossId].met ? ` (${SPECIES[bossId].name})` : ''}. Mostly ${ELEMENTS[place.element].name}.${record.visits ? ` Most calmed in one go: ${record.best} of ${place.path.length}.` : ''}${record.clears ? ' Calm now: Heirlooms come out more often here.' : ''}`
           : `Not built yet: this slice ends at ${LAST_BUILT.name}.`),
         built && game.roomOpen(place.id)
           ? h('p', { class: 'cardnote', data: { act: 'enter' } }, !visit ? 'The gate is open. Walk on in.'
@@ -581,8 +581,11 @@ export function laneScreen(ctx) {
     if (!visiting && state.visit) {
       ctx.save();
       play('gate');
-      // If one of them is an Heirloom, you hear it glint before you have picked it out.
-      if (state.visit.groups.some((group) => group.foes.some((foe) => foe.heirloom))) setTimeout(() => play('heirloom'), 550);
+      // If one of them is an Heirloom, you hear it glint, and are told, before you have picked it out.
+      if (state.visit.groups.some((group) => group.foes.some((foe) => foe.heirloom))) {
+        setTimeout(() => play('heirloom'), 550);
+        toast('Something in here is glinting gold.', { kind: 'gold' });
+      }
     }
     spring += ((moving ? 1 : 0) - spring) * (1 - Math.exp(-dt * 12));
     // The team keeps its distance behind you along the way you came, and eases into place.

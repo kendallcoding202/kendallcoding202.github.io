@@ -57,8 +57,14 @@ test('tapping at random does not clear the room, but is never stuck: it gets str
   for (let v = 1; v < careless.byVisit.length; v++) assert.ok(careless.byVisit[v].level > careless.byVisit[v - 1].level);
 });
 
-test('an Heirloom is rare but real: seen in a few fights in a hundred', () => {
-  assert.ok(friendly.heirloomFightShare > 0.01 && friendly.heirloomFightShare < 0.09, String(friendly.heirloomFightShare));
+test('an Heirloom is rare but real: in a few fights in a hundred at first, and about three times that once the place is calm', () => {
+  const [first, ...later] = friendly.heirloomByVisit;
+  assert.ok(first > 0.01 && first < 0.08, `first visit: ${first}`);
+  // (By the second visit four players in five have calmed the garden; by the third, all of them.)
+  for (const share of later.slice(1)) assert.ok(share > first * 1.8 && share < 0.2, `once calm: ${share} against ${first}`);
+  assert.ok(friendly.heirloomFightShare > first && friendly.heirloomFightShare < 0.15, String(friendly.heirloomFightShare));
+  assert.ok(friendly.heirloomsKept > 0.8 && friendly.heirloomsKept < 4, `kept after four visits: ${friendly.heirloomsKept}`);
+  assert.equal(brawler.heirloomsKept, 0, 'and none for someone who never reaches out');
 });
 
 test('the report prints a line for every stop and every visit', () => {

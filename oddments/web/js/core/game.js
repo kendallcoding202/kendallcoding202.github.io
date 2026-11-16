@@ -4,7 +4,7 @@
 import { TEAM_SIZE, NAME_LENGTH, lookOf, roomOf } from './balance.js';
 import { createBattle, choices, act, concede } from './battle.js';
 import { settleUp } from './progress.js';
-import { rollEncounter, fairEncounter, enterRoom, leaveRoom, afterFight, canMeet, nextGroup, heldBy, roomOpen, teamOf, maxHpOf } from './rooms.js';
+import { rollEncounter, fairEncounter, enterRoom, leaveRoom, afterFight, canMeet, nextGroup, heldBy, roomOpen, placeCalm, teamOf, maxHpOf } from './rooms.js';
 import { WORLD, POST, stepWalk, routeTo, straighten, roomy, standing, canStand, spotNear, spotOf, districtOf, districtAt, postNear, personNear, personAt, TALK } from './world.js';
 import { goalOf, aimOf, storySoFar, hasNews, talk, takeCall } from './story.js';
 
@@ -244,7 +244,7 @@ export class Game {
     const room = roomOf(visit.room);
     if (!canMeet(visit, room, index)) return null;
     const group = visit.groups[index];
-    if (!fairEncounter(room, index, group.foes)) group.foes = rollEncounter(state, room, index);
+    if (!fairEncounter(room, index, group.foes)) group.foes = rollEncounter(state, room, index, placeCalm(state, room.id));
     for (const foe of group.foes) {
       state.book[foe.species].met = true;
       if (foe.heirloom) state.book[foe.species].heirloom = true;

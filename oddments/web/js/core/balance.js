@@ -254,11 +254,19 @@ export const START_TEAM = [['dustbunny', 3], ['sockeel', 3], ['toastghost', 3]];
 //
 // Now and then a restless Clutterkin is an Heirloom: the same kind in rare
 // colours, as if it had been handed down. Looks only; it fights the same.
-// It is a little prouder, so it takes one more pip to calm.
+// It is a little prouder, so it takes one more pip to calm. Looking for them
+// is a game of its own: go back to the places you have calmed.
 export const HEIRLOOM = {
   odds: 1 / 60, // each restless Clutterkin in an encounter, bosses never
+  // A place you have calmed feels safe, and they bring out their best colours there: three times as often.
+  calmOdds: 1 / 20,
   huff: 1, // extra pips
 };
+
+// Once a place is calm, word gets round, and kinds like the three you set out with come calling
+// there too (never beside its ringleader). It is the only way one of theirs can turn up as an
+// Heirloom. `weight` is how likely each is beside the place's own kinds, which weigh 1 to 3.
+export const VISITORS = { kinds: START_TEAM.map(([id]) => id), weight: 0.4 };
 
 // ---------------------------------------------------------------- the house-sitter
 //

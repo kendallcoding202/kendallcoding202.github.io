@@ -4,7 +4,7 @@ import {
   LOOK_IDS, lookOf, xpNeeded, roomOf, roomBuilt,
 } from './balance.js';
 import { newFriend } from './progress.js';
-import { roomOpen, maxHpOf, rollEncounter, fairEncounter, heldBy } from './rooms.js';
+import { roomOpen, maxHpOf, rollEncounter, fairEncounter, heldBy, placeCalm } from './rooms.js';
 import { own } from './util.js';
 import { settleWhere } from './world.js';
 import { newStory, reviveStory } from './story.js';
@@ -98,7 +98,7 @@ function reviveVisit(raw, state) {
     return {
       foes: fairEncounter(room, stop, saved.foes)
         ? saved.foes.map((foe) => ({ species: foe.species, level: foe.level, heirloom: foe.heirloom }))
-        : rollEncounter(state, room, stop),
+        : rollEncounter(state, room, stop, placeCalm(state, room.id)),
       done: saved.done === true && stop < room.path.length - 1,
     };
   });

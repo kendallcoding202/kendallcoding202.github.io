@@ -429,6 +429,8 @@ const met = Object.values(s.book).filter((p) => p.met).length;
 check((await page.$$('.page-tile:not(.unmet)')).length === met, `the ${met} kinds met so far are shown`);
 check(await S(page, () => [...document.querySelectorAll('.page-tile.unmet')].every((t) => t.disabled && t.querySelector('b').textContent === '???')), 'the rest are shadows');
 check((await page.$$('.ring > div')).length === 6, 'and the six elements are explained');
+check(await S(page, () => { const hunt = document.querySelector('.card.hunt'); return !!hunt && hunt.dataset.kept === '0' && hunt.textContent.includes('0 of 14 kept') && hunt.textContent.includes('one in 60') && hunt.textContent.includes('one in 20'); }), 'the scrapbook has the hunt for Heirlooms: none kept yet, and how the odds stand');
+check(await S(page, () => document.querySelector('[data-act="where"]').textContent.startsWith('Nowhere is calm yet') && document.querySelector('[data-act="tofind"]').textContent.startsWith('Still to find:') && document.querySelector('[data-act="tofind"]').textContent.includes('???')), 'it says nowhere is calm yet, and lists who is still to find, unmet kinds as ???');
 await snap(page, 'e2e-book');
 
 // =============================================================== reload
@@ -517,6 +519,7 @@ check(await walkTo(page, 'garden'), 'you can walk back out through the gate');
 check((await game(page, () => window.oddments.game.held().filter((point) => point.x < 1000).length)) === 5, 'and from outside they are back in their bushes');
 await page.waitForSelector('.placecard[data-spot="garden"]');
 check(await S(page, () => document.querySelector('.placecard small').textContent.includes('Most calmed in one go: 5 of 5') && document.querySelector('[data-act="enter"]').textContent.includes('Walk on in')), 'the garden can be walked again');
+check(await S(page, () => document.querySelector('.placecard small').textContent.includes('Calm now: Heirlooms come out more often here.')), 'and its card says that, calm, it is a good place to look for Heirlooms');
 const visitsSoFar = (await state(page)).rooms.garden.visits;
 check(await walkIn(page, 'garden') && (await state(page)).rooms.garden.visits === visitsSoFar + 1 && (await state(page)).visit.stop === 0, 'and stepping back in is a new visit, with everyone restless again');
 await S(page, () => { window.oddments.game.goHome(); window.oddments.game.standBy('ines'); window.oddments.ctx.show('lane'); });
@@ -634,8 +637,24 @@ await restAtHome(page);
 await tab(page, 'friends');
 check(await S(page, (species) => document.querySelector(`.friend[data-species="${species}"] img`).src.includes('_heirloom') && !!document.querySelector(`.friend[data-species="${species}"] .heirloom`), rare.species), 'and is shown as an Heirloom among your friends');
 await tab(page, 'book');
-check(await S(page, (species) => !!document.querySelector(`[data-kind="${species}"] .stamp.gold`), rare.species), 'with a gold stamp in the scrapbook');
+check(await S(page, (species) => !!document.querySelector(`[data-kind="${species}"] .stamp.gold`) && document.querySelector(`[data-kind="${species}"]`).classList.contains('rare'), rare.species), 'with a gold stamp in the scrapbook');
+check(await S(page, () => document.querySelector('.card.hunt').dataset.kept === '1' && document.querySelector('.card.hunt').textContent.includes('1 of 14 kept')), 'and the hunt counts it: one of fourteen kept');
+check(await S(page, (name) => !document.querySelector('[data-act="tofind"]').textContent.includes(`${name},`) && !document.querySelector('[data-act="tofind"]').textContent.endsWith(`${name}.`), SPECIES[rare.species].name), 'it is off the list of those still to find');
 await snap(page, 'e2e-heirloom-book');
+// Walking into a place where one is waiting, you are told (and hear it) before you have picked it out.
+await S(page, () => { window.oddments.game.standAt('garden'); window.oddments.ctx.show('lane'); });
+let glinted = false;
+for (let tries = 0; tries < 400 && !glinted; tries++) {
+  if ((await where(page)).district !== 'garden') { await tapToward(page, 'in:garden'); await page.waitForTimeout(450); }
+  const visit = (await state(page)).visit;
+  if (!visit) continue;
+  if (visit.groups.some((group) => group.foes.some((foe) => foe.heirloom))) { glinted = !!(await page.$('.toast.gold')) && (await S(page, () => window.oddments.sound().heard.heirloom >= 1)); break; }
+  // Nobody rare this time: rest and step in again, as someone looking for one would.
+  await restAtHome(page);
+  await S(page, () => { window.oddments.game.standAt('garden'); window.oddments.ctx.show('lane'); });
+}
+check(glinted, 'stepping in where an Heirloom waits, a gold notice says something is glinting, and it is heard');
+await snap(page, 'e2e-heirloom-glint');
 
 // =============================================================== damaged saves
 section('Damaged and edited saves');

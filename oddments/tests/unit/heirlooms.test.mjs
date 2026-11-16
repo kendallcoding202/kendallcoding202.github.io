@@ -8,7 +8,8 @@ import { createBattle, makeFighter, unitOf } from '../../web/js/core/battle.js';
 import { settleUp } from '../../web/js/core/progress.js';
 import { newState } from '../../web/js/core/state.js';
 import { Game } from '../../web/js/core/game.js';
-import { HEIRLOOM, SPECIES, SPECIES_IDS, ROOMS } from '../../web/js/core/balance.js';
+import { HEIRLOOM, VISITORS, SPECIES, SPECIES_IDS, ROOMS, roomBuilt } from '../../web/js/core/balance.js';
+import { poolOf } from '../../web/js/core/rooms.js';
 
 const SPRITES = fileURLToPath(new URL('../../web/assets/sprites/', import.meta.url));
 
@@ -26,6 +27,60 @@ test('about one restless Clutterkin in sixty is an Heirloom, and a boss never is
   const share = rare / met;
   assert.ok(share > HEIRLOOM.odds * 0.7 && share < HEIRLOOM.odds * 1.3, `${rare} of ${met}`);
   assert.ok(HEIRLOOM.odds > 1 / 200 && HEIRLOOM.odds < 1 / 20, 'rare, but something a player will actually see');
+});
+
+test('in a place you have calmed they bring out their best colours: about one in twenty there', () => {
+  assert.ok(HEIRLOOM.calmOdds > HEIRLOOM.odds * 2 && HEIRLOOM.calmOdds <= 1 / 10, 'a real difference, and still a find');
+  for (const room of ROOMS.filter(roomBuilt)) {
+    let met = 0;
+    let rare = 0;
+    for (let seed = 1; seed <= 6000; seed++) {
+      for (const foe of rollEncounter({ rng: seed * 31 }, room, seed % room.path.length, true)) {
+        if (SPECIES[foe.species].boss) { assert.equal(foe.heirloom, false, 'a boss never is, calm or not'); continue; }
+        met++;
+        if (foe.heirloom) rare++;
+      }
+    }
+    const share = rare / met;
+    assert.ok(share > HEIRLOOM.calmOdds * 0.75 && share < HEIRLOOM.calmOdds * 1.25, `${room.id}: ${rare} of ${met}`);
+  }
+});
+
+test('every kind that can be a friend can turn up as an Heirloom somewhere, once places are calm', () => {
+  const canJoin = SPECIES_IDS.filter((id) => !SPECIES[id].boss);
+  const restless = new Set(ROOMS.filter(roomBuilt).flatMap((room) => room.path.flatMap((_, stop) => poolOf(room, stop, false).map(([id]) => id))));
+  const calm = new Set(ROOMS.filter(roomBuilt).flatMap((room) => room.path.flatMap((_, stop) => poolOf(room, stop, true).map(([id]) => id))));
+  const never = canJoin.filter((id) => !restless.has(id));
+  assert.deepEqual(never.sort(), [...VISITORS.kinds].sort(), 'while everywhere is restless, the three you set out with are met nowhere');
+  for (const id of canJoin) assert.ok(calm.has(id), `${id} is never met, so its Heirloom could never be found`);
+  for (const id of canJoin) assert.ok(SPECIES[id].huff > 0, `${id} can be calmed, so can be an Heirloom`);
+  // And one that visits really can be one: found by rolling.
+  let found = null;
+  for (let seed = 1; seed <= 20000 && !found; seed++) found = rollEncounter({ rng: seed }, ROOMS[0], seed % 4, true).find((foe) => foe.heirloom && VISITORS.kinds.includes(foe.species)) || null;
+  assert.ok(found, 'an Heirloom of one of your first three turns up in a calm garden');
+});
+
+test('calming an Heirloom of a kind you set out with gives your own friend its colours', () => {
+  const state = newState(1e12, 5);
+  state.started = true;
+  state.rooms.garden.clears = 1;
+  const game = new Game(state, { now: 1e12, fx: false });
+  assert.equal(game.travelTo('garden'), true);
+  const level = ROOMS[0].path[0].level[0];
+  state.visit.groups[0].foes = [{ species: 'dustbunny', level, heirloom: true }, { species: 'dandepuff', level, heirloom: false }];
+  const mine = state.friends.find((friend) => friend.species === 'dustbunny');
+  assert.equal(mine.heirloom, false);
+  const battle = game.startEncounter(0);
+  assert.deepEqual(battle.units.filter((unit) => unit.side === 'foe').map((unit) => [unit.species, unit.heirloom]), [['dustbunny', true], ['dandepuff', false]], 'the visitor is met as it was seen, not rolled again');
+  // Settle the visitor and win.
+  const rare = battle.units.find((unit) => unit.side === 'foe' && unit.heirloom);
+  rare.huff = 0; rare.settled = true; rare.hp = 0;
+  for (const unit of battle.units) if (unit.side === 'foe' && !unit.settled) unit.hp = 0;
+  battle.phase = 'won';
+  const summary = settleUp(state, battle);
+  assert.deepEqual(summary.heirlooms, ['dustbunny']);
+  assert.equal(mine.heirloom, true, 'your Dust Bunny wears the colours now');
+  assert.equal(state.friends.filter((friend) => friend.species === 'dustbunny').length, 1, 'and there is still only one of it');
 });
 
 test('an Heirloom fights exactly like any other of its kind; it is only a little prouder', () => {

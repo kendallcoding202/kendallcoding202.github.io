@@ -113,7 +113,12 @@ export function simulate({ players = 400, visits = 4, style = 'friendly', room: 
   const fights = all.reduce((sum, p) => sum + p.visits.reduce((n, v) => n + v.fights.length, 0), 0);
   const heirloomFights = all.reduce((sum, p) => sum + p.visits.reduce((n, v) => n + v.fights.filter((f) => f.heirloom).length, 0), 0);
   const before = { arrived: mean(all.map((p) => (p.before.arrived ? 1 : 0))), visits: mean(all.map((p) => p.before.visits)), minutes: mean(all.map((p) => p.before.minutes)) };
-  return { players, visits, style, room: roomId, before, stops, byVisit, firstLoss, heirloomFightShare: heirloomFights / fights, heirloomsKept: mean(all.map((p) => p.state.stats.heirlooms)) };
+  // The share of fights with an Heirloom in them, visit by visit: it rises once the place is calm.
+  const heirloomByVisit = Array.from({ length: visits }, (_, v) => {
+    const those = all.flatMap((p) => p.visits[v].fights);
+    return those.length ? those.filter((f) => f.heirloom).length / those.length : 0;
+  });
+  return { players, visits, style, room: roomId, before, stops, byVisit, firstLoss, heirloomFightShare: heirloomFights / fights, heirloomByVisit, heirloomsKept: mean(all.map((p) => p.state.stats.heirlooms)) };
 }
 
 const pc = (v) => `${Math.round(v * 100)}%`.padStart(4);
@@ -141,7 +146,7 @@ export function report(result) {
   lines.push('');
   lines.push(`First visits that end in a loss, by stop: ${result.firstLoss.map((share, stop) => `${stop + 1}: ${pc(share).trim()}`).join('   ')}`);
   lines.push(`Most first visits that fail, fail at stop ${worst + 1} (${room.path[worst].name}).`);
-  lines.push(`Heirlooms: 1 in ${Math.round(1 / HEIRLOOM.odds)} restless Clutterkin; one turned up in ${(result.heirloomFightShare * 100).toFixed(1)}% of fights; kept per player after ${result.visits} visits: ${result.heirloomsKept.toFixed(2)}.`);
+  lines.push(`Heirlooms: 1 in ${Math.round(1 / HEIRLOOM.odds)} restless Clutterkin, 1 in ${Math.round(1 / HEIRLOOM.calmOdds)} in a place already calm. A fight had one in it, visit by visit: ${result.heirloomByVisit.map((share) => `${(share * 100).toFixed(1)}%`).join(', ')}. Kept per player after ${result.visits} visits: ${result.heirloomsKept.toFixed(2)}.`);
   return lines.join('\n');
 }
 

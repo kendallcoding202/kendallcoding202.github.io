@@ -1,10 +1,10 @@
 // Rooms: who is restless at each stop of a place, and a visit from stepping in to resting at home.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rollEncounter, fairEncounter, canMeet, nextGroup, roomOpen, enterRoom, leaveRoom, afterFight, heldBy, maxHpOf, teamOf } from '../../web/js/core/rooms.js';
+import { rollEncounter, fairEncounter, poolOf, placeCalm, canMeet, nextGroup, roomOpen, enterRoom, leaveRoom, afterFight, heldBy, maxHpOf, teamOf } from '../../web/js/core/rooms.js';
 import { BARRICADE, districtOf } from '../../web/js/core/world.js';
 import { newState } from '../../web/js/core/state.js';
-import { ROOMS, SPECIES, BREATHER, TEAM_SIZE, statAt } from '../../web/js/core/balance.js';
+import { ROOMS, SPECIES, BREATHER, TEAM_SIZE, VISITORS, START_TEAM, statAt } from '../../web/js/core/balance.js';
 
 const GARDEN = ROOMS[0];
 
@@ -80,6 +80,57 @@ test('ground is held by a barricade while a place is shut, by cover while you ar
   state.where = { ...alley.posts[2] };
   assert.deepEqual(heldBy(state), garden.posts);
   assert.deepEqual(heldBy(state, null), [...garden.posts, ...alley.posts]);
+});
+
+test('once a place is calm, kinds like your first three come calling there: never before, never beside its ringleader', () => {
+  assert.deepEqual(VISITORS.kinds, START_TEAM.map(([id]) => id));
+  assert.ok(VISITORS.weight > 0 && VISITORS.weight < 1, 'a visitor is less likely than anyone who lives there');
+  for (const room of ROOMS.filter((r) => r.path)) {
+    room.path.forEach((spot, stop) => {
+      assert.equal(poolOf(room, stop, false), spot.pool, 'not calm: only who lives there');
+      assert.equal(poolOf(room, stop), spot.pool);
+      const calm = poolOf(room, stop, true);
+      if (spot.boss) { assert.equal(calm, spot.pool, 'nobody visits a ringleader'); return; }
+      assert.deepEqual(calm.slice(0, spot.pool.length), spot.pool, 'calm: everyone who lives there, as before');
+      assert.deepEqual(calm.slice(spot.pool.length), VISITORS.kinds.map((id) => [id, VISITORS.weight]));
+    });
+  }
+  // Rolled many times: no visitor ever turns up while the place is restless, some do once it is calm, none with the boss.
+  const seenAt = (calm) => { const kinds = new Set(); for (let seed = 1; seed <= 600; seed++) for (let stop = 0; stop < 5; stop++) for (const foe of rollEncounter({ rng: seed * 17 }, GARDEN, stop, calm)) kinds.add(`${stop}:${foe.species}`); return kinds; };
+  const restless = seenAt(false);
+  const calm = seenAt(true);
+  for (const id of VISITORS.kinds) {
+    for (let stop = 0; stop < 5; stop++) assert.equal(restless.has(`${stop}:${id}`), false, `${id} in a restless garden`);
+    for (let stop = 0; stop < 4; stop++) assert.equal(calm.has(`${stop}:${id}`), true, `${id} never visits stop ${stop + 1} of a calm garden`);
+    assert.equal(calm.has(`4:${id}`), false, `${id} beside the Sprinkler`);
+  }
+  // A visitor is a fair thing to find at a stop visitors can come to, at that stop's levels, and nowhere else.
+  const level = GARDEN.path[1].level[0];
+  assert.equal(fairEncounter(GARDEN, 1, [{ species: 'dustbunny', level, heirloom: true }, { species: 'sockeel', level, heirloom: false }]), true);
+  assert.equal(fairEncounter(GARDEN, 1, [{ species: 'dustbunny', level: level + 9, heirloom: false }, { species: 'sockeel', level, heirloom: false }]), false, 'not at any level it likes');
+  assert.equal(fairEncounter(GARDEN, 4, [{ species: 'dustbunny', level: 3, heirloom: false }, { species: 'boss_hydra', level: 5, heirloom: false }, { species: 'dandepuff', level: 3, heirloom: false }]), false, 'not beside the boss');
+});
+
+test('stepping into a place you have calmed rolls it as calm; a seed throws the same dice either way', () => {
+  assert.equal(placeCalm(newState(1e12, 1), 'garden'), false);
+  for (const odd of ['nowhere', 'constructor', null]) assert.equal(placeCalm(newState(1e12, 1), odd), false);
+  let visitors = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const first = newState(1e12, seed);
+    const again = newState(1e12, seed);
+    again.rooms.garden.clears = 1;
+    assert.equal(placeCalm(again, 'garden'), true);
+    enterRoom(first, 'garden');
+    enterRoom(again, 'garden');
+    assert.equal(first.rng, again.rng, 'the same number of dice thrown');
+    first.visit.groups.forEach((group, stop) => {
+      assert.equal(group.foes.length, again.visit.groups[stop].foes.length, 'the same numbers of them');
+      assert.deepEqual(group.foes.map((foe) => foe.level), again.visit.groups[stop].foes.map((foe) => foe.level), 'at the same levels');
+      for (const foe of group.foes) assert.equal(VISITORS.kinds.includes(foe.species), false);
+    });
+    visitors += again.visit.groups.flatMap((group) => group.foes).filter((foe) => VISITORS.kinds.includes(foe.species)).length;
+  }
+  assert.ok(visitors >= 20, `${visitors} visitors in 60 calm gardens`);
 });
 
 test('you step in rested, with every group already waiting, and cannot step in twice', () => {

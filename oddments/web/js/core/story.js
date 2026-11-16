@@ -89,6 +89,7 @@ const DOV = {
     'Tap one of them in a fight and it tells you its soft spot. Nobody ever taps them. I tap everything.',
     'Down the alley they come one at a time. There is no going round. I tried. I got pecked.',
     'Crumb jams Clank. Take the Toast Ghost down Tin Can Alley and watch the tins dent.',
+    'Want an Heirloom? Go back where it is calm. They feel safe there and bring out their best colours. I saw three in the garden in one week. Three!',
     'If you hit the one you are making friends with, it gets in a Huff again. So pick one, and hit the others.',
     'My nan says the Sprinkler was never turned off. Imagine being left on for a week. I would be cross too.',
     'You can only have one of each kind. If you calm a kind you have already got, it goes off happy and yours learns from it.',
@@ -194,7 +195,7 @@ export function goalOf(state) {
     return goal('calm', about.title, about.detail, { room: next.id, count: [Math.min(stops, state.rooms[next.id].best), stops] });
   }
   return goal('more', next ? `${next.name} is next` : 'The lane is quiet',
-    next ? 'It is not built yet: this is as far as the slice goes. The places you have calmed are restless again whenever you have rested, with more friends to make.' : 'Every place on the lane is calm. Mr. Spick has nothing to collect.',
+    next ? 'It is not built yet: this is as far as the slice goes. The places you have calmed are restless again whenever you have rested, with more friends to make, and Heirlooms come out more often where it is calm.' : 'Every place on the lane is calm. Mr. Spick has nothing to collect.',
     { count: [placesCalm(state), ROOMS.length] });
 }
 

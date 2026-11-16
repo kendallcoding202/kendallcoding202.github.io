@@ -1,6 +1,6 @@
 // Rooms: who is restless at each stop of a place, and a visit from stepping in
 // to resting at home. Rules only: no DOM, no clock, no storage.
-import { SPECIES, ROOMS, HEIRLOOM, BREATHER, TEAM_SIZE, roomOf, roomBuilt, statAt } from './balance.js';
+import { SPECIES, ROOMS, HEIRLOOM, VISITORS, BREATHER, TEAM_SIZE, roomOf, roomBuilt, statAt } from './balance.js';
 import { nextRandom, rollInt, rollPick, own } from './util.js';
 import { BARRICADE, districtOf, districtAt } from './world.js';
 
@@ -11,18 +11,34 @@ export function roomOpen(state, roomId) {
   return index === 0 || state.rooms[ROOMS[index - 1].id].clears > 0;
 }
 
+/** Whether a place has been calmed at least once. Calm places are where Heirlooms are looked for. */
+export const placeCalm = (state, roomId) => own(state.rooms, roomId) && state.rooms[roomId].clears > 0;
+
+/**
+ * Who may turn up at a stop, as [kind, weight]: the stop's own list, and, in a place that has been
+ * calmed, visitors as well (see VISITORS). Nobody visits a ringleader's stop.
+ */
+export function poolOf(room, stop, calm = false) {
+  const spot = room.path[stop];
+  return calm && !spot.boss ? [...spot.pool, ...VISITORS.kinds.map((id) => [id, VISITORS.weight])] : spot.pool;
+}
+
 /**
  * Who is waiting at a stop: a list of { species, level, heirloom }, at most
- * three. A boss stands in the middle with its company either side.
+ * three. A boss stands in the middle with its company either side. In a place
+ * that is `calm` (calmed before), Heirlooms are likelier and visitors may come.
+ * (The same dice are thrown either way, so a seed's run of luck does not shift.)
  */
-export function rollEncounter(dice, room, stop) {
+export function rollEncounter(dice, room, stop, calm = false) {
   const spot = room.path[stop];
+  const pool = poolOf(room, stop, calm);
+  const odds = calm ? HEIRLOOM.calmOdds : HEIRLOOM.odds;
   const company = [];
   const count = rollInt(dice, spot.size[0], spot.size[1]);
   for (let i = 0; i < count && company.length < TEAM_SIZE - (spot.boss ? 1 : 0); i++) {
-    const [species] = rollPick(dice, spot.pool, ([, weight]) => weight);
+    const [species] = rollPick(dice, pool, ([, weight]) => weight);
     const level = rollInt(dice, spot.level[0], spot.level[1]);
-    const heirloom = SPECIES[species].huff > 0 && nextRandom(dice) < HEIRLOOM.odds;
+    const heirloom = SPECIES[species].huff > 0 && nextRandom(dice) < odds;
     company.push({ species, level, heirloom });
   }
   if (!spot.boss) return company;
@@ -35,8 +51,9 @@ export const teamOf = (state) => state.team.map((id) => state.friends.find((frie
 
 /**
  * Whether a list is a fair roll for a stop: the right boss (if any) at the
- * right level, the right number of others, each from that stop's list and at
- * its levels. A save cannot swap a boss for something soft.
+ * right level, the right number of others, each from that stop's list (or a
+ * visitor, where visitors can ever come) and at its levels. A save cannot swap
+ * a boss for something soft.
  */
 export function fairEncounter(room, stop, list) {
   const spot = room.path[stop];
@@ -49,7 +66,7 @@ export function fairEncounter(room, stop, list) {
       if (foe.species !== spot.boss || foe.level !== spot.bossLevel || foe.heirloom) return false;
       bosses++;
     } else {
-      if (!spot.pool.some(([id]) => id === foe.species) || foe.level < spot.level[0] || foe.level > spot.level[1]) return false;
+      if (!poolOf(room, stop, true).some(([id]) => id === foe.species) || foe.level < spot.level[0] || foe.level > spot.level[1]) return false;
       company++;
     }
   }
@@ -102,7 +119,7 @@ export function enterRoom(state, roomId) {
   state.visit = {
     room: roomId, stop: 0,
     hp: Object.fromEntries(teamOf(state).map((friend) => [friend.id, maxHpOf(friend)])),
-    groups: room.path.map((_, stop) => ({ foes: rollEncounter(state, room, stop), done: false })),
+    groups: room.path.map((_, stop) => ({ foes: rollEncounter(state, room, stop, placeCalm(state, roomId)), done: false })),
   };
   state.rooms[roomId].visits++;
   return true;

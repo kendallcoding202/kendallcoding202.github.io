@@ -69,21 +69,39 @@ export function bookScreen(ctx) {
     const friend = friends.find((f) => f.species === id);
     const met = book[id].met;
     return h('button', {
-      class: `page-tile${met ? '' : ' unmet'}${friend ? ' friend' : ''}`, data: { kind: id }, disabled: !met,
+      class: `page-tile${met ? '' : ' unmet'}${friend ? ' friend' : ''}${friend && friend.heirloom ? ' rare' : ''}`, data: { kind: id }, disabled: !met,
       onclick: () => oddmentCard({ species: id, level: friend ? friend.level : 1, heirloom: !!(friend && friend.heirloom), xp: friend ? friend.xp : null }),
     },
       sprite(id, !!(friend && friend.heirloom)),
       h('b', null, met ? kind.name : '???'),
       met ? elementTag(kind.element) : h('small', null, 'Not met'),
-      h('span', { class: 'stamps' }, friend ? h('i', { class: 'stamp pal', title: 'A friend' }, '♥') : null, book[id].heirloom ? h('i', { class: 'stamp gold', title: 'Heirloom met' }, '❖') : null));
+      // A heart for a friend. For its Heirloom: a gold mark once yours wears the colours, a hollow one if
+      // you have only seen it.
+      h('span', { class: 'stamps' }, friend ? h('i', { class: 'stamp pal', title: 'A friend' }, '♥') : null,
+        friend && friend.heirloom ? h('i', { class: 'stamp gold', title: 'Heirloom kept' }, '❖')
+          : book[id].heirloom ? h('i', { class: 'stamp seen', title: 'Heirloom seen, not kept' }, '◇') : null));
   });
+  // The hunt: which Heirlooms you have, which you have seen get away, and which are still out there.
+  const kept = canJoin.filter((id) => friends.some((f) => f.species === id && f.heirloom));
+  const seen = canJoin.filter((id) => book[id].heirloom && !kept.includes(id));
+  const toFind = canJoin.filter((id) => !kept.includes(id));
+  const calm = ROOMS.filter((room) => game.state.rooms[room.id].clears > 0);
+  const one = (odds) => `one in ${Math.round(1 / odds)}`;
+  const hunt = h('div', { class: 'card hunt', data: { kept: String(kept.length), seen: String(seen.length) } },
+    h('div', { class: 'huntline' }, h('b', null, 'Heirlooms'), bar('xp', kept.length / canJoin.length, `${kept.length} of ${canJoin.length} kept`)),
+    h('p', null, `About ${one(HEIRLOOM.odds)} restless Clutterkin is an Heirloom, in rare colours: ${one(HEIRLOOM.calmOdds)} in a place you have calmed, where kinds like the three you set out with come calling too. You can see one glint before you walk up. Reach out to it and win; if you already have that kind, yours takes its colours.`),
+    h('small', { data: { act: 'where' } }, calm.length ? `Calm now, so best for looking: ${calm.map((room) => room.name).join(', ')}.` : 'Nowhere is calm yet. Calm a place and go back to it.'),
+    toFind.length
+      ? h('small', { data: { act: 'tofind' } }, `Still to find: ${toFind.map((id) => (book[id].met ? SPECIES[id].name : '???') + (seen.includes(id) ? ' (seen)' : '')).join(', ')}.`)
+      : h('small', { class: 'gold', data: { act: 'tofind' } }, 'You have every one of them.'));
   const el = h('section', { id: 'book', class: 'page' },
     h('header', { class: 'bar-top' }, h('h1', null, 'Scrapbook')),
-    h('p', { class: 'note' }, `Met ${kinds.filter((id) => book[id].met).length} of ${kinds.length} · Friends ${friends.length} of ${canJoin.length} · Heirlooms seen ${canJoin.filter((id) => book[id].heirloom).length} of ${canJoin.length}`),
+    h('p', { class: 'note' }, `Met ${kinds.filter((id) => book[id].met).length} of ${kinds.length} · Friends ${friends.length} of ${canJoin.length} · Heirlooms ${kept.length} of ${canJoin.length}`),
+    hunt,
     h('div', { class: 'grid book' }, tiles),
     h('h3', null, 'Elements'),
     h('div', { class: 'ring' }, ELEMENT_IDS.map((id) => h('div', null, elementTag(id), h('span', null, ' beats '), elementTag(ELEMENTS[id].beats), h('small', null, ` ${ELEMENTS[id].why}.`)))),
-    h('p', { class: 'note' }, `Beating an element: damage ×1.5. Being beaten by it: ×0.7. About one restless Clutterkin in ${Math.round(1 / HEIRLOOM.odds)} is an Heirloom, in rare colours.`));
+    h('p', { class: 'note' }, 'Beating an element: damage ×1.5. Being beaten by it: ×0.7.'));
   return { el };
 }
 
