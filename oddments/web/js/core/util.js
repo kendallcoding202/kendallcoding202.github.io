@@ -28,7 +28,5 @@ export function rollPick(holder, list, weight = () => 1) {
 
 export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
-export const pct = (v, digits = 0) => `${(v * 100).toFixed(digits)}%`;
-
 // (Not Object.hasOwn: iOS 15.0 to 15.3 do not have it.)
 export const own = (table, key) => typeof key === 'string' && Object.prototype.hasOwnProperty.call(table, key);

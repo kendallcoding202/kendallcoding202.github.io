@@ -4,7 +4,9 @@
 import { ROOM_IDS } from './balance.js';
 
 export const WORLD = {
-  w: 720, h: 1640, // the size of the lane, in its own units (about two thirds of a pixel each on a phone)
+  // The size of the lane, in its own units. It is exactly one screen wide, so the view only ever
+  // travels up and down it, and nothing is ever cut off at the sides.
+  w: 640, h: 1720,
   edge: 26, // how close to the edge of the world feet may go
   speed: 255, // walking, in units a second
   reach: 82, // how near a door counts as being at it
@@ -15,8 +17,8 @@ export const WORLD = {
 // Where every place stands: x is the middle of its front, y the foot of its
 // front wall. Home is where you are staying; the rest are the eight rooms.
 const AT = {
-  home: [360, 1500], garden: [180, 1270], alley: [540, 1110], pantry: [180, 950], wash: [540, 790],
-  stacks: [180, 630], rooftops: [540, 470], attic: [180, 320], dark: [520, 180],
+  home: [320, 1560], garden: [165, 1320], alley: [475, 1150], pantry: [165, 980], wash: [475, 810],
+  stacks: [165, 640], rooftops: [475, 470], attic: [165, 300], dark: [450, 190],
 };
 export const SPOT_IDS = ['home', ...ROOM_IDS];
 export const SPOTS = SPOT_IDS.map((id) => {
@@ -30,11 +32,14 @@ export const spotOf = (id) => SPOTS.find((spot) => spot.id === id) || null;
 
 // Trees, as circles to walk round.
 export const TREES = [
-  [60, 1580, 30], [660, 1585, 32], [640, 1400, 28], [70, 1420, 26], [665, 1250, 28], [55, 1105, 28],
-  [668, 940, 28], [52, 790, 26], [666, 625, 28], [54, 470, 26], [664, 320, 28], [330, 150, 24], [58, 160, 26], [670, 70, 24],
+  [48, 1660, 28], [592, 1666, 30], [600, 1440, 28], [44, 1470, 26], [598, 1300, 28], [42, 1140, 28],
+  [598, 960, 28], [42, 800, 26], [598, 625, 28], [42, 460, 26], [598, 290, 28], [250, 110, 24], [44, 140, 26], [604, 70, 24],
 ].map(([x, y, r]) => ({ x, y, r }));
 
-/** Whether feet can be at this point: inside the lane, and not in a building or a tree. */
+// A lamp beside every building, on the side the lane is. Thin, but solid.
+export const LAMPS = SPOTS.map((spot) => ({ x: spot.x + (spot.x <= WORLD.w / 2 ? 1 : -1) * (spot.w / 2 + 30), y: spot.y + 26, r: 7 }));
+
+/** Whether feet can be at this point: inside the lane, and not in a building, a tree or a lamp post. */
 export function canStand(x, y) {
   if (!(x >= WORLD.edge && x <= WORLD.w - WORLD.edge && y >= WORLD.edge && y <= WORLD.h - WORLD.edge)) return false;
   const b = WORLD.body;
@@ -44,6 +49,10 @@ export function canStand(x, y) {
   for (const tree of TREES) {
     const reach = tree.r * 0.55 + b; // the trunk, not the leaves
     if ((x - tree.x) * (x - tree.x) + (y - tree.y) * (y - tree.y) < reach * reach) return false;
+  }
+  for (const lamp of LAMPS) {
+    const reach = lamp.r + b;
+    if ((x - lamp.x) * (x - lamp.x) + (y - lamp.y) * (y - lamp.y) < reach * reach) return false;
   }
   return true;
 }
@@ -119,6 +128,33 @@ export function routeTo(from, to, can, size) {
   return way;
 }
 
+/**
+ * The same way with the corners taken out: wherever you can walk straight to
+ * a later point without touching anything, the points between are dropped.
+ * A way found on squares zig-zags; walked like this it does not.
+ */
+export function straighten(from, way, can) {
+  const out = [];
+  let at = from;
+  for (let i = 0; i < way.length;) {
+    let j = way.length - 1;
+    while (j > i && !clearWay(at, way[j], can)) j--;
+    out.push(way[j]);
+    at = way[j];
+    i = j + 1;
+  }
+  return out;
+}
+
+/** Whether you can walk in a straight line from one point to another without touching anything. */
+export function clearWay(a, b, can) {
+  const steps = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 2);
+  for (let i = 1; i <= steps; i++) {
+    if (!can(a.x + ((b.x - a.x) * i) / steps, a.y + ((b.y - a.y) * i) / steps)) return false;
+  }
+  return true;
+}
+
 /** The place whose door you are standing at, or null. */
 export function spotNear(pos) {
   let best = null;
@@ -147,14 +183,14 @@ export function settleWhere(raw) {
 // without meeting them. `gate` is where you come in and where you go out.
 export const AREAS = {
   garden: {
-    w: 720, h: 1500,
-    gate: { x: 360, y: 1430 },
+    w: 640, h: 1620,
+    gate: { x: 320, y: 1530 },
     blocks: [
-      { x: 0, y: 1160, w: 500, h: 44 }, { x: 220, y: 880, w: 500, h: 44 },
-      { x: 0, y: 600, w: 500, h: 44 }, { x: 220, y: 320, w: 500, h: 44 },
+      { x: 0, y: 1240, w: 440, h: 44 }, { x: 200, y: 960, w: 440, h: 44 },
+      { x: 0, y: 680, w: 440, h: 44 }, { x: 200, y: 400, w: 440, h: 44 },
     ],
     // Each gap is narrower than the ground a group holds, so there is no squeezing by.
-    posts: [{ x: 605, y: 1182 }, { x: 115, y: 902 }, { x: 605, y: 622 }, { x: 115, y: 342 }, { x: 360, y: 130 }],
+    posts: [{ x: 535, y: 1262 }, { x: 105, y: 982 }, { x: 535, y: 702 }, { x: 105, y: 422 }, { x: 320, y: 215 }],
   },
 };
 export const POST = { hold: 100, meet: 118 }; // how much ground a waiting group holds, and how near is meeting it
