@@ -1,4 +1,4 @@
-# Oddments (working title)
+# Oddkin
 
 **The house is awake. The cats fight it. You are going to try talking to it.**
 
@@ -15,15 +15,11 @@ No ads, no analytics, no accounts, no purchases, no network calls. The save live
 
 ## The name
 
-"Oddments" is a placeholder (it is also what the creatures are called). The name is yours to choose. Five suggestions:
+The game is called **Oddkin**, and so are its creatures: one Oddkin, many Oddkin. Odd things from a house, who become kin. Ines Tock says as much the first time you meet her.
 
-1. **Oddments** — odd socks, odd ends, the things left over. Short, and it names the creatures.
-2. **Homebodies** — household things that got bodies.
-3. **Housewarming** — what you are doing to a house full of grumpy things.
-4. **While the Cats Sleep** — ties it to Pawst Lives: the cats fight at night, you work the day shift.
-5. **Things That Go Clank** — a wink at "bump in the night", with one of our elements in it.
+A web search found no game, app or toy by that name. It has not been checked against the App Store or trademarks.
 
-None of these has been checked against the App Store or trademarks.
+Inside the repository some things still carry the working title, on purpose: the folder and the web address (`oddments/`), the name of the save on the device (`oddments.save`, so nobody's save is lost) and the handle for poking at the game from a browser console (`window.oddments`). None of these is seen by a player.
 
 ## Run it
 
@@ -83,4 +79,4 @@ docs/                   the design and the art list
 
 ## Not done
 
-One place of eight can be played: the other seven are buildings you can walk up to, with nothing behind their doors, and the story stops where the garden does. Three neighbours stand in the world and talk, but they stand still, and there is nothing to pick up or do besides meeting Oddments. Friends on the green are for looking at, not talking to. You see it from above in 2D. The house-sitter turns to face the way they walk; Oddments and neighbours have one view each and only turn left or right. No sound, no purchases. The iPhone app builds and runs in Apple's Simulator, but it has not been uploaded to TestFlight or run on a real iPhone: that needs your Apple account (`docs/TESTFLIGHT.md`). Oddments do not grow up yet (the table says into what; the rule and the art are not there). The buildings, trees, lamps, hedges and grass are painted (two generated images, see `docs/ART.md`); the streets, their stepping stones, the garden gate and the name plates are still drawn in code. The four house-sitter looks are still candidates, taller and slimmer than the Pawst Lives cats. The app's icon is a stand-in. The balance has only been played by bots. The browser test runs in Chromium at phone sizes. In iOS's own web engine the game has only been launched and looked at (first screen, and resumed from a save), not played through.
+One place of eight can be played: the other seven are buildings you can walk up to, with nothing behind their doors, and the story stops where the garden does. Three neighbours stand in the world and talk, but they stand still, and there is nothing to pick up or do besides meeting Oddkin. Friends on the green are for looking at, not talking to. You see it from above in 2D. The house-sitter turns to face the way they walk; Oddkin and neighbours have one view each and only turn left or right. No sound, no purchases. The iPhone app builds and runs in Apple's Simulator, but it has not been uploaded to TestFlight or run on a real iPhone: that needs your Apple account (`docs/TESTFLIGHT.md`). Oddkin do not grow up yet (the table says into what; the rule and the art are not there). The buildings, trees, lamps, hedges and grass are painted (two generated images, see `docs/ART.md`); the streets, their stepping stones, the garden gate and the name plates are still drawn in code. The four house-sitter looks are still candidates, taller and slimmer than the Pawst Lives cats. The app's icon is a stand-in. The balance has only been played by bots. The browser test runs in Chromium at phone sizes. In iOS's own web engine the game has only been launched and looked at (first screen, and resumed from a save), not played through.

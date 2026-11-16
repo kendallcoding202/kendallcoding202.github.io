@@ -59,7 +59,7 @@ Needs **no** new images:
 - **Heirlooms**: rare colours for all 40 kinds and their 40 grown forms are recoloured in code (80 sprites, free). A hand-painted one can replace any recolour later.
 - **Fights**: the 8 room paintings and all 48 Pawst Lives monster sprites are used as they are.
 
-Optional, not counted: front and back views of the neighbours if they are ever to walk about, and of the Oddments that follow you (48 kinds, so best done a sheet at a time and only for the ones that walk with you most).
+Optional, not counted: front and back views of the neighbours if they are ever to walk about, and of the Oddkin that follow you (48 kinds, so best done a sheet at a time and only for the ones that walk with you most).
 
 ## The eleven grown-up forms named so far
 

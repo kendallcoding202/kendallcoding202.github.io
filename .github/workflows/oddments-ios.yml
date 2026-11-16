@@ -1,10 +1,11 @@
-# Oddments: builds the iOS app on a Mac runner.
+# Oddkin: builds the iOS app on a Mac runner.
 #
-#   Run it by hand: Actions tab -> Oddments iOS -> Run workflow.
+#   Run it by hand: Actions tab -> Oddkin iOS -> Run workflow.
 #
 #   "build"      (box unticked) compiles the app for the Simulator with no
 #                signing, launches it, saves screenshots, and proves a save
-#                survives in the app's native storage. Needs no secrets.
+#                survives in the app's native storage. It ends by rehearsing
+#                the TestFlight archive, unsigned. Needs no secrets.
 #
 #   "testflight" (box ticked) archives the app, has Apple sign it and uploads
 #                it to App Store Connect. The app record must already exist
@@ -22,7 +23,7 @@
 #   This repository is public, and so is everything these jobs print. The
 #   bundle id is a secret for that reason (yours has your name in it), and the
 #   signing step prints only its errors, with anything in quotes removed.
-name: Oddments iOS
+name: Oddkin iOS
 
 on:
   workflow_dispatch:
@@ -118,6 +119,39 @@ jobs:
           path: |
             oddments/first-launch.png
             oddments/resumed.png
+      # A rehearsal of the upload, as far as it can go without Apple: the same steps as the
+      # "testflight" job below (the stand-in bundle id swapped for another, the game copied in, an
+      # Xcode the App Store accepts, a Release archive for a real iPhone), stopping short of signing.
+      # Nothing is uploaded. If this passes, what is left untested is Apple's side.
+      - name: Rehearse the TestFlight archive (unsigned, nothing is uploaded)
+        run: |
+          set -o pipefail
+          sed -i '' "s/app\.oddments\.game/app.oddments.rehearsal/g" ios/App/App.xcodeproj/project.pbxproj capacitor.config.json
+          npm run ios:sync
+          if [ "$(xcodebuild -version | awk 'NR==1 { print int($2) }')" -lt 26 ]; then
+            NEWEST=$(ls -d /Applications/Xcode_*.app | grep -viE 'beta|candidate' | sort -V | tail -n 1)
+            sudo xcode-select -s "$NEWEST"
+          fi
+          xcodebuild -version
+          xcodebuild archive \
+            -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Rehearsal.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" | tail -n 20
+          APP="$RUNNER_TEMP/Rehearsal.xcarchive/Products/Applications/App.app"
+          ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist")
+          NAME=$(/usr/libexec/PlistBuddy -c "Print :CFBundleDisplayName" "$APP/Info.plist")
+          BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Info.plist")
+          VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Info.plist")
+          echo "archived: \"$NAME\" $VERSION ($BUILD), bundle id $ID"
+          [ "$ID" = "app.oddments.rehearsal" ] || { echo "::error::the bundle id was not swapped in"; exit 1; }
+          [ "$BUILD" = "${{ github.run_number }}" ] || { echo "::error::the build number was not stamped"; exit 1; }
+          [ "$NAME" = "Oddkin" ] || { echo "::error::the app is not called Oddkin"; exit 1; }
+          [ -f "$APP/public/index.html" ] || { echo "::error::the game is not inside the app"; exit 1; }
+          [ -f "$APP/Assets.car" ] || { echo "::error::the icon was not compiled in"; exit 1; }
+          [ -f "$APP/PrivacyInfo.xcprivacy" ] || { echo "::error::the privacy manifest is missing"; exit 1; }
+          grep -q "BUILD = '${{ github.run_number }}'" "$APP/public/js/platform/build.js" || { echo "::error::the game inside does not know its build number"; exit 1; }
+          echo "the archive is whole: name, version, build number, bundle id, game, icon and privacy manifest are all in place"
 
   # Are the secrets the right things, does Apple accept them, and is there an
   # app record to upload to? Answered on Linux, in seconds.
@@ -199,7 +233,7 @@ jobs:
           set -o pipefail
           xcodebuild archive \
             -project ios/App/App.xcodeproj -scheme App -configuration Release \
-            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Oddments.xcarchive" \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Oddkin.xcarchive" \
             CODE_SIGNING_ALLOWED=NO \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" | tail -n 40
       # What Xcode prints while signing can name the certificate's owner. This
@@ -221,7 +255,7 @@ jobs:
           EOF
           OUTCOME=0
           xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/Oddments.xcarchive" \
+            -archivePath "$RUNNER_TEMP/Oddkin.xcarchive" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export" \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${TIDY_ASC_KEY_ID}.p8" \

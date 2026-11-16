@@ -1,4 +1,4 @@
-# Getting Oddments onto TestFlight
+# Getting Oddkin onto TestFlight
 
 The iPhone app is the same game in a thin shell (Capacitor, as Pawst Lives uses), built by GitHub on a Mac it rents by the minute. Everything that can be done from this repository is done. What is left needs your Apple account, and is listed below in the order you would do it.
 
@@ -7,7 +7,7 @@ The iPhone app is the same game in a thin shell (Capacitor, as Pawst Lives uses)
 | | Status |
 | --- | --- |
 | Xcode project (`ios/`), stand-in icon and launch image | In the repository |
-| The app compiles, launches in the iOS Simulator, and keeps its save in native storage | Checked by the "Oddments iOS" workflow, job "build", which needs no secrets. Its screenshots are attached to each run. |
+| The app compiles, launches in the iOS Simulator, and keeps its save in native storage | Checked by the "Oddkin iOS" workflow, job "build", which needs no secrets. Its screenshots are attached to each run. |
 | Upload to TestFlight | Wired up (job "testflight"), **not yet run**: it needs the app record and the five secrets below. |
 | A real iPhone | Not tried. TestFlight is how that happens. |
 
@@ -26,12 +26,12 @@ Register it at [developer.apple.com/account](https://developer.apple.com/account
 At [appstoreconnect.apple.com](https://appstoreconnect.apple.com) → Apps → **+** → New App:
 
 - Platform **iOS**.
-- **Name**: yours to choose. It must not already be taken on the App Store, and it can be changed later, right up until release. TestFlight testers see this name.
+- **Name**: Oddkin. It must not already be taken on the App Store (if it is, add a few words, for example "Oddkin: Before Monday"); it can be changed later, right up until release. TestFlight testers see this name.
 - Primary language English (U.S.).
 - **Bundle ID**: the one from step 1.
 - **SKU**: anything, for example `oddments-ios`.
 
-The name under the icon on the phone is set separately and says "Oddments" for now (`CFBundleDisplayName` in `ios/App/App/Info.plist`, and `appName` in `capacitor.config.json`).
+The name under the icon on the phone is set separately and says "Oddkin" (`CFBundleDisplayName` in `ios/App/App/Info.plist`, and `appName` in `capacitor.config.json`).
 
 ### 3. Add five secrets to this repository
 
@@ -47,7 +47,7 @@ GitHub → this repository → Settings → Secrets and variables → Actions �
 
 ### 4. Run the upload
 
-GitHub → Actions → **Oddments iOS** → Run workflow → tick **Upload to TestFlight** → Run.
+GitHub → Actions → **Oddkin iOS** → Run workflow → tick **Upload to TestFlight** → Run.
 
 - A first job checks the secrets against Apple in a few seconds and says in plain words what is wrong if anything is.
 - The second archives the app, has Apple sign it, and uploads it. About ten minutes.
@@ -55,7 +55,7 @@ GitHub → Actions → **Oddments iOS** → Run workflow → tick **Upload to Te
 
 ### 5. Install it
 
-Apple takes a few minutes to process a build. Then: install the **TestFlight** app on your iPhone, accept the invitation Apple emails you, and install Oddments from there. Settings in the game shows which build you have.
+Apple takes a few minutes to process a build. Then: install the **TestFlight** app on your iPhone, accept the invitation Apple emails you, and install Oddkin from there. Settings in the game shows which build you have.
 
 The first build of an app sometimes waits on one question in App Store Connect (TestFlight → the build → "Missing Compliance"). The answer is already declared in the app (it uses no encryption beyond what iOS provides), so this should not appear; if it does, answer "None of the algorithms mentioned above".
 

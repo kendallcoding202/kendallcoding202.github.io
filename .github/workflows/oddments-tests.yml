@@ -1,6 +1,6 @@
-# Oddments: runs the rule tests, the simulator and the browser end-to-end
+# Oddkin: runs the rule tests, the simulator and the browser end-to-end
 # test whenever the game changes. Cheap Linux minutes only.
-name: Oddments tests
+name: Oddkin tests
 
 on:
   push:
