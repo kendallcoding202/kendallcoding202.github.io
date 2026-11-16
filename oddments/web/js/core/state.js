@@ -6,7 +6,7 @@ import {
 import { newFriend } from './progress.js';
 import { roomOpen, maxHpOf, rollEncounter, fairEncounter, heldBy } from './rooms.js';
 import { own } from './util.js';
-import { settleWhere, districtOf } from './world.js';
+import { settleWhere } from './world.js';
 import { newStory, reviveStory } from './story.js';
 
 export function newState(now = Date.now(), seed = (now ^ 0x9e3779b9) | 0) {
