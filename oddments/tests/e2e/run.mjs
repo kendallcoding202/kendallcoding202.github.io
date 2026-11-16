@@ -492,6 +492,7 @@ while (!cleared && visits < 6) {
       check((await page.$$('.unit.boss')).length === 1 && (await page.$$('.unit.foe')).length === 3, 'the boss stands with two others');
       check((await S(page, () => document.querySelectorAll('.unit.boss .pips i').length)) === 0, 'and has no Huff to calm');
       check(await S(page, () => document.querySelectorAll('.order .chip.foe img[src*="boss_hydra"]').length === 2), 'it takes two turns a round');
+      check(await S(page, () => window.oddments.sound().scene === 'boss'), 'and its fight has the lower, quicker tune');
       await snap(page, 'e2e-boss');
     }
     await botFight(page, { befriend: index < 4 });
@@ -712,6 +713,67 @@ for (const [name, viewport] of [
   await snap(other, `e2e-size-${viewport.width}`);
   await other.context().close();
 }
+
+// =============================================================== sound
+// (A test cannot listen. It can read what the sound code says it is doing: whether the audio clock is
+// running, which tune is playing, and how often each effect has been asked for.)
+section('Sound');
+const loud = await newPage();
+await loud.goto(`${base}?debug&fast&reset&seed=7`);
+await ready(loud);
+const sounding = (p) => S(p, () => window.oddments.sound());
+let snd = await sounding(loud);
+check(snd.running === false && snd.playing === false, 'nothing sounds before the first touch');
+check(snd.effects === true && snd.music === true, 'sound effects and music are both on to begin with');
+await loud.click('[data-id="begin"]');
+await loud.waitForSelector('.modal.talk');
+await loud.waitForTimeout(300);
+snd = await sounding(loud);
+check(snd.running && snd.playing && snd.scene === 'world', 'after it the lullaby plays');
+check(snd.heard.ring === 1 && snd.heard.talk === 1 && snd.heard.tap >= 1, 'the phone rings, great-aunt Maribel has a voice, and a button its tap', JSON.stringify(snd.heard));
+await hearOut(loud);
+check((await sounding(loud)).heard.talk === 4, 'a voice for every line she says');
+await walkUpTo(loud, 'ines');
+check((await sounding(loud)).heard.step >= 3, 'footsteps as you walk');
+await S(loud, () => { window.oddments.game.standAt('alley'); window.oddments.ctx.show('lane'); });
+await loud.waitForTimeout(300);
+await tapToward(loud, 'in:alley');
+await loud.waitForTimeout(200);
+check((await sounding(loud)).heard.nope === 1, 'a tap on the barricade gets the sound of something that will not budge');
+await S(loud, () => { window.oddments.game.standAt('garden'); window.oddments.ctx.show('lane'); });
+check(await walkIn(loud, 'garden'), 'walking in through the garden gate');
+await loud.waitForTimeout(200);
+check((await sounding(loud)).heard.gate === 1, 'the gate is heard');
+await onward(loud);
+snd = await sounding(loud);
+check(snd.heard.meet === 1 && snd.scene === 'fight' && snd.playing, 'meeting a group has its sting, and the music changes to the scuffle');
+await idle(loud);
+await botFight(loud, {});
+snd = await sounding(loud);
+check(snd.heard.use >= 2 && (snd.heard.hit || 0) + (snd.heard.strong || 0) + (snd.heard.weak || 0) >= 2, 'moves and hits are heard', JSON.stringify(snd.heard));
+check((snd.heard.win || 0) + (snd.heard.lose || 0) === 1, 'and so is how it ended');
+await loud.click('[data-id="next"]');
+await loud.waitForTimeout(200);
+check((await sounding(loud)).scene === 'world', 'back in the world, the lullaby again');
+await tab(loud, 'settings');
+check((await loud.$$('#settings .switch')).length === 3 && await S(loud, () => document.querySelector('[data-act="sound"]').classList.contains('on') && document.querySelector('[data-act="music"]').classList.contains('on')), 'Settings has a switch for sound effects and one for music, both on');
+await loud.click('[data-act="music"]');
+await loud.waitForTimeout(200);
+snd = await sounding(loud);
+check(snd.music === false && snd.playing === false && snd.effects === true, 'music off stops the tune and leaves the effects');
+await loud.click('[data-act="sound"]');
+snd = await sounding(loud);
+check(snd.effects === false && (await state(loud)).settings.sound === false && (await state(loud)).settings.music === false, 'sound effects off, and both are remembered');
+await loud.goto(`${base}?debug&fast`);
+await ready(loud);
+await tab(loud, 'settings');
+snd = await sounding(loud);
+check(snd.effects === false && snd.music === false && await S(loud, () => !document.querySelector('[data-act="sound"]').classList.contains('on')), 'after a reload they are still off');
+check(snd.running === true && snd.playing === false, 'so a touch wakes the audio but nothing plays');
+await loud.click('[data-act="music"]');
+await loud.waitForTimeout(300);
+check((await sounding(loud)).playing === true, 'and music comes back the moment it is switched on');
+await loud.context().close();
 
 // =============================================================== a folding phone
 section('A folding phone, opened and closed in the middle of things');

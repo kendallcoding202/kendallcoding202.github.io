@@ -30,7 +30,7 @@ export function newState(now = Date.now(), seed = (now ^ 0x9e3779b9) | 0) {
     book: Object.fromEntries(SPECIES_IDS.map((id) => [id, { met: friends.some((friend) => friend.species === id), heirloom: false }])),
     stats: { battles: 0, wins: 0, losses: 0, rounds: 0, knockouts: 0, befriended: 0, heirlooms: 0 },
     story: newStory(), // which conversations have been had; the rest of the story is read from everything else here
-    settings: { fast: false },
+    settings: { fast: false, sound: true, music: true }, // fast fights; sound effects; the tunes
     seen: {}, // one-time hints already shown
   };
 }
@@ -159,7 +159,8 @@ export function reviveState(saved, now = Date.now()) {
   for (const key of Object.keys(state.stats)) state.stats[key] = int(stats[key], 0);
   state.story = reviveStory(saved.story);
   const settings = isObj(saved.settings) ? saved.settings : {};
-  for (const key of Object.keys(state.settings)) state.settings[key] = settings[key] === true;
+  // A switch an older save has never heard of keeps its usual setting: sound is on unless turned off.
+  for (const key of Object.keys(state.settings)) if (typeof settings[key] === 'boolean') state.settings[key] = settings[key];
   const seen = isObj(saved.seen) ? saved.seen : {};
   state.seen = Object.fromEntries(Object.keys(seen).filter((key) => key.length <= 24 && seen[key] === true).slice(0, 64).map((key) => [key, true]));
   return state;

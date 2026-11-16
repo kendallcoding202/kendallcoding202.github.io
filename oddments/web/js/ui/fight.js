@@ -10,6 +10,7 @@ import { h, sprite, setText, wait } from './dom.js';
 import { modal } from './modals.js';
 import { elementTag, moveLine, oddmentCard } from './parts.js';
 import { lineFor } from './text.js';
+import { play as sound } from '../platform/sound.js'; // (this screen has a `play` of its own: playing back the fight)
 
 export function fightScreen(ctx) {
   const { game } = ctx;
@@ -160,6 +161,7 @@ export function fightScreen(ctx) {
       case 'use':
         say(lineFor(event, nameOf));
         flash(view[event.who].el, event.move === BRACE.id || !moveOf(event.move).power ? 'cast' : 'lunge', 440);
+        sound(event.move === BRACE.id ? 'brace' : 'use');
         await pause(400);
         break;
       case 'hit': {
@@ -169,10 +171,11 @@ export function fightScreen(ctx) {
         float(event.target, `−${event.dmg}${event.edge > 0 ? '!' : ''}`, event.edge > 0 ? 'dmg strong' : event.edge < 0 ? 'dmg weak' : 'dmg');
         burst(event.target, event.edge > 0 ? 'strong' : '');
         flash(v.el, 'hurt', 400);
+        sound(event.edge > 0 ? 'strong' : event.edge < 0 ? 'weak' : 'hit');
         if (event.edge > 0 || event.down) flash(arena, 'shake', 320);
         say(lineFor(event, nameOf));
         await pause(event.edge ? 520 : 380);
-        if (event.down) { leave(event.target, 'down'); await pause(260); }
+        if (event.down) { leave(event.target, 'down'); sound('faint'); await pause(260); }
         break;
       }
       case 'mend':
@@ -180,23 +183,27 @@ export function fightScreen(ctx) {
         drawPlate(event.target);
         float(event.target, `+${event.amount}`, 'heal');
         burst(event.target, 'heal');
+        sound('mend');
         say(lineFor(event, nameOf));
         await pause(400);
         break;
       case 'mod':
         float(event.target, `${event.stat === 'oomph' ? 'Oomph' : event.stat === 'grit' ? 'Grit' : 'Pep'} ${event.by > 0 ? '▲' : '▼'}`, event.by > 0 ? 'up' : 'down');
+        sound(event.by > 0 ? 'up' : 'down');
         say(lineFor(event, nameOf));
         await pause(340);
         break;
       case 'call':
         say(lineFor(event, nameOf));
         flash(caller, 'calling', 420);
+        sound(event.call === 'reach' ? 'reach' : 'call');
         await pause(380);
         break;
       case 'huff':
         view[event.target].huff = event.huff;
         drawPlate(event.target);
         flash(view[event.target].pips, 'pop', 400);
+        sound(event.by > 0 ? 'huff' : 'pip');
         say(lineFor(event, nameOf));
         await pause(360);
         break;
@@ -204,6 +211,7 @@ export function fightScreen(ctx) {
         say(lineFor(event, nameOf));
         leave(event.target, 'settled');
         float(event.target, '♥', 'heart');
+        sound('settle');
         await pause(700);
         break;
       case 'end':

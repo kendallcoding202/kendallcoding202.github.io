@@ -66,7 +66,7 @@ web/                    the game: what ships
     auto.js             a plain stand-in player, for the simulator and the rehearsal
     util.js             the seeded random generator
   js/ui/                the screens: the world you walk in, the fight, friends, scrapbook
-  js/platform/          storage, and the one file that knows about the iOS app's native side
+  js/platform/          storage, sound, and the one file that knows about the iOS app's native side
   assets/               sprites, room paintings, the painted world, font (about 2 MB)
 tests/unit/             a test per rule (node:test)
 tests/e2e/              the browser test, the preview smoke test, a screenshot tool
@@ -83,7 +83,7 @@ docs/                   the design and the art list
 
 ## Not done
 
-Two places of eight can be played: the other six are buildings you can walk up to, with nothing behind their doors, and the story stops where Tin Can Alley does. Three neighbours stand in the world and talk, but they stand still, and there is nothing to pick up or do besides meeting Clutterkin. Friends on the green are for looking at, not talking to. You see it from above in 2D. The house-sitter turns to face the way they walk; Clutterkin and neighbours have one view each and only turn left or right. No sound at all yet: no music and no effects. No purchases. Clutterkin do not grow up yet (the table says into what; the rule and the art are not there). Heirlooms can be found and kept, but nothing helps you look for one (see `docs/DESIGN.md`).
+Two places of eight can be played: the other six are buildings you can walk up to, with nothing behind their doors, and the story stops where Tin Can Alley does. Three neighbours stand in the world and talk, but they stand still, and there is nothing to pick up or do besides meeting Clutterkin. Friends on the green are for looking at, not talking to. You see it from above in 2D. The house-sitter turns to face the way they walk; Clutterkin and neighbours have one view each and only turn left or right. There is sound now (effects, a lullaby in the lane and a livelier tune in a fight, all made in code, with a switch for each in Settings), but nobody has listened to it: it was written and tested by something that cannot hear, so whether it is pleasant is for you to say. No purchases. Clutterkin do not grow up yet (the table says into what; the rule and the art are not there). Heirlooms can be found and kept, but nothing helps you look for one (see `docs/DESIGN.md`).
 
 The buildings, trees, lamps, hedges, grass, and the alley's junk, fence and cobbles are painted (four generated images, see `docs/ART.md`); the streets, their stepping stones, the gateways and the name plates are still drawn in code. The four house-sitter looks are still candidates, taller and slimmer than the Pawst Lives cats. The app icon is painted, with one touch-up done in code (the pencil in her hair).
 

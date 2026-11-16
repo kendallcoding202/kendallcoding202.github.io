@@ -2,7 +2,7 @@
 import { Game } from './core/game.js';
 import { newState, reviveState } from './core/state.js';
 import { playable } from './core/trial.js';
-import { SPECIES, MAX_LEVEL, roomOf, moveOf, xpNeeded } from './core/balance.js';
+import { SPECIES, ROOMS, MAX_LEVEL, roomOf, roomBuilt, moveOf, xpNeeded } from './core/balance.js';
 import { loadAssets } from './ui/assets.js';
 import { h, $, sprite } from './ui/dom.js';
 import { modal, toast } from './ui/modals.js';
@@ -11,6 +11,7 @@ import { fightScreen } from './ui/fight.js';
 import { friendsScreen, bookScreen, settingsScreen, lookDialog } from './ui/friends.js';
 import { heirloomTag, bar } from './ui/parts.js';
 import { loadSave, writeSave, clearSave, keepUnreadable } from './platform/storage.js';
+import { unlockSound, setSound, hushSound, play, setScene, soundState } from './platform/sound.js';
 
 const params = new URLSearchParams(location.search);
 // Switches for testing in a browser: ?reset starts from a clean save, ?fast
@@ -50,6 +51,18 @@ async function boot() {
   const seed = Number(params.get('seed') || flags.seed);
   const game = new Game(state || (Number.isFinite(seed) && seed ? newState(Date.now(), seed) : newState(Date.now())), { now: Date.now() });
 
+  // Sound: the two switches as the save has them. Nothing is heard until the first touch (a browser's
+  // rule), every touch after that costs nothing, and away from the game there is silence.
+  setSound({ effects: game.state.settings.sound, music: game.state.settings.music });
+  window.addEventListener('pointerdown', unlockSound, true);
+  window.addEventListener('keydown', unlockSound, true);
+  document.addEventListener('visibilitychange', () => hushSound(document.hidden));
+  // Every button makes the same small sound when pressed; what it does may make another.
+  document.addEventListener('click', (event) => {
+    const button = event.target && event.target.closest ? event.target.closest('button') : null;
+    if (button && !button.disabled) play('tap');
+  }, true);
+
   let showing = null;
   const screenRoot = $('#screen');
   const tabsRoot = $('#tabs');
@@ -64,6 +77,8 @@ async function boot() {
       const target = place === 'fight' ? 'fight' : (TABS.some((tab) => tab.id === name) ? name : 'lane');
       if (showing && showing.gone) showing.gone();
       ctx.current = target;
+      // The music follows you: the lullaby out in the world, the scuffle in a fight, lower for a ringleader.
+      setScene(target !== 'fight' ? 'world' : game.battle.units.some((unit) => unit.boss) ? 'boss' : 'fight');
       const screen = SCREENS[target](ctx);
       showing = screen;
       screenRoot.replaceChildren(screen.el);
@@ -84,7 +99,7 @@ async function boot() {
   window.addEventListener('pagehide', () => ctx.save());
 
   // A handle for tests and for poking at the game from a browser console.
-  if (flag('debug') || location.hostname === 'localhost' || location.hostname === '127.0.0.1') window.oddments = { game, ctx };
+  if (flag('debug') || location.hostname === 'localhost' || location.hostname === '127.0.0.1') window.oddments = { game, ctx, sound: soundState };
 
   // Whichever copy of the save was the newer, both places now hold it.
   if (state) ctx.save();
@@ -104,7 +119,18 @@ function resultDialog(ctx, summary, foes) {
   const lines = [];
   const name = (species) => SPECIES[species].name;
 
-  if (summary.cleared) lines.push(h('p', { class: 'big' }, `${room.name} is calm!`), h('p', null, 'Everyone is rested, and the way on is open. (The next place is not built yet: this slice ends here. Step out of the gate and back in, and the garden will be restless again, with more friends to make.)'));
+  // How it went, to the ear: the place calm, a fight won, or the walk home; then anyone new, and anyone grown.
+  play(summary.cleared ? 'calm' : summary.won ? 'win' : 'lose');
+  if (summary.joined.length) setTimeout(() => play('joined'), summary.cleared ? 1500 : 650);
+  if (summary.heirlooms.length || summary.joined.some((joined) => joined.heirloom)) setTimeout(() => play('heirloom'), summary.cleared ? 2100 : 1250);
+  if (summary.gains.some((gain) => gain.to > gain.from)) setTimeout(() => play('level'), summary.cleared ? 2700 : summary.joined.length ? 1850 : 800);
+
+  if (summary.cleared) {
+    const next = ROOMS[ROOMS.indexOf(room) + 1];
+    lines.push(h('p', { class: 'big' }, `${room.name} is calm!`), h('p', null, next && roomBuilt(next)
+      ? `Everyone is rested, and the way on is open: ${next.name} is next. Ines Tock will want to hear. (Step out of the gate and back in and ${room.name} is restless again, with more friends to make.)`
+      : `Everyone is rested. That is as far as the lane is built: ${next ? `${next.name} comes next, and is not there yet` : 'every place is calm'}. (Step out of the gate and back in and ${room.name} is restless again, with more friends to make.)`));
+  }
   else if (summary.won) lines.push(h('p', null, 'They are calm now. Everyone catches their breath.'));
   else lines.push(h('p', null, 'Your friends are worn out. You carry them home for a rest: you keep everything they learned.'));
 

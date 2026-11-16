@@ -149,6 +149,7 @@ small { color: var(--muted); font-size: 12px; }
 .switch.on::after { transform: translateX(20px); background: #fff; }
 .toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .toggle small { display: block; }
+.toggle + .toggle { margin-top: 12px; padding-top: 12px; border-top: 1.5px solid var(--line); }
 .note { color: var(--muted); font-size: 13px; }
 .note.gold { color: var(--gold); }
 

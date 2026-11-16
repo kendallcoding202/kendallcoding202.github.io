@@ -7,12 +7,13 @@
 // `bake`), then placed each frame, so a frame costs a handful of pictures
 // however detailed the painting was.
 import { ROOMS, SPECIES, ELEMENTS, roomOf, roomBuilt } from '../core/balance.js';
-import { WORLD, POST, SPOTS, TREES, LAMPS, HEDGES, ROAD_POINTS, GREEN, DISTRICTS, PEOPLE, spotOf, personAt } from '../core/world.js';
+import { WORLD, POST, SPOTS, TREES, LAMPS, HEDGES, ROAD_POINTS, GREEN, DISTRICTS, PEOPLE, spotOf, personAt, districtAt } from '../core/world.js';
 import { CAST } from '../core/story.js';
 import { h, sprite, spriteSrc } from './dom.js';
 import { elementTag, bar } from './parts.js';
 import { modal, toast, modalOpen } from './modals.js';
 import { converse } from './talk.js';
+import { play } from '../platform/sound.js';
 import { FONT, oval, paint, glow, label, worldSrc, paintGround, paintBuilding, paintProp, paintLamp, paintGate, wallOf } from './scenery.js';
 
 // How much of the world fits across the screen. People and Clutterkin are small in a big place.
@@ -52,6 +53,11 @@ const GROUND = {
   w: WORLD.w, h: WORLD.h, roads: ROAD_POINTS, spots: SPOTS.filter((spot) => !DISTRICTS[spot.id]), lamps: LAMPS, hedges: HEDGES, green: GREEN,
   lawns: PLACES.map(({ room, area, dress }) => ({ x: area.x, y: area.y, w: area.w, h: area.h, tint: room.tint, gate: area.gate, posts: area.posts, floor: dress.floor })),
 };
+// Where feet fall on stone, not grass, and how far apart footfalls are. And the goal as last heard
+// of: a new one gets a bell, once, whichever screen it changed on.
+const PAVED = new Set(PLACES.filter(({ dress }) => dress.floor === 'cobbles').map(({ room }) => room.id));
+const FOOTFALL = 36;
+let goalHeard = null;
 /** The last place that is built: where this slice of the game ends. */
 const LAST_BUILT = ROOMS.filter(roomBuilt).pop();
 
@@ -88,6 +94,7 @@ export function laneScreen(ctx) {
   let facing = 1;
   let aspect = 'front'; // which way you are turned: 'side' (see `facing`), 'front' toward the screen, 'back' away from it
   let stride = 0; // how far you have walked, for the bounce in your step
+  let footfall = 0; // how far you had walked at your last footfall
   let spring = 0; // 0 standing still, 1 walking: eased, so a step never snaps
   let cardFor; // what the card is showing (undefined: not drawn yet)
   let everything = false; // true while painting the whole world once, before the first frame
@@ -407,6 +414,8 @@ export function laneScreen(ctx) {
     if (key === cardFor) return;
     cardFor = key;
     goalText.textContent = goal.count ? `${goal.title} (${goal.count[0]} of ${goal.count[1]})` : goal.title;
+    if (goalHeard !== null && goalHeard !== goal.id) play('goal');
+    goalHeard = goal.id;
     goalChip.dataset.goal = goal.id;
     // The heading says where you are, and how a visit is going.
     title.textContent = inside ? roomOf(inside).name : LANE;
@@ -436,7 +445,7 @@ export function laneScreen(ctx) {
     if (id === 'home') {
       if (visit) {
         card.replaceChildren(h('h2', null, HOME.name), h('small', null, 'Rest here and everyone gets their breath back. Whoever you calmed out there will be restless again by the time you go back.'), teamList(),
-          h('button', { class: 'btn gold', data: { act: 'rest' }, onclick: () => { if (game.rest()) { ctx.save(); toast('Everyone is rested.', { kind: 'good' }); cardFor = undefined; } } }, 'Rest'));
+          h('button', { class: 'btn gold', data: { act: 'rest' }, onclick: () => { if (game.rest()) { ctx.save(); play('rest'); toast('Everyone is rested.', { kind: 'good' }); cardFor = undefined; } } }, 'Rest'));
         return;
       }
       card.replaceChildren(h('h2', null, HOME.name), h('small', null, HOME.blurb, ' Friends who are not walking with you potter about on the green.'),
@@ -494,6 +503,8 @@ export function laneScreen(ctx) {
       if (Math.hypot(to.x - post.x, to.y - post.y) <= POST.meet) passedOver = -1; // a tap on them is choosing to meet them
     }
     way = game.routeTo(to);
+    // A tap on a barricade, or past it into the place it shuts, gets the sound of something that will not budge.
+    if (PLACES.some(({ room, area }) => !game.roomOpen(room.id) && (districtAt(to) === room.id || Math.hypot(to.x - area.gate.x, to.y - area.gate.y) <= 90))) play('nope');
     mark = { x: to.x, y: to.y, life: 1 };
     if (!state.seen.walked) { state.seen.walked = true; hint.hidden = true; }
   }
@@ -551,7 +562,7 @@ export function laneScreen(ctx) {
     // screen (and once, for a save from before there was a story).
     else if (!state.story.call) {
       const call = game.takeCall();
-      if (call) { ctx.save(); converse(call, () => { cardFor = undefined; }); }
+      if (call) { ctx.save(); play('ring'); converse(call, () => { cardFor = undefined; }); }
     }
     const moving = !met && way.length > 0 && game.walk(way[0], dt);
     const now = here();
@@ -563,10 +574,16 @@ export function laneScreen(ctx) {
       if (Math.abs(dy) > Math.abs(dx) * 1.3) aspect = dy > 0 ? 'front' : 'back';
       else if (Math.abs(dx) > Math.abs(dy) * 1.3) aspect = 'side';
       stride += Math.hypot(dx, now.y - before.y);
+      if (stride - footfall >= FOOTFALL) { footfall = stride; play('step', { hard: PAVED.has(game.district()) }); }
       if (Math.hypot(now.x - trail[0].x, now.y - trail[0].y) > 5) { trail.unshift({ x: now.x, y: now.y }); if (trail.length > 60) trail.length = 60; }
     } else if (way.length) way.shift();
     // Stepping through a gate begins a visit: worth keeping straight away.
-    if (!visiting && state.visit) ctx.save();
+    if (!visiting && state.visit) {
+      ctx.save();
+      play('gate');
+      // If one of them is an Heirloom, you hear it glint before you have picked it out.
+      if (state.visit.groups.some((group) => group.foes.some((foe) => foe.heirloom))) setTimeout(() => play('heirloom'), 550);
+    }
     spring += ((moving ? 1 : 0) - spring) * (1 - Math.exp(-dt * 12));
     // The team keeps its distance behind you along the way you came, and eases into place.
     const ease = 1 - Math.exp(-dt * 10);
@@ -592,6 +609,7 @@ export function laneScreen(ctx) {
     if (group >= 0) {
       met = true;
       way = [];
+      play('meet');
       wrap.classList.add('meeting');
       setTimeout(() => { if (game.startEncounter(group)) ctx.show('fight'); }, ctx.fast ? 60 : 460);
     }

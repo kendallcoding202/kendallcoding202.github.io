@@ -4,6 +4,7 @@ import { SPECIES, SPECIES_IDS, ELEMENTS, ELEMENT_IDS, TEAM_SIZE, LOOKS, NAME_LEN
 import { h, sprite } from './dom.js';
 import { modal, toast } from './modals.js';
 import { elementTag, heirloomTag, bar, oddmentCard } from './parts.js';
+import { setSound, unlockSound } from '../platform/sound.js';
 
 /** Everyone who has come home, and the three who walk with you. */
 export function friendsScreen(ctx) {
@@ -91,10 +92,26 @@ export function settingsScreen(ctx) {
   const { settings, player, stats } = game.state;
   const fast = h('button', { class: `switch${settings.fast ? ' on' : ''}`, role: 'switch', 'aria-label': 'Fast fights', data: { act: 'fast' } });
   fast.addEventListener('click', () => { settings.fast = !settings.fast; fast.classList.toggle('on', settings.fast); ctx.save(); });
+  // Sound effects and music each have a switch of their own.
+  const flip = (key, label) => {
+    const button = h('button', { class: `switch${settings[key] ? ' on' : ''}`, role: 'switch', 'aria-label': label, data: { act: key } });
+    button.addEventListener('click', () => {
+      settings[key] = !settings[key];
+      button.classList.toggle('on', settings[key]);
+      setSound({ effects: settings.sound, music: settings.music });
+      unlockSound();
+      ctx.save();
+    });
+    return button;
+  };
+  const sound = flip('sound', 'Sound effects');
+  const music = flip('music', 'Music');
 
   const el = h('section', { id: 'settings', class: 'page' },
     h('header', { class: 'bar-top' }, h('h1', null, 'Settings')),
     h('div', { class: 'card' },
+      h('div', { class: 'toggle' }, h('div', null, 'Sound effects', h('small', null, 'Footsteps, taps, and what happens in a fight.')), sound),
+      h('div', { class: 'toggle' }, h('div', null, 'Music', h('small', null, 'A lullaby out in the lane, something livelier in a fight.')), music),
       h('div', { class: 'toggle' }, h('div', null, 'Fast fights', h('small', null, 'Play the moves back quicker.')), fast)),
     h('div', { class: 'card you' },
       sprite(player.look),

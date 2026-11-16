@@ -3,6 +3,7 @@
 import { h, sprite } from './dom.js';
 import { modal } from './modals.js';
 import { CAST } from '../core/story.js';
+import { play } from '../platform/sound.js';
 
 /** Plays `lines` (each { who, text }) one after another. `onDone` runs when the last has been heard. */
 export function converse(lines, onDone) {
@@ -27,6 +28,7 @@ export function converse(lines, onDone) {
     role.textContent = person.role;
     if (face.dataset.who !== lines[at].who) { face.dataset.who = lines[at].who; face.replaceChildren(sprite(person.art)); }
     words.textContent = lines[at].text;
+    play('talk', { who: lines[at].who });
     button.textContent = at < lines.length - 1 ? 'Next' : 'OK';
     dialog.el.dataset.line = `${at + 1}/${lines.length}`;
   }
