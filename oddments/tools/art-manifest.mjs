@@ -21,6 +21,24 @@ const human = (id, desc) => ({
   prompt: `A single game character sprite: ${desc} Standing upright, facing right in side three-quarter view. Big head, warm friendly but determined expression. An original character, not based on any existing game, film or cartoon character. ${SPRITE_STYLE}`,
 });
 
+// Two more views of a person already painted, so they can face any way they walk: one image holding
+// the same character from the front and from behind. `ref` is the painting to match: where the
+// image service takes a picture to work from it is given that one; where it does not, the words do.
+const PEOPLE_STYLE =
+  'Style: clean 2D mobile game art, bold dark outline, flat cel shading with soft highlights, ' +
+  'vibrant saturated colors, sticker-like, chibi proportions with a big head, cute but with attitude. ' +
+  'Full bodies visible with empty margin on all sides, no ground, no shadow, no text, no letters, no border. Transparent background.';
+const turnaround = (ref, desc) => ({
+  id: `${ref}_turn`, kind: 'turn', ref, size: '1536x1024', quality: 'medium', transparent: true,
+  prompt:
+    `Two views of one and the same game character, the character shown in the reference picture: ${desc} ` +
+    'Draw exactly two full-body figures side by side with a wide empty gap between them, the same height, feet on the same level, both standing upright. ' +
+    'LEFT figure: seen straight from the FRONT, facing the viewer, looking at the viewer. ' +
+    'RIGHT figure: seen straight from BEHIND, back to the viewer, face not visible. ' +
+    'Both figures have exactly the same hair, skin, clothes, colours, proportions and carried things as the reference picture, and the same drawing style. ' +
+    `An original character, not based on any existing game, film or cartoon character. ${PEOPLE_STYLE}`,
+});
+
 // The world you walk in. The same look as the sprites (it is the Pawst Lives
 // sprite style, less the words that only fit a single character), so buildings
 // sit beside the monsters as if painted together.
@@ -35,6 +53,31 @@ export const ART = [
   human('sitter_b', 'a tall lanky young adult man house-sitter with dark brown skin, short twisted hair and round glasses, wearing a plum-purple quilted dressing gown over striped pyjamas and fluffy grey slippers, holding a big chunky flashlight with a warm beam in one hand, the other hand held out open in a friendly way.'),
   human('sitter_c', 'a short stocky young adult house-sitter with tan skin, freckles and a chin-length bob of teal-dyed hair, wearing a camping headlamp on the forehead, a baggy cream cable-knit jumper with rolled sleeves, patched olive-green dungarees and yellow rubber boots, a feather duster tucked in the belt, one hand held out open in a friendly way.'),
   human('sitter_d', 'a young adult house-sitter with East Asian features and short choppy black hair, wrapped in a colourful patchwork quilt worn like a cape over grey pyjamas, a big ring of old house keys at the belt, carrying a lit candle in a brass chamber-stick holder in one hand, the other hand held out open in a friendly way.'),
+  // ---- the house-sitter from the front and from behind, one image per look ----
+  // (tools/process-art.py cuts each into its two figures: <look>_front and <look>_back.)
+  turnaround('sitter_a', 'a young adult woman house-sitter with warm brown skin and curly dark hair in a messy bun held by a pencil, wearing an oversized mustard-yellow knitted cardigan over teal pyjamas, mismatched socks (one red-striped, one blue-dotted) and no shoes, holding a small glowing brass wind-up lantern in one hand.'),
+  turnaround('sitter_b', 'a tall lanky young adult man house-sitter with dark brown skin, short twisted hair and round glasses, wearing a plum-purple quilted dressing gown over striped pyjamas and fluffy grey slippers, holding a big chunky flashlight in one hand.'),
+  turnaround('sitter_c', 'a short stocky young adult house-sitter with tan skin, freckles and a chin-length bob of teal-dyed hair, wearing a camping headlamp on the forehead, a baggy cream cable-knit jumper with rolled sleeves, patched olive-green dungarees and yellow rubber boots, a feather duster tucked in the belt.'),
+  turnaround('sitter_d', 'a young adult house-sitter with East Asian features and short choppy black hair, wrapped in a colourful patchwork quilt worn like a cape over grey pyjamas, a big ring of old house keys at the belt, carrying a lit candle in a brass chamber-stick holder in one hand.'),
+  // ---- the cast: the four people of the lane, on one sheet ----
+  // (tools/process-art.py cuts it into cast_ines, cast_dov, cast_spick and cast_maribel, left to right.)
+  {
+    id: 'cast_sheet', kind: 'cast', size: '1536x1024', quality: 'medium', transparent: true,
+    prompt:
+      'Four separate game character sprites in one image, standing in a single row, evenly spaced with a wide empty gap between each, none touching or overlapping, ' +
+      'feet on the same level, all drawn in the same style and to the same scale (the child clearly shorter than the adults). ' +
+      'Each stands upright facing the viewer, turned very slightly to the right, full body. Left to right: ' +
+      'ONE: a stout elderly woman clock-mender with deep brown skin and silver hair wrapped up in a patterned amber headscarf, a brass jeweller\'s magnifying loupe pushed up on her forehead, ' +
+      'a moss-green shirt with rolled sleeves, a worn leather tool apron with tiny screwdrivers and clock keys in its pockets, a big pocket watch hanging on a chain, sturdy brown boots, a kind knowing smile, one hand raised in greeting. ' +
+      'TWO: a ten-year-old kid with light olive skin, a mop of curly red-brown hair and a gap-toothed grin, an oversized denim jacket covered in bottle caps pinned on like medals, ' +
+      'a glass jam jar full of bottle caps hugged under one arm, striped shorts, scabbed knees and green wellington boots. ' +
+      'THREE: a tall thin middle-aged clearance man with pale skin, a neat grey moustache and a flat peaked cap, spotless pale-blue overalls buttoned to the neck with a yellow rubber glove hanging from a pocket, ' +
+      'holding a clipboard against his chest and a pencil in the other hand, looking unimpressed and in a hurry. ' +
+      'FOUR: a tiny sprightly great-aunt in her eighties with light brown skin and a big cloud of white hair, round sunglasses pushed up into it, a bright floral travelling coat, ' +
+      'a patterned carpet bag in one hand and a walking stick with a cat-shaped handle in the other, a mischievous smile. ' +
+      'All four are original characters, not based on any existing game, film or cartoon character. ' +
+      PEOPLE_STYLE,
+  },
   // ---- the world: every building in the lane and three things that stand in it, on one sheet ----
   // (tools/process-art.py cuts the sheet into its twelve sprites, in this order.)
   {

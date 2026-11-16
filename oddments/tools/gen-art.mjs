@@ -3,7 +3,10 @@
 // Needs OPENAI_API_KEY in the environment (or a proxy that injects it).
 // Every image costs money: nothing is generated unless it is in the manifest
 // and missing, and the manifest only lists art that has been agreed.
-import { writeFile, mkdir, access } from 'node:fs/promises';
+// An entry with `ref` is painted from a picture already made (art/raw/<ref>), so the
+// same character can be shown another way; if the service will not take a picture to
+// work from, the entry's words are used on their own instead.
+import { writeFile, readFile, mkdir, access } from 'node:fs/promises';
 import { ART } from './art-manifest.mjs';
 
 const OUT = new URL('../art/raw/', import.meta.url);
@@ -16,6 +19,15 @@ await mkdir(OUT, { recursive: true });
 
 const exists = async (u) => access(u).then(() => true, () => false);
 
+/** The picture an entry is to be painted from: the original as it came, or as archived. */
+async function reference(id) {
+  for (const [ext, type] of [['png', 'image/png'], ['webp', 'image/webp']]) {
+    const url = new URL(`${id}.${ext}`, OUT);
+    if (await exists(url)) return { bytes: await readFile(url), type, name: `${id}.${ext}` };
+  }
+  return null;
+}
+
 async function generate(item) {
   const dest = new URL(`${item.id}.png`, OUT);
   // Originals are archived as .webp after processing; either counts as done.
@@ -26,13 +38,30 @@ async function generate(item) {
     output_format: 'png', n: 1,
     ...(item.transparent ? { background: 'transparent' } : {}),
   };
+  let from = item.ref ? await reference(item.ref) : null;
   for (let attempt = 1; attempt <= 4; attempt++) {
     try {
-      const res = await fetch('https://api.openai.com/v1/images/generations', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      let res;
+      if (from) {
+        // Painted from a picture: the same request as a form, with the picture attached.
+        const form = new FormData();
+        for (const [key, value] of Object.entries(body)) form.append(key, String(value));
+        form.append('image', new Blob([from.bytes], { type: from.type }), from.name);
+        res = await fetch('https://api.openai.com/v1/images/edits', { method: 'POST', headers: { Authorization: `Bearer ${KEY}` }, body: form });
+        // Refused outright (not a hiccup): this service will not work from a picture. Use the words alone.
+        if (res.status >= 400 && res.status < 500 && res.status !== 429) {
+          console.error(`  ${item.id}: cannot be painted from a picture here (${res.status}: ${(await res.text()).slice(0, 200)}); using the words alone`);
+          from = null;
+          attempt--;
+          continue;
+        }
+      } else {
+        res = await fetch('https://api.openai.com/v1/images/generations', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      }
       const json = await res.json();
       if (!json.data) throw new Error(JSON.stringify(json).slice(0, 300));
       await writeFile(dest, Buffer.from(json.data[0].b64_json, 'base64'));

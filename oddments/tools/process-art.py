@@ -2,7 +2,9 @@
 """Turns the originals in art/raw/ into the web-sized assets under web/assets/.
 
 Only art made for this game is in art/raw/ (the people, and the world: one
-sheet of buildings and things, and one ground texture). The monsters, rooms,
+sheet of buildings and things, and one ground texture). A person's front and
+back views arrive two to an image, and the cast four to an image; each is cut
+into its figures here. The monsters, rooms,
 icons and font were painted for Pawst Lives and are copied from it already
 processed. Sprites are trimmed to their painted area and shrunk, exactly as
 Pawst Lives does it, so old and new sit at the same scale.
@@ -116,6 +118,71 @@ def earth_from(grass):
     return Image.fromarray((dark + (pale - dark) * t).round().astype(np.uint8), "RGB")
 
 
+# The cast sheet, left to right.
+CAST = ["cast_ines", "cast_dov", "cast_spick", "cast_maribel"]
+
+
+def cut_row(im, count):
+    """
+    Cuts an image of figures standing in a row into its figures, left to right. Figures are told apart
+    by which paint touches which, not by the gaps between them: an elbow may reach over a neighbour's
+    column without the two being one. A stray fleck belongs to whichever figure it is nearest.
+    """
+    im = im.convert("RGBA")
+    solid = np.asarray(im.getchannel("A")) > 40
+    cell = 4  # worked out on a coarse grid: quick, and paint a hair apart still counts as touching
+    h, w = solid.shape[0] // cell, solid.shape[1] // cell
+    coarse = solid[: h * cell, : w * cell].reshape(h, cell, w, cell).any(axis=(1, 3))
+    label = np.zeros((h, w), dtype=np.int32)
+    blobs = []  # for each: how many cells, and the sum of their columns
+    for y0, x0 in zip(*np.nonzero(coarse)):
+        if label[y0, x0]:
+            continue
+        number = len(blobs) + 1
+        label[y0, x0] = number
+        stack = [(y0, x0)]
+        cells, across = 0, 0
+        while stack:
+            y, x = stack.pop()
+            cells += 1
+            across += x
+            for ny, nx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1), (y + 1, x + 1), (y - 1, x - 1), (y + 1, x - 1), (y - 1, x + 1)):
+                if 0 <= ny < h and 0 <= nx < w and coarse[ny, nx] and not label[ny, nx]:
+                    label[ny, nx] = number
+                    stack.append((ny, nx))
+        blobs.append((cells, across / cells))
+    if len(blobs) < count:
+        raise SystemExit(f"expected {count} figures in the image, found {len(blobs)}")
+    biggest = sorted(sorted(range(len(blobs)), key=lambda i: -blobs[i][0])[:count], key=lambda i: blobs[i][1])
+    owner = {i: min(biggest, key=lambda big: abs(blobs[big][1] - blobs[i][1])) for i in range(len(blobs))}
+    fine = np.kron(label, np.ones((cell, cell), dtype=np.int32))
+    pieces = []
+    for big in biggest:
+        mine = np.isin(fine, [i + 1 for i in owner if owner[i] == big])
+        figure = np.asarray(im)[: h * cell, : w * cell].copy()
+        figure[~mine] = 0
+        pieces.append(trimmed(Image.fromarray(figure, "RGBA")))
+    return pieces
+
+
+def process_people(name, im, sprites):
+    """A look's front and back views, or the cast: several figures in one image, kept at the scale they were painted."""
+    if name == "cast_sheet":
+        names = CAST
+    else:
+        look = name[: -len("_turn")]
+        names = [look + "_front", look + "_back"]
+    pieces = cut_row(im, len(names))
+    # One scale for the whole image, so the tallest stands as tall as any other person and a child stays a child.
+    scale = SIZES["human"] / max(piece.height for piece in pieces)
+    written = []
+    for sprite, piece in zip(names, pieces):
+        dest = os.path.join(sprites, sprite + ".webp")
+        piece.resize((max(1, round(piece.width * scale)), max(1, round(piece.height * scale))), Image.LANCZOS).save(dest, "WEBP", quality=88, method=6)
+        written.append(dest)
+    return written
+
+
 def process_world(name, im, world):
     """The two images of the world: the sheet becomes twelve sprites, the grass two repeating tiles."""
     written = []
@@ -145,8 +212,9 @@ def main():
         kind = kind_of(name)
         im = Image.open(os.path.join(RAW, fname))
         im.load()
-        if name.startswith("world_"):
-            written = process_world(name, im, os.path.join(OUT, "world"))
+        if name.startswith("world_") or name.endswith("_turn") or name == "cast_sheet":
+            written = (process_world(name, im, os.path.join(OUT, "world")) if name.startswith("world_")
+                       else process_people(name, im, os.path.join(OUT, "sprites")))
             count += 1
             total += sum(os.path.getsize(dest) for dest in written)
             if fname.endswith(".png"):
