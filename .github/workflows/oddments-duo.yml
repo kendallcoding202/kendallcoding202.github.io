@@ -99,12 +99,20 @@ jobs:
           sleep 30
           echo "--- the displays this simulator has"
           xcrun simctl io "$DEVICE" enumerate 2>&1 | grep -iE "display|screen|size|class|port" | head -n 60 || true
-          xcrun simctl io "$DEVICE" screenshot duo-as-launched.png
-          # Each of these is a guess at how a second screen is asked for: any that this simctl does not
-          # know simply fails and is skipped.
-          for display in internal external inner outer main cover; do
-            xcrun simctl io "$DEVICE" screenshot --display="$display" "duo-$display.png" 2>/dev/null && echo "took a screenshot of the '$display' display" || true
-          done
+          # An iPhone Duo has two screens, and a screenshot has to say which. Asked for one without
+          # saying, simctl refuses and lists them ("--display=1 ... 1398x2034"): that list is read here.
+          SCREENS=$(xcrun simctl io "$DEVICE" screenshot duo-probe.png 2>&1 | grep -oE -- '--display=[0-9]+ .*' || true)
+          rm -f duo-probe.png
+          echo "$SCREENS"
+          if [ -z "$SCREENS" ]; then
+            xcrun simctl io "$DEVICE" screenshot duo-only-screen.png
+          else
+            echo "$SCREENS" | while read -r line; do
+              id=$(echo "$line" | grep -oE '^--display=[0-9]+' | cut -d= -f2)
+              size=$(echo "$line" | grep -oE '[0-9]+x[0-9]+$')
+              xcrun simctl io "$DEVICE" screenshot --display="$id" "duo-screen-$id-$size.png" || true
+            done
+          fi
           python3 - <<'PY'
           import glob, struct
           for path in sorted(glob.glob("duo-*.png")):
