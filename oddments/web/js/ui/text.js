@@ -1,5 +1,5 @@
 // What the fight says out loud: one short line per thing that happens.
-import { CALLS, STATS, BRACE, moveOf } from '../core/balance.js';
+import { STATS, BRACE, moveOf } from '../core/balance.js';
 
 /** A line for an event, or null if it needs none. `name(key)` gives a fighter's name. */
 export function lineFor(event, name) {
@@ -28,5 +28,3 @@ export function lineFor(event, name) {
       return null;
   }
 }
-
-export const callName = (id) => CALLS[id].name;

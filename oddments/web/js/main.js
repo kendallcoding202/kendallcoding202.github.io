@@ -2,14 +2,14 @@
 import { Game } from './core/game.js';
 import { newState, reviveState } from './core/state.js';
 import { playable } from './core/trial.js';
-import { SPECIES, roomOf, moveOf } from './core/balance.js';
+import { SPECIES, MAX_LEVEL, roomOf, moveOf, xpNeeded } from './core/balance.js';
 import { loadAssets } from './ui/assets.js';
 import { h, $, sprite } from './ui/dom.js';
 import { modal, toast } from './ui/modals.js';
 import { laneScreen } from './ui/lane.js';
 import { fightScreen } from './ui/fight.js';
 import { friendsScreen, bookScreen, settingsScreen, lookDialog } from './ui/friends.js';
-import { heirloomTag } from './ui/parts.js';
+import { heirloomTag, bar } from './ui/parts.js';
 import { loadSave, writeSave, clearSave, keepUnreadable } from './platform/storage.js';
 
 const params = new URLSearchParams(location.search);
@@ -116,11 +116,17 @@ function resultDialog(ctx, summary, foes) {
 
   if (summary.xp > 0) {
     lines.push(h('p', { class: 'xp' }, `+${summary.xp} experience each`));
-    for (const gain of summary.gains.filter((g) => g.to > g.from)) {
-      lines.push(h('div', { class: 'levelup' }, sprite(gain.species, !!(game.friend(gain.id) && game.friend(gain.id).heirloom), 'flip'),
-        h('div', null, h('b', null, `${name(gain.species)} is now level ${gain.to}`), gain.team ? null : h('small', null, ' (at home)'),
-          gain.learned.map((id) => h('small', { class: 'learned' }, `Learned ${moveOf(id).name}`)))));
-    }
+    // Everyone who walked with you, and anyone at home who went up a level.
+    lines.push(h('div', { class: 'gains' }, summary.gains.filter((gain) => gain.team || gain.to > gain.from).map((gain) => {
+      const friend = game.friend(gain.id);
+      const up = gain.to > gain.from;
+      return h('div', { class: `gain${up ? ' up' : ''}` }, sprite(gain.species, !!(friend && friend.heirloom), 'flip'),
+        h('div', null,
+          h('div', { class: 'line' }, h('b', null, name(gain.species)),
+            h('small', { class: up ? 'lvup' : '' }, up ? `Level ${gain.from} → ${gain.to}${gain.team ? '' : ' (at home)'}` : `Level ${gain.to}`)),
+          friend && friend.level < MAX_LEVEL ? bar('xp', friend.xp / xpNeeded(friend.level)) : null,
+          gain.learned.map((id) => h('small', { class: 'learned' }, `Learned ${moveOf(id).name}`))));
+    })));
   }
   if (!summary.won && foes.some((foe) => foe.settled)) lines.push(h('p', { class: 'note' }, 'The one you calmed slipped away in the muddle.'));
 

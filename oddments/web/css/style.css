@@ -54,7 +54,6 @@ img { -webkit-user-drag: none; }
 h1, h2, h3, p { margin: 0; }
 small { color: var(--muted); font-size: 12px; }
 .flip { transform: scaleX(-1); }
-.ic { width: 1.25em; height: 1.25em; object-fit: contain; vertical-align: -0.28em; flex: none; }
 
 /* ------------------------------------------------------------ boot */
 #boot {
@@ -86,7 +85,11 @@ small { color: var(--muted); font-size: 12px; }
   background: var(--bg); box-shadow: 0 0 60px rgba(0,0,0,.6);
 }
 #screen { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; }
-#screen > section { flex: 1 0 auto; display: flex; flex-direction: column; min-height: 100%; }
+#screen > section { flex: 1 0 auto; display: flex; flex-direction: column; min-height: 100%; animation: screen-in .22s ease-out; }
+/* One screen fades up as the last goes; a fight arrives with a little more weight. */
+@keyframes screen-in { from { opacity: 0; } }
+#screen > section#fight { animation: fight-in .34s cubic-bezier(.2,.8,.3,1); }
+@keyframes fight-in { from { opacity: 0; transform: scale(1.05); } }
 /* The map, a path and a fight fill the screen exactly and scroll inside themselves, if at all. */
 #screen[data-screen="lane"], #screen[data-screen="path"], #screen[data-screen="fight"] { overflow: hidden; }
 #screen[data-screen="lane"] > section, #screen[data-screen="path"] > section, #screen[data-screen="fight"] > section { flex: 1 1 0; min-height: 0; height: 100%; }
@@ -187,43 +190,46 @@ small { color: var(--muted); font-size: 12px; }
 @keyframes fade { from { opacity: 0; } }
 @keyframes pop { from { opacity: 0; transform: scale(.94); } }
 
-/* ------------------------------------------------------------ the lane (the open world) */
+/* ------------------------------------------------------------ the world: the lane, and inside a place */
 #lane { min-height: 0; }
-.lanewrap { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; background: #1e3346; }
+/* The view fills the screen and never changes size: the title and the card for a place float over it. */
+.lanewrap { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; background: #1b3044; }
 .lanecanvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-.bar-top.over { position: absolute; top: 0; left: 0; right: 0; pointer-events: none; text-shadow: 0 2px 0 rgba(0,0,0,.5); }
-.lanehint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); padding: 6px 14px; border-radius: 14px; white-space: nowrap; font-weight: 600; background: rgba(13,10,28,.78); border: 1.5px solid rgba(255,255,255,.18); pointer-events: none; animation: pulse-hint 1.2s infinite alternate; }
+/* Night closing in at the edges. */
+.lanewrap::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse 85% 70% at 50% 46%, rgba(8,6,20,0) 55%, rgba(8,6,20,.5) 100%); }
+.bar-top.over { position: absolute; top: 0; left: 0; right: 0; z-index: 2; pointer-events: none; text-shadow: 0 2px 0 rgba(0,0,0,.55); background: linear-gradient(rgba(8,6,20,.6), rgba(8,6,20,0)); padding-bottom: 22px; }
+.bar-top.over .where { display: block; margin-top: -2px; font-weight: 600; color: var(--ink); opacity: .82; }
+.lanehint { position: absolute; left: 50%; bottom: 176px; z-index: 2; transform: translateX(-50%); padding: 6px 14px; border-radius: 14px; white-space: nowrap; font-weight: 600; background: rgba(13,10,28,.8); border: 1.5px solid rgba(255,255,255,.18); pointer-events: none; animation: pulse-hint 1.2s infinite alternate; }
 @keyframes pulse-hint { to { opacity: .6; } }
-.placecard { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 12px 14px 12px; background: var(--panel); border-top: 1.5px solid var(--line); animation: rise-card .18s; }
+.placecard { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 2; display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 18px; background: rgba(33,27,64,.96); border: 1.5px solid var(--line); box-shadow: 0 10px 30px rgba(0,0,0,.5); animation: rise-card .22s cubic-bezier(.2,.8,.3,1); }
 .placecard h2 { font-size: 19px; }
-@keyframes rise-card { from { transform: translateY(12px); opacity: 0; } }
-.teamrow { display: flex; gap: 10px; }
-.mini { display: inline-flex; flex-direction: column; align-items: center; }
-.mini img { height: 44px; width: 52px; object-fit: contain; }
-
-/* ------------------------------------------------------------ inside a place */
-#lane.inside .placecard { gap: 6px; }
 .placecard h2 small { font-weight: 600; }
-.lanewrap.meeting .lanecanvas { animation: meet .42s ease-in; }
-@keyframes meet { 30% { filter: brightness(1.9); } 60% { filter: brightness(.7); } 100% { filter: brightness(2.2); transform: scale(1.12); } }
+.placecard > small { font-size: 12.5px; line-height: 1.3; }
+@keyframes rise-card { from { transform: translateY(18px); opacity: 0; } }
+.placecard.slim { gap: 7px; padding: 9px 10px 10px; }
+.cardhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cardhead h2 { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .teamlist { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .teamcard { display: flex; align-items: center; gap: 6px; padding: 5px 7px; border-radius: 12px; background: var(--card); min-width: 0; }
-.teamcard img { height: 34px; width: 38px; object-fit: contain; flex: none; }
+.teamcard img { height: 32px; width: 36px; object-fit: contain; flex: none; }
 .teamcard > div { flex: 1; min-width: 0; }
 .teamcard b { display: block; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .teamcard .bar { margin-top: 2px; height: 12px; } .teamcard .bar span { line-height: 12px; font-size: 9.5px; }
 .teamcard.down img { filter: grayscale(1); opacity: .6; }
-.shadowy { filter: brightness(0) drop-shadow(0 0 1px rgba(255,255,255,.5)); opacity: .8; }
-@keyframes pulse { to { box-shadow: 0 0 0 8px rgba(255,200,61,.12); } }
-.scene .bg, .arena .bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center bottom; }
-.roundpill { position: absolute; top: calc(var(--safe-top) + 8px); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; padding: 5px 14px 6px; border-radius: 14px; white-space: nowrap; background: rgba(13,10,28,.74); border: 1.5px solid rgba(255,255,255,.16); z-index: 3; }
-.roundpill span { font-size: 11px; color: var(--muted); }
+/* Walking into whoever is waiting: the view rushes in and whites out, and the fight fades up from it. */
+.lanewrap.meeting .lanecanvas { animation: meet .46s cubic-bezier(.5,0,.9,.4) forwards; }
+@keyframes meet { 35% { filter: brightness(1.5); transform: scale(1.03); } 100% { filter: brightness(3); transform: scale(1.3); opacity: 0; } }
 
 /* ------------------------------------------------------------ the fight */
 #fight { min-height: 0; height: 100%; }
-.arena { position: relative; flex: none; height: clamp(190px, 37vh, 340px); overflow: hidden; background: #0d0a1c; }
+/* The scene takes whatever room the controls leave, so there is never a dead gap below them. */
+.arena { position: relative; flex: 1 1 auto; min-height: 176px; overflow: hidden; background: #0d0a1c; }
+.arena .bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center bottom; transform: scale(1.15); transform-origin: 50% 100%; }
+.arena.shake { animation: shake .3s; }
+@keyframes shake { 20% { transform: translate(4px, -2px); } 45% { transform: translate(-4px, 2px); } 70% { transform: translate(3px, 1px); } }
 .topline { position: absolute; top: calc(var(--safe-top) + 6px); left: 8px; right: 8px; display: flex; justify-content: center; z-index: 6; }
-.topline .roundpill { position: static; transform: none; flex-direction: row; align-items: baseline; gap: 8px; padding: 4px 14px 5px; }
+.roundpill { display: flex; align-items: baseline; gap: 8px; padding: 4px 14px 5px; border-radius: 14px; white-space: nowrap; background: rgba(13,10,28,.76); border: 1.5px solid rgba(255,255,255,.16); }
+.roundpill span { font-size: 11px; color: var(--muted); }
 .topline .menu { position: absolute; right: 0; top: -2px; }
 
 /* The scene is kept clear: nothing hangs in the air. Everyone stands on the
@@ -231,28 +237,27 @@ small { color: var(--muted); font-size: 12px; }
    one tidy row a side, the first of the team nearest the middle, with clear
    air between the sides. Under each pair of feet: a shadow, then a small bar
    for Health and, for a restless one, the pips of its Huff. */
-.arena .bg { transform: scale(1.35); transform-origin: 50% 100%; }
 /* Six equal places on one line: three, a gap, three. Nobody overlaps anybody. */
-.unit { position: absolute; width: 15.4%; bottom: 9%; display: flex; flex-direction: column; align-items: center; z-index: 2; }
+.unit { position: absolute; width: 15.4%; bottom: max(7%, 14px); display: flex; flex-direction: column; align-items: center; z-index: 2; }
 .unit.ally.s0 { left: 31.4%; } .unit.ally.s1 { left: 16%; } .unit.ally.s2 { left: .6%; }
 .unit.foe.s0 { right: 31.4%; } .unit.foe.s1 { right: 16%; } .unit.foe.s2 { right: .6%; }
 .unit .body { position: relative; width: 100%; display: flex; justify-content: center; align-items: flex-end; animation: bob 2.6s ease-in-out infinite; transform-origin: 50% 100%; z-index: 1; }
 .unit.s1 .body { animation-delay: -.9s; } .unit.s2 .body { animation-delay: -1.7s; }
 /* Every sprite is fitted into the same box, so a long Sock Eel takes no more room than a round Dandepuff. */
-.unit .sprite { width: 84%; height: clamp(44px, 15.5vw, 78px); object-fit: contain; object-position: center bottom; }
+.unit .sprite { width: 92%; height: clamp(46px, 16.4vw, 84px); object-fit: contain; object-position: center bottom; }
 .unit.ally .sprite { transform: scaleX(-1); }
 .unit .shadow { width: 78%; height: 10px; margin-top: -6px; border-radius: 50%; background: radial-gradient(ellipse at center, rgba(8,6,20,.7), rgba(8,6,20,0) 70%); }
 /* Things that fly hover over their shadow; everything else has its feet on it. */
 .unit.fly .body { animation-name: hover; margin-bottom: 7px; }
 .unit.fly .shadow { width: 54%; opacity: .75; }
 /* A fixed height, so the feet of both sides are on one line whether or not there are pips underneath. */
-.foot { width: 76%; height: 26px; margin-top: 1px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.hpbar { width: 100%; height: 6px; border-radius: 3px; background: rgba(8,6,20,.7); border: 1px solid rgba(255,255,255,.28); overflow: hidden; }
-.hpbar i { display: block; height: 100%; width: 100%; border-radius: 2px; background: var(--good); transition: width .3s; }
-.hpbar i.low { background: var(--bad); }
+.foot { width: 80%; height: 26px; margin-top: 1px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.hpbar { width: 100%; height: 7px; border-radius: 4px; background: rgba(8,6,20,.74); border: 1px solid rgba(255,255,255,.3); overflow: hidden; }
+.hpbar i { display: block; height: 100%; width: 100%; border-radius: 3px; background: linear-gradient(#8ff0a6, var(--good)); transition: width .4s cubic-bezier(.2,.8,.3,1); }
+.hpbar i.low { background: linear-gradient(#ff8a96, var(--bad)); }
 .unit.rare .hpbar { border-color: var(--gold); box-shadow: 0 0 0 1px rgba(255,200,61,.55); }
 .pips { display: flex; gap: 2px; }
-.pips i { width: 8px; height: 5px; border-radius: 2px; background: rgba(8,6,20,.6); border: 1px solid rgba(255,255,255,.25); }
+.pips i { width: 8px; height: 5px; border-radius: 2px; background: rgba(8,6,20,.6); border: 1px solid rgba(255,255,255,.25); transition: background .25s; }
 .pips i.on { background: #ff9d5c; border-color: #ffb98a; }
 .pips.pop { animation: hop .35s; }
 .unit.settled .pips i { background: var(--good); border-color: var(--good); }
@@ -269,42 +274,54 @@ small { color: var(--muted); font-size: 12px; }
 .arena.bossfight .unit.boss { width: 28.4%; right: 14%; }
 .unit.boss .sprite { width: 96%; height: clamp(84px, 31vw, 150px); }
 .unit.boss .shadow { height: 16px; margin-top: -9px; }
-.unit.boss .foot { width: 70%; } .unit.boss .hpbar { height: 8px; border-color: var(--bad); }
+.unit.boss .foot { width: 70%; } .unit.boss .hpbar { height: 9px; border-color: var(--bad); }
 
-.unit .edge { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); padding: 1px 8px; border-radius: 9px; font-size: 11px; font-weight: 700; white-space: nowrap; z-index: 7; }
+.unit .edge { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); padding: 1px 8px; border-radius: 9px; font-size: 11px; font-weight: 700; white-space: nowrap; z-index: 7; box-shadow: 0 2px 6px rgba(0,0,0,.4); }
 .edge.strong { background: var(--good); color: #0c2a15; } .edge.weak { background: var(--bad); color: #3a0010; } .edge.even { background: var(--card-hi); }
+/* Whose turn it is: a glow, and a marker bobbing over its head. */
 .unit.turn .sprite { filter: drop-shadow(0 0 5px rgba(255,200,61,.95)) drop-shadow(0 0 1px rgba(255,200,61,.9)); }
+.unit.turn::before { content: ""; position: absolute; top: -15px; left: 50%; margin-left: -7px; border: 7px solid transparent; border-top: 9px solid var(--gold); border-bottom: 0; filter: drop-shadow(0 2px 0 rgba(0,0,0,.5)); animation: marker .7s ease-in-out infinite alternate; z-index: 6; }
+@keyframes marker { to { transform: translateY(-5px); } }
+.unit.pick::before { display: none; }
 .unit.pick .body { animation: pick .5s ease-in-out infinite alternate; }
-.unit.pick .sprite { filter: drop-shadow(0 0 5px rgba(255,255,255,.9)); }
-.unit.ally.lunge { animation: lunge-right .4s; } .unit.foe.lunge { animation: lunge-left .4s; }
-.unit.cast .body { animation: hop .4s; }
-.unit.hurt .sprite { animation: hurt .36s; }
+.unit.pick .sprite { filter: drop-shadow(0 0 5px rgba(255,255,255,.95)) drop-shadow(0 0 1px #fff); }
+.unit.ally.lunge { animation: lunge-right .42s cubic-bezier(.3,.8,.3,1); z-index: 5; } .unit.foe.lunge { animation: lunge-left .42s cubic-bezier(.3,.8,.3,1); z-index: 5; }
+.unit.cast .body { animation: cast .42s ease-out; }
+.unit.hurt .sprite { animation: hurt .38s; }
 .unit.down { pointer-events: none; }
-.unit.down .foot { opacity: .35; }
-.unit.down .body { animation: none; opacity: .28; filter: grayscale(1); transform: rotate(-78deg) translateX(-12%); transition: all .3s; }
+.unit.down::before { display: none; }
+.unit.down .foot { opacity: .35; transition: opacity .3s; }
+.unit.down .body { animation: none; opacity: .28; filter: grayscale(1); transform: rotate(-78deg) translateX(-12%); transition: all .35s cubic-bezier(.4,0,.6,1); }
 .unit.foe.down .body { transform: rotate(78deg) translateX(12%); }
 .unit.down .shadow { opacity: .4; }
-.unit.settled .body { animation: none; opacity: .9; transform: scale(.84); transition: all .4s; }
-@keyframes bob { 50% { transform: scaleY(1.025); } }
+.unit.settled::before { display: none; }
+.unit.settled .body { animation: none; opacity: .92; transform: scale(.86); transition: all .4s; }
+@keyframes bob { 50% { transform: scaleY(1.03); } }
 @keyframes hover { 50% { transform: translateY(-6px); } }
 @keyframes pick { to { transform: translateY(-5px); } }
 @keyframes hop { 40% { transform: translateY(-9px); } }
-@keyframes lunge-right { 40% { transform: translateX(22px); } }
-@keyframes lunge-left { 40% { transform: translateX(-22px); } }
-@keyframes hurt { 20% { transform: translateX(5px); filter: brightness(2.2); } 60% { transform: translateX(-4px); } }
+@keyframes cast { 30% { transform: translateY(-10px) scale(1.06); } 60% { transform: translateY(0) scale(.98); } }
+@keyframes lunge-right { 18% { transform: translateX(-6px); } 45% { transform: translateX(34px) scale(1.06); } }
+@keyframes lunge-left { 18% { transform: translateX(6px); } 45% { transform: translateX(-34px) scale(1.06); } }
+@keyframes hurt { 15% { transform: translateX(7px); filter: brightness(2.6); } 45% { transform: translateX(-5px); filter: brightness(1.4); } 75% { transform: translateX(2px); } }
 .unit.ally.hurt .sprite { animation-name: hurt-flipped; }
-@keyframes hurt-flipped { 20% { transform: scaleX(-1) translateX(5px); filter: brightness(2.2); } 60% { transform: scaleX(-1) translateX(-4px); } 100% { transform: scaleX(-1); } }
+@keyframes hurt-flipped { 0% { transform: scaleX(-1); } 15% { transform: scaleX(-1) translateX(7px); filter: brightness(2.6); } 45% { transform: scaleX(-1) translateX(-5px); filter: brightness(1.4); } 75% { transform: scaleX(-1) translateX(2px); } 100% { transform: scaleX(-1); } }
 
-.floaters { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
-.float { position: absolute; transform: translate(-50%, 0); padding: 0 6px; border-radius: 8px; font-weight: 700; font-size: 20px; text-shadow: 0 2px 0 rgba(0,0,0,.7); animation: rise .85s ease-out forwards; white-space: nowrap; }
-.float.dmg { color: #fff; } .float.strong { color: var(--gold); font-size: 25px; } .float.weak { color: var(--muted); font-size: 16px; }
-.float.heal { color: var(--good); } .float.heart { color: #ff7aa8; font-size: 30px; }
-.float.up, .float.down { font-size: 13px; text-shadow: none; }
-@keyframes rise { from { opacity: 0; transform: translate(-50%, 8px); } 15% { opacity: 1; } to { opacity: 0; transform: translate(-50%, -42px); } }
+.floaters { position: absolute; inset: 0; pointer-events: none; z-index: 8; }
+.float { position: absolute; transform: translate(-50%, 0); padding: 0 6px; border-radius: 8px; font-weight: 700; font-size: 23px; text-shadow: -2px 0 0 #1a1333, 2px 0 0 #1a1333, 0 -2px 0 #1a1333, 0 3px 0 #1a1333; animation: rise .9s cubic-bezier(.2,.8,.3,1) forwards; white-space: nowrap; }
+.float.dmg { color: #fff; } .float.strong { color: var(--gold); font-size: 29px; } .float.weak { color: #cfc8ea; font-size: 18px; }
+.float.heal { color: #8ff0a6; } .float.heart { color: #ff7aa8; font-size: 30px; }
+.float.up, .float.down { font-size: 13px; text-shadow: none; padding: 1px 7px; }
+@keyframes rise { from { opacity: 0; transform: translate(-50%, 10px) scale(.6); } 18% { opacity: 1; transform: translate(-50%, -8px) scale(1.15); } 30% { transform: translate(-50%, -12px) scale(1); } 75% { opacity: 1; } to { opacity: 0; transform: translate(-50%, -44px) scale(1); } }
+/* Where a hit lands. */
+.burst { position: absolute; width: 20px; height: 20px; margin: -10px 0 0 -10px; border-radius: 50%; border: 4px solid #fff; animation: burst .34s ease-out forwards; }
+.burst.strong { border-color: var(--gold); border-width: 5px; animation-duration: .42s; }
+.burst.heal { border-color: #8ff0a6; }
+@keyframes burst { from { transform: scale(.3); opacity: 1; } to { transform: scale(3.4); opacity: 0; } }
 
 .order { flex: none; display: flex; align-items: center; gap: 5px; padding: 5px 10px; background: #120f26; border-top: 1.5px solid var(--line); overflow: hidden; }
 .order small { margin-right: 2px; }
-.order .chip { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--card); border: 2px solid var(--bad); overflow: hidden; flex: none; }
+.order .chip { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--card); border: 2px solid var(--bad); overflow: hidden; flex: none; transition: transform .2s, opacity .2s, box-shadow .2s; }
 .order .chip.ally { border-color: var(--blue); }
 .order .chip.ally img { transform: scaleX(-1); }
 .order .chip img { width: 24px; height: 24px; object-fit: contain; }
@@ -312,15 +329,20 @@ small { color: var(--muted); font-size: 12px; }
 .order .chip.now { box-shadow: 0 0 0 3px var(--gold); transform: scale(1.1); }
 .say { flex: none; min-height: 34px; display: flex; align-items: center; justify-content: center; padding: 4px 12px; font-weight: 600; text-align: center; background: var(--panel); }
 
-#fight .panel { flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px; padding: 8px 10px calc(var(--safe-bottom) + 10px); background: var(--bg); min-height: 0; }
-#fight .panel.waiting { opacity: .55; }
-.who { display: flex; align-items: center; gap: 8px; min-height: 36px; }
+/* The controls are the same height every turn, whoever is acting and however many moves they
+   know: four places for moves (the ones not learned yet say when they will be) and the Calls. */
+#fight .panel { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 8px 10px calc(var(--safe-bottom) + 10px); background: var(--bg); transition: opacity .15s; }
+#fight .panel.waiting { opacity: .6; }
+.who { display: flex; align-items: center; gap: 8px; height: 36px; }
 .who img { height: 34px; width: 40px; object-fit: contain; transform: scaleX(-1); }
 .who > div { flex: 1; display: flex; align-items: center; gap: 6px; }
 .who b { font-size: 16px; }
 .moves { display: grid; grid-template-columns: 1fr; gap: 6px; }
-.move { position: relative; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px; min-height: 52px; padding: 7px 10px; border-radius: 12px; text-align: left; background: var(--card); border: 2px solid var(--line); border-left-width: 7px; }
-.move b { font-size: 15px; line-height: 1.1; padding-right: 54px; }
+.move, .moveslot { position: relative; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px; height: 50px; padding: 0 10px; border-radius: 12px; text-align: left; background: var(--card); border: 2px solid var(--line); border-left-width: 7px; overflow: hidden; }
+.move b, .moveslot b { font-size: 15px; line-height: 1.1; padding-right: 54px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.move small, .moveslot small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.moveslot { border-style: dashed; border-left-style: solid; background: transparent; opacity: .55; }
+.moveslot b { padding-right: 0; color: var(--muted); font-weight: 600; }
 .move .long { display: block; } .move .short { display: none; }
 .move .dot { position: absolute; top: 7px; right: 8px; font-style: normal; font-size: 10px; font-weight: 700; padding: 0 6px; border-radius: 8px; color: #1a1333; }
 .move.el-spark { border-color: var(--el-spark); } .move.el-spark .dot { background: var(--el-spark); }
@@ -330,28 +352,43 @@ small { color: var(--muted); font-size: 12px; }
 .move.el-clank { border-color: var(--el-clank); } .move.el-clank .dot { background: var(--el-clank); }
 .move.el-sprout { border-color: var(--el-sprout); } .move.el-sprout .dot { background: var(--el-sprout); }
 .move.plain b { padding-right: 0; }
+.move, .call { transition: transform .08s, box-shadow .12s, background .12s; }
 .move:disabled, .call:disabled { opacity: .42; }
 .move.armed, .call.armed { background: var(--card-hi); box-shadow: 0 0 0 3px var(--gold); }
 .move:active:not(:disabled), .call:active:not(:disabled) { transform: scale(.97); }
 /* The house-sitter is not on the field: they stand here, beside what they can do. */
-.calls { display: flex; align-items: stretch; gap: 8px; margin-top: auto; padding: 6px; border-radius: 14px; background: #141d38; border: 1.5px solid #2c4a7a; }
+.calls { display: flex; align-items: stretch; gap: 8px; padding: 6px; border-radius: 14px; background: #141d38; border: 1.5px solid #2c4a7a; }
 .calls .caller { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; width: 50px; }
 .calls .caller img { height: 54px; width: auto; max-width: 56px; object-fit: contain; }
 .calls .caller.calling img { animation: hop .4s; }
 .calls .set { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .calls .set > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; flex: 1; }
-.call { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 40px; padding: 4px; border-radius: 10px; background: #1b2b4d; border: 2px solid var(--blue); }
+.call { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 42px; padding: 0 4px; border-radius: 10px; background: #1b2b4d; border: 2px solid var(--blue); }
 .call b { font-size: 13px; } .call small { font-size: 10px; }
 /* On a short screen the moves go two to a row and say less. */
 @media (max-height: 740px) {
   #fight .panel { gap: 6px; padding-top: 6px; }
   .moves { grid-template-columns: 1fr 1fr; }
-  .move { min-height: 46px; padding: 5px 8px; }
-  .move b { font-size: 13.5px; padding-right: 44px; }
+  .move, .moveslot { height: 46px; padding: 0 8px; }
+  .move b, .moveslot b { font-size: 13.5px; padding-right: 44px; }
   .move .long { display: none; } .move .short { display: block; }
-  .who { min-height: 30px; } .who img { height: 28px; }
+  .who { height: 30px; } .who img { height: 28px; }
   .calls .caller img { height: 44px; }
 }
+
+/* What a fight left behind */
+.gains { display: flex; flex-direction: column; gap: 6px; }
+.gain { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 12px; background: var(--card); }
+.gain img { height: 40px; width: 46px; object-fit: contain; flex: none; }
+.gain > div { flex: 1; min-width: 0; }
+.gain .line { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.gain .line small { white-space: nowrap; }
+.gain .bar { margin: 3px 0 0; height: 8px; overflow: hidden; }
+.gain .bar i { animation: fill .7s cubic-bezier(.2,.8,.3,1) both; transform-origin: 0 50%; }
+@keyframes fill { from { transform: scaleX(0); } }
+.gain.up { border: 1.5px solid var(--gold); }
+.gain .lvup { color: var(--gold); font-weight: 700; }
+.gain .learned { display: block; color: var(--gold); }
 
 /* ------------------------------------------------------------ pages at home */
 .page { padding: 0 14px 16px; gap: 10px; }

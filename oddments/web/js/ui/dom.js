@@ -31,9 +31,6 @@ function append(el, children) {
 }
 
 export const $ = (selector, root = document) => root.querySelector(selector);
-export const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
-
-export const icon = (name, cls = '') => h('img', { class: `ic ${cls}`.trim(), src: `assets/icons/${name}.webp`, alt: '', draggable: false });
 
 /** The picture of an Oddment (its Heirloom colours if it has them) or of a person. */
 export const spriteSrc = (species, heirloom = false) => `assets/sprites/${species}${heirloom ? '_heirloom' : ''}.webp`;
@@ -42,10 +39,6 @@ export const sprite = (species, heirloom = false, cls = '') => h('img', { class:
 export function setText(el, text) {
   const value = String(text);
   if (el.__text !== value) { el.__text = value; el.textContent = value; }
-}
-export function setWidth(el, fraction) {
-  const value = `${Math.max(0, Math.min(1, fraction)) * 100}%`;
-  if (el.__w !== value) { el.__w = value; el.style.width = value; }
 }
 
 export const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

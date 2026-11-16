@@ -4,7 +4,7 @@
 // every reply up to the next choice, and leaves a list of events. This
 // screen plays those events back one at a time, so what is on screen is
 // always the fight as told so far, not as it already stands.
-import { SPECIES, CALLS, ELEMENTS, BRACE, moveOf, roomOf, elementEdge } from '../core/balance.js';
+import { SPECIES, CALLS, CALL_IDS, ELEMENTS, BRACE, moveOf, roomOf, elementEdge } from '../core/balance.js';
 import { unitOf } from '../core/battle.js';
 import { h, sprite, setText, wait } from './dom.js';
 import { modal } from './modals.js';
@@ -123,6 +123,17 @@ export function fightScreen(ctx) {
     setTimeout(() => el.remove(), 900);
   }
 
+  /** A ring where something lands. */
+  function burst(key, cls = '') {
+    const box = view[key].body.getBoundingClientRect();
+    const frame = arena.getBoundingClientRect();
+    const el = h('i', { class: `burst ${cls}`.trim() });
+    el.style.left = `${box.left - frame.left + box.width / 2}px`;
+    el.style.top = `${box.top - frame.top + box.height * 0.55}px`;
+    floaters.append(el);
+    setTimeout(() => el.remove(), 480);
+  }
+
   function flash(el, cls, ms) {
     el.classList.remove(cls);
     void el.offsetWidth; // restart the animation if it is already running
@@ -148,15 +159,17 @@ export function fightScreen(ctx) {
         break;
       case 'use':
         say(lineFor(event, nameOf));
-        flash(view[event.who].el, event.move === BRACE.id || !moveOf(event.move).power ? 'cast' : 'lunge', 420);
+        flash(view[event.who].el, event.move === BRACE.id || !moveOf(event.move).power ? 'cast' : 'lunge', 440);
         await pause(400);
         break;
       case 'hit': {
         const v = view[event.target];
         v.hp = event.hp;
         drawPlate(event.target);
-        float(event.target, `−${event.dmg}`, event.edge > 0 ? 'dmg strong' : event.edge < 0 ? 'dmg weak' : 'dmg');
-        flash(v.el, 'hurt', 380);
+        float(event.target, `−${event.dmg}${event.edge > 0 ? '!' : ''}`, event.edge > 0 ? 'dmg strong' : event.edge < 0 ? 'dmg weak' : 'dmg');
+        burst(event.target, event.edge > 0 ? 'strong' : '');
+        flash(v.el, 'hurt', 400);
+        if (event.edge > 0 || event.down) flash(arena, 'shake', 320);
         say(lineFor(event, nameOf));
         await pause(event.edge ? 520 : 380);
         if (event.down) { leave(event.target, 'down'); await pause(260); }
@@ -166,6 +179,7 @@ export function fightScreen(ctx) {
         view[event.target].hp = event.hp;
         drawPlate(event.target);
         float(event.target, `+${event.amount}`, 'heal');
+        burst(event.target, 'heal');
         say(lineFor(event, nameOf));
         await pause(400);
         break;
@@ -230,12 +244,25 @@ export function fightScreen(ctx) {
 
   // ------------------------------------------------------------ choosing
 
+  // What the controls show while nobody can choose (moves playing back, or the fight just
+  // starting): the same shape as a real turn, switched off, so the screen never changes height.
+  function standIn() {
+    const unit = allies.find((ally) => ally.hp > 0) || allies[0];
+    const off = (id) => ({ id, wait: 0, ready: false, targets: null, used: false });
+    return { unit, moves: [...unit.moves.map((slot) => off(slot.id)), off(BRACE.id)], calls: CALL_IDS.map(off), idle: true };
+  }
+
   function drawPanel() {
-    const options = busy || over ? null : game.choices();
-    if (!options) { panel.classList.add('waiting'); for (const b of panel.querySelectorAll('button')) b.disabled = true; return; }
-    panel.classList.remove('waiting');
+    const live = busy || over ? null : game.choices();
+    if (!live && panel.childElementCount) {
+      panel.classList.add('waiting');
+      for (const b of panel.querySelectorAll('button')) b.disabled = true;
+      return;
+    }
+    const options = live || standIn();
+    panel.classList.toggle('waiting', !live);
     const { unit } = options;
-    const moves = options.moves.map((option) => {
+    const button = (option) => {
       const move = moveOf(option.id);
       const on = armed && armed.type === 'move' && armed.id === option.id;
       return h('button', {
@@ -243,15 +270,20 @@ export function fightScreen(ctx) {
         onclick: () => choose('move', option),
       },
         h('b', null, move.name),
-        option.ready ? null : h('small', null, `Ready in ${option.wait}`),
-        option.ready ? h('small', { class: 'short' }, option.id === BRACE.id ? 'Take a third less' : shortLine(move)) : null,
-        option.ready ? h('small', { class: 'long' }, `${moveLine(option.id)}.`) : null,
+        option.wait > 0 ? h('small', null, `Ready in ${option.wait} turn${option.wait === 1 ? '' : 's'}`) : null,
+        option.wait > 0 ? null : h('small', { class: 'short' }, option.id === BRACE.id ? 'Take a third less' : shortLine(move)),
+        option.wait > 0 ? null : h('small', { class: 'long' }, `${moveLine(option.id)}.`),
         move.element ? h('i', { class: 'dot' }, ELEMENTS[move.element].name) : null);
-    });
+    };
+    // Always four places: the moves it knows, the ones it has yet to learn, and Brace last.
+    const known = options.moves.slice(0, -1).map(button);
+    const later = SPECIES[unit.species].moves.filter(([, at]) => at > unit.level)
+      .map(([, at]) => h('div', { class: 'moveslot' }, h('b', null, 'A move to learn'), h('small', null, `At level ${at}`)));
+    const moves = [...known, ...later, button(options.moves[options.moves.length - 1])];
     const calls = options.calls.map((option) => {
       const call = CALLS[option.id];
       const on = armed && armed.type === 'call' && armed.id === option.id;
-      const why = option.used ? 'Used this round' : option.wait > 0 ? 'Next round' : option.targets.length ? '' : option.id === 'reach' ? 'Nobody to reach' : 'Nobody is hurt';
+      const why = options.idle ? '' : option.used ? 'Used this round' : option.wait > 0 ? 'Next round' : option.targets.length ? '' : option.id === 'reach' ? 'Nobody to reach' : 'Nobody is hurt';
       return h('button', { class: `call${on ? ' armed' : ''}`, disabled: !option.ready, data: { call: option.id }, title: call.desc, onclick: () => choose('call', option) },
         h('b', null, call.name), why ? h('small', null, why) : null);
     });

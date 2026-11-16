@@ -1,5 +1,5 @@
 // The screens at home: your friends and team, the scrapbook, and settings.
-import { SPECIES, SPECIES_IDS, ELEMENTS, ELEMENT_IDS, TEAM_SIZE, LOOKS, NAME_LENGTH, VERSION, HEIRLOOM, xpNeeded, MAX_LEVEL } from '../core/balance.js';
+import { SPECIES, SPECIES_IDS, ELEMENTS, ELEMENT_IDS, TEAM_SIZE, LOOKS, NAME_LENGTH, VERSION, TITLE, HEIRLOOM, xpNeeded, MAX_LEVEL } from '../core/balance.js';
 import { h, sprite } from './dom.js';
 import { modal, toast } from './modals.js';
 import { elementTag, heirloomTag, bar, oddmentCard } from './parts.js';
@@ -103,7 +103,7 @@ export function settingsScreen(ctx) {
       h('small', null, `Fights ${stats.battles} · won ${stats.wins} · friends made ${stats.befriended} · Heirlooms ${stats.heirlooms}`)),
     h('div', { class: 'card' },
       h('p', null, 'No ads, no tracking, no accounts, no purchases. This game never uses the network: your save lives on this device only.'),
-      h('small', null, `Oddments (working title) ${VERSION}. A playable slice: one room of eight.`)),
+      h('small', null, `${TITLE} (working title) ${VERSION}. A playable slice: one place of eight.`)),
     h('button', {
       class: 'btn danger', data: { act: 'reset' },
       onclick: () => modal({
@@ -130,7 +130,7 @@ export function lookDialog(ctx, first) {
     ctx.show(ctx.current);
   };
   return modal({
-    title: first ? 'Oddments' : 'You', cls: first ? 'intro' : 'looks', fixed: first,
+    title: first ? TITLE : 'You', cls: first ? 'intro' : 'looks', fixed: first,
     body: [
       first ? h('p', null, 'You are house-sitting for your great-aunt. The cats sleep all day. At night you find out why: the house is awake. The odd socks, the burnt toast, the dust under the bed.') : null,
       first ? h('p', null, 'The cats fight it. You are going to try talking to it.') : null,

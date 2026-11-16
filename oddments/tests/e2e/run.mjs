@@ -97,7 +97,7 @@ async function walkTo(p, id) {
     const aim = await S(p, (spot) => {
       const at = window.oddments.lane.screenOf(spot);
       const box = document.querySelector('.lanecanvas').getBoundingClientRect();
-      return { x: Math.min(box.right - 8, Math.max(box.left + 8, at.x)), y: Math.min(box.bottom - 8, Math.max(box.top + 70, at.y)) };
+      return { x: Math.min(box.right - 8, Math.max(box.left + 8, at.x)), y: Math.min(box.bottom - 200, Math.max(box.top + 70, at.y)) };
     }, id);
     await p.touchscreen.tap(aim.x, aim.y);
     await p.waitForTimeout(450);
@@ -162,7 +162,7 @@ async function onward(p) {
   const aim = await S(p, () => {
     const to = window.oddments.lane.screenOf('next');
     const box = document.querySelector('.lanecanvas').getBoundingClientRect();
-    return { x: Math.min(box.right - 8, Math.max(box.left + 8, to.x)), y: Math.min(box.bottom - 8, Math.max(box.top + 70, to.y)) };
+    return { x: Math.min(box.right - 8, Math.max(box.left + 8, to.x)), y: Math.min(box.bottom - 200, Math.max(box.top + 70, to.y)) };
   });
   await p.touchscreen.tap(aim.x, aim.y);
   await p.waitForSelector('#fight', { timeout: 15000 });
@@ -180,7 +180,7 @@ for (let tries = 0; tries < 25 && (await S(page, () => window.oddments.game.plac
   const aim = await S(page, () => {
     const to = window.oddments.lane.screenOf('next');
     const box = document.querySelector('.lanecanvas').getBoundingClientRect();
-    return { x: Math.min(box.right - 8, Math.max(box.left + 8, to.x)), y: Math.min(box.bottom - 8, Math.max(box.top + 70, to.y)) };
+    return { x: Math.min(box.right - 8, Math.max(box.left + 8, to.x)), y: Math.min(box.bottom - 200, Math.max(box.top + 70, to.y)) };
   });
   await page.touchscreen.tap(aim.x, aim.y);
   await page.waitForTimeout(500);
@@ -471,6 +471,7 @@ for (const [name, viewport] of [['small phone (320x568)', { width: 320, height: 
   const fitsPath = await S(other, () => document.documentElement.scrollWidth <= innerWidth && document.querySelector('[data-act="home"]').getBoundingClientRect().bottom <= innerHeight + 0.5);
   await onward(other);
   await idle(other);
+  await other.waitForTimeout(500); // the fight screen arrives with a short zoom; measure it once it has landed
   const fitsFight = await S(other, () => {
     const inside = (el) => { const r = el.getBoundingClientRect(); return r.left >= -0.5 && r.right <= innerWidth + 0.5 && r.bottom <= innerHeight + 0.5 && r.top >= -0.5; };
     return document.documentElement.scrollWidth <= innerWidth && [...document.querySelectorAll('.move, .call, .unit, .order')].every(inside);
