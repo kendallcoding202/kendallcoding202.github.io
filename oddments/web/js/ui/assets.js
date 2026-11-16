@@ -3,6 +3,7 @@ import { SPECIES, SPECIES_IDS, ROOMS, LOOK_IDS } from '../core/balance.js';
 import { CAST, CAST_IDS } from '../core/story.js';
 import { spriteSrc } from './dom.js';
 import { WORLD_ART, worldSrc } from './scenery.js';
+import { ROOM_ART } from './roomart.js';
 
 function load(src) {
   return new Promise((resolve) => {
@@ -24,6 +25,7 @@ export async function loadAssets(onProgress = () => {}) {
   for (const id of CAST_IDS) sources.push(spriteSrc(CAST[id].art));
   for (const room of ROOMS) sources.push(`assets/bg/${room.bg}.webp`);
   for (const name of WORLD_ART) sources.push(worldSrc(name));
+  sources.push(...ROOM_ART); // the insides of buildings: their walls, floors and furniture
   let done = 0;
   await Promise.all(sources.map((src) => load(src).then(() => onProgress(++done / sources.length))));
   try { await document.fonts.load('700 16px Fredoka'); } catch { /* the system font will do */ }

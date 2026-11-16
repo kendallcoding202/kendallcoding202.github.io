@@ -13,8 +13,8 @@ import { toast, modalOpen } from './modals.js';
 import { converse } from './talk.js';
 import { play } from '../platform/sound.js';
 import { dustShift, throughDoor } from './shift.js';
-import { FONT, oval, paint, glow, label, worldSrc } from './scenery.js';
-import { paintRoom, paintFire, roomArt, standingIn } from './roomart.js';
+import { FONT, oval, paint, glow, label } from './scenery.js';
+import { paintRoom, roomArt, standingIn } from './roomart.js';
 
 const HOME_NAME = 'Home';
 const HEAD = 62; // how far down the screen the heading reaches at the least, in screen points
@@ -88,9 +88,9 @@ export function insideScreen(ctx) {
     };
     return { friend, ...spot(), to: spot(), spot, wait: next() * 3 + i * 0.4, f: 1, step: 0, next };
   });
-  const things = standingIn(room);
+  const things = standingIn(id, room);
   const art = { maribel: picture(spriteSrc(CAST.maribel.art)) };
-  for (const name of roomArt(room)) art[name] = picture(worldSrc(name));
+  for (const [name, src] of roomArt(id, room)) art[name] = picture(src);
   const shown = new Map();
   const held = new Set();
 
@@ -199,14 +199,13 @@ export function insideScreen(ctx) {
       for (const image of Object.values(art)) if (!image.complete) image.addEventListener('load', () => { sheet = null; }, { once: true });
     }
     pen.drawImage(sheet, 0, 0, room.w, room.h);
-    if (room.kind === 'home') paintFire(pen, room, clock);
     if (mark && mark.life > 0) {
       pen.beginPath(); pen.ellipse(mark.x, mark.y, 24 * (1.3 - mark.life), 11 * (1.3 - mark.life), 0, 0, Math.PI * 2);
       pen.strokeStyle = `rgba(255,200,61,${Math.max(0, mark.life)})`; pen.lineWidth = 4; pen.stroke();
     }
     // Back to front, so whoever is further down the floor is in front.
     const row = [];
-    for (const thing of things) row.push({ y: thing.y, draw: () => { pen.save(); pen.translate(thing.x, thing.y); thing.paint(pen, art); pen.restore(); } });
+    for (const thing of things) row.push({ y: thing.y, draw: () => { pen.save(); pen.translate(thing.x, thing.y); thing.paint(pen, art, clock); pen.restore(); } });
     room.posts.forEach((post, index) => row.push({ y: post.y + 22, draw: () => waiting(index) }));
     for (const body of stayers) {
       const fly = SPECIES[body.friend.species].fly;

@@ -228,12 +228,12 @@ test('a save keeps you indoors only where you could really be standing', () => {
   const game = fresh();
   game.standAt('home');
   game.enter('home');
-  game.state.indoors.x = 144; game.state.indoors.y = 436;
+  game.state.indoors.x = 300; game.state.indoors.y = 436;
   const back = (edit) => { const raw = JSON.parse(game.serialize(NOW)); edit(raw); return reviveState(raw, NOW); };
-  assert.deepEqual(back(() => {}).indoors, { id: 'home', x: 144, y: 436 });
+  assert.deepEqual(back(() => {}).indoors, { id: 'home', x: 300, y: 436 });
   assert.equal(newState(NOW, 1).indoors, null);
   // In the furniture, off the floor, or not a number: you are where you would have come in.
-  for (const at of [{ x: 100, y: 300 }, { x: -50, y: 500 }, { x: NaN, y: 500 }, { x: '144', y: 436 }, { x: 1e308, y: 1e308 }]) assert.deepEqual(back((raw) => { Object.assign(raw.indoors, at); }).indoors, { id: 'home', ...INSIDES.home.start });
+  for (const at of [{ x: 100, y: 300 }, { x: -50, y: 500 }, { x: NaN, y: 500 }, { x: '300', y: 436 }, { x: 1e308, y: 1e308 }]) assert.deepEqual(back((raw) => { Object.assign(raw.indoors, at); }).indoors, { id: 'home', ...INSIDES.home.start });
   // Somewhere that is not an inside, or with the world saying you are not at its door: you are outdoors.
   for (const id of ['garden', 'nowhere', 'constructor', '__proto__', 7, null]) assert.equal(back((raw) => { raw.indoors.id = id; }).indoors, null, String(id));
   assert.equal(back((raw) => { raw.where = { x: 400, y: 1540 }; }).indoors, null, 'the save says indoors at home, and standing down the street');

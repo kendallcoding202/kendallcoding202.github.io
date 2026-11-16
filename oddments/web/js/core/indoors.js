@@ -34,38 +34,54 @@ export const INDOOR = {
 // long enough to lie in), and everything about a body there (how wide it is, how far apart
 // friends walk) goes by that. A place where groups wait keeps the lane's own scale, as the
 // garden does, and its floor is drawn to that.
-// `blocks` are the floor that furniture stands on; `spots` what there is to do and where you stand
-// to do it; `door` is the mat you leave by and `start` where you stand on coming in.
+// `blocks` are the floor that furniture stands on: each is named for what stands there (a second
+// one of a kind has a number on the end), and the screen has a painting for every name. `spots`
+// are what there is to do and where you stand to do it; `door` is the mat you leave by and `start`
+// where you stand on coming in.
 export const INSIDES = {
+  // Home: great-aunt Maribel's front room. Along the back wall, under its painting: the hearth
+  // under the picture of the cottage, the bed under the window, the telephone under the other
+  // picture. On the floor: an armchair and the tea things by the fire, the bookshelf with the
+  // scrapbook on it, the basket, a chest of drawers with a lamp, and the coat stand by the door.
   home: {
-    kind: 'home', view: 620, w: 620, h: 1040, wall: 270, people: 1.8,
+    kind: 'home', view: 620, w: 620, h: 1040, wall: 284, people: 1.8,
     door: { x: 310, y: 1010 }, start: { x: 310, y: 900 },
     blocks: [
-      { id: 'bed', x: 26, y: 270, w: 236, h: 124 },
-      { id: 'phone', x: 276, y: 270, w: 64, h: 54 },
-      { id: 'shelf', x: 356, y: 270, w: 120, h: 46 },
-      { id: 'hearth', x: 490, y: 270, w: 110, h: 56 },
-      { id: 'basket', x: 64, y: 706, w: 116, h: 56 },
+      { id: 'hearth', x: 14, y: 284, w: 170, h: 46 },
+      { id: 'bed', x: 196, y: 284, w: 228, h: 68 },
+      { id: 'fern', x: 438, y: 284, w: 32, h: 26 },
+      { id: 'phone', x: 484, y: 284, w: 80, h: 42 },
+      { id: 'armchair', x: 28, y: 452, w: 108, h: 48 },
+      { id: 'teatable', x: 150, y: 476, w: 56, h: 28 },
+      { id: 'shelf', x: 462, y: 516, w: 138, h: 40 },
+      { id: 'basket', x: 40, y: 826, w: 116, h: 44 },
+      { id: 'drawers', x: 496, y: 800, w: 100, h: 40 },
+      { id: 'coats', x: 400, y: 952, w: 36, h: 24 },
     ],
     spots: [
-      { id: 'bed', x: 150, y: 452, does: 'rest' },
-      { id: 'phone', x: 308, y: 392, does: 'ring' },
-      { id: 'shelf', x: 420, y: 384, does: 'book' },
-      { id: 'basket', x: 252, y: 760, does: 'team' },
+      { id: 'bed', x: 310, y: 410, does: 'rest' },
+      { id: 'phone', x: 576, y: 376, does: 'ring' }, // (beside the telephone, not in front of it: it should be seen)
+      { id: 'shelf', x: 531, y: 606, does: 'book' },
+      { id: 'basket', x: 236, y: 852, does: 'team' },
     ],
     posts: [],
   },
+  // The Midnight Pantry: shelves the length of the back wall, and stores stood about its sides in
+  // twos: sacks and barrels, crates of potatoes and milk, tins, jars, a cheese, eggs, the scales.
   pantry: {
     kind: 'place', view: 760, w: 760, h: 1640, wall: 200, people: 1,
     door: { x: 380, y: 1610 }, start: { x: 380, y: 1500 },
     blocks: [
-      { id: 'crates', x: 30, y: 1446, w: 90, h: 54 },
-      { id: 'boxes', x: 646, y: 1256, w: 84, h: 50 },
-      { id: 'bottles', x: 30, y: 1018, w: 80, h: 48 },
-      { id: 'pallets', x: 646, y: 806, w: 84, h: 48 },
-      { id: 'sacks', x: 30, y: 478, w: 84, h: 50 },
-      { id: 'crates2', x: 646, y: 430, w: 84, h: 50 },
-      { id: 'boxes2', x: 30, y: 760, w: 80, h: 48 },
+      { id: 'potatoes', x: 30, y: 1470, w: 66, h: 28 }, { id: 'barrel', x: 100, y: 1446, w: 50, h: 26 },
+      { id: 'milk', x: 668, y: 1296, w: 60, h: 26 }, { id: 'pickles', x: 624, y: 1322, w: 40, h: 24 },
+      { id: 'tins', x: 30, y: 1046, w: 54, h: 26 }, { id: 'sack', x: 88, y: 1070, w: 54, h: 26 },
+      { id: 'scales', x: 668, y: 836, w: 58, h: 26 }, { id: 'eggs', x: 612, y: 862, w: 52, h: 24 },
+      { id: 'cheese', x: 34, y: 630, w: 48, h: 24 }, { id: 'onions', x: 86, y: 654, w: 56, h: 24 },
+      { id: 'barrel2', x: 676, y: 430, w: 50, h: 26 }, { id: 'sack2', x: 618, y: 452, w: 54, h: 26 },
+      { id: 'stool', x: 36, y: 404, w: 52, h: 26 },
+      // Against the back wall, either side of where the Crumbwyrm waits.
+      { id: 'barrel3', x: 40, y: 202, w: 50, h: 26 }, { id: 'sack3', x: 96, y: 206, w: 54, h: 26 },
+      { id: 'milk2', x: 652, y: 204, w: 60, h: 26 }, { id: 'tins2', x: 592, y: 208, w: 54, h: 26 },
     ],
     spots: [],
     posts: [{ x: 250, y: 1290 }, { x: 520, y: 1070 }, { x: 250, y: 840 }, { x: 520, y: 610 }, { x: 380, y: 350 }],

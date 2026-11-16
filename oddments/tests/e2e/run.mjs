@@ -867,7 +867,7 @@ s = await state(page);
 check(Object.values(s.rooms).every((record) => record.clears === 1) && await S(page, () => document.querySelector('.goalchip').dataset.goal === 'more'), 'all eight places are calm: the lane is quiet');
 check(['boss_spincycle', 'boss_tome', 'boss_warden', 'boss_clock', 'boss_vacuum'].every((id) => s.book[id].met), 'and every ringleader is in the scrapbook');
 // Home, and the telephone: great-aunt Maribel hears the end of it.
-await S(page, () => { const g = window.oddments.game; g.standAt('home'); g.enter('home'); g.state.indoors.x = 308; g.state.indoors.y = 392; window.oddments.ctx.show('lane'); });
+await page.evaluate(async () => { const { INSIDES } = await import('./js/core/indoors.js'); const g = window.oddments.game; const phone = INSIDES.home.spots.find((spot) => spot.does === 'ring'); g.standAt('home'); g.enter('home'); g.state.indoors.x = phone.x; g.state.indoors.y = phone.y; window.oddments.ctx.show('lane'); });
 await page.waitForSelector('#inside[data-room="home"] [data-act="ring"]');
 await page.click('[data-act="ring"]');
 await page.waitForSelector('.modal.talk');
