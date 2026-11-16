@@ -33,10 +33,10 @@ for (const tab of TABS) SCREENS[tab.id] = tab.build;
 // (the page saves itself as it unloads, which would undo the change).
 let frozen = false;
 
-function boot() {
-  if (flag('reset')) clearSave();
+async function boot() {
+  if (flag('reset')) await clearSave();
   let state = null;
-  const stored = loadSave();
+  const stored = await loadSave();
   try {
     if (stored) state = reviveState(JSON.parse(stored), Date.now());
     // Well-formed is not enough: it must survive a rehearsal on a copy.
@@ -75,7 +75,7 @@ function boot() {
     },
     showTab: (name) => ctx.show(name),
     afterFight: (summary, foes) => resultDialog(ctx, summary, foes),
-    resetGame() { frozen = true; clearSave(); location.reload(); },
+    resetGame() { frozen = true; clearSave().then(() => location.reload()); },
   };
 
   tabsRoot.replaceChildren(...TABS.map((tab) => h('button', { class: 'tab', data: { tab: tab.id }, onclick: () => ctx.show(tab.id) }, h('i', { class: `tabicon t-${tab.id}` }), h('span', null, tab.label))));
@@ -86,6 +86,8 @@ function boot() {
   // A handle for tests and for poking at the game from a browser console.
   if (flag('debug') || location.hostname === 'localhost' || location.hostname === '127.0.0.1') window.oddments = { game, ctx };
 
+  // Whichever copy of the save was the newer, both places now hold it.
+  if (state) ctx.save();
   return loadAssets((p) => { $('#bootfill').style.width = `${Math.round(p * 100)}%`; }).then(() => {
     $('#app').hidden = false;
     ctx.show('lane');
@@ -146,10 +148,7 @@ function showRescue() {
     button('plain', 'Try again', () => location.reload()),
     button('danger', 'Start a new game', () => {
       frozen = true;
-      const stored = loadSave();
-      if (stored) keepUnreadable(stored);
-      clearSave();
-      location.reload();
+      loadSave().then((stored) => { if (stored) keepUnreadable(stored); return clearSave(); }).then(() => location.reload());
     })));
 }
 

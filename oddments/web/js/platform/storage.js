@@ -1,22 +1,53 @@
-// Where the save lives: this device's localStorage, and nowhere else.
+// Where the save lives: on this device, and nowhere else. In a browser that
+// is localStorage. In the iOS app it is also written to the app's own native
+// settings store, which iOS never clears the way it can clear a web view's
+// storage; on load the newer of the two copies wins.
 // Nothing here or anywhere in the game talks to a network.
+import { isNative, native } from './native.js';
 
 const KEY = 'oddments.save';
 
-export function loadSave() {
+function readLocal() {
   try { return localStorage.getItem(KEY); } catch { return null; }
 }
 
-/** Writes the save. True once it is stored; false if the browser would not take it (private mode, or full). */
+/** When a stored save was last played, or -1 if it cannot be read at all. */
+function lastSeenOf(json) {
+  try { return JSON.parse(json).lastSeen || 0; } catch { return -1; }
+}
+
+/** Which of two stored copies to use: the one played more recently; either, if there is only one. */
+export function newer(local, kept) {
+  if (local && kept) return lastSeenOf(kept) > lastSeenOf(local) ? kept : local;
+  return local || kept || null;
+}
+
+/** The stored save as text, or null if there is none. */
+export async function loadSave() {
+  const local = readLocal();
+  let kept = null;
+  if (isNative()) {
+    try { kept = (await native('Preferences', 'get', { key: KEY })).value; } catch { kept = null; }
+  }
+  return newer(local, typeof kept === 'string' ? kept : null);
+}
+
+/** Writes the save. True once this device has it; false if the browser would not take it (private mode, or full). */
 export function writeSave(json) {
-  try { localStorage.setItem(KEY, json); return true; } catch { return false; }
+  let stored = false;
+  try { localStorage.setItem(KEY, json); stored = true; } catch { /* the app's own copy below still saves */ }
+  if (isNative()) { native('Preferences', 'set', { key: KEY, value: json }).catch(() => {}); stored = true; }
+  return stored;
 }
 
 /** Sets aside a stored save the game could not read, so starting over does not destroy it. */
 export function keepUnreadable(json) {
   try { localStorage.setItem(`${KEY}.unreadable`, json); } catch { /* best effort */ }
+  if (isNative()) native('Preferences', 'set', { key: `${KEY}.unreadable`, value: json }).catch(() => {});
 }
 
-export function clearSave() {
+/** Removes the save from wherever it is kept. Resolves once it is gone. */
+export async function clearSave() {
   try { localStorage.removeItem(KEY); } catch { /* nothing to clear */ }
+  if (isNative()) await native('Preferences', 'remove', { key: KEY }).catch(() => {});
 }

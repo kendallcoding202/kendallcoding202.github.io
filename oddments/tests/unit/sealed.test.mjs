@@ -18,10 +18,12 @@ test('the content security policy allows the game\'s own files and nothing else'
   const policy = html.match(/http-equiv="Content-Security-Policy" content="([^"]+)"/)[1];
   const rules = Object.fromEntries(policy.split(';').map((rule) => rule.trim().split(/\s+/)).map(([name, ...values]) => [name, values]));
   assert.deepEqual(rules['default-src'], ["'none'"]);
-  assert.deepEqual(rules['script-src'], ["'self'"]);
-  assert.deepEqual(rules['style-src'], ["'self'"], 'no inline styles either');
-  assert.deepEqual(rules['img-src'], ["'self'"]);
-  assert.deepEqual(rules['font-src'], ["'self'"]);
+  // Its own files, under the address they have on the web and the one they have inside the iOS app.
+  const own = ["'self'", 'capacitor://localhost'];
+  assert.deepEqual(rules['script-src'], own);
+  assert.deepEqual(rules['style-src'], own, 'no inline styles either');
+  assert.deepEqual(rules['img-src'], own);
+  assert.deepEqual(rules['font-src'], own);
   assert.deepEqual(rules['base-uri'], ["'none'"]);
   assert.deepEqual(rules['form-action'], ["'none'"]);
   assert.equal(rules['connect-src'], undefined, 'nothing may be fetched: connect-src falls back to none');
@@ -65,6 +67,11 @@ test('everything that ships is a kind of file the game means to ship, and it is 
 test('only this device\'s own storage is used, under the game\'s own name', () => {
   const users = text.filter(({ body }) => /localStorage|sessionStorage/.test(body)).map(({ path }) => path);
   assert.deepEqual(users, ['js/platform/storage.js']);
+  // And only one file knows about the iOS app's native side, which it uses for the save and nothing else.
+  const bridged = text.filter(({ body }) => /Capacitor|nativePromise|webkit\.messageHandlers/.test(body)).map(({ path }) => path);
+  assert.deepEqual(bridged, ['js/platform/native.js']);
+  const asked = text.flatMap(({ body }) => [...body.matchAll(/native\('(\w+)', '(\w+)'/g)].map((m) => `${m[1]}.${m[2]}`));
+  assert.deepEqual([...new Set(asked)].sort(), ['Preferences.get', 'Preferences.remove', 'Preferences.set']);
   assert.match(readFileSync(join(WEB, 'js/platform/storage.js'), 'utf8'), /const KEY = 'oddments\.save'/);
 });
 
