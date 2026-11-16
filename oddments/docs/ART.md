@@ -6,20 +6,20 @@
 
 | | From | Count |
 | --- | --- | --- |
-| Monster sprites | Pawst Lives, copied as they are | 21 (three you start with, eight met in the garden, three more met in Tin Can Alley, four more in the Midnight Pantry, and the three bosses). Pawst Lives has 48 in all: 40 kinds and 8 bosses |
-| Room paintings | Pawst Lives, copied as they are | 8 (the garden's and the alley's are used in fights) |
+| Monster sprites | Pawst Lives, copied as they are | 48: all 40 kinds and the 8 bosses |
+| Room paintings | Pawst Lives, copied as they are | 8, one for each place: what its fights are seen against |
 | Font | Pawst Lives | Fredoka, with its licence |
-| Heirloom (rare colour) sprites | Recoloured in code by `tools/heirlooms.py` | 18 |
+| Heirloom (rare colour) sprites | Recoloured in code by `tools/heirlooms.py` | 40, one for every kind |
 | The house-sitter | **Generated for this game** | 4 images: four candidate looks (`sitter_a` to `sitter_d`), from the side |
 | The house-sitter, turned | **Generated for this game** | 4 images, one per look, each holding that look from the front and from behind (8 sprites) |
 | The cast | **Generated for this game** | 1 image holding all four: Ines Tock, Dov, Mr. Spick, Great-aunt Maribel |
 | The world | **Generated for this game** | 2 images, which became 14 pictures (below) |
 | Tin Can Alley | **Generated for this game** | 2 images, which became 13 pictures (below) |
 | App icon | **Generated for this game** | 1 image: the house-sitter with a lantern and a calm Hopmote (the dust under the bed). `tools/ios-art.py` makes the icon from it |
-| The insides of home and the Midnight Pantry | Drawn in code by `web/js/ui/roomart.js` | Nothing generated. Walls, floors and furniture are code; the pantry's crates and boxes are Tin Can Alley's paintings; great-aunt Maribel's portrait is her own |
+| The insides of the seven buildings you walk into | **Generated for this game** | 21 images, three to a room, which became 98 pictures (below) |
 | Launch image and loading screen | Painted from the game's own world by `tools/postcard.mjs` | A postcard of the lane, home in the middle; nothing generated |
 
-**Fourteen images have been generated in all.** Each was agreed before it was made, and every one came out usable on the first attempt. One has been touched up since, in code and for nothing: on the icon the pencil in her hair was painted lying on top of the bun, and `tools/ios-art.py` grows hair over its lower end so that it comes out of the bun instead. The archived original is as it was painted. Close up, the covered patch is a little softer than the hair round it; a repaint would be one more image.
+**Thirty-five images have been generated in all.** The first fourteen were each agreed before they were made. The other twenty-one are the rooms, made on 16 November 2026 after the owner approved spending on them ("I approve spending on the rooms and anything we need for the game, I want a polished good looking game"). Every one of the thirty-five came out usable on the first attempt. One has been touched up since, in code and for nothing: on the icon the pencil in her hair was painted lying on top of the bun, and `tools/ios-art.py` grows hair over its lower end so that it comes out of the bun instead. The archived original is as it was painted. Close up, the covered patch is a little softer than the hair round it; a repaint would be one more image.
 
 ### The world's two images
 
@@ -39,6 +39,20 @@ Still **drawn in code** (`web/js/ui/scenery.js`), on top of the paintings: the s
 
 From these: the alley's walls are those things piled along it; its fence is the panel; whoever is restless there hides in the bins; and the barricade stands in its gateway until the garden is calm. Its three kinds and its boss came from Pawst Lives with everything else, so the whole place cost two images.
 
+### The rooms' twenty-one images
+
+Home and the six places you walk into by a door (the Midnight Pantry, the Wash, the Dusty Stacks, Moonlit Rooftops, the Tick-Tock Attic, the Roaring Dark) each took three images. Until 16 November 2026 all seven were drawn in code and looked plainer than the painted world outside them.
+
+- **A sheet of twelve things** that stand in the room (`art/raw/<room>_sheet.webp`): at home a bed, the telephone on its table, a bookshelf, the hearth, the basket, an armchair, a fern, the tea things, a rug, a door mat, a coat stand and a chest of drawers with a lamp; in the pantry sacks, barrels, crates, tins, a jar of pickles, a cheese, eggs, milk, a stool, onions and the scales; and so on for each room. `tools/process-art.py` cuts a sheet by which cell of its grid each bit of paint has its middle in, so a thing may be in two parts (a broom and its dustpan) and two rows may nearly touch.
+- **Its back wall**, seen straight on (`<room>_wall.webp`). Only a band of the painting is used: from just above whatever is highest on it down to where it meets the floor. The rows are in `INSIDES` in `tools/process-art.py`, read off each painting.
+- **Its floor**, seen from above (`<room>_floor.webp`). All seven were painted to repeat and do, as they come, so they are only resized: fading one edge into another, as the grass has, would smear a pattern of tiles.
+
+They are in `web/assets/rooms/`, fourteen pictures a room. Where each thing stands is in `web/js/core/indoors.js` (every block of floor is named for what stands on it) and how wide it stands is in `web/js/ui/roomart.js`; a test holds the two together.
+
+Two things about the walls. At home, on the rooftops and in the attic the wall is one painting right across (the rooftops' is the night sky over the town; the attic's is the gable end with its shelf of clocks, and both stand taller than a room's wall). In the other four the wall is the painting **and its mirror image side by side**: a wall of shelves or washing machines painted once across the whole room would have had jars half as tall as you, and two paintings' width puts them at the size they should be. The join is in the middle, behind where the ringleader stands.
+
+Still **drawn in code**, on top of the paintings: the night lying on each floor, pools of light (the fire, which flickers; lamps; skylights; moonlight from a window; the door), the shadow under each thing, the red light of Machine Six in the Wash and its puddles, and in the Roaring Dark the dark itself. Great-aunt Maribel's portrait, which is her own painting from the cast, is put into the frame over the telephone.
+
 ### The people
 
 The front and back views were painted from each look's side view (the image service was given that picture to work from), so the three views of a look are the same person in the same clothes. The cast were painted together in one image so they share a scale: Dov, a child, stands shorter than the grown-ups, and great-aunt Maribel is tiny. `tools/process-art.py` cuts the figures apart by which paint touches which.
@@ -55,14 +69,14 @@ The four candidates used the Pawst Lives sprite style prompt word for word (`too
 | --- | --- | --- |
 | 1 | The house-sitter, final sprite | One of the four candidates, or a repaint at Pawst Lives proportions. A repaint would want its front and back views repainted to match. |
 | 40 | Grown-up forms | One per kind. Eighteen are named (below); twenty-two still to design. Bosses do not grow. |
-| 11 | Things for the world | For each of the five places still to build, a sheet of the things that stand in it and a ground of its own, as Tin Can Alley has (10). And one sheet of painted gateways (1). A place can be built with none, drawn in code as the Midnight Pantry is; it looks plainer. |
+| 1 | Things for the world | One sheet of painted gateways. Every place is built and painted now. A bigger map, with roads on to other areas, would want a sheet and a ground for each new area, as Tin Can Alley has. |
 | 17 | Icons | Six elements, three Calls, three stats (Health exists), four tabs, the Heirloom mark. |
 | 1 | Title art | The app icon is painted. |
-| **70** | **new images** | Fewer if things are painted several to a sheet. Not counted: painted furniture for home and painted things for the pantry (a sheet each) if the rooms drawn in code are to match the painted world. |
+| **60** | **new images** | Fewer if things are painted several to a sheet. |
 
 No longer needed, because the two world images covered them: a painted map of the neighbourhood, the nine buildings, and a painted map for every place (a ground tile and things to stand on it build those).
 
-The count for the places still to build comes from building two. Tin Can Alley took one sheet and one texture, and that is what is counted for each of the other five. The Midnight Pantry took nothing: its floor, wall and shelves are drawn in code and its crates are the alley's. Two places that suit the same floor could share a texture and save an image.
+What the eight places took: the garden nothing of its own (it is the world's grass, bushes and trees); Tin Can Alley two images (a sheet and a texture); and each of the six you walk into, and home, three (a sheet, a wall and a floor). A new place out of doors would cost what the alley did, and one indoors what a room did.
 
 Needs **no** new images:
 
