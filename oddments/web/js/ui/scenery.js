@@ -91,38 +91,58 @@ function turf(pen, grass, x0, y0, x1, y1, wash) {
   }
 }
 
+const STONE_ROOM = 40; // how far apart two stepping stones must be: a stone is 28 long
+
+/**
+ * Where the stepping stones of these ways go: one every other point along each. Where two ways meet,
+ * each would lay a stone on the same spot; the first one there keeps it, so stones never pile up.
+ */
+export function steppingStones(ways) {
+  const next = run(31);
+  const laid = [];
+  for (const way of ways) {
+    way.forEach((p, i) => {
+      if (i % 2) return;
+      const x = p.x + (next() - 0.5) * 8;
+      const y = p.y + (next() - 0.5) * 8;
+      const a = p.a + (next() - 0.5) * 0.5;
+      if (!laid.some((stone) => Math.hypot(stone.x - x, stone.y - y) < STONE_ROOM)) laid.push({ x, y, a });
+    });
+  }
+  return laid;
+}
+
 /**
  * Worn ways: a dark edge, packed earth, pebbles at the sides and stepping stones down the middle.
  * `ways` is a list of lines, each as its points (see `along`); they are laid as one, so where two
  * meet there is no seam.
  */
 function wornWays(pen, ways, earth, tone) {
-  const next = run(31);
+  const next = run(47);
   const trace = () => { pen.beginPath(); for (const way of ways) way.forEach((p, i) => (i ? pen.lineTo(p.x, p.y) : pen.moveTo(p.x, p.y))); };
   pen.lineCap = 'round'; pen.lineJoin = 'round'; pen.setLineDash([]);
   trace(); pen.strokeStyle = 'rgba(8,10,30,.42)'; pen.lineWidth = 90; pen.stroke();
   trace(); pen.strokeStyle = arrived(earth) ? pen.createPattern(earth, 'repeat') : '#6a5a5e'; pen.lineWidth = 76; pen.stroke();
   trace(); pen.strokeStyle = tone.wash; pen.lineWidth = 76; pen.stroke();
   trace(); pen.strokeStyle = 'rgba(255,240,215,.07)'; pen.lineWidth = 46; pen.stroke();
-  for (const stones of ways) {
-    for (const p of stones) {
+  for (const way of ways) {
+    for (const p of way) {
       for (let i = 0; i < 2; i++) {
         const side = (next() > 0.5 ? 1 : -1) * (23 + next() * 12);
         oval(pen, p.x + Math.cos(p.a + Math.PI / 2) * side + (next() - 0.5) * 14, p.y + Math.sin(p.a + Math.PI / 2) * side + (next() - 0.5) * 14, 2.5 + next() * 2.5, 2 + next() * 2);
         paint(pen, tone.pebble);
       }
     }
-    stones.forEach((p, i) => {
-      if (i % 2) return;
-      pen.save();
-      pen.translate(p.x + (next() - 0.5) * 8, p.y + (next() - 0.5) * 8);
-      pen.rotate(p.a + (next() - 0.5) * 0.5);
-      // A worn slab set in the earth: a soft dark edge below it, a little light along its top, no hard line.
-      rounded(pen, -14, -7, 28, 19, 8); paint(pen, 'rgba(8,10,30,.4)');
-      rounded(pen, -14, -9.5, 28, 18, 8); paint(pen, tone.stone);
-      rounded(pen, -9, -7, 13, 4, 2); paint(pen, 'rgba(255,255,255,.16)');
-      pen.restore();
-    });
+  }
+  for (const stone of steppingStones(ways)) {
+    pen.save();
+    pen.translate(stone.x, stone.y);
+    pen.rotate(stone.a);
+    // A worn slab set in the earth: a soft dark edge below it, a little light along its top, no hard line.
+    rounded(pen, -14, -7, 28, 19, 8); paint(pen, 'rgba(8,10,30,.4)');
+    rounded(pen, -14, -9.5, 28, 18, 8); paint(pen, tone.stone);
+    rounded(pen, -9, -7, 13, 4, 2); paint(pen, 'rgba(255,255,255,.16)');
+    pen.restore();
   }
 }
 

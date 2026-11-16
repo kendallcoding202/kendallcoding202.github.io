@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { existsSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
-  WORLD_ART, BUILDING_WIDE, worldSrc, paintGround, paintBuilding, paintProp, paintLamp, paintGate, bushesOf, stood, label, mix,
+  WORLD_ART, BUILDING_WIDE, worldSrc, paintGround, paintBuilding, paintProp, paintLamp, paintGate, bushesOf, steppingStones, stood, label, mix,
 } from '../../web/js/ui/scenery.js';
 import { WORLD, SPOTS, LAMPS, HEDGES, ROAD_POINTS, GREEN, DISTRICTS, canStand } from '../../web/js/core/world.js';
 
@@ -115,6 +115,21 @@ test('the ground of the whole world is the grass painting, with streets of earth
   assert.ok(count(early, 'fillRect') >= 2);
   // With no place to walk into, it is all lane.
   assert.doesNotThrow(() => paintGround(standIn(), { ...GROUND, lawns: [] }, art));
+});
+
+test('stepping stones never pile up, even where streets meet', () => {
+  const stones = steppingStones(ROAD_POINTS);
+  assert.ok(stones.length > 80, `${stones.length} stones along the streets`);
+  for (let i = 0; i < stones.length; i++) {
+    for (let j = i + 1; j < stones.length; j++) {
+      const apart = Math.hypot(stones[i].x - stones[j].x, stones[i].y - stones[j].y);
+      assert.ok(apart >= 40, `two stones ${Math.round(apart)} apart at ${Math.round(stones[i].x)},${Math.round(stones[i].y)}`);
+    }
+  }
+  // Two ways that cross lay fewer stones together than apart: the crossing is shared.
+  const across = Array.from({ length: 9 }, (_, i) => ({ x: i * 24, y: 96, a: 0 }));
+  const down = Array.from({ length: 9 }, (_, i) => ({ x: 96, y: i * 24, a: Math.PI / 2 }));
+  assert.ok(steppingStones([across, down]).length < steppingStones([across]).length + steppingStones([down]).length);
 });
 
 test('a hedge is bushes shoulder to shoulder, standing on the ground the hedge holds', () => {
