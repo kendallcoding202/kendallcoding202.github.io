@@ -22,7 +22,7 @@ const STYLES = {
 /** One visit to a room, from walking in to going home. Returns a record per fight. */
 export function playVisit(game, style, roomId = ROOMS[0].id) {
   const fights = [];
-  if (!game.enterRoom(roomId)) return fights;
+  if (!game.travelTo(roomId)) return fights;
   while (game.place() === 'path') {
     const stop = game.state.visit.stop;
     const battle = game.startEncounter();

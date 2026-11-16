@@ -6,6 +6,7 @@ import {
 import { newFriend } from './progress.js';
 import { roomOpen, maxHpOf } from './rooms.js';
 import { own } from './util.js';
+import { settleWhere } from './world.js';
 
 export function newState(now = Date.now(), seed = (now ^ 0x9e3779b9) | 0) {
   const friends = START_TEAM.map(([species, level], i) => newFriend(i + 1, species, level));
@@ -19,6 +20,7 @@ export function newState(now = Date.now(), seed = (now ^ 0x9e3779b9) | 0) {
     friends, // everyone who has come home: { id, species, level, xp, heirloom }
     nextFriendId: friends.length + 1,
     team: friends.map((friend) => friend.id), // up to three friend ids, in fighting order
+    where: settleWhere(null), // where you are standing in the lane; a new game starts at the door of home
     rooms: Object.fromEntries(ROOM_IDS.map((id) => [id, { visits: 0, clears: 0, losses: 0, best: 0 }])),
     visit: null, // the room being walked: { room, stop, hp: { friendId: health } }
     // The scrapbook: which kinds have been met, and which as an Heirloom.
@@ -122,6 +124,7 @@ export function reviveState(saved, now = Date.now()) {
     const stops = roomBuilt(roomOf(id)) ? roomOf(id).path.length : 0;
     state.rooms[id] = { visits: int(raw.visits, 0), clears: stops ? int(raw.clears, 0) : 0, losses: int(raw.losses, 0), best: int(raw.best, 0, 0, stops) };
   }
+  state.where = settleWhere(saved.where);
   state.visit = reviveVisit(saved.visit, state);
 
   const book = isObj(saved.book) ? saved.book : {};

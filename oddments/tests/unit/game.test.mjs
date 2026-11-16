@@ -30,16 +30,16 @@ test('an empty name keeps the old one; an unknown look falls back to the first',
 
 test('you are at home, on a path or in a fight, and each allows different things', () => {
   const game = fresh();
-  assert.equal(game.place(), 'home');
+  assert.equal(game.place(), 'lane');
   assert.equal(game.startEncounter(), null, 'no fight at home');
   assert.equal(game.leaveRoom(), false);
   assert.equal(game.finishBattle(), null);
   assert.equal(game.choices(), null);
   assert.equal(game.act({ type: 'move', id: 'brace' }), false);
 
-  assert.equal(game.enterRoom('garden'), true);
+  assert.equal(game.travelTo('garden'), true);
   assert.equal(game.place(), 'path');
-  assert.equal(game.enterRoom('garden'), false);
+  assert.equal(game.travelTo('garden'), false);
   assert.equal(game.setTeam([1, 2]), false, 'nobody is swapped half way down a path');
 
   assert.ok(game.startEncounter());
@@ -50,7 +50,7 @@ test('you are at home, on a path or in a fight, and each allows different things
   assert.ok(game.choices().unit);
   assert.equal(game.concede(), true);
   assert.ok(game.finishBattle());
-  assert.equal(game.place(), 'home');
+  assert.equal(game.place(), 'lane');
 });
 
 test('the team is one to three friends you actually have, each once', () => {
@@ -69,7 +69,7 @@ test('the team is one to three friends you actually have, each once', () => {
 test('a short-handed team fights short-handed', () => {
   const game = fresh();
   game.setTeam([3]);
-  game.enterRoom('garden');
+  game.travelTo('garden');
   const battle = game.startEncounter();
   assert.equal(battle.units.filter((u) => u.side === 'ally').length, 1);
   assert.equal(game.teamHealth().length, 1);
@@ -77,7 +77,7 @@ test('a short-handed team fights short-handed', () => {
 
 test('meeting a kind writes it in the scrapbook', () => {
   const game = fresh();
-  game.enterRoom('garden');
+  game.travelTo('garden');
   const battle = game.startEncounter();
   for (const foe of battle.units.filter((u) => u.side === 'foe')) assert.equal(game.state.book[foe.species].met, true);
   assert.equal(game.state.book.boss_hydra.met, false);
@@ -85,7 +85,7 @@ test('meeting a kind writes it in the scrapbook', () => {
 
 test('Health carries from one fight to the next with a breather between, and is full again at home', () => {
   const game = fresh(4);
-  game.enterRoom('garden');
+  game.travelTo('garden');
   const battle = game.startEncounter();
   playOut(battle, {});
   const left = Object.fromEntries(battle.units.filter((u) => u.side === 'ally').map((u) => [u.friendId, u.hp]));
@@ -108,7 +108,7 @@ test('a whole room can be played from the gate to the boss, and clearing it is r
   for (let seed = 1; seed <= 40 && !cleared; seed++) {
     const game = fresh(seed);
     game.begin({ name: 'Kit' });
-    game.enterRoom('garden');
+    game.travelTo('garden');
     const fights = [];
     while (game.place() === 'path') {
       playOut(game.startEncounter(), { befriend: true, have: game.state.friends.map((f) => f.species) });
@@ -127,17 +127,19 @@ test('a whole room can be played from the gate to the boss, and clearing it is r
   assert.ok(game.state.friends.length > 3, 'and made friends on the way');
   assert.ok(game.state.friends.every((f) => !SPECIES[f.species].boss));
   assert.ok(game.team().every((f) => f.level > 3));
-  assert.equal(game.place(), 'home');
+  assert.equal(game.place(), 'lane');
 });
 
 test('with fx off no events are kept; with fx on the fight tells its story', () => {
   const quiet = new Game(newState(NOW, 2), { now: NOW, fx: false });
-  quiet.enterRoom('garden');
+  quiet.travelTo('garden');
   assert.equal(quiet.startEncounter().events, null);
   const loud = fresh(2);
-  loud.enterRoom('garden');
+  loud.travelTo('garden');
   const events = loud.startEncounter().events;
-  assert.equal(events[0].t, 'round');
+  assert.equal(events[0].t, 'start');
+  assert.equal(events[0].units.length, loud.battle.units.length);
+  assert.equal(events[1].t, 'round');
   assert.ok(events.some((e) => e.t === 'turn'));
 });
 

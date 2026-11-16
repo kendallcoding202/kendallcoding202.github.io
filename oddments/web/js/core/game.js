@@ -5,6 +5,7 @@ import { TEAM_SIZE, NAME_LENGTH, lookOf, roomOf } from './balance.js';
 import { createBattle, choices, act, concede } from './battle.js';
 import { settleUp } from './progress.js';
 import { rollEncounter, enterRoom, leaveRoom, afterFight, roomOpen, teamOf, maxHpOf } from './rooms.js';
+import { stepWalk, spotNear, spotOf } from './world.js';
 
 export class Game {
   /**
@@ -19,11 +20,35 @@ export class Game {
     this.battle = null; // the fight in progress; never saved
   }
 
-  /** Where the player is: 'home', on a room's 'path', or in a 'fight'. */
+  /** Where the player is: out in the 'lane', on a room's 'path', or in a 'fight'. */
   place() {
     if (this.battle) return 'fight';
-    return this.state.visit ? 'path' : 'home';
+    return this.state.visit ? 'path' : 'lane';
   }
+
+  // ------------------------------------------------------------ the lane
+
+  /** Walks toward a point for `dt` seconds. Returns whether you moved. Only out in the lane. */
+  walk(target, dt) {
+    if (this.place() !== 'lane' || !target || !Number.isFinite(target.x) || !Number.isFinite(target.y)) return false;
+    const next = stepWalk(this.state.where, target, dt);
+    this.state.where = { x: next.x, y: next.y };
+    return next.moving;
+  }
+
+  /** The place whose door you are standing at: 'home', a room id, or null. */
+  near() { return spotNear(this.state.where); }
+
+  /** Goes straight to a place's door. For the simulator and tests; a player walks. */
+  standAt(spotId) {
+    const spot = spotOf(spotId);
+    if (this.place() !== 'lane' || !spot) return false;
+    this.state.where = { x: spot.door.x, y: spot.door.y };
+    return true;
+  }
+
+  /** Goes straight to a room and walks in. For the simulator and tests. */
+  travelTo(roomId) { return this.standAt(roomId) && this.enterRoom(roomId); }
 
   // ------------------------------------------------------------ the house-sitter
 
@@ -48,11 +73,11 @@ export class Game {
   team() { return teamOf(this.state); }
 
   /**
-   * Chooses who walks with you: one to three friend ids, each once. Only at
-   * home: nobody is swapped half way down a path.
+   * Chooses who walks with you: one to three friend ids, each once. Only out
+   * in the lane: nobody is swapped half way down a path.
    */
   setTeam(ids) {
-    if (this.place() !== 'home' || !Array.isArray(ids)) return false;
+    if (this.place() !== 'lane' || !Array.isArray(ids)) return false;
     const team = ids.filter((id, i) => this.friend(id) && ids.indexOf(id) === i);
     if (team.length !== ids.length || team.length < 1 || team.length > TEAM_SIZE) return false;
     this.state.team = team;
@@ -62,10 +87,11 @@ export class Game {
   // ------------------------------------------------------------ rooms
 
   roomOpen(roomId) { return roomOpen(this.state, roomId); }
-  enterRoom(roomId) { return this.place() === 'home' && enterRoom(this.state, roomId); }
+  /** Walks in. You have to be standing at its door. */
+  enterRoom(roomId) { return this.place() === 'lane' && this.near() === roomId && enterRoom(this.state, roomId); }
   leaveRoom() { return this.place() === 'path' && leaveRoom(this.state); }
 
-  /** The Health each team member has right now: as left on the path, or full at home. */
+  /** The Health each team member has right now: as left on the path, or full out in the lane. */
   teamHealth() {
     const visit = this.state.visit;
     return this.team().map((friend) => ({ id: friend.id, max: maxHpOf(friend), hp: visit ? Math.min(maxHpOf(friend), visit.hp[friend.id] || 0) : maxHpOf(friend) }));
@@ -94,7 +120,7 @@ export class Game {
 
   /**
    * Banks a fight that is over and moves on: along the path after a win,
-   * home after a loss or once the room's boss is beaten. Returns what
+   * back out to the lane after a loss or once the room's boss is beaten. Returns what
    * happened, or null if there is no finished fight.
    */
   finishBattle() {
@@ -106,6 +132,8 @@ export class Game {
     const room = state.visit.room;
     const stop = state.visit.stop;
     const moved = afterFight(state, summary.won, left);
+    // Worn out, they are carried home; otherwise you step back out of the door you went in by.
+    if (!summary.won) state.where = { ...spotOf('home').door };
     for (const friend of state.friends) if (friend.heirloom) state.book[friend.species].heirloom = true;
     this.battle = null;
     return { ...summary, room, stop, cleared: moved.cleared, home: moved.home };

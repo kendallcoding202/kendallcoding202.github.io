@@ -15,7 +15,7 @@ export function playable(state, now = Date.now()) {
     for (const friend of game.state.friends) if (!SPECIES[friend.species].name) return false;
     game.teamHealth();
     for (let fights = 0; fights < 2; fights++) {
-      if (game.place() === 'home' && !game.enterRoom(ROOMS[0].id)) return false;
+      if (game.place() === 'lane' && !game.travelTo(ROOMS[0].id)) return false;
       if (!game.startEncounter()) return false;
       if (game.battle.phase === 'fight' && !game.choices()) return false;
       playOut(game.battle, { befriend: true, have: game.state.friends.map((friend) => friend.species) });

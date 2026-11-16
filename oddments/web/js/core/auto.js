@@ -23,8 +23,12 @@ function wanted(battle, { befriend = false, have = [], heirlooms = [] }) {
   // Carry on with one already started; only start a new one while the team is in good shape.
   const started = fresh.filter((foe) => foe.huff < foe.maxHuff);
   if (started.length) return started.sort((a, b) => a.huff - b.huff)[0];
+  const rare = fresh.find((foe) => foe.heirloom);
+  if (rare) return rare; // worth it even when the team is tired
   if (!healthy) return null;
-  return fresh.sort((a, b) => Math.ceil(a.huff / reachAmount(battle, a)) - Math.ceil(b.huff / reachAmount(battle, b)))[0] || null;
+  // An Heirloom first, as anyone would; then whoever takes the fewest goes.
+  const goes = (foe) => Math.ceil(foe.huff / reachAmount(battle, foe)) - (foe.heirloom ? 100 : 0);
+  return fresh.sort((a, b) => goes(a) - goes(b))[0] || null;
 }
 
 /** The next action to pass to `act`, or null when the fight is over. */

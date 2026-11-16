@@ -21,7 +21,7 @@ sim.state.seen.calls = true;
 sim.state.settings.fast = true;
 const live = new Game(sim.state, { now: NOW, fx: false });
 live.setLook({ name: 'Odalys', look: LOOK_IDS[3] });
-live.enterRoom('garden');
+live.travelTo('garden');
 playOut(live.startEncounter(), {});
 live.finishBattle();
 const REAL = JSON.parse(live.serialize(NOW));
@@ -67,7 +67,7 @@ test('saves built to break the game at launch are repaired, and the game then ru
     const state = load(attack);
     assert.ok(state, `refused outright rather than repaired: ${JSON.stringify(attack).slice(0, 70)}`);
     const game = new Game(state, { now: NOW, fx: false });
-    if (game.place() === 'home') assert.equal(game.enterRoom('garden'), true);
+    if (game.place() === 'lane') assert.equal(game.travelTo('garden'), true);
     for (let i = 0; i < 3 && game.place() === 'path'; i++) { playOut(game.startEncounter(), { befriend: true }); assert.ok(game.finishBattle()); }
     assert.ok(game.team().length >= 1 && game.team().length <= TEAM_SIZE);
     assert.ok(Number.isInteger(state.rng));

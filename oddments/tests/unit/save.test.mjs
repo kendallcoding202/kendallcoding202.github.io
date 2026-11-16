@@ -35,9 +35,9 @@ test('a new save, and one in the middle of a room, come back exactly as they wen
   const { state } = playPlayer({ seed: 5, visits: 2 });
   const game = new Game(state, { now: NOW, fx: false });
   game.setLook({ name: 'Marisol', look: LOOK_IDS[2] });
-  assert.equal(game.enterRoom('garden'), true);
+  assert.equal(game.travelTo('garden'), true);
   game.startEncounter(); game.concede(); game.finishBattle(); // home again
-  game.enterRoom('garden');
+  game.travelTo('garden');
   state.visit.hp[state.team[0]] = 7;
   const saved = JSON.parse(game.serialize(NOW));
   assert.ok(saved.friends.length > 3 && saved.visit && saved.stats.battles > 5);
@@ -48,7 +48,7 @@ test('a new save, and one in the middle of a room, come back exactly as they wen
 
 test('the fight in progress is not part of the save', () => {
   const game = new Game(newState(NOW, 3), { now: NOW });
-  game.enterRoom('garden');
+  game.travelTo('garden');
   game.startEncounter();
   const saved = JSON.parse(game.serialize(NOW));
   assert.equal(saved.battle, undefined);

@@ -279,6 +279,8 @@ export function createBattle(dice, { allies, foes, fx = true }) {
     events: fx ? [] : null,
     tally: { allyTurns: 0, foeTurns: 0, calls: 0, downs: 0 },
   };
+  // How everyone stood before anything happened, for whoever is drawing the fight.
+  emit(battle, { t: 'start', units: battle.units.map((unit) => ({ key: unit.key, hp: unit.hp, huff: unit.huff })) });
   judge(battle); // a side with nobody standing has already lost
   if (battle.phase === 'fight') { beginRound(battle); advance(battle); }
   return battle;

@@ -78,7 +78,7 @@ test('meeting one is written in the scrapbook even if it gets away', () => {
   let game = null;
   for (let seed = 1; seed < 5000 && !game; seed++) {
     const candidate = new Game(newState(1e12, seed), { now: 1e12, fx: false });
-    candidate.enterRoom('garden');
+    candidate.travelTo('garden');
     const before = candidate.state.rng;
     if (rollEncounter({ rng: before }, ROOMS[0], 0).some((foe) => foe.heirloom)) game = candidate;
   }
