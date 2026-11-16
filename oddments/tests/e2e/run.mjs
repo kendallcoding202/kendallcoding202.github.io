@@ -177,7 +177,8 @@ check(at.near === 'home' && (await S(page, () => document.querySelector('.placec
 check(await S(page, () => !document.querySelector('#tabs').hidden), 'the tabs show');
 const firstView = await view(page);
 check(firstView.w < WORLD.w / 2 && firstView.h < WORLD.h, `the world is much bigger than the screen (${Math.round(firstView.w)} of ${WORLD.w} across, ${Math.round(firstView.h)} of ${WORLD.h} down)`);
-check((await game(page, () => window.oddments.game.travelTo('alley'))) === false, 'a place that is not built cannot be walked into');
+check((await game(page, () => window.oddments.game.travelTo('alley'))) === false, 'a place that is still shut cannot be walked into');
+check((await game(page, () => window.oddments.game.travelTo('pantry'))) === false, 'nor one that is not built');
 await snap(page, 'e2e-lane');
 
 // --- someone to talk to
@@ -237,10 +238,15 @@ check(await S(page, () => document.querySelector('.placecard h2').textContent.in
 check((await state(page)).visit === null && moved.district === null, 'reading the sign is not yet a visit');
 check((await state(page)).seen.walked === true && await S(page, () => document.querySelector('.lanehint').hidden), 'the walking hint goes once you have walked');
 await snap(page, 'e2e-lane-garden');
-check(await walkTo(page, 'alley'), 'you can walk on to a place that is not built yet');
+check(await walkTo(page, 'alley'), 'you can walk right across the lane to the next place, Tin Can Alley');
 await page.waitForSelector('.placecard[data-spot="alley"]');
-check(await S(page, () => document.querySelector('[data-act="enter"]').disabled && document.querySelector('[data-act="enter"]').textContent === 'Not built yet'), 'but its door is locked');
-at = await stopped(page); // still walking the last few steps to the door when the card appears
+check(await S(page, () => document.querySelector('[data-act="enter"]').disabled && document.querySelector('[data-act="enter"]').textContent === 'Clear The Garden Gate first'), 'its card says what has to be done first');
+for (let i = 0; i < 4; i++) { await tapToward(page, 'in:alley'); await page.waitForTimeout(450); }
+at = await stopped(page);
+check(at.district === null && at.near === 'alley' && (await state(page)).visit === null, 'and the barricade in its gateway cannot be walked through');
+check(Math.abs((await view(page)).x + (await view(page)).w / 2 - at.x) < 140, 'at the east edge of the world the view still keeps you near the middle of the screen');
+await page.waitForTimeout(300);
+await snap(page, 'e2e-alley-shut');
 await page.goto(`${base}?debug&fast`);
 await ready(page);
 const again = await where(page);
@@ -418,7 +424,7 @@ await snap(page, 'e2e-friends');
 
 section('Scrapbook');
 await tab(page, 'book');
-check((await page.$$('.page-tile')).length === 12, 'the scrapbook has a page for every kind');
+check((await page.$$('.page-tile')).length === Object.keys(SPECIES).length && Object.keys(SPECIES).length === 16, 'the scrapbook has a page for every kind');
 const met = Object.values(s.book).filter((p) => p.met).length;
 check((await page.$$('.page-tile:not(.unmet)')).length === met, `the ${met} kinds met so far are shown`);
 check(await S(page, () => [...document.querySelectorAll('.page-tile.unmet')].every((t) => t.disabled && t.querySelector('b').textContent === '???')), 'the rest are shadows');
@@ -502,12 +508,12 @@ check(s.book.boss_hydra.met && !s.friends.some((f) => SPECIES[f.species].boss), 
 check(s.friends.length >= 5, `friends were made along the way (${s.friends.length})`);
 check(s.friends.filter((f) => s.team.includes(f.id)).every((f) => f.level > 3), 'and the team grew');
 check(await S(page, () => document.querySelector('.goalchip').dataset.goal === 'report' && document.querySelector('.goalchip span').textContent === 'Tell Ines Tock'), 'the goal is now to tell Ines Tock');
-check((await where(page)).district === 'garden' && (await game(page, () => window.oddments.game.held().length)) === 0, 'you are still standing in the garden, and nobody is about');
+check((await where(page)).district === 'garden' && (await game(page, () => window.oddments.game.held().filter((point) => point.x < 1000).length)) === 0, 'you are still standing in the garden, and nobody is about');
 check(await S(page, () => document.querySelector('.placecard').hidden), 'with nothing to report');
 await page.waitForTimeout(400);
 await snap(page, 'e2e-garden-calm');
 check(await walkTo(page, 'garden'), 'you can walk back out through the gate');
-check((await game(page, () => window.oddments.game.held().length)) === 5, 'and from outside they are back in their bushes');
+check((await game(page, () => window.oddments.game.held().filter((point) => point.x < 1000).length)) === 5, 'and from outside they are back in their bushes');
 await page.waitForSelector('.placecard[data-spot="garden"]');
 check(await S(page, () => document.querySelector('.placecard small').textContent.includes('Most calmed in one go: 5 of 5') && document.querySelector('[data-act="enter"]').textContent.includes('Walk on in')), 'the garden can be walked again');
 const visitsSoFar = (await state(page)).rooms.garden.visits;
@@ -516,14 +522,82 @@ await S(page, () => { window.oddments.game.goHome(); window.oddments.game.standB
 await page.waitForSelector('.placecard[data-person="ines"] [data-act="talk"].gold');
 await page.click('[data-act="talk"]');
 check((await hearOut(page)) === 3 && (await state(page)).story.ines === 2, 'she has news again, and hears about the garden');
-check(await S(page, () => document.querySelector('.goalchip').dataset.goal === 'more' && document.querySelector('.goalchip span').textContent === 'Tin Can Alley is next (1 of 8)'), 'one place of eight is calm, and the next is named');
+check(await S(page, () => document.querySelector('.goalchip').dataset.goal === 'calm' && document.querySelector('.goalchip span').textContent === 'Calm Tin Can Alley (0 of 5)'), 'one place of eight is calm, and the goal moves on to the next');
 await page.click('[data-act="goal"]');
 check(await S(page, () => document.querySelector('.modal.journal .aim').textContent.includes('1 of 8 calm') && [...document.querySelectorAll('.modal.journal .sofar li')].some((li) => li.textContent === 'The Garden Gate is calm.')), 'and the journal has it down');
 await snap(page, 'e2e-journal-calm');
 await page.click('.modal [data-id="ok"]');
+
+// =============================================================== the second place
+section('Tin Can Alley');
 await S(page, () => { window.oddments.game.standAt('alley'); window.oddments.ctx.show('lane'); });
 await page.waitForSelector('.placecard[data-spot="alley"]');
-check(await S(page, () => document.querySelector('[data-act="enter"]').disabled && document.querySelector('[data-act="enter"]').textContent === 'Not built yet'), 'the next place is still not built: the slice ends here');
+check(await S(page, () => document.querySelector('.placecard h2').textContent.includes('Tin Can Alley') && document.querySelector('[data-act="enter"]').textContent.includes('Walk on in')), 'with the garden calm, its barricade is down and its gate open');
+check(await game(page, () => window.oddments.game.held().every((point) => !point.r)), 'nothing is left in the gateway');
+await page.waitForTimeout(400);
+await snap(page, 'e2e-alley-gate');
+check(await walkIn(page, 'alley'), 'you walk in through the gate');
+s = await state(page);
+check(s.visit && s.visit.room === 'alley' && s.visit.stop === 0 && s.visit.groups.length === 5 && s.rooms.alley.visits === 1, 'and that begins a visit to it');
+check(await S(page, () => document.querySelector('#lane h1').textContent === 'Tin Can Alley' && document.querySelector('#lane .where').textContent === '0 of 5 calmed'), 'the heading says so');
+await page.waitForTimeout(500);
+await snap(page, 'e2e-alley');
+// Tap the far end of the alley, as a finger would. Whoever is nearest the gate fills it from wall to wall, so that is who you meet.
+for (let tries = 0; tries < 30 && (await S(page, () => window.oddments.game.place())) !== 'fight'; tries++) {
+  await tapToward(page, 'post:4');
+  await page.waitForTimeout(500);
+}
+await page.waitForSelector('#fight', { timeout: 15000 });
+check((await game(page, () => window.oddments.game.facing)) === 0, 'tapping the far end of the alley walks you into the first group: there is no going round');
+await idle(page);
+check(await S(page, () => document.querySelector('#fight img.bg').src.includes('bg_alley')), 'the fight is in the alley');
+check((await battle(page)).units.filter((u) => u.side === 'foe').every((u) => ['cancrab', 'ratscal'].includes(u.species)), 'against the kinds that hang about its bins');
+let alleyCalm = false;
+let calls = 0;
+let baronSeen = false;
+const metInTurn = [];
+while (!alleyCalm && calls < 8) {
+  calls++;
+  if (!(await state(page)).visit) await S(page, () => { window.oddments.game.travelTo('alley'); window.oddments.ctx.show('lane'); });
+  while ((await state(page)).visit) {
+    const index = (await state(page)).visit.stop;
+    if ((await screen(page)) !== 'fight') await onward(page, index);
+    await idle(page);
+    if (calls === 1) metInTurn.push(await game(page, () => window.oddments.game.facing));
+    if (index === 4 && !baronSeen) {
+      baronSeen = true;
+      const foes = (await page.$$('.unit.foe')).length;
+      check((await page.$$('.unit.boss')).length === 1 && (foes === 2 || foes === 3), 'the Bandit Baron holds court at the far end, with one or two others');
+      check(await S(page, () => document.querySelectorAll('.order .chip.foe img[src*="boss_baron"]').length === 2), 'and takes two turns a round');
+      await snap(page, 'e2e-baron');
+    }
+    await botFight(page, { befriend: index < 4 });
+    alleyCalm = (await modalTitle(page)) === 'All calm';
+    await page.click('[data-id="next"]');
+    await page.waitForTimeout(80);
+  }
+}
+s = await state(page);
+check(alleyCalm, `a sensible player calms the alley (took ${calls} visit${calls === 1 ? '' : 's'})`);
+check(metInTurn.every((group, i) => group === i), 'meeting its groups in turn, from the gate up', metInTurn.join(' '));
+check(s.rooms.alley.clears === 1 && s.rooms.alley.best === 5 && s.visit === null, 'calming it is recorded and the visit is over');
+check(s.book.boss_baron.met && ['cancrab', 'sockgoblin', 'coothug'].filter((kind) => s.book[kind].met).length >= 2, 'the Baron is in the scrapbook, and so are kinds met nowhere else');
+check((await where(page)).district === 'alley', 'you are still standing in the alley');
+await page.waitForTimeout(400);
+await snap(page, 'e2e-alley-calm');
+check(await S(page, () => document.querySelector('.goalchip').dataset.goal === 'report'), 'the goal is to tell Ines Tock again');
+await S(page, () => { window.oddments.game.standBy('ines'); window.oddments.ctx.show('lane'); });
+await page.waitForSelector('.placecard[data-person="ines"] [data-act="talk"].gold');
+await page.click('[data-act="talk"]');
+check((await hearOut(page)) === 3 && (await state(page)).story.ines === 3, 'she hears about the alley');
+check(await S(page, () => document.querySelector('.goalchip').dataset.goal === 'more' && document.querySelector('.goalchip span').textContent === 'The Midnight Pantry is next (2 of 8)'), 'two places of eight are calm, and the next is named');
+// One visit at a time: out calling on the garden, the card at the alley gate says to rest first.
+await S(page, () => { window.oddments.game.travelTo('garden'); window.oddments.game.standAt('alley'); window.oddments.ctx.show('lane'); });
+await page.waitForSelector('.placecard[data-spot="alley"]');
+check(await S(page, () => document.querySelector('[data-act="enter"]').textContent.includes('still out calling on The Garden Gate')), 'while you are out calling on one place, the other tells you to rest first');
+await S(page, () => { window.oddments.game.goHome(); window.oddments.game.standAt('pantry'); window.oddments.ctx.show('lane'); });
+await page.waitForSelector('.placecard[data-spot="pantry"]');
+check(await S(page, () => document.querySelector('[data-act="enter"]').disabled && document.querySelector('[data-act="enter"]').textContent === 'Not built yet' && document.querySelector('.placecard small').textContent.includes('this slice ends at Tin Can Alley')), 'the place after that is not built: the slice ends here');
 await snap(page, 'e2e-house-cleared');
 
 // =============================================================== heirlooms
