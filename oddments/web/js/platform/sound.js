@@ -1,4 +1,4 @@
-// All the game's sound. Every effect and both tunes are made here, as they
+// All the game's sound. Every effect and every tune is made here, as they
 // are needed, with the browser's own Web Audio: there are no sound files to
 // ship or license, and nothing is fetched. This is the one file that knows
 // about audio; the screens only say what happened (`play('hit')`) and where
@@ -56,17 +56,58 @@ const SCUFFLE = {
   ],
 };
 
+/** A fight in Tin Can Alley: quicker again, a riff with a bent note in it, played on things found in bins. */
+const RACKET = {
+  home: 220, // A below middle C
+  beat: 0.4,
+  beats: 4,
+  bars: [
+    { chord: [0, 3, 7], notes: [[0, 12, 0.5], [0.5, 12, 0.5], [1, 15, 0.5], [1.5, 12, 0.5], [2, 10, 1], [3, 7, 1]] },
+    { chord: [0, 3, 7], notes: [[0, 12, 0.5], [0.5, 12, 0.5], [1, 15, 0.5], [1.5, 17, 0.5], [2, 15, 2]] },
+    { chord: [5, 8, 12], notes: [[0, 17, 0.5], [0.5, 17, 0.5], [1, 20, 0.5], [1.5, 17, 0.5], [2, 15, 1], [3, 12, 1]] },
+    { chord: [7, 11, 14], notes: [[0, 19, 1], [1, 14, 0.5], [1.5, 11, 0.5], [2, 14, 2]] },
+    { chord: [0, 3, 7], notes: [[0, 12, 0.5], [0.5, 15, 0.5], [1, 17, 0.5], [1.5, 18, 0.5], [2, 19, 1], [3, 22, 1]] },
+    { chord: [-4, 0, 3], notes: [[0, 24, 1], [1, 20, 0.5], [1.5, 17, 0.5], [2, 20, 2]] },
+    { chord: [-2, 2, 5], notes: [[0, 22, 0.5], [0.5, 19, 0.5], [1, 17, 1], [2, 14, 0.5], [2.5, 17, 0.5], [3, 19, 1]] },
+    { chord: [7, 11, 14], notes: [[0, 19, 0.5], [0.5, 18, 0.5], [1, 17, 0.5], [1.5, 14, 0.5], [2, 11, 1], [3, 7, 1]] },
+  ],
+};
+
+/** A ringleader: its own tune, not the scuffle. Heavier, in a darker key, with a bass that does not let up. */
+const RINGLEADER = {
+  home: 196, // G below middle C
+  beat: 0.42,
+  beats: 4,
+  bars: [
+    { chord: [0, 3, 7], notes: [[0, 12, 1.5], [1.5, 10, 0.5], [2, 12, 1], [3, 15, 1]] },
+    { chord: [0, 3, 7], notes: [[0, 14, 1.5], [1.5, 12, 0.5], [2, 10, 2]] },
+    { chord: [-4, 0, 3], notes: [[0, 15, 1.5], [1.5, 14, 0.5], [2, 15, 1], [3, 19, 1]] },
+    { chord: [-5, -1, 2], notes: [[0, 19, 1.5], [1.5, 17, 0.5], [2, 14, 2]] },
+    { chord: [0, 3, 7], notes: [[0, 19, 0.5], [0.5, 19, 0.5], [1, 22, 1], [2, 19, 1], [3, 15, 1]] },
+    { chord: [5, 8, 12], notes: [[0, 20, 1.5], [1.5, 19, 0.5], [2, 17, 1], [3, 15, 1]] },
+    { chord: [-4, 0, 3], notes: [[0, 15, 1], [1, 19, 1], [2, 22, 1], [3, 20, 1]] },
+    { chord: [-5, -1, 2], notes: [[0, 19, 1], [1, 23, 1], [2, 19, 1], [3, 14, 1]] },
+  ],
+};
+
 /**
- * Where you are, as far as the music goes: which tune, how fast and how high. A ringleader gets
- * the fight tune lower and a touch quicker. 'quiet' is no music at all.
+ * Where you are, as far as the music goes: which tune, what plays it (`voice`), what plays under
+ * it (`back`), how fast and how high. 'quiet' is no music at all. A fight has the scuffle unless
+ * the place has a fight tune of its own; a ringleader has one of its own wherever it is.
  */
 export const SCENES = {
   quiet: null,
-  world: { tune: LULLABY, voice: 'box', speed: 1, shift: 0, loud: 1 },
-  fight: { tune: SCUFFLE, voice: 'pluck', speed: 1, shift: 0, loud: 0.9 },
-  boss: { tune: SCUFFLE, voice: 'pluck', speed: 1.12, shift: -3, loud: 1 },
+  world: { tune: LULLABY, voice: 'box', back: 'waltz', speed: 1, shift: 0, loud: 1 },
+  fight: { tune: SCUFFLE, voice: 'pluck', back: 'walk', speed: 1, shift: 0, loud: 0.9 },
+  clatter: { tune: RACKET, voice: 'tin', back: 'clank', speed: 1, shift: 0, loud: 0.95 },
+  boss: { tune: RINGLEADER, voice: 'reed', back: 'drive', speed: 1, shift: 0, loud: 1 },
 };
-export const TUNES = { LULLABY, SCUFFLE };
+export const TUNES = { LULLABY, SCUFFLE, RACKET, RINGLEADER };
+/** The places whose fights have a tune of their own. */
+export const FIGHT_SCENE = { alley: 'clatter' };
+/** Which scene it is: out in the world, or in a fight (in which place, and whether against its ringleader). */
+export const sceneFor = ({ fight = false, boss = false, room = '' } = {}) => (!fight ? 'world' : boss ? 'boss'
+  : Object.prototype.hasOwnProperty.call(FIGHT_SCENE, room) ? FIGHT_SCENE[room] : 'fight');
 
 // ---------------------------------------------------------------- the effects
 //
@@ -86,7 +127,11 @@ export const SOUNDS = {
   ring: (kit) => { for (let burst = 0; burst < 2; burst++) for (let i = 0; i < 9; i++) kit.tone({ freq: i % 2 ? 1245 : 1568, dur: 0.05, type: 'sine', vol: 0.085, delay: burst * 0.75 + i * 0.055 }); },
   talk: (kit, with_) => { const freq = VOICES[with_.who] || 440; [1, 1.12, 0.94].forEach((bend, i) => kit.tone({ freq: freq * bend, to: freq * bend * 1.05, dur: 0.07, type: 'triangle', vol: 0.06, delay: i * 0.075 })); },
   // A fight
-  meet: (kit) => { [392, 494, 587, 784].forEach((freq, i) => kit.tone({ freq, dur: 0.1, type: 'triangle', vol: 0.09, delay: i * 0.065 })); kit.noise({ dur: 0.3, vol: 0.04, freq: 900, sweep: 3000 }); },
+  // Walking into someone: a rising sting (lower, and in a darker turn, for a ringleader), the scuffle of
+  // the dust going up, and the puff of it clearing.
+  meet: (kit, with_) => { (with_.boss ? [233, 277, 349, 466] : [392, 494, 587, 784]).forEach((freq, i) => kit.tone({ freq, dur: with_.boss ? 0.14 : 0.1, type: 'triangle', vol: 0.09, delay: i * (with_.boss ? 0.085 : 0.065) })); kit.noise({ dur: 0.3, vol: 0.04, freq: 900, sweep: 3000 }); },
+  scuffle: (kit) => { kit.noise({ dur: 0.5, vol: 0.1, freq: 280, sweep: 2200, q: 0.5, delay: 0.05 }); [0.12, 0.24, 0.34].forEach((delay, i) => kit.tone({ freq: 150 - i * 12, to: 70, dur: 0.09, type: 'triangle', vol: 0.1, delay })); },
+  poof: (kit) => kit.noise({ dur: 0.36, vol: 0.07, freq: 1900, sweep: 520, q: 0.5 }),
   use: (kit) => { kit.noise({ dur: 0.14, vol: 0.2, freq: 600, sweep: 2600, q: 0.6 }); kit.tone({ freq: 300, to: 520, dur: 0.1, type: 'sine', vol: 0.035 }); },
   hit: (kit) => { kit.noise({ dur: 0.07, vol: 0.13, freq: 1400 }); kit.tone({ freq: 190, to: 95, dur: 0.1, type: 'triangle', vol: 0.13 }); },
   strong: (kit) => { kit.noise({ dur: 0.1, vol: 0.16, freq: 2600 }); kit.tone({ freq: 240, to: 90, dur: 0.14, type: 'triangle', vol: 0.15 }); kit.tone({ freq: 988, dur: 0.09, type: 'square', vol: 0.045, delay: 0.02 }); },
@@ -187,35 +232,81 @@ function hissFor(audio) {
   return buffer;
 }
 
+// What plays the melody. Each takes the note, how long it is held (in beats), and where it goes.
+const VOICE = {
+  /** A music box. */
+  box: (kit, freq, long, beat, loud, to) => kit.bell(freq, { dur: Math.max(0.9, long * beat * 1.5), vol: 0.085 * loud, ...to }),
+  /** A plucked string. */
+  pluck: (kit, freq, long, beat, loud, to) => kit.pluck(freq, { dur: Math.max(0.22, long * beat * 0.95), vol: 0.075 * loud, ...to }),
+  /** A toy piano made of tin: a short pluck with a hollow clack on the front of it. */
+  tin: (kit, freq, long, beat, loud, to) => {
+    kit.pluck(freq, { dur: Math.max(0.2, long * beat * 0.8), vol: 0.066 * loud, ...to });
+    kit.tone({ freq: freq * 3, dur: 0.05, type: 'square', vol: 0.011 * loud, attack: 0.003, ...to });
+  },
+  /** Something with a chest: a held, reedy note, for whoever is in charge. */
+  reed: (kit, freq, long, beat, loud, to) => {
+    kit.tone({ freq, dur: Math.max(0.2, long * beat * 0.96), type: 'triangle', vol: 0.072 * loud, attack: 0.02, ...to });
+    kit.tone({ freq, dur: Math.max(0.2, long * beat * 0.9), type: 'sawtooth', vol: 0.02 * loud, attack: 0.03, ...to });
+  },
+};
+
+// What plays under it: one bar at a time. `pitch` turns a note of the tune into a frequency, `after`
+// a number of beats into the bar into how long from now that is.
+const BACK = {
+  /** A waltz: a low note held through the bar, and the chord, softly, on its other beats. */
+  waltz(kit, bar, tune, beat, loud, pitch, after, dest) {
+    // (A triangle, not a pure tone: a phone's small speaker cannot sound a note this low, only its overtones.)
+    kit.tone({ freq: pitch(bar.chord[0] - 12), dur: beat * tune.beats * 0.98, type: 'triangle', vol: 0.055 * loud, delay: after(0), attack: 0.03, dest });
+    for (let b = 1; b < tune.beats; b++) {
+      kit.bell(pitch(bar.chord[1]), { dur: beat * 0.9, vol: 0.026 * loud, delay: after(b), dest });
+      kit.bell(pitch(bar.chord[2]), { dur: beat * 0.9, vol: 0.026 * loud, delay: after(b), dest });
+    }
+  },
+  /** Root, fifth, octave, fifth, twice over, on the half beats: a plucked bass that walks on the spot. */
+  walk(kit, bar, tune, beat, loud, pitch, after, dest) {
+    const walk = [0, 7, 12, 7];
+    for (let half = 0; half < tune.beats * 2; half++) {
+      kit.pluck(pitch(bar.chord[0] - 12 + walk[half % 4]), { dur: beat * 0.42, vol: 0.06 * loud, delay: after(half / 2), dest });
+      if (half % 4 === 2) kit.noise({ dur: 0.04, vol: 0.018 * loud, freq: 5200, q: 1.2, delay: after(half / 2), dest });
+    }
+  },
+  /** Tin Can Alley: a bass on every beat, a bin lid on two and four, something small and tinny on every off beat. */
+  clank(kit, bar, tune, beat, loud, pitch, after, dest) {
+    for (let b = 0; b < tune.beats; b++) {
+      kit.pluck(pitch(bar.chord[0] - 12 + (b % 2 ? 7 : 0)), { dur: beat * 0.5, vol: 0.066 * loud, delay: after(b), dest });
+      kit.noise({ dur: 0.035, vol: 0.034 * loud, freq: 4300, q: 7, delay: after(b + 0.5), dest });
+      if (b % 2) kit.tone({ freq: 410, to: 290, dur: 0.06, type: 'square', vol: 0.02 * loud, delay: after(b), dest });
+    }
+    // And the chord, a bottle at a time, late in the bar.
+    kit.pluck(pitch(bar.chord[1]), { dur: beat * 0.3, vol: 0.03 * loud, delay: after(tune.beats - 1.5), dest });
+    kit.pluck(pitch(bar.chord[2]), { dur: beat * 0.3, vol: 0.03 * loud, delay: after(tune.beats - 0.5), dest });
+  },
+  /** A ringleader: a bass that does not let up, a thump on one and three, a crack on two and four, the chord held low under it all. */
+  drive(kit, bar, tune, beat, loud, pitch, after, dest) {
+    const steps = [0, 0, 12, 0, 0, 0, 7, 12];
+    for (let half = 0; half < tune.beats * 2; half++) kit.pluck(pitch(bar.chord[0] - 12 + steps[half % 8]), { dur: beat * 0.44, vol: 0.064 * loud, delay: after(half / 2), dest });
+    for (let b = 0; b < tune.beats; b++) {
+      if (b % 2 === 0) kit.tone({ freq: 130, to: 52, dur: 0.13, type: 'sine', vol: 0.11 * loud, delay: after(b), dest });
+      else kit.noise({ dur: 0.09, vol: 0.045 * loud, freq: 1900, q: 0.8, delay: after(b), dest });
+    }
+    for (const note of bar.chord.slice(1)) kit.tone({ freq: pitch(note), dur: beat * tune.beats * 0.96, type: 'triangle', vol: 0.018 * loud, delay: after(0), attack: 0.05, dest });
+  },
+};
+export const VOICE_NAMES = Object.keys(VOICE);
+export const BACK_NAMES = Object.keys(BACK);
+
 /**
- * Writes one bar of a scene's tune into the future, starting at clock time `at`: the melody, a
- * bass note, and the chord (a waltz's two soft beats, or a plucked walk in a fight).
+ * Writes one bar of a scene's tune into the future, starting at clock time `at`: the melody in
+ * the scene's voice, and whatever plays under it.
  */
 export function writeBar(kit, scene, barIndex, at, dest) {
-  const { tune, voice, speed, shift, loud } = scene;
+  const { tune, voice, back, speed, shift, loud } = scene;
   const beat = tune.beat / speed;
   const bar = tune.bars[barIndex % tune.bars.length];
   const pitch = (semitones) => tune.home * Math.pow(2, (semitones + shift) / 12);
-  const delayOf = (beats) => Math.max(0, at + beats * beat - kit.now());
-  for (const [when, note, long] of bar.notes) {
-    if (voice === 'box') kit.bell(pitch(note), { dur: Math.max(0.9, long * beat * 1.5), vol: 0.085 * loud, delay: delayOf(when), dest });
-    else kit.pluck(pitch(note), { dur: Math.max(0.22, long * beat * 0.95), vol: 0.075 * loud, delay: delayOf(when), dest });
-  }
-  if (voice === 'box') {
-    // (A triangle, not a pure tone: a phone's small speaker cannot sound a note this low, only its overtones.)
-    kit.tone({ freq: pitch(bar.chord[0] - 12), dur: beat * tune.beats * 0.98, type: 'triangle', vol: 0.055 * loud, delay: delayOf(0), attack: 0.03, dest });
-    for (let b = 1; b < tune.beats; b++) {
-      kit.bell(pitch(bar.chord[1]), { dur: beat * 0.9, vol: 0.026 * loud, delay: delayOf(b), dest });
-      kit.bell(pitch(bar.chord[2]), { dur: beat * 0.9, vol: 0.026 * loud, delay: delayOf(b), dest });
-    }
-  } else {
-    // Root, fifth, octave, fifth, twice over, on the half beats: a plucked bass that walks on the spot.
-    const walk = [0, 7, 12, 7];
-    for (let half = 0; half < tune.beats * 2; half++) {
-      kit.pluck(pitch(bar.chord[0] - 12 + walk[half % 4]), { dur: beat * 0.42, vol: 0.06 * loud, delay: delayOf(half / 2), dest });
-      if (half % 4 === 2) kit.noise({ dur: 0.04, vol: 0.018 * loud, freq: 5200, q: 1.2, delay: delayOf(half / 2), dest });
-    }
-  }
+  const after = (beats) => Math.max(0, at + beats * beat - kit.now());
+  for (const [when, note, long] of bar.notes) VOICE[voice](kit, pitch(note), long, beat, loud, { delay: after(when), dest });
+  BACK[back](kit, bar, tune, beat, loud, pitch, after, dest);
   return beat * tune.beats; // how long the bar lasts
 }
 

@@ -499,7 +499,7 @@ while (!cleared && visits < 6) {
       check((await page.$$('.unit.boss')).length === 1 && (await page.$$('.unit.foe')).length === 3, 'the boss stands with two others');
       check((await S(page, () => document.querySelectorAll('.unit.boss .pips i').length)) === 0, 'and has no Huff to calm');
       check(await S(page, () => document.querySelectorAll('.order .chip.foe img[src*="boss_hydra"]').length === 2), 'it takes two turns a round');
-      check(await S(page, () => window.oddments.sound().scene === 'boss'), 'and its fight has the lower, quicker tune');
+      check(await S(page, () => window.oddments.sound().scene === 'boss'), 'and its fight has a ringleader\'s own tune');
       await snap(page, 'e2e-boss');
     }
     await botFight(page, { befriend: index < 4 });
@@ -560,6 +560,7 @@ await page.waitForSelector('#fight', { timeout: 15000 });
 check((await game(page, () => window.oddments.game.facing)) === 0, 'tapping the far end of the alley walks you into the first group: there is no going round');
 await idle(page);
 check(await S(page, () => document.querySelector('#fight img.bg').src.includes('bg_alley')), 'the fight is in the alley');
+check(await S(page, () => window.oddments.sound().scene === 'clatter'), 'to the alley\'s own fight tune, not the garden\'s');
 check((await battle(page)).units.filter((u) => u.side === 'foe').every((u) => ['cancrab', 'ratscal'].includes(u.species)), 'against the kinds that hang about its bins');
 let alleyCalm = false;
 let calls = 0;
@@ -702,6 +703,112 @@ await page.click('[data-id="erase"]');
 await page.waitForSelector('.modal.intro', { timeout: 15000 });
 s = await state(page);
 check(s.friends.length === 3 && !s.started && s.rooms.garden.clears === 0, 'erasing gives a brand-new game');
+
+// =============================================================== reading a fight
+section('Reading a fight');
+// Not played fast: the dust, the pages and the bubble are seen at their own pace. On a phone with a status bar.
+const read = await newPage({ width: 393, height: 852 });
+await read.goto(`${base}?debug&reset&seed=11`);
+await ready(read);
+await S(read, () => { document.documentElement.style.setProperty('--safe-top', '59px'); document.documentElement.style.setProperty('--safe-bottom', '34px'); });
+await begin(read);
+// The washing line, with two who will show both tags: one a Fluff move hurts more, one it hurts less.
+await S(read, () => {
+  const o = window.oddments;
+  o.game.travelTo('garden');
+  o.game.state.visit.groups[1].foes = [{ species: 'snailor', level: 2, heirloom: false }, { species: 'sparkplug', level: 2, heirloom: false }];
+  o.game.approach(1);
+  o.ctx.show('lane');
+});
+await tapToward(read, 'post:1');
+await read.waitForSelector('canvas.shift', { timeout: 15000 });
+check(await S(read, () => { const c = document.querySelector('canvas.shift').getBoundingClientRect(); return c.left <= 0 && c.top <= 0 && c.right >= innerWidth && c.bottom >= innerHeight; }) && (await screen(read)) === 'lane', 'walking into a group, dust billows up over the whole screen while the world is still behind it');
+await read.waitForSelector('#fight', { timeout: 15000 });
+check(!!(await read.$('canvas.shift')), 'the fight is set out behind the dust');
+await read.waitForSelector('canvas.shift', { state: 'detached', timeout: 5000 });
+let heardNow = (await S(read, () => window.oddments.sound())).heard;
+check(heardNow.meet === 1 && heardNow.scuffle === 1 && heardNow.poof === 1, 'which clears to show it: a sting, a scuffle and a puff are heard', JSON.stringify(heardNow));
+
+// Before the very first fight, how a fight works.
+await read.waitForSelector('.modal.howto');
+check((await S(read, () => document.querySelector('#fight').dataset.busy)) === '1' && (await state(read)).seen.fights === true, 'before your very first fight, how a fight works is explained, and the fight waits');
+check(await S(read, () => {
+  const m = document.querySelector('.modal.howto');
+  return m.dataset.page === '1/3' && m.querySelectorAll('.elring .ringchip').length === 7 && m.querySelector('.edge.strong').textContent === 'Hurts more' && m.querySelector('.edge.weak').textContent === 'Hurts less'
+    && m.textContent.includes('50% more damage') && m.textContent.includes('30% less damage');
+}), 'first the ring of elements, and what the two tags over a target mean, in numbers');
+const pageFits = () => S(read, () => { const m = document.querySelector('.modal.howto'); const r = m.getBoundingClientRect(); const b = m.querySelector('.body'); return r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth && b.scrollHeight <= b.clientHeight + 1; });
+let pagesFit = await pageFits();
+await snap(read, 'e2e-howto');
+await read.click('.modal.howto [data-id="next"]');
+check(await S(read, () => { const m = document.querySelector('.modal.howto'); return m.dataset.page === '2/3' && m.textContent.includes('Huff') && m.textContent.includes('Reach out takes 2 pips off (3 ') && m.querySelectorAll('.howkin .pips i').length === 3; }), 'then making friends: the pips, and what Reach out does to them');
+pagesFit = pagesFit && await pageFits();
+await read.click('.modal.howto [data-id="next"]');
+check(await S(read, () => { const m = document.querySelector('.modal.howto'); return m.dataset.page === '3/3' && m.querySelectorAll('.howcall').length === 3 && m.querySelector('[data-id="next"]').textContent === 'Got it'; }), 'then your own part: the three Calls');
+pagesFit = pagesFit && await pageFits();
+check(pagesFit, 'every page fits the screen without scrolling');
+await read.click('.modal.howto [data-id="next"]');
+await read.waitForSelector('#fight[data-busy="0"]', { timeout: 30000 });
+check(!(await read.$('.modal.howto')), 'and with that read, the fight begins');
+
+// The tags over targets: what the move will do to them, in words that cannot be read the other way round.
+const mover = await S(read, () => window.oddments.game.choices().unit.species);
+await read.click('[data-move="lintflurry"]');
+await read.waitForTimeout(150);
+const tags = await S(read, () => [...document.querySelectorAll('.unit.foe')].map((u) => { const e = u.querySelector('.edge'); const r = e.getBoundingClientRect(); return { text: e.hidden ? '' : e.textContent, left: r.left, right: r.right, bottom: r.bottom, head: u.querySelector('.sprite').getBoundingClientRect().top }; }));
+check(mover === 'dustbunny' && tags.length === 2 && tags[0].text === 'Hurts more' && tags[1].text === 'Hurts less', 'choosing who to hit, each is tagged with what the move will do to it: "Hurts more", "Hurts less"', JSON.stringify(tags));
+const inRow = [...tags].sort((a, b) => a.left - b.left);
+check(tags.every((t) => t.bottom <= t.head + 0.5 && t.left >= 0 && t.right <= 393) && inRow[0].right <= inRow[1].left, 'the tags sit above their heads, not on them, and do not touch each other', JSON.stringify(tags));
+await snap(read, 'e2e-tags');
+await read.click('[data-act="cancel"]');
+
+// Reach out to one that is not ready.
+const before = (await battle(read)).units.find((u) => u.key === 'f0').huff;
+await read.click('[data-call="reach"]');
+await read.click('[data-unit="f0"]');
+await read.waitForSelector('.float.bubble');
+await read.waitForTimeout(320);
+const said = await S(read, () => {
+  const b = document.querySelector('.float.bubble').getBoundingClientRect();
+  const unit = document.querySelector('[data-unit="f0"]');
+  return { text: document.querySelector('.float.bubble').textContent, foot: b.bottom + 8, head: unit.querySelector('.sprite').getBoundingClientRect().top, left: b.left, right: b.right, turned: unit.classList.contains('refuse'), say: document.querySelector('.say').textContent };
+});
+check(said.text === 'Not yet!' && said.turned, 'reached, and not ready to come: it turns its back and says "Not yet!"', JSON.stringify(said));
+check(said.foot <= said.head + 0.5 && said.left >= 0 && said.right <= 393, 'in a bubble above its head: clear of it, tail and all, and on the screen', JSON.stringify(said));
+check(said.say === `${SPECIES.snailor.name} ${SPECIES.snailor.notYet}.`, 'and the line says how its kind says no', said.say);
+await snap(read, 'e2e-notyet');
+await read.waitForSelector('#fight[data-busy="0"]', { timeout: 30000 });
+const after = (await battle(read)).units.find((u) => u.key === 'f0').huff;
+check(after > 0 && after < before && (await S(read, () => document.querySelector('.say').textContent)) === `${after} more pip${after === 1 ? '' : 's'} to go. ${SPECIES.dustbunny.name}'s turn.`, 'then how far there is to go, and that the turn is still yours');
+heardNow = (await S(read, () => window.oddments.sound())).heard;
+check(heardNow.notyet === 1 && heardNow.pip === 1, 'both heard: the pips coming off, and its "uh-uh"');
+// The explanation can be read again from the fight's menu, and is not shown unasked a second time.
+await read.click('[data-act="menu"]');
+await read.click('.modal.menu [data-id="howto"]');
+check(!!(await read.$('.modal.howto')) && !(await read.$('.modal.menu')), 'the fight\'s menu opens the explanation again');
+await read.click('.modal.howto .x');
+await S(read, () => { window.oddments.game.concede(); window.oddments.game.finishBattle(); window.oddments.game.travelTo('garden'); window.oddments.game.startEncounter(0); window.oddments.ctx.show('fight'); });
+await read.waitForSelector('#fight[data-busy="0"]', { timeout: 30000 });
+check(!(await read.$('.modal.howto')), 'a second fight starts straight away, with no explanation');
+
+// The top of the map, on a phone whose status bar pushes the heading down: it all comes out from under.
+await S(read, () => {
+  const o = window.oddments;
+  o.game.concede(); o.game.finishBattle();
+  o.game.travelTo('garden');
+  o.game.state.where = { x: o.game.state.where.x, y: 52 };
+  o.ctx.show('lane');
+});
+await read.waitForTimeout(500);
+const top = await S(read, () => {
+  const v = window.oddments.lane.view();
+  const box = document.querySelector('.lanecanvas').getBoundingClientRect();
+  const k = box.width / v.w;
+  return { edge: box.top + (0 - v.y) * k, head: window.oddments.lane.screenOf('me').y - 96 * k, chip: document.querySelector('.goalchip').getBoundingClientRect().bottom, who: document.querySelector('#lane .who').getBoundingClientRect().bottom };
+});
+check(top.chip > 130 && top.edge >= top.chip && top.head >= top.chip && top.edge >= top.who, 'at the very top of the map, the edge of the world and your own head are clear of the heading, your name and the goal', JSON.stringify(top));
+await snap(read, 'e2e-top');
+await read.context().close();
 
 // =============================================================== other phones
 section('Other screen sizes');

@@ -11,7 +11,7 @@ import { fightScreen } from './ui/fight.js';
 import { friendsScreen, bookScreen, settingsScreen, lookDialog } from './ui/friends.js';
 import { heirloomTag, bar } from './ui/parts.js';
 import { loadSave, writeSave, clearSave, keepUnreadable } from './platform/storage.js';
-import { unlockSound, setSound, hushSound, play, setScene, soundState } from './platform/sound.js';
+import { unlockSound, setSound, hushSound, play, setScene, sceneFor, soundState } from './platform/sound.js';
 
 const params = new URLSearchParams(location.search);
 // Switches for testing in a browser: ?reset starts from a clean save, ?fast
@@ -81,8 +81,9 @@ async function boot() {
       const target = place === 'fight' ? 'fight' : (TABS.some((tab) => tab.id === name) ? name : 'lane');
       if (showing && showing.gone) showing.gone();
       ctx.current = target;
-      // The music follows you: the lullaby out in the world, the scuffle in a fight, lower for a ringleader.
-      setScene(target !== 'fight' ? 'world' : game.battle.units.some((unit) => unit.boss) ? 'boss' : 'fight');
+      // The music follows you: the lullaby out in the world; in a fight the scuffle, or the place's own
+      // fight tune where it has one; and a ringleader's own tune wherever one is met.
+      setScene(sceneFor({ fight: target === 'fight', boss: target === 'fight' && game.battle.units.some((unit) => unit.boss), room: game.state.visit ? game.state.visit.room : '' }));
       const screen = SCREENS[target](ctx);
       showing = screen;
       screenRoot.replaceChildren(screen.el);

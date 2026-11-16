@@ -14,6 +14,7 @@ import { elementTag, bar } from './parts.js';
 import { modal, toast, modalOpen } from './modals.js';
 import { converse } from './talk.js';
 import { play } from '../platform/sound.js';
+import { dustShift } from './shift.js';
 import { FONT, oval, paint, glow, label, worldSrc, paintGround, paintBuilding, paintProp, paintLamp, paintGate, wallOf } from './scenery.js';
 
 // How much of the world fits across the screen. People and Clutterkin are small in a big place.
@@ -621,9 +622,19 @@ export function laneScreen(ctx) {
     if (group >= 0) {
       met = true;
       way = [];
-      play('meet');
+      const boss = !!roomOf(state.visit.room).path[group].boss;
+      const begin = () => { if (game.startEncounter(group)) ctx.show('fight'); };
+      play('meet', { boss });
       wrap.classList.add('meeting');
-      setTimeout(() => { if (game.startEncounter(group)) ctx.show('fight'); }, ctx.fast ? 60 : 460);
+      if (ctx.fast) setTimeout(begin, 60);
+      else {
+        // A scuffle of dust billows up from where they stand until it fills the screen; the fight is
+        // set out behind it, and it clears to show them.
+        const post = DISTRICTS[state.visit.room].posts[group];
+        const box = canvas.getBoundingClientRect();
+        play('scuffle');
+        dustShift({ from: { x: box.left + (post.x - cam.x) * cam.k, y: box.top + (post.y - 30 - cam.y) * cam.k }, boss, covered: () => { begin(); play('poof'); } });
+      }
     }
     raf = requestAnimationFrame(frame);
   }

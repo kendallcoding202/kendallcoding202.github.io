@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { SOUNDS, SOUND_NAMES, SCENES, TUNES, MASTER, MUSIC, createSound, kitFor, writeBar, play, setScene, unlockSound, setSound, hushSound, soundState } from '../../web/js/platform/sound.js';
+import { SOUNDS, SOUND_NAMES, SCENES, TUNES, VOICE_NAMES, BACK_NAMES, FIGHT_SCENE, sceneFor, MASTER, MUSIC, createSound, kitFor, writeBar, play, setScene, unlockSound, setSound, hushSound, soundState } from '../../web/js/platform/sound.js';
 import { newState, reviveState } from '../../web/js/core/state.js';
 
 const WEB = fileURLToPath(new URL('../../web/js/', import.meta.url));
@@ -118,12 +118,18 @@ test('every effect makes something, briefly, quietly, and with real numbers', as
   }
 });
 
-test('the two tunes are well formed: every bar full, every note in the bar and in a singable range', () => {
+test('the four tunes are well formed: every bar full, every note in the bar and in a singable range', () => {
+  assert.deepEqual(Object.keys(TUNES), ['LULLABY', 'SCUFFLE', 'RACKET', 'RINGLEADER']);
   assert.equal(TUNES.LULLABY.beats, 3, 'the lullaby is in three');
   assert.equal(TUNES.SCUFFLE.beats, 4, 'the scuffle is in four');
   assert.ok(TUNES.SCUFFLE.beat < TUNES.LULLABY.beat, 'and quicker');
+  assert.ok(TUNES.RACKET.beat < TUNES.SCUFFLE.beat, 'the alley\'s fight tune is quicker again');
+  assert.ok(TUNES.RINGLEADER.home < Math.min(TUNES.SCUFFLE.home, TUNES.RACKET.home), 'a ringleader\'s is the lowest of the fight tunes');
+  // No two tunes are the same tune moved about: each has its own key note, and its own first bar.
+  assert.equal(new Set(Object.values(TUNES).map((tune) => tune.home)).size, 4);
+  assert.equal(new Set(Object.values(TUNES).map((tune) => JSON.stringify(tune.bars[0].notes))).size, 4);
   for (const [name, tune] of Object.entries(TUNES)) {
-    assert.ok(tune.home > 200 && tune.home < 400 && tune.beat > 0.3 && tune.beat < 1);
+    assert.ok(tune.home > 190 && tune.home < 400 && tune.beat > 0.3 && tune.beat < 1);
     assert.ok(tune.bars.length % 4 === 0 && tune.bars.length >= 8, `${name}: ${tune.bars.length} bars`);
     tune.bars.forEach((bar, i) => {
       assert.equal(bar.chord.length, 3, `${name} bar ${i + 1}`);
@@ -144,18 +150,32 @@ test('the two tunes are well formed: every bar full, every note in the bar and i
   }
 });
 
-test('where you are picks the tune: a lullaby in the world, the scuffle in a fight, lower and quicker for a ringleader', () => {
-  assert.deepEqual(Object.keys(SCENES), ['quiet', 'world', 'fight', 'boss']);
+test('where you are picks the tune: a lullaby in the world, a fight tune by place, and a ringleader\'s own', () => {
+  assert.deepEqual(Object.keys(SCENES), ['quiet', 'world', 'fight', 'clatter', 'boss']);
   assert.equal(SCENES.quiet, null);
   assert.equal(SCENES.world.tune, TUNES.LULLABY);
   assert.equal(SCENES.fight.tune, TUNES.SCUFFLE);
-  assert.equal(SCENES.boss.tune, TUNES.SCUFFLE);
-  assert.ok(SCENES.boss.shift < SCENES.fight.shift && SCENES.boss.speed > SCENES.fight.speed);
+  assert.equal(SCENES.clatter.tune, TUNES.RACKET);
+  assert.equal(SCENES.boss.tune, TUNES.RINGLEADER, 'a ringleader has a tune of its own, not the scuffle moved down');
+  // Every scene is played by something that exists, and no two scenes sound alike: each has its own voice and its own backing.
+  const playing = Object.values(SCENES).filter(Boolean);
+  for (const scene of playing) assert.ok(VOICE_NAMES.includes(scene.voice) && BACK_NAMES.includes(scene.back) && scene.speed > 0 && scene.loud > 0.5 && scene.loud <= 1);
+  assert.equal(new Set(playing.map((scene) => scene.voice)).size, playing.length);
+  assert.equal(new Set(playing.map((scene) => scene.back)).size, playing.length);
+  // Which scene it is.
+  assert.equal(sceneFor(), 'world');
+  assert.equal(sceneFor({ fight: false, boss: true, room: 'alley' }), 'world', 'out of a fight it is the world, whatever else is said');
+  assert.equal(sceneFor({ fight: true, room: 'garden' }), 'fight');
+  assert.equal(sceneFor({ fight: true, room: 'alley' }), 'clatter', 'Tin Can Alley has a fight tune of its own');
+  assert.equal(sceneFor({ fight: true, boss: true, room: 'garden' }), 'boss');
+  assert.equal(sceneFor({ fight: true, boss: true, room: 'alley' }), 'boss');
+  for (const odd of ['pantry', 'constructor', 'toString', '', undefined]) assert.equal(sceneFor({ fight: true, room: odd }), 'fight', `a place with no tune of its own (${odd}) has the scuffle`);
+  for (const [room, name] of Object.entries(FIGHT_SCENE)) assert.ok(SCENES[name] && name !== 'world' && name !== 'boss', room);
   assert.ok(MASTER > 0.5 && MASTER <= 2 && MUSIC > 0.2 && MUSIC < 1, 'the music sits under the effects');
 });
 
 test('a bar is written into the future: melody, bass and chord, all inside the bar', () => {
-  for (const name of ['world', 'fight', 'boss']) {
+  for (const name of ['world', 'fight', 'clatter', 'boss']) {
     const { Clock, made } = standIn();
     const clock = new Clock();
     clock.currentTime = 10;
