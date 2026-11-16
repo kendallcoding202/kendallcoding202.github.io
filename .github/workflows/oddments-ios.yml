@@ -1,0 +1,238 @@
+# Oddments: builds the iOS app on a Mac runner.
+#
+#   Run it by hand: Actions tab -> Oddments iOS -> Run workflow.
+#
+#   "build"      (box unticked) compiles the app for the Simulator with no
+#                signing, launches it, saves screenshots, and proves a save
+#                survives in the app's native storage. Needs no secrets.
+#
+#   "testflight" (box ticked) archives the app, has Apple sign it and uploads
+#                it to App Store Connect. The app record must already exist
+#                there, and these must exist under
+#                Settings -> Secrets and variables -> Actions:
+#                  ASC_KEY_ID       App Store Connect API key id
+#                  ASC_ISSUER_ID    its issuer id
+#                  ASC_KEY_P8       the .p8 file's full text
+#                  APPLE_TEAM_ID    your 10-character team id
+#                  IOS_BUNDLE_ID    the bundle id the app record was made with
+#                See oddments/docs/TESTFLIGHT.md for where each one comes from.
+#                A "preflight" job on Linux proves all of that against Apple
+#                first, so a wrong secret costs seconds, not Mac minutes.
+#
+#   This repository is public, and so is everything these jobs print. The
+#   bundle id is a secret for that reason (yours has your name in it), and the
+#   signing step prints only its errors, with anything in quotes removed.
+name: Oddments iOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      testflight:
+        description: Upload to TestFlight (instead of the Simulator check)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oddments-ios-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: oddments
+
+jobs:
+  build:
+    if: ${{ !inputs.testflight }}
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      BUNDLE_ID: app.oddments.game # a stand-in: fine for the Simulator, never uploaded
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: oddments/package-lock.json
+      - run: npm ci
+      - name: Copy the game into the Xcode project
+        run: |
+          printf "export const BUILD = '%s';\n" "${{ github.run_number }}" > web/js/platform/build.js
+          npm run ios:sync
+      - name: Show toolchain
+        run: xcodebuild -version
+      - name: Build for the Simulator (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO | tail -n 60
+      - name: Launch it and take a screenshot
+        run: |
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c "
+          import json, sys
+          devices = [d for runtime in json.load(sys.stdin)['devices'].values() for d in runtime if d['name'].startswith('iPhone')]
+          print(devices[-1]['udid'])")
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl install "$DEVICE" build/Build/Products/Debug-iphonesimulator/App.app
+          xcrun simctl launch "$DEVICE" "$BUNDLE_ID"
+          sleep 25
+          xcrun simctl io "$DEVICE" screenshot first-launch.png
+          echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
+      # The app keeps its save in web storage and in its native settings.
+      # This proves the native half: a saved game is planted in the native
+      # settings only (with the device off, so nothing is cached), and the app
+      # must resume that house-sitter and write the save back there.
+      - name: Check a save survives in native storage
+        run: |
+          PREFS="$(xcrun simctl get_app_container "$DEVICE" "$BUNDLE_ID" data)/Library/Preferences/$BUNDLE_ID.plist"
+          xcrun simctl terminate "$DEVICE" "$BUNDLE_ID" || true
+          xcrun simctl shutdown "$DEVICE"
+          node tools/ios-save-check.mjs seed > seeded.json
+          python3 - "$PREFS" <<'PY'
+          import os, plistlib, sys
+          path = sys.argv[1]
+          prefs = plistlib.load(open(path, "rb")) if os.path.exists(path) else {}
+          prefs["CapacitorStorage.oddments.save"] = open("seeded.json").read()
+          os.makedirs(os.path.dirname(path), exist_ok=True)
+          plistlib.dump(prefs, open(path, "wb"), fmt=plistlib.FMT_BINARY)
+          PY
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl launch "$DEVICE" "$BUNDLE_ID"
+          sleep 40
+          xcrun simctl io "$DEVICE" screenshot resumed.png
+          xcrun simctl terminate "$DEVICE" "$BUNDLE_ID" || true
+          xcrun simctl shutdown "$DEVICE"
+          python3 -c "import plistlib, sys; sys.stdout.write(plistlib.load(open(sys.argv[1], 'rb'))['CapacitorStorage.oddments.save'])" "$PREFS" > after.json
+          node tools/ios-save-check.mjs verify after.json seeded.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: oddments-simulator-screenshots
+          path: |
+            oddments/first-launch.png
+            oddments/resumed.png
+
+  # Are the secrets the right things, does Apple accept them, and is there an
+  # app record to upload to? Answered on Linux, in seconds.
+  preflight:
+    if: ${{ inputs.testflight }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Check the Apple credentials and the app record
+        run: node tools/asc.mjs check
+
+  testflight:
+    needs: preflight
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: oddments/package-lock.json
+      - run: npm ci
+      # The repository carries a stand-in bundle id. The real one is put in
+      # here, on this throwaway machine only, and hidden wherever it is printed.
+      - name: Use the real bundle id
+        run: |
+          REAL=$(printf '%s' "$BUNDLE_ID" | tr -d '[:space:]')
+          echo "::add-mask::$REAL"
+          sed -i '' "s/app\.oddments\.game/$REAL/g" ios/App/App.xcodeproj/project.pbxproj capacitor.config.json
+          echo "BUNDLE_ID=$REAL" >> "$GITHUB_ENV"
+      # The build number is stamped into the game so Settings can show it.
+      - name: Copy the game into the Xcode project
+        run: |
+          printf "export const BUILD = '%s';\n" "${{ github.run_number }}" > web/js/platform/build.js
+          npm run ios:sync
+      # App Store Connect only accepts builds made with Xcode 26 or later. If
+      # the runner's default is older, switch to the newest release it carries.
+      - name: Pick an Xcode the App Store accepts
+        run: |
+          if [ "$(xcodebuild -version | awk 'NR==1 { print int($2) }')" -lt 26 ]; then
+            NEWEST=$(ls -d /Applications/Xcode_*.app | grep -viE 'beta|candidate' | sort -V | tail -n 1)
+            sudo xcode-select -s "$NEWEST"
+          fi
+          xcodebuild -version
+      # Pasted secrets can carry a stray space or line break, and Xcode needs
+      # the key as a letter-perfect PEM. Both are put right here.
+      - name: Write the API key where Xcode can read it
+        run: |
+          for name in ASC_KEY_ID ASC_ISSUER_ID APPLE_TEAM_ID; do
+            value=$(printf '%s' "${!name}" | tr -d '[:space:]')
+            echo "::add-mask::$value"
+            echo "TIDY_$name=$value" >> "$GITHUB_ENV"
+          done
+          KEY_ID=$(printf '%s' "$ASC_KEY_ID" | tr -d '[:space:]')
+          mkdir -p "$RUNNER_TEMP/keys"
+          node tools/asc.mjs write-key "$RUNNER_TEMP/keys/AuthKey_${KEY_ID}.p8"
+      # Archived unsigned on purpose. Signing happens in the next step with
+      # Apple's cloud-managed distribution certificate, so this throwaway
+      # machine never needs (or creates) a certificate of its own.
+      - name: Archive
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Oddments.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" | tail -n 40
+      # What Xcode prints while signing can name the certificate's owner. This
+      # log is public, so only its errors and its outcome are shown, with
+      # anything in quotes taken out.
+      - name: Sign and upload to App Store Connect
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>teamID</key><string>${TIDY_APPLE_TEAM_ID}</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+            <key>uploadSymbols</key><true/>
+          </dict></plist>
+          EOF
+          OUTCOME=0
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Oddments.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${TIDY_ASC_KEY_ID}.p8" \
+            -authenticationKeyID "$TIDY_ASC_KEY_ID" -authenticationKeyIssuerID "$TIDY_ASC_ISSUER_ID" > "$RUNNER_TEMP/export.log" 2>&1 || OUTCOME=$?
+          grep -iE 'error|\*\* EXPORT|upload|succeeded|failed' "$RUNNER_TEMP/export.log" | sed -E 's/"[^"]*"/"..."/g; s/\([A-Z0-9]{10}\)/(...)/g' | tail -n 40 || true
+          rm -f "$RUNNER_TEMP/export.log"
+          exit "$OUTCOME"
+      - name: Remove the key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/keys"
+      # What Apple has made of the upload so far, and a tester group that gets
+      # every build, with the account holder invited, if nobody can test yet.
+      - name: Make sure someone can test it
+        run: node tools/asc.mjs status --invite

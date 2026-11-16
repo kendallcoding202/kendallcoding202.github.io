@@ -11,6 +11,18 @@
     "e2e": "node tests/e2e/run.mjs",
     "preview": "node tools/build-preview.mjs",
     "art": "node tools/gen-art.mjs && python3 tools/process-art.py",
-    "art:needs": "node tools/art-needs.mjs"
+    "art:needs": "node tools/art-needs.mjs",
+    "ios:art": "python3 tools/ios-art.py",
+    "ios:sync": "cap sync ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/ios": "^8.6.2",
+    "@capacitor/preferences": "^8.0.1",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.4"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.2"
   }
 }

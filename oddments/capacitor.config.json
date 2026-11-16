@@ -1,0 +1,21 @@
+{
+  "appId": "app.oddments.game",
+  "appName": "Oddments",
+  "webDir": "web",
+  "backgroundColor": "#17132e",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#17132e",
+    "scrollEnabled": false,
+    "allowsLinkPreview": false,
+    "preferredContentMode": "mobile"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": true,
+      "launchShowDuration": 400,
+      "backgroundColor": "#17132e",
+      "showSpinner": false
+    }
+  }
+}
