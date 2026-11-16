@@ -146,17 +146,15 @@ async function check(env) {
   say('Apple accepted the key, key id and issuer id.');
 
   // Apple signs an upload with a certificate it keeps itself, and will only do that for a key with
-  // Admin access; with any other, the upload stops at "Cloud signing permission error" after the
-  // Mac has already done its work. Listing the team's users is something only an Admin key may do,
-  // so it tells the two apart in a moment.
-  const users = await get('/v1/users?limit=1&fields[users]=roles', jwt);
-  if (users.status === 403) {
-    fail('This API key works, but it does not have Admin access, and Apple only signs an upload for a key that does. '
-      + 'In App Store Connect: Users and Access -> Integrations -> App Store Connect API, generate a new key with Access set to Admin. '
-      + 'Then replace the ASC_KEY_ID and ASC_KEY_P8 secrets with the new key\'s id and the text of its .p8 file (ASC_ISSUER_ID stays as it is), and revoke the old key. See docs/TESTFLIGHT.md.');
+  // Admin access; with any other, the upload stops at "Cloud signing permission error". There is no
+  // way to ask a key what access it has, so what it is allowed to read is printed here instead
+  // (200 allowed, 403 not). Nothing in these answers is secret. An earlier version of this check
+  // assumed only an Admin key could list users; an App Manager key can too, so that is not the test.
+  const seen = [];
+  for (const name of ['users', 'userInvitations', 'certificates', 'profiles', 'devices']) {
+    seen.push(`${name} ${(await get(`/v1/${name}?limit=1`, jwt)).status}`);
   }
-  if (users.status === 200) say('The key has Admin access, which Apple needs to sign the upload.');
-  else warn(`Could not tell whether the key has Admin access (App Store Connect answered ${users.status}). If the upload stops at "Cloud signing permission error", it does not.`);
+  say(`What this key may read: ${seen.join(', ')}.`);
 
   const ids = await get(`/v1/bundleIds?filter[identifier]=${encodeURIComponent(bundleId)}&fields[bundleIds]=identifier,seedId&limit=50`, jwt);
   const registered = ids.data.find((b) => b.attributes?.identifier === bundleId);

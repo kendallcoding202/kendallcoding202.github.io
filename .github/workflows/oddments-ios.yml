@@ -33,6 +33,10 @@ on:
         description: Upload to TestFlight (instead of the Simulator check)
         type: boolean
         default: false
+      check_only:
+        description: Only check the Apple credentials (no build, no upload)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -40,7 +44,7 @@ permissions:
 # A newer Simulator check replaces an older one still running. An upload is never cancelled, by
 # a check or by another upload.
 concurrency:
-  group: oddments-ios-${{ inputs.testflight && format('upload-{0}', github.run_id) || 'check' }}
+  group: oddments-ios-${{ inputs.testflight && format('upload-{0}', github.run_id) || inputs.check_only && 'credentials' || 'check' }}
   cancel-in-progress: ${{ !inputs.testflight }}
 
 defaults:
@@ -49,7 +53,7 @@ defaults:
 
 jobs:
   build:
-    if: ${{ !inputs.testflight }}
+    if: ${{ !inputs.testflight && !inputs.check_only }}
     runs-on: macos-15
     timeout-minutes: 30
     env:
@@ -128,7 +132,7 @@ jobs:
   # Nothing is uploaded and no secrets are needed. If this passes, what is left untested is
   # Apple's side. It runs beside "build", on a Mac of its own, and is done in a few minutes.
   rehearsal:
-    if: ${{ !inputs.testflight }}
+    if: ${{ !inputs.testflight && !inputs.check_only }}
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -174,7 +178,7 @@ jobs:
   # Are the secrets the right things, does Apple accept them, and is there an
   # app record to upload to? Answered on Linux, in seconds.
   preflight:
-    if: ${{ inputs.testflight }}
+    if: ${{ inputs.testflight || inputs.check_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -193,6 +197,7 @@ jobs:
 
   testflight:
     needs: preflight
+    if: ${{ inputs.testflight && !inputs.check_only }}
     runs-on: macos-15
     timeout-minutes: 45
     env:
