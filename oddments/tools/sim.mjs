@@ -6,7 +6,7 @@
 // careless  taps any move at random and never makes a Call
 import { Game } from '../web/js/core/game.js';
 import { newState } from '../web/js/core/state.js';
-import { ROOMS, SPECIES, HEIRLOOM } from '../web/js/core/balance.js';
+import { ROOMS, HEIRLOOM } from '../web/js/core/balance.js';
 import { playOut } from '../web/js/core/auto.js';
 
 // Rough seconds of real time: a choice takes a moment's thought and every
@@ -131,5 +131,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const style = option('style', 'friendly');
   if (!STYLES[style]) { console.error(`unknown style "${style}": friendly, brawler or careless`); process.exit(1); }
   console.log(report(simulate({ players, visits: Number(option('visits', 4)), style })));
-  void SPECIES;
 }

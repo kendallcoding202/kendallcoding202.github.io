@@ -65,7 +65,7 @@ web/                    the game: what ships
     util.js             the seeded random generator
   js/ui/                the screens: the walkable world, the fight, friends, scrapbook
   js/platform/          storage. The only code that knows where the save lives.
-  assets/               sprites, room paintings, icons, font (about 1 MB)
+  assets/               sprites, room paintings, font (about 1 MB)
 tests/unit/             a test per rule (node:test)
 tests/e2e/              the browser test, the preview smoke test, a screenshot tool
 tools/                  simulator, art pipeline, Heirloom recolours, preview build, local server
@@ -80,4 +80,4 @@ docs/                   the design and the art list
 
 ## Not done
 
-One place of eight. No sound, no iOS wrapper, no App Store work, no purchases. Oddments do not grow up yet (the table says into what; the rule and the art are not there). The ground you walk on is drawn in code, not painted. The rest of the cast are names in the design, not people in the game. The balance has only been played by bots.
+One place of eight. No sound, no iOS wrapper, no App Store work, no purchases. Oddments do not grow up yet (the table says into what; the rule and the art are not there). The ground you walk on is drawn in code, not painted. The rest of the cast are names in the design, not people in the game. The balance has only been played by bots. Everything has been run in Chromium at phone sizes; nothing has been run on an iPhone or in Safari.

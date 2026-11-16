@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | Monster sprites | Pawst Lives, copied as they are | 12 (three you start with, eight met in the garden, the Sprinkler Hydra) |
 | Room paintings | Pawst Lives, copied as they are | 8 (the garden is used in fights; all eight appear as the little window in each building) |
-| Icons, font | Pawst Lives | 5 icons, Fredoka |
+| Font | Pawst Lives | Fredoka, with its licence |
 | Heirloom (rare colour) sprites | Recoloured in code by `tools/heirlooms.py` | 11 |
 | The house-sitter | **Generated for this game** | 4 candidate looks (`sitter_a` to `sitter_d`); the four images agreed so far |
 
