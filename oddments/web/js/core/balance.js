@@ -3,7 +3,7 @@
 
 export const VERSION = '0.1.0';
 export const SAVE_VERSION = 2;
-export const TITLE = 'Oddkin'; // the game's name, and what its creatures are called: one Oddkin, many Oddkin
+export const TITLE = 'Clutterkin'; // the game's name, and what its creatures are called (one Clutterkin, many Clutterkin): clutter to some, kin to you
 
 export const TEAM_SIZE = 3;
 export const ROSTER_MAX = 60; // friends kept; one per kind, so never reached with 40 kinds
@@ -34,7 +34,7 @@ export function elementEdge(attack, defend) {
   return 0;
 }
 export const elementMult = (attack, defend) => [WEAK, 1, STRONG][elementEdge(attack, defend) + 1];
-/** The element an Oddkin lets its guard down around: the one it beats. */
+/** The element an Clutterkin lets its guard down around: the one it beats. */
 export const softSpotOf = (element) => ELEMENTS[element].beats;
 
 // ---------------------------------------------------------------- stats
@@ -119,7 +119,7 @@ export const MOVES = {
 export const BRACE = { id: 'brace', name: 'Brace', element: null, kind: 'boost', aim: 'self', boost: { stat: 'grit', by: 0.5, turns: 1 }, wait: 0, desc: 'Sit tight: takes a third less until its next turn.' };
 export const moveOf = (id) => (id === BRACE.id ? BRACE : MOVES[id]);
 
-// ---------------------------------------------------------------- the Oddkin
+// ---------------------------------------------------------------- the Clutterkin
 //
 // The first twelve. `moves` pairs each move with the level it is learned at.
 // `huff` is how worked up one is when it is not yet a friend: the pips Reach
@@ -213,11 +213,11 @@ export const START_TEAM = [['dustbunny', 3], ['sockeel', 3], ['toastghost', 3]];
 
 // ---------------------------------------------------------------- heirlooms
 //
-// Now and then a restless Oddkin is an Heirloom: the same kind in rare
+// Now and then a restless Clutterkin is an Heirloom: the same kind in rare
 // colours, as if it had been handed down. Looks only; it fights the same.
 // It is a little prouder, so it takes one more pip to calm.
 export const HEIRLOOM = {
-  odds: 1 / 60, // each restless Oddkin in an encounter, bosses never
+  odds: 1 / 60, // each restless Clutterkin in an encounter, bosses never
   huff: 1, // extra pips
 };
 
@@ -225,7 +225,7 @@ export const HEIRLOOM = {
 //
 // The human makes one Call a round. `every`: 1 = any round, 2 = every other.
 export const CALLS = {
-  reach: { name: 'Reach out', aim: 'foe', every: 1, desc: 'Calm a restless Oddkin. Best on one you have stopped hitting.' },
+  reach: { name: 'Reach out', aim: 'foe', every: 1, desc: 'Calm a restless Clutterkin. Best on one you have stopped hitting.' },
   cheer: { name: 'Cheer on', aim: 'ally', every: 1, boost: { stat: 'oomph', by: 0.3, turns: 1 }, desc: 'A friend\'s next move hits 30% harder.' },
   patch: { name: 'Patch up', aim: 'ally', every: 2, mend: 0.2, desc: 'Mend a friend by a fifth of its Health. Every other round.' },
 };
@@ -257,7 +257,7 @@ export const BENCH_SHARE = 0.5; // friends left at home learn half as much
 // ---------------------------------------------------------------- rooms
 //
 // The eight rooms of the house, in the order they open. A room is a path of
-// encounters ending in a boss. `size` is how many restless Oddkin turn up,
+// encounters ending in a boss. `size` is how many restless Clutterkin turn up,
 // `pool` who they may be (kind, weight) and `level` how strong. Only the
 // first room is built; the rest are on the map and locked.
 export const BREATHER = 0.3; // share of Health everyone regains between encounters

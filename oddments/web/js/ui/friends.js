@@ -82,7 +82,7 @@ export function bookScreen(ctx) {
     h('div', { class: 'grid book' }, tiles),
     h('h3', null, 'Elements'),
     h('div', { class: 'ring' }, ELEMENT_IDS.map((id) => h('div', null, elementTag(id), h('span', null, ' beats '), elementTag(ELEMENTS[id].beats), h('small', null, ` ${ELEMENTS[id].why}.`)))),
-    h('p', { class: 'note' }, `Beating an element: damage ×1.5. Being beaten by it: ×0.7. About one restless Oddkin in ${Math.round(1 / HEIRLOOM.odds)} is an Heirloom, in rare colours.`));
+    h('p', { class: 'note' }, `Beating an element: damage ×1.5. Being beaten by it: ×0.7. About one restless Clutterkin in ${Math.round(1 / HEIRLOOM.odds)} is an Heirloom, in rare colours.`));
   return { el };
 }
 

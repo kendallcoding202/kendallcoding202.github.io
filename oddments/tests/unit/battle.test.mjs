@@ -186,7 +186,7 @@ test('whoever is down takes no more turns and cannot be aimed at or mended', () 
   assert.equal(act(battle, move('crumbtoss', 'f1')), false);
 });
 
-test('the fight is won when no restless Oddkin is standing, and lost when no friend is', () => {
+test('the fight is won when no restless Clutterkin is standing, and lost when no friend is', () => {
   const won = fight(1, [{ species: 'dustbunny', level: 20 }], [{ species: 'dandepuff', level: 1 }]);
   act(won, move('lintflurry', 'f0'));
   assert.equal(won.phase, 'won');

@@ -32,7 +32,7 @@ function append(el, children) {
 
 export const $ = (selector, root = document) => root.querySelector(selector);
 
-/** The picture of an Oddkin (its Heirloom colours if it has them) or of a person. */
+/** The picture of an Clutterkin (its Heirloom colours if it has them) or of a person. */
 export const spriteSrc = (species, heirloom = false) => `assets/sprites/${species}${heirloom ? '_heirloom' : ''}.webp`;
 export const sprite = (species, heirloom = false, cls = '') => h('img', { class: cls, src: spriteSrc(species, heirloom), alt: '', draggable: false });
 

@@ -15,7 +15,7 @@ await cp(WEB, OUT, { recursive: true });
 
 const html = await readFile(`${WEB}index.html`, 'utf8');
 const body = html.slice(html.indexOf('<body>') + 6, html.indexOf('</body>'));
-await writeFile(`${OUT}fragment.html`, `<title>Oddkin</title>
+await writeFile(`${OUT}fragment.html`, `<title>Clutterkin</title>
 <link rel="stylesheet" href="css/style.css">
 ${body.trim()}
 `);

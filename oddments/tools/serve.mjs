@@ -30,5 +30,5 @@ export function serve(port = 0, root = WEB) {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const server = await serve(Number(process.env.PORT) || 5174);
-  console.log(`Oddkin at http://127.0.0.1:${server.address().port}/`);
+  console.log(`Clutterkin at http://127.0.0.1:${server.address().port}/`);
 }

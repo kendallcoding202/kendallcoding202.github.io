@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Oddkin: befriend the things in the house that came alive, and battle alongside them.",
+  "description": "Clutterkin: befriend the things in the house that came alive, and battle alongside them.",
   "scripts": {
     "start": "node tools/serve.mjs",
     "test": "node --test \"tests/unit/*.test.mjs\"",

@@ -120,7 +120,7 @@ export function report(result) {
   lines.push('');
   lines.push(`First visits that end in a loss, by stop: ${result.firstLoss.map((share, stop) => `${stop + 1}: ${pc(share).trim()}`).join('   ')}`);
   lines.push(`Most first visits that fail, fail at stop ${worst + 1} (${room.path[worst].name}).`);
-  lines.push(`Heirlooms: 1 in ${Math.round(1 / HEIRLOOM.odds)} restless Oddkin; one turned up in ${(result.heirloomFightShare * 100).toFixed(1)}% of fights; kept per player after ${result.visits} visits: ${result.heirloomsKept.toFixed(2)}.`);
+  lines.push(`Heirlooms: 1 in ${Math.round(1 / HEIRLOOM.odds)} restless Clutterkin; one turned up in ${(result.heirloomFightShare * 100).toFixed(1)}% of fights; kept per player after ${result.visits} visits: ${result.heirloomsKept.toFixed(2)}.`);
   return lines.join('\n');
 }
 

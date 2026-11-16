@@ -34,7 +34,7 @@ export function ringLine(element) {
 }
 
 /**
- * A card about one Oddkin: a friend (with its experience and all its
+ * A card about one Clutterkin: a friend (with its experience and all its
  * moves) or a restless one met in a fight (with its Huff and soft spot).
  */
 export function oddmentCard({ species, level, heirloom = false, xp = null, huff = null, actions = [] }) {

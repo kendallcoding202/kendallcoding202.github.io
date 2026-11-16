@@ -52,6 +52,6 @@ test('a move with no element, or a made-up one, is simply even', () => {
   assert.equal(elementMult('suds', undefined), 1);
 });
 
-test('an Oddkin has a soft spot for the element it beats', () => {
+test('an Clutterkin has a soft spot for the element it beats', () => {
   for (const id of ELEMENT_IDS) assert.equal(softSpotOf(id), ELEMENTS[id].beats);
 });

@@ -53,8 +53,8 @@ export const CALL = [
 
 const INES = {
   first: [
-    'So you are the house-sitter. Maribel rang. I am Ines Tock. I mend clocks, and I have lived among Oddkin longer than you have been alive.',
-    'Oddkin: that is what we call them. Odd socks, burnt toast, lost buttons. Odd things, every one, and kin all the same, once they have stopped fretting.',
+    'So you are the house-sitter. Maribel rang. I am Ines Tock. I mend clocks, and I have lived among Clutterkin longer than you have been alive.',
+    'Clutterkin: that is what we call them. Odd socks, burnt toast, lost buttons. Clutter, some would say. Kin, I say, once they have stopped fretting.',
     'Restless, they pick fights, and your three will stand up for you. But you need not flatten everyone. Reach out to one, keep reaching, and it may calm down and come home with you.',
     'Every place on this lane has a ringleader. Calm everyone else there and it will face you. Calm it too, and the whole place settles.',
   ],
@@ -87,7 +87,7 @@ const DOV = {
 const SPICK = {
   first: [
     'Spick. Spick and Span Clearances. Do not mind me, I am counting.',
-    'Eight premises on this lane with unattended moving property. Monday morning the van comes, and whatever is still rattling about goes in it.',
+    'Eight premises on this lane with unattended moving property. Clutter, in plain words. Monday morning the van comes, and whatever is still rattling about goes in it.',
     'If it is sitting quietly, it is furniture, and furniture is not my department. Makes no odds to me either way.',
   ],
   later: (state) => {
@@ -153,7 +153,7 @@ export function goalOf(state) {
   const record = state.rooms[FIRST.id];
   const stops = FIRST.path.length;
   const goal = (id, title, detail, extra = {}) => ({ id, title, detail, who: null, room: null, count: null, ...extra });
-  if (story.ines === 0) return goal('meet', 'Find Ines Tock', 'She mends clocks and knows about Oddkin. She is waiting on the green, just below home.', { who: 'ines' });
+  if (story.ines === 0) return goal('meet', 'Find Ines Tock', 'She mends clocks and knows about Clutterkin. She is waiting on the green, just below home.', { who: 'ines' });
   if (!calm(state, FIRST.id)) {
     if (state.stats.befriended === 0) {
       return goal('friend', 'Make a friend in the garden', 'Walk in through the garden gate. In a fight, Reach out to one you like instead of hitting it, and win.', { room: FIRST.id });

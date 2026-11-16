@@ -1,6 +1,6 @@
-# Oddkin: runs the rule tests, the simulator and the browser end-to-end
+# Clutterkin: runs the rule tests, the simulator and the browser end-to-end
 # test whenever the game changes. Cheap Linux minutes only.
-name: Oddkin tests
+name: Clutterkin tests
 
 on:
   push:

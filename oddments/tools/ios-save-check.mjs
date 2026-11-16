@@ -1,5 +1,5 @@
 // Proves the iOS app's native save storage works, without tapping anything.
-// Used by the "Oddkin iOS" workflow in the Simulator:
+// Used by the "Clutterkin iOS" workflow in the Simulator:
 //
 //   node tools/ios-save-check.mjs seed                 prints a saved game as JSON
 //   node tools/ios-save-check.mjs verify AFTER SEED    checks AFTER is that game, loaded by the app and saved back

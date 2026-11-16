@@ -1,6 +1,6 @@
-# Oddkin: builds the iOS app on a Mac runner.
+# Clutterkin: builds the iOS app on a Mac runner.
 #
-#   Run it by hand: Actions tab -> Oddkin iOS -> Run workflow.
+#   Run it by hand: Actions tab -> Clutterkin iOS -> Run workflow.
 #
 #   "build"      (box unticked) compiles the app for the Simulator with no
 #                signing, launches it, saves screenshots, and proves a save
@@ -23,7 +23,7 @@
 #   This repository is public, and so is everything these jobs print. The
 #   bundle id is a secret for that reason (yours has your name in it), and the
 #   signing step prints only its errors, with anything in quotes removed.
-name: Oddkin iOS
+name: Clutterkin iOS
 
 on:
   workflow_dispatch:
@@ -148,7 +148,7 @@ jobs:
           echo "archived: \"$NAME\" $VERSION ($BUILD), bundle id $ID"
           [ "$ID" = "app.oddments.rehearsal" ] || { echo "::error::the bundle id was not swapped in"; exit 1; }
           [ "$BUILD" = "${{ github.run_number }}" ] || { echo "::error::the build number was not stamped"; exit 1; }
-          [ "$NAME" = "Oddkin" ] || { echo "::error::the app is not called Oddkin"; exit 1; }
+          [ "$NAME" = "Clutterkin" ] || { echo "::error::the app is not called Clutterkin"; exit 1; }
           [ -f "$APP/public/index.html" ] || { echo "::error::the game is not inside the app"; exit 1; }
           [ -f "$APP/Assets.car" ] || { echo "::error::the icon was not compiled in"; exit 1; }
           [ -f "$APP/PrivacyInfo.xcprivacy" ] || { echo "::error::the privacy manifest is missing"; exit 1; }
@@ -235,7 +235,7 @@ jobs:
           set -o pipefail
           xcodebuild archive \
             -project ios/App/App.xcodeproj -scheme App -configuration Release \
-            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Oddkin.xcarchive" \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Clutterkin.xcarchive" \
             CODE_SIGNING_ALLOWED=NO \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" | tail -n 40
       # What Xcode prints while signing can name the certificate's owner. This
@@ -257,7 +257,7 @@ jobs:
           EOF
           OUTCOME=0
           xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/Oddkin.xcarchive" \
+            -archivePath "$RUNNER_TEMP/Clutterkin.xcarchive" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export" \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${TIDY_ASC_KEY_ID}.p8" \

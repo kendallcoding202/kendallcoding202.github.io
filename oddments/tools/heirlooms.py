@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Paints the Heirloom (rare colour) version of every Oddkin from its own sprite.
+"""Paints the Heirloom (rare colour) version of every Clutterkin from its own sprite.
 
 Nothing is generated: each Heirloom is the ordinary sprite recoloured in
 code, so a rare one costs no new art. For each kind, LOOKS says how:
