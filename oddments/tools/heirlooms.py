@@ -38,6 +38,9 @@ LOOKS = {
     "capbeetle": {"turn": 130},
     "sparkplug": {"turn": 170, "dye": (265, 0.3)},
     "ratscal": {"turn": 185, "dye": (200, 0.25)},
+    "cancrab": {"turn": 150},
+    "sockgoblin": {"turn": 215},
+    "coothug": {"turn": 175, "dye": (42, 0.5)},
 }
 
 

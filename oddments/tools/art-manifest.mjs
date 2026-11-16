@@ -99,6 +99,32 @@ export const ART = [
       'a round leafy tree with a short trunk; an old iron street lamp post with a glowing yellow lantern; a round clipped green hedge bush. ' +
       WORLD_STYLE,
   },
+  // ---- Tin Can Alley: the things that stand in it, on one sheet ----
+  // (tools/process-art.py cuts the sheet into its twelve sprites, in this order.)
+  {
+    id: 'alley_sheet', kind: 'sheet', size: '1536x1024', quality: 'medium', transparent: true,
+    prompt:
+      'A sprite sheet for a game: exactly twelve separate objects arranged in a neat grid of three rows and four columns, evenly spaced, ' +
+      'each centred in its own cell with clear empty space all around it, none touching or overlapping, all drawn at a similar size. ' +
+      'They are things from a back alley at night, each seen from the front and slightly from above. ' +
+      'Row one, left to right: a dented round metal trash can with its lid on; a dented round metal trash can with its lid askew and a fish bone sticking out; ' +
+      'a sturdy wooden crate with rope handles; a stack of two old car tyres. ' +
+      'Row two, left to right: a rusty teal oil drum; a pile of flattened cardboard boxes tied with string; a stack of three wooden pallets; ' +
+      'a blue plastic milk crate full of empty glass bottles. ' +
+      'Row three, left to right: a big wide barricade of trash cans, crates and planks piled high, blocking the way; ' +
+      'a short section of weathered wooden plank fence with one crooked board; a heap of shiny bottle caps and crushed tin cans; a dented orange traffic cone. ' +
+      WORLD_STYLE,
+  },
+  // ---- Tin Can Alley: the ground you walk on there ----
+  // (tools/process-art.py fades it edge into edge so it repeats without a seam.)
+  {
+    id: 'alley_cobbles', kind: 'tile', size: '1024x1024', quality: 'medium', transparent: false,
+    prompt:
+      'A seamless tileable ground texture for a 2D mobile game, seen from directly above: old rounded cobblestones at night, painterly flat shapes with soft gradients, ' +
+      'slate blue-grey and dusty purple, a few slightly lighter and darker stones, thin dark gaps between them, the odd tuft of moss. Evenly lit, no shadows, ' +
+      'no objects, no puddles, no outlines, no text. Slightly desaturated and low in contrast so characters stand out on top of it. ' +
+      'The texture fills the whole square image from edge to edge.',
+  },
   // ---- the world: the ground you walk on ----
   // (tools/process-art.py mirrors it into a tile with no seams, and recolours a second one for the path.)
   {
