@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- Only this game's own files may run or load. No inline or remote script, no eval, and no network at all:
+     there is no connect-src, so the page cannot call anything, anywhere. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#17132e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Oddments">
+<meta name="robots" content="noindex">
+<meta name="description" content="Oddments (working title): befriend the things in the house that came alive.">
+<title>Oddments</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="boot">
+  <div class="bootrow">
+    <img src="assets/sprites/sockeel.webp" alt="" class="flip">
+    <img src="assets/sprites/dustbunny.webp" alt="">
+    <img src="assets/sprites/toastghost.webp" alt="">
+  </div>
+  <h1>Oddments</h1>
+  <small>working title</small>
+  <div class="bootbar"><i id="bootfill"></i></div>
+</div>
+
+<div id="app" hidden>
+  <main id="screen"></main>
+  <nav id="tabs" hidden></nav>
+</div>
+
+<div id="toasts"></div>
+<div id="modals"></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
