@@ -249,3 +249,18 @@ test('a save keeps you indoors only where you could really be standing', () => {
   assert.deepEqual(settleIn(INSIDES.home, null), INSIDES.home.start);
   assert.deepEqual(settleIn(INSIDES.home, { x: 300, y: 600 }), { x: 300, y: 600 });
 });
+
+test('rooms are to scale: at home a bed is a bed\'s length beside whoever sleeps in it, and the room is a room, not a hall', () => {
+  const home = INSIDES.home;
+  const you = 96 * home.people; // how tall you stand on its floor
+  assert.ok(home.people >= 1.5 && home.people <= 2.2, 'at home you are seen close up');
+  const bed = home.blocks.find((block) => block.id === 'bed');
+  assert.ok(bed.w > you * 1.1 && bed.w < you * 1.7, `the bed is ${(bed.w / you).toFixed(2)} of you long`);
+  assert.ok(home.wall > you * 1.3 && home.wall < you * 2, `the wall is ${(home.wall / you).toFixed(2)} of you high`);
+  assert.ok(home.w > you * 3 && home.w < you * 4.5, `the room is ${(home.w / you).toFixed(1)} of you across`);
+  // Furniture is kept clear of by a body's width at that scale, and you still fit everywhere there is something to do.
+  for (const spot of home.spots) assert.ok(canStandIn(home, spot.x, spot.y), spot.id);
+  assert.equal(canStandIn(home, bed.x + bed.w + INDOOR.body, bed.y + bed.h / 2), false, 'no nearer the bed than a body at home\'s scale');
+  // A place where groups wait keeps the lane's own scale, so that a group is the size it is everywhere else.
+  for (const id of INSIDE_IDS.filter((key) => INSIDES[key].kind === 'place')) assert.equal(INSIDES[id].people, 1, id);
+});

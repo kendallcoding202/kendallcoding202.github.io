@@ -39,6 +39,7 @@ export function insideScreen(ctx) {
   const room = insideOf(id);
   const place = roomOf(id);
   const here = () => state.indoors || room.start;
+  const big = room.people || 1; // how big people and Clutterkin are drawn on this floor, against the lane
 
   const canvas = h('canvas', { class: 'lanecanvas', 'aria-label': 'Tap to walk.' });
   const card = h('div', { class: 'placecard', hidden: true });
@@ -70,17 +71,17 @@ export function insideScreen(ctx) {
   let sheet = null; // the room, painted once
   const cam = { x: 0, y: 0, k: 1, w: room.view, h: room.view, dpr: 1, top: HEAD, set: false };
   const start = here();
-  const trail = Array.from({ length: 12 }, (_, i) => ({ x: start.x, y: start.y + i * 14 }));
-  const pals = game.team().map((friend, i) => ({ friend, x: start.x + (i - 1) * 46, y: start.y + 40 + i * 6, f: 1, step: i * 9 }));
+  const trail = Array.from({ length: 12 }, (_, i) => ({ x: start.x, y: Math.min(room.h - 24, start.y + i * 14) }));
+  const pals = game.team().map((friend, i) => ({ friend, x: start.x + (i - 1) * 46 * big, y: Math.min(room.h - 24, start.y + 40 + i * 6), f: 1, step: i * 9 }));
   // At home, whoever is not walking with you is in here with you, pottering about the floor.
-  const stayers = room.kind !== 'home' ? [] : state.friends.filter((friend) => !state.team.includes(friend.id)).slice(0, 8).map((friend, i) => {
+  const stayers = room.kind !== 'home' ? [] : state.friends.filter((friend) => !state.team.includes(friend.id)).slice(0, 6).map((friend, i) => {
     const next = run((friend.id * 48271 + 23) % 2147483646 + 1);
     for (let k = 0; k < 4; k++) next();
     const spot = () => {
       for (let tries = 0; tries < 12; tries++) {
-        const x = 60 + next() * (room.w - 120);
-        const y = room.wall + 150 + next() * (room.h - room.wall - 330);
-        if (Math.hypot(x - room.door.x, y - room.door.y) > 150 && !room.blocks.some((b) => x > b.x - 30 && x < b.x + b.w + 30 && y > b.y - 30 && y < b.y + b.h + 30)) return { x, y };
+        const x = 80 + next() * (room.w - 160);
+        const y = room.wall + 190 + next() * (room.h - room.wall - 400);
+        if (Math.hypot(x - room.door.x, y - room.door.y) > 190 && !room.blocks.some((b) => x > b.x - 50 && x < b.x + b.w + 50 && y > b.y - 50 && y < b.y + b.h + 50)) return { x, y };
       }
       return { x: room.w / 2, y: room.wall + 300 };
     };
@@ -129,8 +130,10 @@ export function insideScreen(ctx) {
 
   // ------------------------------------------------------------ drawing
 
-  function stand(src, x, y, tall, faceRight, paintedRight, lift = 0, lean = 0) {
+  function stand(src, x, y, height, faceRight, paintedRight, rise = 0, lean = 0) {
     const image = picture(src);
+    const tall = height * big;
+    const lift = rise * big;
     oval(pen, x, y + 2, Math.max(0, tall * 0.3 * (1 - Math.min(1, lift / (tall * 0.5)))), tall * 0.085); paint(pen, 'rgba(8,6,20,.5)');
     if (!image.complete || !image.naturalWidth) return;
     const wide = tall * Math.min(1.5, image.naturalWidth / image.naturalHeight);
@@ -205,17 +208,17 @@ export function insideScreen(ctx) {
     room.posts.forEach((post, index) => row.push({ y: post.y + 22, draw: () => waiting(index) }));
     for (const body of stayers) {
       const fly = SPECIES[body.friend.species].fly;
-      row.push({ y: body.y, draw: () => stand(spriteSrc(body.friend.species, body.friend.heirloom), body.x, body.y, 54, body.f > 0, false, fly ? 9 + Math.sin(clock * 3 + body.step) * 4 : Math.abs(Math.sin(body.step / 15)) * 5) });
+      row.push({ y: body.y, draw: () => stand(spriteSrc(body.friend.species, body.friend.heirloom), body.x, body.y, 54, body.f > 0, false, fly ? 9 + Math.sin(clock * 3 + body.step) * 4 : Math.abs(Math.sin(body.step / (15 * big))) * 5) });
     }
     const { x, y } = here();
     for (const pal of pals) {
       const fly = SPECIES[pal.friend.species].fly;
-      const lift = fly ? 9 + Math.sin(clock * 3 + pal.step) * 4 : Math.abs(Math.sin(pal.step / 15)) * 5 * spring;
+      const lift = fly ? 9 + Math.sin(clock * 3 + pal.step) * 4 : Math.abs(Math.sin(pal.step / (15 * big))) * 5 * spring;
       row.push({ y: pal.y - 0.01, draw: () => stand(spriteSrc(pal.friend.species, pal.friend.heirloom), pal.x, pal.y, 54, pal.f > 0, false, lift) });
     }
-    const hop = Math.abs(Math.sin(stride / 17)) * 7 * spring;
+    const hop = Math.abs(Math.sin(stride / (17 * big))) * 7 * spring;
     const view = aspect === 'side' ? state.player.look : `${state.player.look}_${aspect}`;
-    row.push({ y, draw: () => stand(spriteSrc(view), x, y, 96, aspect !== 'side' || facing > 0, true, hop, Math.sin(stride / 17) * 0.035 * spring) });
+    row.push({ y, draw: () => stand(spriteSrc(view), x, y, 96, aspect !== 'side' || facing > 0, true, hop, Math.sin(stride / (17 * big)) * 0.035 * spring) });
     row.sort((a, b) => a.y - b.y);
     for (const thing of row) thing.draw();
     // What there is to do in here, each marked where you stand to do it, and named when you are near.
@@ -223,12 +226,12 @@ export function insideScreen(ctx) {
     for (const spot of room.spots) {
       const near = by && by.id === spot.id;
       const bob = Math.sin(clock * 3 + spot.x) * 3;
-      pen.beginPath(); pen.arc(spot.x, spot.y - 4, near ? 9 : 6, 0, Math.PI * 2);
+      pen.beginPath(); pen.arc(spot.x, spot.y - 4, (near ? 9 : 6) * Math.sqrt(big), 0, Math.PI * 2);
       paint(pen, near ? '#ffc83d' : 'rgba(255,200,61,.55)');
       pen.lineWidth = 2.5; pen.strokeStyle = 'rgba(13,10,28,.85)'; pen.stroke();
-      if (!near) { pen.font = `700 20px ${FONT}`; pen.textAlign = 'center'; pen.textBaseline = 'middle'; pen.fillStyle = '#ffc83d'; pen.lineWidth = 5; pen.strokeText('▾', spot.x, spot.y - 26 + bob); pen.fillText('▾', spot.x, spot.y - 26 + bob); }
+      if (!near) { pen.font = `700 ${Math.round(20 * Math.sqrt(big))}px ${FONT}`; pen.textAlign = 'center'; pen.textBaseline = 'middle'; pen.fillStyle = '#ffc83d'; pen.lineWidth = 5; pen.strokeText('▾', spot.x, spot.y - 30 + bob); pen.fillText('▾', spot.x, spot.y - 30 + bob); }
     }
-    label(pen, 'Way out', room.door.x, room.door.y - 44, '#fff7e8', 'rgba(255,255,255,.28)', 18);
+    label(pen, 'Way out', room.door.x, room.door.y - 44, '#fff7e8', 'rgba(255,255,255,.28)', Math.round(18 * Math.sqrt(big)));
   }
 
   // ------------------------------------------------------------ the card
@@ -323,7 +326,7 @@ export function insideScreen(ctx) {
       const dy = body.to.y - body.y;
       const far = Math.hypot(dx, dy);
       if (far < 3) { body.to = body.spot(); body.wait = 1.5 + body.next() * 4; continue; }
-      const step = Math.min(far, 42 * dt);
+      const step = Math.min(far, 42 * big * dt);
       body.x += (dx / far) * step; body.y += (dy / far) * step;
       body.step += step;
       if (Math.abs(dx) > 1) body.f = dx > 0 ? 1 : -1;
@@ -356,13 +359,13 @@ export function insideScreen(ctx) {
       if (Math.abs(dy) > Math.abs(dx) * 1.3) aspect = dy > 0 ? 'front' : 'back';
       else if (Math.abs(dx) > Math.abs(dy) * 1.3) aspect = 'side';
       stride += Math.hypot(dx, dy);
-      if (stride - footfall >= FOOTFALL) { footfall = stride; play('step', { hard: true }); }
+      if (stride - footfall >= FOOTFALL * big) { footfall = stride; play('step', { hard: true }); }
       if (Math.hypot(now.x - trail[0].x, now.y - trail[0].y) > 5) { trail.unshift({ x: now.x, y: now.y }); if (trail.length > 60) trail.length = 60; }
     } else if (way.length) way.shift();
     spring += ((moving ? 1 : 0) - spring) * (1 - Math.exp(-dt * 12));
     const ease = 1 - Math.exp(-dt * 10);
     pals.forEach((pal, i) => {
-      const to = behind(GAP * (i + 1));
+      const to = behind(GAP * big * (i + 1));
       const dx = (to.x - pal.x) * ease;
       const dy = (to.y - pal.y) * ease;
       pal.x += dx; pal.y += dy;

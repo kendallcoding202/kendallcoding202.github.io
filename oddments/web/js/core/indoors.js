@@ -25,13 +25,20 @@ export const INDOOR = {
 };
 
 // Every inside is seen from the front: the back wall across the top (`wall` tall), the floor below
-// it. x runs across and y down, in the lane's own units (a person stands 96 tall). `view` is how
-// much of it fits across a phone: home is seen from a little closer than the lane is.
+// it. x runs across and y down. `view` is how much of it fits across a phone.
+//
+// Scale. Out in the lane a person stands 96 units tall beside a cottage 240 wide: people are big
+// for their buildings, as on any map. Indoors that will not do: a bed has to be a bed's length
+// beside whoever sleeps in it. So a room says how big `people` are drawn on its floor, against
+// the lane (home: nearly twice, which makes its bookshelf a little taller than you and its bed
+// long enough to lie in), and everything about a body there (how wide it is, how far apart
+// friends walk) goes by that. A place where groups wait keeps the lane's own scale, as the
+// garden does, and its floor is drawn to that.
 // `blocks` are the floor that furniture stands on; `spots` what there is to do and where you stand
 // to do it; `door` is the mat you leave by and `start` where you stand on coming in.
 export const INSIDES = {
   home: {
-    kind: 'home', view: 620, w: 620, h: 1040, wall: 270,
+    kind: 'home', view: 620, w: 620, h: 1040, wall: 270, people: 1.8,
     door: { x: 310, y: 1010 }, start: { x: 310, y: 900 },
     blocks: [
       { id: 'bed', x: 26, y: 270, w: 236, h: 124 },
@@ -41,22 +48,24 @@ export const INSIDES = {
       { id: 'basket', x: 64, y: 706, w: 116, h: 56 },
     ],
     spots: [
-      { id: 'bed', x: 144, y: 436, does: 'rest' },
-      { id: 'phone', x: 308, y: 368, does: 'ring' },
-      { id: 'shelf', x: 416, y: 360, does: 'book' },
-      { id: 'basket', x: 232, y: 738, does: 'team' },
+      { id: 'bed', x: 150, y: 452, does: 'rest' },
+      { id: 'phone', x: 308, y: 392, does: 'ring' },
+      { id: 'shelf', x: 420, y: 384, does: 'book' },
+      { id: 'basket', x: 252, y: 760, does: 'team' },
     ],
     posts: [],
   },
   pantry: {
-    kind: 'place', view: 760, w: 760, h: 1640, wall: 200,
+    kind: 'place', view: 760, w: 760, h: 1640, wall: 200, people: 1,
     door: { x: 380, y: 1610 }, start: { x: 380, y: 1500 },
     blocks: [
-      { id: 'crates', x: 30, y: 1436, w: 124, h: 70 },
-      { id: 'boxes', x: 620, y: 1250, w: 110, h: 66 },
-      { id: 'bottles', x: 30, y: 1010, w: 104, h: 62 },
-      { id: 'pallets', x: 626, y: 800, w: 104, h: 60 },
-      { id: 'sacks', x: 30, y: 470, w: 112, h: 66 },
+      { id: 'crates', x: 30, y: 1446, w: 90, h: 54 },
+      { id: 'boxes', x: 646, y: 1256, w: 84, h: 50 },
+      { id: 'bottles', x: 30, y: 1018, w: 80, h: 48 },
+      { id: 'pallets', x: 646, y: 806, w: 84, h: 48 },
+      { id: 'sacks', x: 30, y: 478, w: 84, h: 50 },
+      { id: 'crates2', x: 646, y: 430, w: 84, h: 50 },
+      { id: 'boxes2', x: 30, y: 760, w: 80, h: 48 },
     ],
     spots: [],
     posts: [{ x: 250, y: 1290 }, { x: 520, y: 1070 }, { x: 250, y: 840 }, { x: 520, y: 610 }, { x: 380, y: 350 }],
@@ -73,8 +82,9 @@ const NOBODY = [];
  */
 export function canStandIn(room, x, y, held = NOBODY) {
   if (!(x >= INDOOR.edge && x <= room.w - INDOOR.edge && y >= room.wall + INDOOR.back && y <= room.h - INDOOR.front)) return false;
+  const body = INDOOR.body * (room.people || 1);
   for (const block of room.blocks) {
-    if (x > block.x - INDOOR.body && x < block.x + block.w + INDOOR.body && y > block.y - INDOOR.body && y < block.y + block.h + INDOOR.body) return false;
+    if (x > block.x - body && x < block.x + block.w + body && y > block.y - body && y < block.y + block.h + body) return false;
   }
   for (const post of held) {
     const reach = post.r || POST.hold;

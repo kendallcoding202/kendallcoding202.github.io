@@ -256,36 +256,37 @@ function pantryWall(pen, room) {
   dark.addColorStop(0, 'rgba(8,6,20,.6)'); dark.addColorStop(1, 'rgba(8,6,20,0)');
   pen.fillStyle = dark; pen.fillRect(0, 0, w, 60);
   const next = run(41);
-  for (const base of [88, 176]) {
-    let at = 22;
-    while (at < w - 60) {
+  // Three shelves the length of the wall, and everything on them a size a hand could lift down.
+  for (const base of [66, 122, 178]) {
+    let at = 18;
+    while (at < w - 40) {
       const sort = next();
       const colour = JARS[Math.floor(next() * JARS.length)];
       if (sort < 0.45) {
         // A jar: glass, what is in it, a lid.
-        const wide = 34 + next() * 16;
-        const tall = 44 + next() * 20;
-        box(pen, at, base - tall, wide, tall, 9, '#9fc4cf', 3);
-        rounded(pen, at + 4, base - tall * 0.72, wide - 8, tall * 0.72 - 4, 6); paint(pen, colour);
-        box(pen, at + 3, base - tall - 8, wide - 6, 11, 3, '#8a5f40', 3);
-        at += wide + 8;
+        const wide = 18 + next() * 9;
+        const tall = 24 + next() * 12;
+        box(pen, at, base - tall, wide, tall, 5, '#9fc4cf', 2.5);
+        rounded(pen, at + 2.5, base - tall * 0.72, wide - 5, tall * 0.72 - 2.5, 3.5); paint(pen, colour);
+        box(pen, at + 2, base - tall - 5, wide - 4, 7, 2, '#8a5f40', 2.5);
+        at += wide + 5;
       } else if (sort < 0.75) {
         // A tin, with a band round it.
-        const wide = 38 + next() * 10;
-        const tall = 34 + next() * 10;
-        box(pen, at, base - tall, wide, tall, 4, '#aeb7c6', 3);
-        flat(pen, at + 2, base - tall * 0.72, wide - 4, tall * 0.46, colour);
-        at += wide + 8;
+        const wide = 20 + next() * 7;
+        const tall = 19 + next() * 7;
+        box(pen, at, base - tall, wide, tall, 3, '#aeb7c6', 2.5);
+        flat(pen, at + 1.5, base - tall * 0.72, wide - 3, tall * 0.46, colour);
+        at += wide + 5;
       } else {
         // A packet.
-        const wide = 30 + next() * 10;
-        const tall = 56 + next() * 16;
-        box(pen, at, base - tall, wide, tall, 3, colour, 3);
+        const wide = 17 + next() * 7;
+        const tall = 30 + next() * 10;
+        box(pen, at, base - tall, wide, tall, 2, colour, 2.5);
         oval(pen, at + wide / 2, base - tall * 0.58, wide * 0.28, wide * 0.28); paint(pen, 'rgba(255,247,232,.75)');
-        at += wide + 8;
+        at += wide + 5;
       }
     }
-    box(pen, 8, base, w - 16, 12, 3, '#6b4630', 3.5);
+    box(pen, 8, base, w - 16, 8, 2.5, '#6b4630', 3);
   }
   flat(pen, 0, wall - 12, w, 12, '#1c2636');
   // The light somebody left on, at the far end: the one in the painting.
@@ -295,7 +296,7 @@ function pantryWall(pen, room) {
 function paintPantry(pen, room) {
   const { w, h, wall } = room;
   pantryWall(pen, room);
-  tiles(pen, 0, wall, w, h - wall, 76, '#b9573f', '#ead9bd', '#6b3f33');
+  tiles(pen, 0, wall, w, h - wall, 47.5, '#b9573f', '#ead9bd', '#6b3f33');
   mat(pen, room);
   flat(pen, 0, wall, w, h - wall, 'rgba(14,16,44,.42)');
   glow(pen, 96, wall + 30, 300, '255,236,170', 0.2);
@@ -313,8 +314,8 @@ export const paintRoom = (pen, id, room, art) => (PAINTERS[id] || paintPantry)(p
 // (and how wide it stands), or something drawn here.
 const STANDING = {
   basket: { draw: basket },
-  crates: { art: 'a_crate', wide: 132 }, boxes: { art: 'a_boxes', wide: 122 }, bottles: { art: 'a_bottles', wide: 112 },
-  pallets: { art: 'a_pallets', wide: 118 }, sacks: { art: 'a_boxes', wide: 122 },
+  crates: { art: 'a_crate', wide: 96 }, boxes: { art: 'a_boxes', wide: 90 }, bottles: { art: 'a_bottles', wide: 84 },
+  pallets: { art: 'a_pallets', wide: 90 }, sacks: { art: 'a_boxes', wide: 90 }, crates2: { art: 'a_crate', wide: 90 }, boxes2: { art: 'a_boxes', wide: 84 },
 };
 /** The paintings a room needs from the world's (assets/world), by name. */
 export const roomArt = (room) => [...new Set(room.blocks.map((block) => STANDING[block.id] && STANDING[block.id].art).filter(Boolean))];
