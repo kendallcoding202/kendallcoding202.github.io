@@ -34,6 +34,7 @@ jobs:
         run: |
           npm run sim
           npm run sim -- --room=alley
+          npm run sim -- --room=pantry
       - name: Install a browser for the end-to-end test
         run: |
           npm install --no-save playwright
