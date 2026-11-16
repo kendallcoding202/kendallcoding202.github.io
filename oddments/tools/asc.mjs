@@ -125,8 +125,9 @@ export function fail(text) {
 
 async function check(env) {
   const missing = ['ASC_KEY_ID', 'ASC_ISSUER_ID', 'ASC_KEY_P8', 'APPLE_TEAM_ID'].filter((name) => !tidy(env[name]));
-  if (missing.length) fail(`Not set: ${missing.join(', ')}. Add them under Settings -> Secrets and variables -> Actions. See docs/TESTFLIGHT.md.`);
-  if (!tidy(env.BUNDLE_ID)) fail('Not set: IOS_BUNDLE_ID, the bundle id the app was created with in App Store Connect. Add it as a secret. See docs/TESTFLIGHT.md.');
+  // Everything that is missing is named at once, so one look says all that is left to add.
+  if (!tidy(env.BUNDLE_ID)) missing.push('IOS_BUNDLE_ID');
+  if (missing.length) fail(`Not set: ${missing.join(', ')}. Add ${missing.length === 1 ? 'it' : 'them'} under Settings -> Secrets and variables -> Actions. See docs/TESTFLIGHT.md.`);
 
   const { key, error } = readKey(env.ASC_KEY_P8);
   if (error) fail(error);

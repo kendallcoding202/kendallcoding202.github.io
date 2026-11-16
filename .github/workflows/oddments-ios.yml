@@ -36,9 +36,11 @@ on:
 permissions:
   contents: read
 
+# A newer Simulator check replaces an older one still running. An upload is never cancelled, by
+# a check or by another upload.
 concurrency:
-  group: oddments-ios-${{ github.ref }}
-  cancel-in-progress: true
+  group: oddments-ios-${{ inputs.testflight && format('upload-{0}', github.run_id) || 'check' }}
+  cancel-in-progress: ${{ !inputs.testflight }}
 
 defaults:
   run:
