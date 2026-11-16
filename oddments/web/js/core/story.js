@@ -71,8 +71,13 @@ const INES = {
     ],
     alley: [
       'Tin Can Alley, quiet. I never thought I would hear the day. The Baron has held court in there since the bin men changed their round.',
-      'Two places of eight. The Midnight Pantry is next, and that I cannot get you into yet: this is as far as the lane is built.',
-      'So walk the garden and the alley again. They are restless every time you rest, and there are kinds in both you have not met.',
+      'Two places of eight. The Midnight Pantry is next: north of here, up the lane and left at the fork, the shop with the striped awning. That one you walk into, by its front door.',
+      'Everything in there is past its date, and most of it is Crumb, with the Crumbwyrm at the back: a toaster that kept every crumb it was ever given. Suds wash away Crumb. Take your Eelastic.',
+    ],
+    pantry: [
+      'The pantry, quiet? I thought I could smell toast. That thing has been popping all night for a fortnight.',
+      'Three places of eight. The Wash is next, and that I cannot get you into yet: this is as far as the lane is built.',
+      'So walk the garden, the alley and the pantry again. They are restless every time you rest, and there are kinds in all three you have not met.',
     ],
   },
   heard: (place) => `${place} is calm. Good. That is one more off Mr. Spick's list.`,
@@ -92,6 +97,8 @@ const DOV = {
     'Want an Heirloom? Go back where it is calm. They feel safe there and bring out their best colours. I saw three in the garden in one week. Three!',
     'If you hit the one you are making friends with, it gets in a Huff again. So pick one, and hit the others.',
     'My nan says Old Summerlong was never turned off. Imagine being left on all summer. I would be cross too.',
+    'You can go indoors, you know. Tap a front door. Yours has a bed in it, and a telephone, and whoever you left at home.',
+    'In the pantry they are spread about the floor, not in a line. You can go round them, if you keep wide.',
     'You can only have one of each kind. If you calm a kind you have already got, it goes off happy and yours learns from it.',
   ],
 };
@@ -171,6 +178,7 @@ export function takeCall(state) {
 const CALMING = {
   garden: { title: 'Calm the garden', detail: 'Calm everyone else there and Old Summerlong, the sprinkler, will face you. Rest at home whenever you need to.' },
   alley: { title: 'Calm Tin Can Alley', detail: 'East along the street, past the launderette. A narrow place: they come one after another, and Baron Pilfer is at the far end. Crumb jams Clank.' },
+  pantry: { title: 'Calm the Midnight Pantry', detail: 'North of home, left at the fork: go in by its front door. Calm everyone on the floor and the Crumbwyrm will face you. Suds wash away Crumb.' },
 };
 
 /**

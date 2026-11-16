@@ -1,5 +1,6 @@
 // The open world: where things stand, where feet can go, walking, and the garden you walk into.
 import { test } from 'node:test';
+import { insideOf } from '../../web/js/core/indoors.js';
 import assert from 'node:assert/strict';
 import {
   WORLD, SPOTS, SPOT_IDS, TREES, LAMPS, HEDGES, ROADS, ROAD_POINTS, GREEN, DISTRICTS, POST,
@@ -266,10 +267,13 @@ test('a new game starts at the door of home, and the save remembers where you wa
 
 // ---------------------------------------------------------------- the garden: a place you walk into
 
-test('every built place is a stretch of the world with a gate and a post for each stop of its path', () => {
+test('every built place is a stretch of the world with a gate, or a building you walk into, with a post for each stop of its path', () => {
   for (const room of ROOMS) {
     const area = districtOf(room.id);
-    if (!roomBuilt(room)) { assert.equal(area, null, `${room.id} is not built, so has nowhere to walk into`); continue; }
+    const inside = insideOf(room.id);
+    if (!roomBuilt(room)) { assert.equal(area, null, `${room.id} is not built, so has nowhere to walk into`); assert.equal(inside, null); continue; }
+    assert.ok(!!area !== !!inside, `${room.id} is one or the other`);
+    if (inside) { assert.equal(inside.kind, 'place'); assert.equal(inside.posts.length, room.path.length); continue; } // (its floor is looked at in indoors.test.mjs)
     assert.equal(area.posts.length, room.path.length);
     assert.ok(canStand(area.gate.x, area.gate.y), 'the gateway is open ground');
     assert.equal(districtAt(area.gate), null, 'standing in the gateway is not yet inside');

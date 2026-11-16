@@ -1,10 +1,11 @@
 // The game as one object: it owns the save and exposes every action a player
 // can take. No DOM, no storage, no clock of its own (the caller passes the
 // time in), which is what makes it testable.
-import { TEAM_SIZE, NAME_LENGTH, lookOf, roomOf } from './balance.js';
+import { TEAM_SIZE, NAME_LENGTH, lookOf, roomOf, roomBuilt } from './balance.js';
 import { createBattle, choices, act, concede } from './battle.js';
 import { settleUp } from './progress.js';
-import { rollEncounter, fairEncounter, enterRoom, leaveRoom, afterFight, canMeet, nextGroup, heldBy, roomOpen, placeCalm, teamOf, maxHpOf } from './rooms.js';
+import { rollEncounter, fairEncounter, enterRoom, leaveRoom, afterFight, canMeet, nextGroup, heldBy, heldIn, roomOpen, placeCalm, teamOf, maxHpOf } from './rooms.js';
+import { insideOf, stepIn, routeIn, spotIn, onMat, besidePost } from './indoors.js';
 import { WORLD, POST, stepWalk, routeTo, straighten, roomy, standing, canStand, spotNear, spotOf, districtOf, districtAt, postNear, personNear, personAt, TALK } from './world.js';
 import { goalOf, aimOf, storySoFar, hasNews, talk, takeCall } from './story.js';
 
@@ -43,6 +44,15 @@ export class Game {
   walk(target, dt) {
     const { state } = this;
     if (this.place() === 'fight' || !target || !Number.isFinite(target.x) || !Number.isFinite(target.y)) return false;
+    if (state.indoors) {
+      // Indoors you walk that floor, and stepping onto the door mat is stepping out.
+      const room = insideOf(state.indoors.id);
+      const next = stepIn(room, state.indoors, target, dt, this.heldIndoors());
+      state.indoors.x = next.x;
+      state.indoors.y = next.y;
+      if (next.moving && onMat(room, next)) this.leave();
+      return next.moving;
+    }
     const from = districtAt(state.where);
     const next = stepWalk(state.where, target, dt, standing(this.held()));
     state.where = { x: next.x, y: next.y };
@@ -51,8 +61,60 @@ export class Game {
     return next.moving;
   }
 
-  /** Where you are standing. Null during a fight. */
-  standing() { return this.place() === 'fight' ? null : this.state.where; }
+  /** Where you are standing: out in the lane, or on the floor of whatever you are inside. Null during a fight. */
+  standing() {
+    if (this.place() === 'fight') return null;
+    return this.state.indoors ? { x: this.state.indoors.x, y: this.state.indoors.y } : this.state.where;
+  }
+
+  // ------------------------------------------------------------ indoors
+
+  /** The building you are inside ('home', or a place's id), or null out in the lane. */
+  indoors() { return this.state.indoors ? this.state.indoors.id : null; }
+
+  /** The ground being held on the floor you are on: whoever is still waiting there. */
+  heldIndoors() {
+    const id = this.indoors();
+    return id ? heldIn(this.state, id, insideOf(id).posts) : [];
+  }
+
+  /**
+   * Whether you may go into a building from its door, and if not why: 'shut' (not yet open, or
+   * not built), 'elsewhere' (you are out calling on another place and have not rested), or 'away'
+   * (you are not at its door). True if you may.
+   */
+  mayEnter(id) {
+    const inside = insideOf(id);
+    if (!inside || this.place() === 'fight' || this.state.indoors || this.near() !== id) return 'away';
+    const room = roomOf(id);
+    if (!room) return true;
+    if (!roomBuilt(room) || !roomOpen(this.state, id)) return 'shut';
+    return this.state.visit && this.state.visit.room !== id ? 'elsewhere' : true;
+  }
+
+  /** Goes in through the door you are standing at. Stepping into a place, rested, begins a visit to it. */
+  enter(id) {
+    if (this.mayEnter(id) !== true) return false;
+    const { state } = this;
+    const inside = insideOf(id);
+    state.where = { ...spotOf(id).door };
+    state.indoors = { id, x: inside.start.x, y: inside.start.y };
+    if (roomOf(id) && !state.visit) enterRoom(state, id);
+    return true;
+  }
+
+  /** Steps out: you are in the lane again, at the door you went in by. */
+  leave() {
+    if (!this.state.indoors || this.place() === 'fight') return false;
+    this.state.indoors = null;
+    return true;
+  }
+
+  /** What you are standing by indoors (a bed, a telephone: { id, does }), or null. */
+  spotNear() {
+    const id = this.indoors();
+    return id && this.place() !== 'fight' ? spotIn(insideOf(id), this.state.indoors) : null;
+  }
 
   /** The place you are inside (a room id), or null out in the lane. */
   district() { return districtAt(this.state.where); }
@@ -61,6 +123,12 @@ export class Game {
   routeTo(target) {
     const from = this.standing();
     if (!from || !target) return [];
+    if (this.state.indoors) {
+      // The same care indoors: a wide berth round every group but the one you are heading for.
+      const wide = POST.meet + 14;
+      const close = (post, point) => Math.hypot(point.x - post.x, point.y - post.y) <= wide;
+      return routeIn(insideOf(this.state.indoors.id), from, target, this.heldIndoors().map((post) => (close(post, target) || close(post, from) ? post : { x: post.x, y: post.y, r: wide })));
+    }
     // Brushing past a group is meeting it. So the way gives everyone a wide berth, except whoever
     // you are heading for, and whoever you are already standing beside (you have to get away somehow).
     const berth = POST.meet + 14;
@@ -104,7 +172,11 @@ export class Game {
     const visit = this.state.visit;
     if (this.place() !== 'path') return -1;
     const room = roomOf(visit.room);
-    return postNear(districtOf(visit.room).posts.map((post, i) => (canMeet(visit, room, i) ? post : null)), this.state.where);
+    const can = (post, i) => (canMeet(visit, room, i) ? post : null);
+    // Whoever waits indoors is met indoors, on that floor; whoever waits out in the lane, out in the lane.
+    const inside = insideOf(visit.room);
+    if (inside) return this.indoors() === visit.room ? postNear(inside.posts.map(can), this.state.indoors) : -1;
+    return this.state.indoors ? -1 : postNear(districtOf(visit.room).posts.map(can), this.state.where);
   }
 
   /** The group a sensible visitor would meet next (its number), or -1. */
@@ -114,6 +186,14 @@ export class Game {
   approach(index = this.nextGroup()) {
     const visit = this.state.visit;
     if (this.place() !== 'path' || !canMeet(visit, roomOf(visit.room), index)) return false;
+    const inside = insideOf(visit.room);
+    if (inside) {
+      if (this.indoors() !== visit.room) return false;
+      const at = besidePost(inside, inside.posts[index], this.heldIndoors());
+      if (at) { this.state.indoors.x = at.x; this.state.indoors.y = at.y; }
+      return !!at;
+    }
+    if (this.state.indoors) return false;
     const post = districtOf(visit.room).posts[index];
     const held = this.held();
     // Stand just short of them: straight below, or failing that either side or above.
@@ -133,13 +213,17 @@ export class Game {
     const spot = spotOf(spotId);
     if (this.place() === 'fight' || !spot) return false;
     this.state.where = { x: spot.door.x, y: spot.door.y };
+    this.state.indoors = null;
     return true;
   }
 
   /** Goes straight through a place's gate, rested, and so begins a visit. For the simulator and tests. */
   travelTo(roomId) {
+    // A place you walk into by its door: to the door, and in.
+    if (insideOf(roomId) && roomOf(roomId)) return this.place() === 'lane' && this.standAt(roomId) && this.enter(roomId);
     const district = districtOf(roomId);
     if (this.place() !== 'lane' || !district || !roomOpen(this.state, roomId)) return false;
+    this.state.indoors = null;
     this.state.where = { x: district.gate.x, y: district.gate.y - 70 };
     return enterRoom(this.state, roomId);
   }
@@ -151,8 +235,8 @@ export class Game {
   aim() { return aimOf(this.state); }
   journal() { return storySoFar(this.state); }
 
-  /** The neighbour you are standing near enough to talk to (their id), or null. Nobody during a fight. */
-  personNear() { return this.place() === 'fight' ? null : personNear(this.state.where); }
+  /** The neighbour you are standing near enough to talk to (their id), or null. Nobody during a fight, or from indoors. */
+  personNear() { return this.place() === 'fight' || this.state.indoors ? null : personNear(this.state.where); }
   hasNews(who) { return hasNews(this.state, who); }
 
   /** Talks to whoever you are standing by. Returns what they say (lines of { who, text }), or null. */
@@ -169,7 +253,7 @@ export class Game {
     for (const [dx, dy] of [[0, 1], [-1, 0], [1, 0], [0, -1]]) {
       const x = person.x + dx * (TALK - 20);
       const y = person.y + dy * (TALK - 20);
-      if (canStand(x, y, held)) { this.state.where = { x, y }; return true; }
+      if (canStand(x, y, held)) { this.state.where = { x, y }; this.state.indoors = null; return true; }
     }
     return false;
   }
@@ -274,7 +358,7 @@ export class Game {
     const room = state.visit.room;
     const stop = this.facing;
     const moved = afterFight(state, stop, summary.won, left);
-    if (!summary.won) state.where = { ...spotOf('home').door };
+    if (!summary.won) { state.where = { ...spotOf('home').door }; state.indoors = null; }
     for (const friend of state.friends) if (friend.heirloom) state.book[friend.species].heirloom = true;
     this.battle = null;
     this.facing = -1;

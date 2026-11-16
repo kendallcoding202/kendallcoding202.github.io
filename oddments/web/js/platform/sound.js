@@ -119,6 +119,7 @@ export const SOUNDS = {
   // Getting about
   tap: (kit) => kit.tone({ freq: 620, to: 780, dur: 0.045, type: 'triangle', vol: 0.08 }),
   step: (kit, with_) => kit.noise({ dur: 0.06, vol: with_.hard ? 0.11 : 0.08, freq: with_.hard ? 1700 : 620, q: 0.7 }),
+  door: (kit) => { kit.tone({ freq: 170, to: 120, dur: 0.09, type: 'triangle', vol: 0.1 }); kit.noise({ dur: 0.03, vol: 0.06, freq: 2600, q: 2, delay: 0.1 }); kit.tone({ freq: 96, to: 70, dur: 0.14, type: 'sine', vol: 0.1, delay: 0.17 }); },
   nope: (kit) => kit.tone({ freq: 196, to: 147, dur: 0.12, type: 'square', vol: 0.05 }),
   gate: (kit) => { kit.tone({ freq: 170, to: 250, dur: 0.2, type: 'sawtooth', vol: 0.03 }); kit.bell(784, { delay: 0.14, vol: 0.09 }); kit.bell(1047, { delay: 0.26, vol: 0.08 }); },
   goal: (kit) => { kit.bell(880, { vol: 0.08 }); kit.bell(1175, { delay: 0.12, vol: 0.08 }); },

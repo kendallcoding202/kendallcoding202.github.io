@@ -121,6 +121,26 @@ export const MOVES = {
   peckingorder: hit('Pecking Order', 'crumb', 1.0, 0, 'You are at the bottom of it.'),
   shakedown: hit('Shakedown', 'crumb', 1.1, 2, 'Hand over the crumbs: lowers Oomph.', { sap: { stat: 'oomph', by: 0.25, turns: 2 } }),
   flocktogether: sweep('Flock Together', 'crumb', 0.65, 3, 'Suddenly there are forty of it.'),
+  // Scrumpling
+  steampuff: hit('Steam Puff', 'crumb', 1.0, 0, 'Lifts its own lid at you.'),
+  doughythump: hit('Doughy Thump', 'crumb', 1.65, 2, 'Soft, until it lands.'),
+  stickyfold: hit('Sticky Fold', 'crumb', 0.8, 3, 'Folds you in and pinches the edges: lowers Pep.', { sap: { stat: 'pep', by: 0.3, turns: 2 } }),
+  // Embernip
+  chilliflick: hit('Chilli Flick', 'spark', 1.0, 0, 'A seed, right in the eye.'),
+  hotstreak: hit('Hot Streak', 'spark', 1.7, 2, 'Too hot to hold, and coming your way.'),
+  fivealarm: sweep('Five-Alarm', 'spark', 0.65, 3, 'Everyone reaches for the water.'),
+  // Eggallant
+  spoonrap: hit('Spoon Rap', 'clank', 1.0, 0, 'Across the knuckles.'),
+  shellup: boost('Shell Up', 'clank', 'grit', 0.5, 3, 'self', 3, 'Back inside the shell: raises Grit.'),
+  softboiledcharge: hit('Soft-Boiled Charge', 'clank', 1.75, 3, 'Runnier than it looks, and faster.'),
+  // Wibblet
+  wobbleslap: hit('Wobble Slap', 'suds', 1.0, 0, 'Cold, and it keeps going after it lands.'),
+  cherryontop: mend('Cherry on Top', 'suds', 0.3, 'ally', 2, 'A cherry makes anybody feel better.'),
+  jellyquake: sweep('Jelly Quake', 'suds', 0.65, 3, 'The whole plate goes.'),
+  // The Crumbwyrm
+  popup: hit('Pop-Up Pounce', 'crumb', 1.0, 0, 'Up out of the slot, all at once.'),
+  crumbbreath: sweep('Crumb Breath', 'crumb', 0.6, 2, 'Years of crumbs, in one go.'),
+  settingsix: hit('Setting Six', 'crumb', 1.3, 3, 'Burnt right through: lowers Grit.', { sap: { stat: 'grit', by: 0.3, turns: 2 } }),
   // Baron Pilfer
   lidbash: hit('Lid Bash', 'clank', 1.0, 0, 'A dustbin lid, edge on.'),
   fishbonesweep: sweep('Fishbone Sweep', 'clank', 0.6, 2, 'The sceptre comes round, and so does the smell.'),
@@ -244,6 +264,34 @@ export const SPECIES = {
     notYet: 'ruffles up and struts off',
     grown: { at: 12, name: 'Kingpinion' },
   },
+  dumpling: {
+    name: 'Scrumpling', element: 'crumb', hp: 50, oomph: 13, grit: 11, pep: 11, huff: 4,
+    moves: [['steampuff', 1], ['doughythump', 3], ['stickyfold', 6]],
+    blurb: 'Steamed on Sunday. Still steaming about it.',
+    notYet: 'lets off steam',
+    grown: { at: 12, name: 'Scrumplord' },
+  },
+  pepperimp: {
+    name: 'Embernip', element: 'spark', hp: 40, oomph: 14, grit: 8, pep: 15, huff: 4,
+    moves: [['chilliflick', 1], ['hotstreak', 3], ['fivealarm', 6]],
+    blurb: 'The last chilli in the jar, and the reason it is the last.',
+    notYet: 'blows a smoke ring at you',
+    grown: { at: 12, name: 'Scorchfoot' },
+  },
+  eggknight: {
+    name: 'Eggallant', element: 'clank', hp: 58, oomph: 10, grit: 15, pep: 6, huff: 5,
+    moves: [['spoonrap', 1], ['shellup', 3], ['softboiledcharge', 6]],
+    blurb: 'Sworn to defend the egg cup. Nobody asked it to.',
+    notYet: 'salutes, and stays put',
+    grown: { at: 12, name: 'Eggalahad' },
+  },
+  jellywobble: {
+    name: 'Wibblet', element: 'suds', hp: 54, oomph: 11, grit: 12, pep: 9, huff: 4,
+    moves: [['wobbleslap', 1], ['cherryontop', 3], ['jellyquake', 6]],
+    blurb: 'Set at midnight. Has not stopped shaking since.',
+    notYet: 'wobbles the other way',
+    grown: { at: 12, name: 'Blancmangler' },
+  },
   boss_hydra: {
     name: 'Old Summerlong', element: 'suds', hp: 118, oomph: 11, grit: 12, pep: 9, huff: 0, boss: true, turns: 2,
     moves: [['nozzlejet', 1], ['fullsprinkle', 1], ['hosedown', 1]],
@@ -253,6 +301,11 @@ export const SPECIES = {
     name: 'Baron Pilfer', element: 'clank', hp: 120, oomph: 12, grit: 13, pep: 10, huff: 0, boss: true, turns: 2,
     moves: [['lidbash', 1], ['fishbonesweep', 1], ['standanddeliver', 1]],
     blurb: 'A fur stole somebody threw out. It crowned itself the same night.',
+  },
+  boss_crumbwyrm: {
+    name: 'The Crumbwyrm', element: 'crumb', hp: 122, oomph: 12, grit: 13, pep: 11, huff: 0, boss: true, turns: 2,
+    moves: [['popup', 1], ['crumbbreath', 1], ['settingsix', 1]],
+    blurb: 'A toaster that kept every crumb it was ever given.',
   },
 };
 export const SPECIES_IDS = Object.keys(SPECIES);
@@ -347,7 +400,17 @@ export const ROOMS = [
       { name: 'The Baron\'s Court', boss: 'boss_baron', bossLevel: 6, size: [1, 2], level: [4, 4], pool: [['coothug', 2], ['ratscal', 2]] },
     ],
   },
-  { id: 'pantry', name: 'The Midnight Pantry', bg: 'bg_pantry', tint: '#f2a65a', element: 'crumb', blurb: 'Everything in here is past its date and wide awake.', path: null },
+  {
+    id: 'pantry', name: 'The Midnight Pantry', bg: 'bg_pantry', tint: '#f2a65a', element: 'crumb',
+    blurb: 'Everything in here is past its date and wide awake.',
+    path: [
+      { name: 'The Bottom Shelf', size: [2, 2], level: [5, 5], pool: [['dumpling', 3], ['jellywobble', 1]] },
+      { name: 'The Spice Rack', size: [2, 2], level: [6, 6], pool: [['pepperimp', 2], ['dumpling', 2]] },
+      { name: 'The Egg Cups', size: [3, 3], level: [6, 6], pool: [['eggknight', 3], ['jellywobble', 2], ['pepperimp', 1]] },
+      { name: 'The Cold Shelf', size: [3, 3], level: [6, 7], pool: [['jellywobble', 3], ['eggknight', 2], ['dumpling', 1]] },
+      { name: 'The Toaster', boss: 'boss_crumbwyrm', bossLevel: 7, size: [1, 2], level: [6, 6], pool: [['pepperimp', 2], ['dumpling', 2]] },
+    ],
+  },
   { id: 'wash', name: 'The Wash', bg: 'bg_wash', tint: '#4fc4cf', element: 'suds', blurb: 'Where socks go in as pairs.', path: null },
   { id: 'stacks', name: 'The Dusty Stacks', bg: 'bg_stacks', tint: '#c08552', element: 'fluff', blurb: 'Overdue books and what lives between the pages.', path: null },
   { id: 'rooftops', name: 'Moonlit Rooftops', bg: 'bg_rooftops', tint: '#7d6bd6', element: 'clank', blurb: 'Slates, chimneys and a long way down.', path: null },

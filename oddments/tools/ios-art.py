@@ -2,7 +2,7 @@
 """Makes the iOS app's icon from the icon painting.
 
 The painting (art/raw/app_icon.webp, generated for this game: see
-docs/ART.md) is the house-sitter in lantern light with a calm Dust Bunny in
+docs/ART.md) is the house-sitter in lantern light with a calm Hopmote in
 the crook of an arm, which is the game in one picture: a person, and a
 household thing that has stopped fretting. It is square and has no
 transparency, which is what the App Store asks of an icon.

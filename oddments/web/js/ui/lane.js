@@ -14,7 +14,8 @@ import { elementTag, bar } from './parts.js';
 import { modal, toast, modalOpen } from './modals.js';
 import { converse } from './talk.js';
 import { play } from '../platform/sound.js';
-import { dustShift } from './shift.js';
+import { dustShift, throughDoor } from './shift.js';
+import { insideOf } from '../core/indoors.js';
 import { FONT, oval, paint, glow, label, worldSrc, paintGround, paintBuilding, paintProp, paintLamp, paintGate, wallOf } from './scenery.js';
 
 // How much of the world fits across the screen. People and Clutterkin are small in a big place.
@@ -24,6 +25,9 @@ const VIEW = 760;
 const ZOOM_MOST = 0.66;
 const MOST_DOTS = 2.4e6; // the most pixels the world is ever drawn with: about what a large iPhone has
 const HOME = { name: 'Home', blurb: 'Great-aunt Maribel\'s house, where you are staying.' };
+// A tap on a building's front door (this far either side of its middle, this far up its wall) is asking
+// to go in. A tap on the ground in front of it is only asking to stand there.
+const DOORWAY = { wide: 50, up: 120, down: 4 };
 const GAP = 60; // how far apart the team walks behind you: a little more than any of them is tall
 const LANE = 'The Lane';
 const HEAD = 62; // how far down the screen the heading reaches at the very least, in screen points
@@ -86,6 +90,8 @@ export function laneScreen(ctx) {
   const pen = canvas.getContext('2d');
 
   let way = []; // the points still to walk through to get where you tapped
+  let wantIn = null; // the building whose door you tapped: you go in when you get there
+  let going = false; // you are going in through a door
   let met = false; // a fight is about to start
   let stirred = false; // you have touched the screen since it appeared
   // Whoever you were already standing beside when the screen appeared (after a reload, say). They are
@@ -318,6 +324,7 @@ export function laneScreen(ctx) {
     const goal = game.goal();
     if (goal.who) return personAt(goal.who);
     if (goal.room && DISTRICTS[goal.room] && game.district() !== goal.room) return DISTRICTS[goal.room].gate;
+    if (goal.room && insideOf(goal.room)) return spotOf(goal.room).door; // a place you walk into by its door
     return null;
   }
 
@@ -414,6 +421,16 @@ export function laneScreen(ctx) {
       h('div', null, h('b', null, SPECIES[friend.species].name), bar(`hp${health[i].hp / health[i].max < 0.3 ? ' low' : ''}`, health[i].hp / health[i].max, `${health[i].hp} / ${health[i].max}`)))));
   };
 
+  /** In through the door you are standing at: the screen dips to dark, and you are indoors. */
+  function goIn(id) {
+    if (going || met || game.mayEnter(id) !== true) return false;
+    going = true;
+    way = [];
+    play('door');
+    throughDoor(() => { game.enter(id); ctx.save(); ctx.show('lane'); }, ctx.fast);
+    return true;
+  }
+
   function drawCard() {
     const visit = state.visit;
     const who = game.personNear();
@@ -453,13 +470,16 @@ export function laneScreen(ctx) {
     }
 
     if (id === 'home') {
+      const inside = (kind) => h('button', { class: `btn ${kind}`, data: { act: 'inside' }, onclick: () => goIn('home') }, 'Go inside');
       if (visit) {
         card.replaceChildren(h('h2', null, HOME.name), h('small', null, 'Rest here and everyone gets their breath back. Whoever you calmed out there will be restless again by the time you go back.'), teamList(),
-          h('button', { class: 'btn gold', data: { act: 'rest' }, onclick: () => { if (game.rest()) { ctx.save(); play('rest'); toast('Everyone is rested.', { kind: 'good' }); cardFor = undefined; } } }, 'Rest'));
+          h('div', { class: 'cardrow' },
+            h('button', { class: 'btn gold', data: { act: 'rest' }, onclick: () => { if (game.rest()) { ctx.save(); play('rest'); toast('Everyone is rested.', { kind: 'good' }); cardFor = undefined; } } }, 'Rest'),
+            inside('plain')));
         return;
       }
-      card.replaceChildren(h('h2', null, HOME.name), h('small', null, HOME.blurb, ' Friends who are not walking with you potter about on the green.'),
-        h('button', { class: 'btn plain', data: { act: 'friends' }, onclick: () => ctx.show('friends') }, 'Choose your team'));
+      card.replaceChildren(h('h2', null, HOME.name), h('small', null, HOME.blurb, ' Friends who are not walking with you potter about on the green, and come in when you do.'),
+        h('div', { class: 'cardrow' }, inside('gold'), h('button', { class: 'btn plain', data: { act: 'friends' }, onclick: () => ctx.show('friends') }, 'Choose your team')));
       return;
     }
     const place = id ? roomOf(id) : null;
@@ -473,7 +493,13 @@ export function laneScreen(ctx) {
         h('small', null, place.blurb, ' ', built
           ? `${place.path.length} groups to calm, the last a boss${bossId && state.book[bossId].met ? ` (${SPECIES[bossId].name})` : ''}. Mostly ${ELEMENTS[place.element].name}.${record.visits ? ` Most calmed in one go: ${record.best} of ${place.path.length}.` : ''}${record.clears ? ' Calm now: Heirlooms come out more often here.' : ''}`
           : `Not built yet: this slice ends at ${LAST_BUILT.name}.`),
-        built && game.roomOpen(place.id)
+        // A place you walk into by its door has a button for it (or says why not just now); one you
+        // walk into across the grass says so.
+        built && game.roomOpen(place.id) && insideOf(place.id)
+          ? (visit && visit.room !== place.id
+            ? h('p', { class: 'cardnote', data: { act: 'enter' } }, `You are still out calling on ${roomOf(visit.room).name}. Rest at home first: nobody in here will come out to you until you have.`)
+            : h('button', { class: 'btn gold', data: { act: 'inside' }, onclick: () => goIn(place.id) }, visit ? 'Go back in' : 'Go in'))
+          : built && game.roomOpen(place.id)
           ? h('p', { class: 'cardnote', data: { act: 'enter' } }, !visit ? 'The gate is open. Walk on in.'
             : visit.room === place.id ? 'Rest at home whenever you need to: it is not far.'
               : `You are still out calling on ${roomOf(visit.room).name}. Rest at home first: nobody here will come out to you until you have.`)
@@ -512,7 +538,10 @@ export function laneScreen(ctx) {
       const post = DISTRICTS[state.visit.room].posts[passedOver];
       if (Math.hypot(to.x - post.x, to.y - post.y) <= POST.meet) passedOver = -1; // a tap on them is choosing to meet them
     }
-    way = game.routeTo(to);
+    // A tap on the front door of a building you can go into walks you to it, and in.
+    const door = SPOTS.find((spot) => insideOf(spot.id) && Math.abs(to.x - spot.x) <= DOORWAY.wide && to.y >= spot.y - DOORWAY.up && to.y <= spot.y + DOORWAY.down);
+    wantIn = door ? door.id : null;
+    way = game.routeTo(door ? door.door : to);
     // A tap on a barricade, or past it into the place it shuts, gets the sound of something that will not budge.
     if (PLACES.some(({ room, area }) => !game.roomOpen(room.id) && (districtAt(to) === room.id || Math.hypot(to.x - area.gate.x, to.y - area.gate.y) <= 90))) play('nope');
     mark = { x: to.x, y: to.y, life: 1 };
@@ -608,6 +637,10 @@ export function laneScreen(ctx) {
       pal.step += Math.hypot(dx, dy);
       if (Math.abs(dx) > 0.25) pal.f = dx > 0 ? 1 : -1;
     });
+    // You tapped a door and have walked up to it: in you go. (If it is shut, you are left standing at it, and its card says why.)
+    if (wantIn && !moving && way.length === 0) { if (game.near() === wantIn) goIn(wantIn); wantIn = null; }
+    // Once you are indoors this screen has had its day: the one for that floor has taken over.
+    if (state.indoors) return;
     potter(dt);
     if (mark) mark.life -= dt * 1.6;
     look(dt);

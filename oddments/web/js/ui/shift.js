@@ -97,6 +97,27 @@ export function paintShift(pen, puffs, t, w, h, boss = false) {
 }
 
 /**
+ * Going through a door: the screen dips to dark, the other side is set out (`swap`), and the dark
+ * lifts. Played fast (and in tests) there is no dip: the other side is simply there.
+ */
+export function throughDoor(swap, fast = false) {
+  if (fast) { swap(); return; }
+  const shade = document.createElement('div');
+  shade.className = 'doorshade';
+  document.body.append(shade);
+  // (A frame later, so the dark is seen to arrive and not simply to be there.)
+  requestAnimationFrame(() => requestAnimationFrame(() => shade.classList.add('on')));
+  let done = false;
+  setTimeout(() => {
+    if (done) return;
+    done = true;
+    swap();
+    shade.classList.remove('on');
+    setTimeout(() => shade.remove(), 260);
+  }, 200);
+}
+
+/**
  * Plays the shift over the whole screen. `from` is where on the screen it billows from; `covered`
  * is called once, when nothing behind it can be seen: that is the moment to swap the screens. For
  * anyone who has asked their phone for less movement it is a plain fade through the dust's colour.

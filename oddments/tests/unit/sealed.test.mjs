@@ -61,7 +61,8 @@ test('everything that ships is a kind of file the game means to ship, and it is 
   const odd = shipped.filter((path) => !/\.(js|css|html|webp|woff2|txt)$/.test(path)).map((path) => path.slice(WEB.length));
   assert.deepEqual(odd, []);
   const bytes = shipped.reduce((sum, path) => sum + statSync(path).size, 0);
-  assert.ok(bytes < 2_500_000, `${Math.round(bytes / 1024)} KB`);
+  // (Most of it is pictures of Clutterkin: about 35 KB a kind with its Heirloom, and there will be forty kinds.)
+  assert.ok(bytes < 4_000_000, `${Math.round(bytes / 1024)} KB`);
 });
 
 test('only this device\'s own storage is used, under the game\'s own name', () => {

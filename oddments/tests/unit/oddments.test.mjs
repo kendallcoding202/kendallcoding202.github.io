@@ -11,9 +11,15 @@ import {
 
 const ASSETS = fileURLToPath(new URL('../../web/assets/', import.meta.url));
 
-test('there are sixteen Clutterkin: fourteen who can be friends and two bosses', () => {
-  assert.equal(SPECIES_IDS.length, 16);
-  assert.deepEqual(SPECIES_IDS.filter((id) => SPECIES[id].boss), ['boss_hydra', 'boss_baron']);
+test('there are twenty-one Clutterkin: eighteen who can be friends and three bosses', () => {
+  assert.equal(SPECIES_IDS.length, 21);
+  assert.deepEqual(SPECIES_IDS.filter((id) => SPECIES[id].boss), ['boss_hydra', 'boss_baron', 'boss_crumbwyrm']);
+  // No two share a name, and none is still called what it was before the names were made its own.
+  const names = SPECIES_IDS.flatMap((id) => [SPECIES[id].name, ...(SPECIES[id].grown ? [SPECIES[id].grown.name] : [])]);
+  assert.equal(new Set(names).size, names.length);
+  for (const old of ['Dust Bunny', 'Sock Eel', 'Toast Ghost', 'Dandepuff', 'Thornhog', 'Grumblebee', 'Snailor', 'Grumpy Gnome', 'Cap Beetle', 'Sparkplug', 'Ratscal', 'Can Crab', 'Sock Goblin', 'Coo-Thug', 'Sprinkler Hydra', 'The Bandit Baron']) assert.equal(names.includes(old), false, old);
+  // A name is said in a fight's one line of text, so it is kept short.
+  for (const id of SPECIES_IDS) assert.ok(SPECIES[id].name.length <= 14, SPECIES[id].name);
 });
 
 test('every Clutterkin has an element, four sensible stats, a line of text and its sprite', () => {
@@ -111,14 +117,14 @@ test('you start with three friends of three different elements, each knowing two
   }
 });
 
-test('the lane has eight places; the first two are built and each ends in its boss', () => {
+test('the lane has eight places; the first three are built and each ends in its boss', () => {
   assert.equal(ROOMS.length, 8);
   assert.equal(new Set(ROOMS.map((room) => room.id)).size, 8);
   for (const room of ROOMS) {
     assert.ok(room.name && room.blurb && ELEMENTS[room.element]);
     assert.ok(existsSync(`${ASSETS}bg/${room.bg}.webp`), `${room.id} background`);
   }
-  assert.deepEqual(ROOMS.filter(roomBuilt).map((room) => room.id), ['garden', 'alley']);
+  assert.deepEqual(ROOMS.filter(roomBuilt).map((room) => room.id), ['garden', 'alley', 'pantry']);
   const bosses = [];
   for (const { path } of ROOMS.filter(roomBuilt)) {
     assert.equal(path.length, 5);
@@ -133,11 +139,13 @@ test('the lane has eight places; the first two are built and each ends in its bo
     for (let i = 1; i < path.length; i++) assert.ok(path[i].level[1] >= path[i - 1].level[1] || path[i].boss, 'the path gets harder');
   }
   assert.equal(new Set(bosses).size, bosses.length, 'each place has a boss of its own');
-  assert.equal(new Set(ROOMS.filter(roomBuilt).flatMap((room) => room.path.map((spot) => spot.name))).size, 10, 'and every stop a name of its own');
-  // The second place starts about where the first left off, and ends higher.
-  const [garden, alley] = ROOMS;
-  assert.ok(alley.path[0].level[0] >= garden.path[3].level[0]);
-  assert.ok(alley.path[4].bossLevel > garden.path[4].bossLevel);
+  assert.equal(new Set(ROOMS.filter(roomBuilt).flatMap((room) => room.path.map((spot) => spot.name))).size, 15, 'and every stop a name of its own');
+  // Each place starts about where the one before left off, and ends higher.
+  const built = ROOMS.filter(roomBuilt);
+  for (let i = 1; i < built.length; i++) {
+    assert.ok(built[i].path[0].level[0] >= built[i - 1].path[3].level[0], built[i].id);
+    assert.ok(built[i].path[4].bossLevel > built[i - 1].path[4].bossLevel, built[i].id);
+  }
 });
 
 test('every kind that can be a friend turns up somewhere in a place that is built, or is with you from the start', () => {

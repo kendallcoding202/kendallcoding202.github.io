@@ -95,6 +95,16 @@ export function heldBy(state, where = state.where) {
   return held;
 }
 
+/**
+ * The ground being held on the floor of an indoor place: on a visit to it, every group there not
+ * yet calmed. (Indoors there is nobody to see until you call: stepping in is calling.)
+ */
+export function heldIn(state, roomId, posts) {
+  const visit = state.visit;
+  if (!visit || visit.room !== roomId) return [];
+  return posts.filter((post, i) => visit.groups[i] && !visit.groups[i].done);
+}
+
 /** Whether a group can be met now: it is still there, and the boss only once everyone else is calm. */
 export function canMeet(visit, room, index) {
   if (!visit || !Number.isInteger(index) || index < 0 || index >= room.path.length || visit.groups[index].done) return false;

@@ -7,6 +7,7 @@ import { loadAssets } from './ui/assets.js';
 import { h, $, sprite } from './ui/dom.js';
 import { modal, toast } from './ui/modals.js';
 import { laneScreen } from './ui/lane.js';
+import { insideScreen } from './ui/inside.js';
 import { fightScreen } from './ui/fight.js';
 import { friendsScreen, bookScreen, settingsScreen, lookDialog } from './ui/friends.js';
 import { heirloomTag, bar } from './ui/parts.js';
@@ -84,11 +85,14 @@ async function boot() {
       // The music follows you: the lullaby out in the world; in a fight the scuffle, or the place's own
       // fight tune where it has one; and a ringleader's own tune wherever one is met.
       setScene(sceneFor({ fight: target === 'fight', boss: target === 'fight' && game.battle.units.some((unit) => unit.boss), room: game.state.visit ? game.state.visit.room : '' }));
-      const screen = SCREENS[target](ctx);
+      // The Lane tab is wherever you are walking: out in the lane, or on the floor of whatever you are inside.
+      const indoors = target === 'lane' ? game.indoors() : null;
+      const screen = (indoors ? insideScreen : SCREENS[target])(ctx);
       showing = screen;
       screenRoot.replaceChildren(screen.el);
       screenRoot.scrollTop = 0;
       screenRoot.dataset.screen = target;
+      screenRoot.dataset.indoors = indoors || '';
       tabsRoot.hidden = place === 'fight';
       for (const button of tabsRoot.children) button.classList.toggle('on', button.dataset.tab === target);
       if (screen.shown) screen.shown();

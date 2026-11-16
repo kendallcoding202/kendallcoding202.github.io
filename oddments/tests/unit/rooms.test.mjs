@@ -50,7 +50,10 @@ test('only the first place is open at the start; each opens when the one before 
   assert.equal(roomOpen(state, 'alley'), true);
   assert.equal(roomOpen(state, 'pantry'), false);
   state.rooms.alley.clears = 1;
-  assert.equal(roomOpen(state, 'pantry'), false, 'cleared the way to it, but it is not built in this slice');
+  assert.equal(roomOpen(state, 'pantry'), true);
+  assert.equal(roomOpen(state, 'wash'), false);
+  state.rooms.pantry.clears = 1;
+  assert.equal(roomOpen(state, 'wash'), false, 'cleared the way to it, but it is not built in this slice');
   assert.equal(roomOpen(state, 'nowhere'), false);
   assert.equal(roomOpen(state, 'constructor'), false);
 });

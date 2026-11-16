@@ -41,6 +41,10 @@ LOOKS = {
     "cancrab": {"turn": 150},
     "sockgoblin": {"turn": 215},
     "coothug": {"turn": 175, "dye": (42, 0.5)},
+    "dumpling": {"turn": 150, "dye": (150, 0.34)},
+    "pepperimp": {"turn": 205},
+    "eggknight": {"turn": 165, "dye": (330, 0.2)},
+    "jellywobble": {"turn": 150},
 }
 
 

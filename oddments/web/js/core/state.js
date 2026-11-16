@@ -4,9 +4,10 @@ import {
   LOOK_IDS, lookOf, xpNeeded, roomOf, roomBuilt,
 } from './balance.js';
 import { newFriend } from './progress.js';
-import { roomOpen, maxHpOf, rollEncounter, fairEncounter, heldBy, placeCalm } from './rooms.js';
+import { roomOpen, maxHpOf, rollEncounter, fairEncounter, heldBy, heldIn, placeCalm } from './rooms.js';
 import { own } from './util.js';
-import { settleWhere } from './world.js';
+import { settleWhere, spotNear } from './world.js';
+import { insideOf, settleIn } from './indoors.js';
 import { newStory, reviveStory } from './story.js';
 
 export function newState(now = Date.now(), seed = (now ^ 0x9e3779b9) | 0) {
@@ -22,6 +23,7 @@ export function newState(now = Date.now(), seed = (now ^ 0x9e3779b9) | 0) {
     nextFriendId: friends.length + 1,
     team: friends.map((friend) => friend.id), // up to three friend ids, in fighting order
     where: settleWhere(null), // where you are standing in the world; a new game starts at the door of home
+    indoors: null, // the building you are inside and where on its floor: { id, x, y }. `where` is then its door
     rooms: Object.fromEntries(ROOM_IDS.map((id) => [id, { visits: 0, clears: 0, losses: 0, best: 0 }])),
     // The visit you are on, from stepping into a place until you rest at home:
     // { room, stop: how many groups are calmed, hp: { friendId: health }, groups: [{ foes: [who], done }] one per stop }
@@ -147,6 +149,16 @@ export function reviveState(saved, now = Date.now()) {
   const where = mapped && isObj(saved.where) ? saved.where : null;
   // (Wherever the save says you stand is checked against the ground held as it would be with you standing there.)
   state.where = settleWhere(where, where ? heldBy(state, where) : []);
+  // Indoors only if it is somewhere there is to be, you are at its door in the world, and the point
+  // is one feet can be at. A place still shut, or one you are not visiting while visiting another,
+  // is not somewhere you can be standing: then you are outside its door.
+  const indoors = isObj(saved.indoors) ? saved.indoors : null;
+  const inside = indoors && typeof indoors.id === 'string' ? insideOf(indoors.id) : null;
+  if (inside && spotNear(state.where) === indoors.id) {
+    const place = roomOf(indoors.id);
+    const fine = !place || (roomBuilt(place) && roomOpen(state, indoors.id) && (!state.visit || state.visit.room === indoors.id));
+    if (fine) state.indoors = { id: indoors.id, ...settleIn(inside, indoors, heldIn(state, indoors.id, inside.posts)) };
+  }
 
   const book = isObj(saved.book) ? saved.book : {};
   for (const id of SPECIES_IDS) {

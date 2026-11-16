@@ -2,7 +2,7 @@
 // long fights last, and how hard the place is. A place after the first is
 // played by someone who has first calmed every place before it, however many
 // visits that took them.
-//   node tools/sim.mjs [players=400] [--style=friendly|brawler|careless] [--visits=4] [--room=garden|alley]
+//   node tools/sim.mjs [players=400] [--style=friendly|brawler|careless] [--visits=4] [--room=garden|alley|pantry]
 // friendly  a sensible player who also calms kinds they do not have yet
 // brawler   a sensible player who never reaches out
 // careless  taps any move at random and never makes a Call

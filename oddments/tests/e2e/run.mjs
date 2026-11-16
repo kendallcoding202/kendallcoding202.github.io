@@ -31,7 +31,7 @@ const section = (name) => console.log(`\n${name}`);
 async function newPage(viewport = { width: 390, height: 844 }) {
   const context = await browser.newContext({ viewport, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
   const page = await context.newPage();
-  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message} ${String(e.stack || '').split('\n').slice(1, 4).map((line) => line.trim()).join(' < ')}`));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
   page.on('request', (r) => requests.push(r.url()));
   return page;
@@ -429,12 +429,12 @@ await snap(page, 'e2e-friends');
 
 section('Scrapbook');
 await tab(page, 'book');
-check((await page.$$('.page-tile')).length === Object.keys(SPECIES).length && Object.keys(SPECIES).length === 16, 'the scrapbook has a page for every kind');
+check((await page.$$('.page-tile')).length === Object.keys(SPECIES).length && Object.keys(SPECIES).length === 21, 'the scrapbook has a page for every kind');
 const met = Object.values(s.book).filter((p) => p.met).length;
 check((await page.$$('.page-tile:not(.unmet)')).length === met, `the ${met} kinds met so far are shown`);
 check(await S(page, () => [...document.querySelectorAll('.page-tile.unmet')].every((t) => t.disabled && t.querySelector('b').textContent === '???')), 'the rest are shadows');
 check((await page.$$('.ring > div')).length === 6, 'and the six elements are explained');
-check(await S(page, () => { const hunt = document.querySelector('.card.hunt'); return !!hunt && hunt.dataset.kept === '0' && hunt.textContent.includes('0 of 14 kept') && hunt.textContent.includes('one in 60') && hunt.textContent.includes('one in 20'); }), 'the scrapbook has the hunt for Heirlooms: none kept yet, and how the odds stand');
+check(await S(page, () => { const hunt = document.querySelector('.card.hunt'); return !!hunt && hunt.dataset.kept === '0' && hunt.textContent.includes('0 of 18 kept') && hunt.textContent.includes('one in 60') && hunt.textContent.includes('one in 20'); }), 'the scrapbook has the hunt for Heirlooms: none kept yet, and how the odds stand');
 check(await S(page, () => document.querySelector('[data-act="where"]').textContent.startsWith('Nowhere is calm yet') && document.querySelector('[data-act="tofind"]').textContent.startsWith('Still to find:') && document.querySelector('[data-act="tofind"]').textContent.includes('???')), 'it says nowhere is calm yet, and lists who is still to find, unmet kinds as ???');
 await snap(page, 'e2e-book');
 
@@ -600,15 +600,187 @@ await S(page, () => { window.oddments.game.standBy('ines'); window.oddments.ctx.
 await page.waitForSelector('.placecard[data-person="ines"] [data-act="talk"].gold');
 await page.click('[data-act="talk"]');
 check((await hearOut(page)) === 3 && (await state(page)).story.ines === 3, 'she hears about the alley');
-check(await S(page, () => document.querySelector('.goalchip').dataset.goal === 'more' && document.querySelector('.goalchip span').textContent === 'The Midnight Pantry is next (2 of 8)'), 'two places of eight are calm, and the next is named');
+check(await S(page, () => document.querySelector('.goalchip').dataset.goal === 'calm' && document.querySelector('.goalchip span').textContent === 'Calm the Midnight Pantry (0 of 5)'), 'two places are calm, and the goal is the third: the Midnight Pantry');
 // One visit at a time: out calling on the garden, the card at the alley gate says to rest first.
 await S(page, () => { window.oddments.game.travelTo('garden'); window.oddments.game.standAt('alley'); window.oddments.ctx.show('lane'); });
 await page.waitForSelector('.placecard[data-spot="alley"]');
 check(await S(page, () => document.querySelector('[data-act="enter"]').textContent.includes('still out calling on The Garden Gate')), 'while you are out calling on one place, the other tells you to rest first');
-await S(page, () => { window.oddments.game.goHome(); window.oddments.game.standAt('pantry'); window.oddments.ctx.show('lane'); });
+// And a place you walk into by its door says the same, in place of its button.
+await S(page, () => { window.oddments.game.standAt('pantry'); window.oddments.ctx.show('lane'); });
 await page.waitForSelector('.placecard[data-spot="pantry"]');
-check(await S(page, () => document.querySelector('[data-act="enter"]').disabled && document.querySelector('[data-act="enter"]').textContent === 'Not built yet' && document.querySelector('.placecard small').textContent.includes('this slice ends at Tin Can Alley')), 'the place after that is not built: the slice ends here');
+check(await S(page, () => !document.querySelector('[data-act="inside"]') && document.querySelector('[data-act="enter"]').textContent.includes('still out calling on The Garden Gate')), 'and so does the door of the pantry');
+await S(page, () => { window.oddments.game.goHome(); window.oddments.game.standAt('wash'); window.oddments.ctx.show('lane'); });
+await page.waitForSelector('.placecard[data-spot="wash"]');
+check(await S(page, () => document.querySelector('[data-act="enter"]').disabled && document.querySelector('[data-act="enter"]').textContent === 'Not built yet' && document.querySelector('.placecard small').textContent.includes('this slice ends at The Midnight Pantry')), 'the place after the pantry is not built: the slice ends there');
 await snap(page, 'e2e-house-cleared');
+
+// =============================================================== going indoors
+section('Going indoors: home');
+const indoors = (p) => S(p, () => { const g = window.oddments.game; return { id: g.indoors(), at: g.state.indoors && { ...g.state.indoors }, near: g.near(), by: g.spotNear() && g.spotNear().id, shown: document.querySelector('#screen').dataset.indoors }; });
+/** One tap toward something on the floor you are on: on it if it can be seen, else as near as a finger can get (above the card, below the heading). */
+async function tapFloor(p, what) {
+  const aim = await S(p, (id) => {
+    const at = window.oddments.lane.screenOf(id);
+    const box = document.querySelector('.lanecanvas').getBoundingClientRect();
+    const card = document.querySelector('.placecard');
+    const foot = card && !card.hidden ? card.getBoundingClientRect().top - 12 : box.bottom - 6;
+    return { x: Math.min(box.right - 8, Math.max(box.left + 8, at.x)), y: Math.min(foot, Math.max(box.top + 150, at.y)) };
+  }, what);
+  await p.touchscreen.tap(aim.x, aim.y);
+}
+/** Walks across a floor to something on it, the way a finger would: by tapping toward it until you are standing by it. */
+async function walkToThing(p, thing) {
+  for (let tries = 0; tries < 30; tries++) {
+    if ((await indoors(p)).by === thing) return true;
+    await tapFloor(p, `thing:${thing}`);
+    await p.waitForTimeout(450);
+  }
+  return (await indoors(p)).by === thing;
+}
+/** Walks to the door mat and so out, by tapping it. */
+async function walkOut(p) {
+  for (let tries = 0; tries < 30 && (await indoors(p)).id; tries++) {
+    await tapFloor(p, 'door');
+    await p.waitForTimeout(450);
+  }
+  await p.waitForSelector('#lane', { timeout: 8000 });
+  return !(await indoors(p)).id;
+}
+await S(page, () => { window.oddments.game.standAt('home'); window.oddments.ctx.show('lane'); });
+await page.waitForSelector('.placecard[data-spot="home"] [data-act="inside"]');
+check(await S(page, () => document.querySelector('[data-act="inside"]').textContent === 'Go inside' && !!document.querySelector('[data-act="friends"]')), 'at the door of home there is a way in, beside choosing your team');
+await page.click('[data-act="inside"]');
+await page.waitForSelector('#inside[data-room="home"]');
+let inn = await indoors(page);
+check(inn.id === 'home' && inn.shown === 'home' && (await screen(page)) === 'lane' && inn.near === 'home', 'Go inside, and you are indoors: on its floor, and in the world still at its door');
+check(await S(page, () => document.querySelector('#inside h1').textContent === 'Home' && !document.querySelector('#tabs').hidden && document.querySelector('[data-tab="lane"]').classList.contains('on')), 'the heading says Home, and the tabs are still there');
+check(await S(page, () => { const v = window.oddments.lane.view(); const box = document.querySelector('.lanecanvas').getBoundingClientRect(); return Math.abs(v.w * v.k - box.width) < 1 && v.w >= 620 - 0.5 && v.x <= 0.5; }), 'the whole width of the room is on the screen');
+check(await S(page, () => {
+  const canvas = document.querySelector('.lanecanvas');
+  const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+  const colours = new Set();
+  for (let i = 0; i < pixels.length; i += 4 * 97) colours.add(`${pixels[i] >> 4},${pixels[i + 1] >> 4},${pixels[i + 2] >> 4}`);
+  return colours.size > 40;
+}), 'and it is painted: wall, floor and furniture, not a blank');
+await page.waitForTimeout(400);
+await snap(page, 'e2e-home-inside');
+// What there is to do in here: walk up to each thing and its card comes up.
+check(await walkToThing(page, 'bed'), 'tapping the bed walks you to it');
+check(await S(page, () => { const card = document.querySelector('.placecard'); return !card.hidden && card.dataset.thing === 'bed' && card.querySelector('h2').textContent === 'Your bed' && card.querySelector('[data-act="rest"]').disabled && !card.textContent.includes('null'); }), 'the bed: nothing to rest from, so it says everyone is rested');
+check(await walkToThing(page, 'phone'), 'and to the telephone');
+await page.click('[data-act="ring"]');
+await page.waitForSelector('.modal.talk');
+check(await S(page, () => document.querySelector('.modal.talk .talkname b').textContent === 'Great-aunt Maribel' && document.querySelector('.modal.talk .talkwords').textContent.includes('Calm the Midnight Pantry')), 'ring great-aunt Maribel and she reminds you what you were doing');
+await hearOut(page);
+check(await walkToThing(page, 'shelf'), 'and to the bookshelf');
+await page.click('[data-act="book"]');
+check((await screen(page)) === 'book', 'where the scrapbook opens');
+await tab(page, 'lane');
+check(!!(await page.$('#inside[data-room="home"]')), 'back on the Lane tab you are still indoors');
+check(await walkToThing(page, 'basket'), 'and to the basket');
+await page.click('[data-act="team"]');
+check((await screen(page)) === 'friends', 'where the team is chosen');
+await tab(page, 'lane');
+// Indoors is kept across a reload, like everything else.
+await S(page, () => window.oddments.ctx.save());
+await page.reload();
+await ready(page);
+await page.waitForSelector('#inside[data-room="home"]');
+inn = await indoors(page);
+check(inn.id === 'home' && inn.by === 'basket', 'reload, and you are standing where you were, indoors');
+check(await walkOut(page), 'tapping the door mat walks you to it, and out');
+inn = await indoors(page);
+check(inn.near === 'home' && (await S(page, () => document.querySelector('#lane h1').textContent)) === 'The Lane', 'and you are in the lane again, at the door you went in by');
+// A tap on the building itself, from the lane, is asking to go in.
+await S(page, () => { const g = window.oddments.game; g.state.where = { x: g.state.where.x - 120, y: g.state.where.y + 90 }; window.oddments.ctx.show('lane'); });
+await page.waitForTimeout(300);
+for (let tries = 0; tries < 12 && !(await indoors(page)).id; tries++) {
+  const front = await S(page, () => { const at = window.oddments.lane.screenOf('home'); const k = document.querySelector('.lanecanvas').getBoundingClientRect().width / window.oddments.lane.view().w; return { x: at.x, y: at.y - 80 * k }; });
+  await page.touchscreen.tap(front.x, front.y);
+  await page.waitForTimeout(600);
+}
+await page.waitForSelector('#inside[data-room="home"]', { timeout: 8000 });
+check((await indoors(page)).id === 'home', 'a tap on the front of the house walks you up to its door and in');
+check((await S(page, () => window.oddments.sound().heard.door)) >= 1, 'with the sound of the door');
+// Resting in your own bed, when there is something to rest from.
+await S(page, () => { const g = window.oddments.game; g.leave(); g.travelTo('garden'); g.standAt('home'); g.enter('home'); window.oddments.ctx.show('lane'); });
+await page.waitForSelector('#inside[data-room="home"]');
+check(await walkToThing(page, 'bed'), 'out calling on the garden, home, and to bed');
+check(await S(page, () => { const card = document.querySelector('.placecard'); return card.querySelectorAll('.teamcard').length === 3 && !card.querySelector('[data-act="rest"]').disabled; }), 'the bed shows how everyone is, and offers a rest');
+await page.click('[data-act="rest"]');
+await page.waitForTimeout(200);
+check((await state(page)).visit === null, 'which ends the visit, as resting at the door does');
+await S(page, () => { window.oddments.game.leave(); window.oddments.ctx.show('lane'); });
+
+section('Going indoors: the Midnight Pantry');
+await S(page, () => { window.oddments.game.standAt('pantry'); window.oddments.ctx.show('lane'); });
+await page.waitForSelector('.placecard[data-spot="pantry"] [data-act="inside"]');
+check(await S(page, () => document.querySelector('.placecard h2').textContent.includes('The Midnight Pantry') && document.querySelector('[data-act="inside"]').textContent === 'Go in'), 'with the alley calm, the pantry is open, and its door has a way in');
+await page.waitForTimeout(300);
+await snap(page, 'e2e-pantry-door');
+await page.click('[data-act="inside"]');
+await page.waitForSelector('#inside[data-room="pantry"]');
+s = await state(page);
+check(s.indoors.id === 'pantry' && s.visit && s.visit.room === 'pantry' && s.visit.stop === 0 && s.visit.groups.length === 5 && s.rooms.pantry.visits === 1, 'going in begins a visit to it');
+check(await S(page, () => document.querySelector('#inside h1').textContent === 'The Midnight Pantry' && document.querySelector('#inside .where').textContent === '0 of 5 calmed' && document.querySelectorAll('.placecard.slim .teamcard').length === 3), 'the heading says where you are and how it is going, and the team is listed');
+await page.waitForTimeout(500);
+await snap(page, 'e2e-pantry');
+// Walk into the nearest group by tapping where it stands.
+for (let tries = 0; tries < 30 && (await S(page, () => window.oddments.game.place())) !== 'fight'; tries++) {
+  await tapFloor(page, 'post:0');
+  await page.waitForTimeout(500);
+}
+await page.waitForSelector('#fight', { timeout: 15000 });
+await idle(page);
+check((await game(page, () => window.oddments.game.facing)) === 0 && await S(page, () => document.querySelector('#fight img.bg').src.includes('bg_pantry')), 'tapping a group walks you into it, and the fight is in the pantry');
+check((await battle(page)).units.filter((u) => u.side === 'foe').every((u) => ['dumpling', 'jellywobble'].includes(u.species)), 'against kinds met nowhere else');
+check(await S(page, () => window.oddments.sound().scene === 'fight'), 'to the scuffle: the pantry has no tune of its own yet');
+await botFight(page, { befriend: true });
+const wonFirst = (await modalTitle(page)) === 'Won';
+await page.click('[data-id="next"]');
+if (wonFirst) {
+  await page.waitForSelector('#inside[data-room="pantry"]');
+  s = await state(page);
+  check(s.indoors.id === 'pantry' && s.visit.stop === 1 && s.visit.groups[0].done, 'win, and you are back on its floor with that group calm');
+  // Step out part way through, and the door says you can go back in; the visit is still on.
+  check(await walkOut(page), 'you can walk out in the middle of a visit');
+  await page.waitForSelector('.placecard[data-spot="pantry"] [data-act="inside"]');
+  check((await state(page)).visit.stop === 1 && await S(page, () => document.querySelector('[data-act="inside"]').textContent === 'Go back in'), 'and its door offers the way back in, with everything as you left it');
+} else check(false, 'the stand-in wins the first fight in the pantry');
+// Calm the whole place. (The stand-in is given the levels for it: this is about going indoors, not about the fights.)
+await S(page, () => { for (const friend of window.oddments.game.state.friends) friend.level = Math.max(friend.level, 11); });
+let pantryCalm = false;
+let crumbwyrmSeen = false;
+for (let calls = 0; calls < 6 && !pantryCalm; calls++) {
+  if (!(await state(page)).visit) await S(page, () => { window.oddments.game.travelTo('pantry'); window.oddments.ctx.show('lane'); });
+  else if (!(await indoors(page)).id) await S(page, () => { window.oddments.game.standAt('pantry'); window.oddments.game.enter('pantry'); window.oddments.ctx.show('lane'); });
+  while ((await state(page)).visit) {
+    const index = await S(page, () => window.oddments.game.nextGroup());
+    await onward(page, index);
+    await idle(page);
+    if (index === 4 && !crumbwyrmSeen) {
+      crumbwyrmSeen = true;
+      check((await page.$$('.unit.boss')).length === 1 && await S(page, () => !!document.querySelector('.unit.boss img[src*="boss_crumbwyrm"]')) && await S(page, () => window.oddments.sound().scene === 'boss'), 'its ringleader, the Crumbwyrm, is at the far end, to a ringleader\'s tune');
+      await snap(page, 'e2e-pantry-boss');
+    }
+    await botFight(page, { befriend: true });
+    await page.click('[data-id="next"]');
+    await page.waitForTimeout(120);
+  }
+  pantryCalm = (await state(page)).rooms.pantry.clears > 0;
+}
+s = await state(page);
+check(pantryCalm && s.rooms.pantry.best === 5 && s.book.boss_crumbwyrm.met, 'the pantry is calmed, and the Crumbwyrm is in the scrapbook');
+check(['dumpling', 'pepperimp', 'eggknight', 'jellywobble'].filter((kind) => s.book[kind].met).length === 4, 'all four of its kinds have been met');
+check(s.indoors && s.indoors.id === 'pantry' && !!(await page.$('#inside[data-room="pantry"]')) && (await S(page, () => document.querySelector('#inside .where').textContent)) === 'calm', 'you are still standing in it, and it says it is calm');
+await page.waitForTimeout(400);
+await snap(page, 'e2e-pantry-calm');
+check(await walkOut(page), 'and you walk out');
+await S(page, () => { window.oddments.game.standBy('ines'); window.oddments.ctx.show('lane'); });
+await page.waitForSelector('.placecard[data-person="ines"] [data-act="talk"].gold');
+await page.click('[data-act="talk"]');
+check((await hearOut(page)) === 3 && (await state(page)).story.ines === 4, 'Ines Tock hears about the pantry');
+check(await S(page, () => document.querySelector('.goalchip').dataset.goal === 'more' && document.querySelector('.goalchip span').textContent === 'The Wash is next (3 of 8)'), 'three places of eight are calm, and the next is named');
 
 // =============================================================== heirlooms
 section('Heirlooms');
@@ -644,7 +816,7 @@ await tab(page, 'friends');
 check(await S(page, (species) => document.querySelector(`.friend[data-species="${species}"] img`).src.includes('_heirloom') && !!document.querySelector(`.friend[data-species="${species}"] .heirloom`), rare.species), 'and is shown as an Heirloom among your friends');
 await tab(page, 'book');
 check(await S(page, (species) => !!document.querySelector(`[data-kind="${species}"] .stamp.gold`) && document.querySelector(`[data-kind="${species}"]`).classList.contains('rare'), rare.species), 'with a gold stamp in the scrapbook');
-check(await S(page, () => document.querySelector('.card.hunt').dataset.kept === '1' && document.querySelector('.card.hunt').textContent.includes('1 of 14 kept')), 'and the hunt counts it: one of fourteen kept');
+check(await S(page, () => document.querySelector('.card.hunt').dataset.kept === '1' && document.querySelector('.card.hunt').textContent.includes('1 of 18 kept')), 'and the hunt counts it: one of eighteen kept');
 check(await S(page, (name) => !document.querySelector('[data-act="tofind"]').textContent.includes(`${name},`) && !document.querySelector('[data-act="tofind"]').textContent.endsWith(`${name}.`), SPECIES[rare.species].name), 'it is off the list of those still to find');
 await snap(page, 'e2e-heirloom-book');
 // Walking into a place where one is waiting, you are told (and hear it) before you have picked it out.
