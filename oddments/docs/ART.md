@@ -6,17 +6,18 @@
 
 | | From | Count |
 | --- | --- | --- |
-| Monster sprites | Pawst Lives, copied as they are | 12 (three you start with, eight met in the garden, the Sprinkler Hydra) |
-| Room paintings | Pawst Lives, copied as they are | 8 (the garden is used in fights) |
+| Monster sprites | Pawst Lives, copied as they are | 16 (three you start with, eight met in the garden, three more met in Tin Can Alley, and the two bosses) |
+| Room paintings | Pawst Lives, copied as they are | 8 (the garden's and the alley's are used in fights) |
 | Font | Pawst Lives | Fredoka, with its licence |
-| Heirloom (rare colour) sprites | Recoloured in code by `tools/heirlooms.py` | 11 |
+| Heirloom (rare colour) sprites | Recoloured in code by `tools/heirlooms.py` | 14 |
 | The house-sitter | **Generated for this game** | 4 images: four candidate looks (`sitter_a` to `sitter_d`), from the side |
 | The house-sitter, turned | **Generated for this game** | 4 images, one per look, each holding that look from the front and from behind (8 sprites) |
 | The cast | **Generated for this game** | 1 image holding all four: Ines Tock, Dov, Mr. Spick, Great-aunt Maribel |
 | The world | **Generated for this game** | 2 images, which became 14 pictures (below) |
-| App icon and launch image | Composed by `tools/ios-art.py` from the Dust Bunny as painted for Pawst Lives | a stand-in; nothing generated |
+| Tin Can Alley | **Generated for this game** | 2 images, which became 13 pictures (below) |
+| App icon and launch image | **Generated for this game** | 1 image: the house-sitter with a lantern and a calm Dust Bunny. `tools/ios-art.py` makes the icon and the launch image from it |
 
-**Eleven images have been generated in all.** Each was agreed before it was made, and every one came out usable on the first attempt.
+**Fourteen images have been generated in all.** Each was agreed before it was made, and every one came out usable on the first attempt. One has been touched up since, in code and for nothing: on the icon the pencil in her hair was painted lying on top of the bun, and `tools/ios-art.py` grows hair over its lower end so that it comes out of the bun instead. The archived original is as it was painted. Close up, the covered patch is a little softer than the hair round it; a repaint would be one more image.
 
 ### The world's two images
 
@@ -27,7 +28,14 @@ They are in `web/assets/world/`. Both came out usable on the first attempt.
 
 The whole open world is laid out from these: where each stands is in `web/js/core/world.js`.
 
-Still **drawn in code** (`web/js/ui/scenery.js`), on top of the paintings: the streets and their stepping stones, the flowers, the garden's gateway, the name plates, and light (lamplight, the door of home, fireflies). A place that is shut is its own painting, darkened, with a padlock on it.
+Still **drawn in code** (`web/js/ui/scenery.js`), on top of the paintings: the streets and their stepping stones, the flowers, the gateways (wood for the garden, iron for the alley), the alley's puddles and dropped bottle caps, the name plates, and light (lamplight, the door of home, fireflies). A place that is shut is its own painting, darkened, with a padlock on it.
+
+### Tin Can Alley's two images
+
+- **One sheet** (`art/raw/alley_sheet.webp`) holding twelve sprites, cut apart the same way: two bins, a crate, a stack of tyres, an oil drum, tied cardboard, pallets, a crate of bottles, a traffic cone, a heap of cans and bottle caps, a fence panel, and a barricade.
+- **One cobble texture** (`art/raw/alley_cobbles.webp`), made to repeat without a seam.
+
+From these: the alley's walls are those things piled along it; its fence is the panel; whoever is restless there hides in the bins; and the barricade stands in its gateway until the garden is calm. Its three kinds and its boss came from Pawst Lives with everything else, so the whole place cost two images.
 
 ### The people
 
@@ -44,15 +52,15 @@ The four candidates used the Pawst Lives sprite style prompt word for word (`too
 | Count | What | Notes |
 | --- | --- | --- |
 | 1 | The house-sitter, final sprite | One of the four candidates, or a repaint at Pawst Lives proportions. A repaint would want its front and back views repainted to match. |
-| 40 | Grown-up forms | One per kind. Eleven are named (below); twenty-nine still to design. Bosses do not grow. |
-| 10 | Things for the world | A painted gateway and fence, and one special thing to stand in each place (the washing line, the bins...). As a sheet or two, as the buildings were. |
+| 40 | Grown-up forms | One per kind. Fourteen are named (below); twenty-six still to design. Bosses do not grow. |
+| 13 | Things for the world | For each of the six places still to build, a sheet of the things that stand in it and a ground of its own, as Tin Can Alley has (12). And one sheet of painted gateways (1). |
 | 17 | Icons | Six elements, three Calls, three stats (Health exists), four tabs, the Heirloom mark. |
-| 2 | App icon and title art | Once the game has its name. |
-| **70** | **new images** | Fewer if things are painted several to a sheet. |
+| 1 | Title art | The app icon is painted. |
+| **72** | **new images** | Fewer if things are painted several to a sheet. |
 
-No longer needed, because the two world images covered them: a painted map of the neighbourhood, the nine buildings, and a painted map for every place (the grass tile and the hedge bush build those).
+No longer needed, because the two world images covered them: a painted map of the neighbourhood, the nine buildings, and a painted map for every place (a ground tile and things to stand on it build those).
 
-Not counted, and worth deciding before the other seven places are built: each of them is somewhere that is not a lawn (an alley, a pantry, a rooftop). In an open world each wants ground of its own (cobbles, floorboards, slates) and a boundary of its own (a wall, shelves, a parapet) in place of the grass and the hedge. That is roughly one more sheet and one more texture per two or three places.
+The count for the places still to build comes from building one. None of them is a lawn (a pantry, a wash-house, a rooftop), so each wants ground of its own (floorboards, tiles, slates) and a boundary of its own (shelves, a parapet) in place of the grass and the hedge. Tin Can Alley took one sheet and one texture, and that is what is counted for each of the other six. Two places that suit the same floor could share a texture and save an image.
 
 Needs **no** new images:
 
@@ -61,7 +69,7 @@ Needs **no** new images:
 
 Optional, not counted: front and back views of the neighbours if they are ever to walk about, and of the Clutterkin that follow you (48 kinds, so best done a sheet at a time and only for the ones that walk with you most).
 
-## The eleven grown-up forms named so far
+## The fourteen grown-up forms named so far
 
 | Kind | Grows up into | One line for the painter |
 | --- | --- | --- |
@@ -76,12 +84,16 @@ Optional, not counted: front and back views of the neighbours if they are ever t
 | Cap Beetle | Corkscrew Stag | A stag beetle with a corkscrew horn and a shell of many caps. |
 | Sparkplug | Surge Protector | A knightly power strip: six sockets for a visor, cable for a cape. |
 | Ratscal | Ratscallion | The rat in a colander helmet with a spatula halberd. |
+| Can Crab | Dustbin Lobster | A lobster that has moved up to a whole dented dustbin, the lid for a hat. |
+| Sock Goblin | Jumper Troll | A hulking troll knitted from a whole unravelling jumper, sleeves trailing. |
+| Coo-Thug | Coo-Kingpin | The feather-duster pigeon grown stout, in a waistcoat, with a pocket watch. |
 
 ## Making art
 
 ```sh
 NODE_USE_ENV_PROXY=1 node tools/gen-art.mjs   # generates only what is in the manifest and missing. Costs money.
-python3 tools/process-art.py                  # trims and sizes art/raw/ into web/assets/, cuts the world sheet, makes the ground tiles
+python3 tools/process-art.py                  # trims and sizes art/raw/ into web/assets/, cuts the sheets, makes the ground tiles
+python3 tools/ios-art.py                      # makes the app icon and launch image from the icon painting
 python3 tools/heirlooms.py                    # repaints every Heirloom; contact sheet in art/review/heirlooms.jpg
 ```
 

@@ -6,10 +6,10 @@ The iPhone app is the same game in a thin shell (Capacitor, as Pawst Lives uses)
 
 | | Status |
 | --- | --- |
-| Xcode project (`ios/`), stand-in icon and launch image | In the repository |
+| Xcode project (`ios/`), icon and launch image | In the repository |
 | The app compiles, launches in the iOS Simulator, and keeps its save in native storage | Checked by the "Clutterkin iOS" workflow, job "build", which needs no secrets. Its screenshots are attached to each run. |
 | Upload to TestFlight | **Working.** The "Clutterkin iOS" workflow archives, has Apple sign it and uploads it. The first build, 0.1.0 (9), went up on 16 November 2026. An internal tester group, "Team", gets every build and the account holder is invited to it. |
-| A real iPhone | Not tried yet by anyone: install the build from TestFlight (step 5). |
+| A real iPhone | Build 0.1.0 (9) has been installed from TestFlight and run. It is from before Tin Can Alley, the new icon and the stepping-stone fix: those reach a phone with the next upload (run the "Clutterkin iOS" workflow with "testflight" ticked). |
 
 ## What only you can do
 
@@ -65,6 +65,6 @@ The first build of an app sometimes waits on one question in App Store Connect (
 
 - **This repository is public, and so is every workflow log.** The upload job hides the secrets, prints only errors and the outcome from the signing step, and removes anything in quotes from those lines, because Xcode can print the certificate owner's name there. If you would rather not rely on that, move the game to a private repository of its own, as Pawst Lives is, before the first upload; nothing else needs to change.
 - **Internal testers** (people on your App Store Connect team, up to 100) get builds immediately. **External testers** (anyone, by email or a public link) need a short one-time review by Apple of the first build, and a line or two of "what to test" text; add them under TestFlight in App Store Connect when you want them.
-- **The icon and launch image are stand-ins**: the Dust Bunny in lamplight, composed by `tools/ios-art.py` from art already in the game. Proper icon art is on the list in `docs/ART.md`.
+- **The icon and launch image** are made by `tools/ios-art.py` from one painting: the house-sitter with a lantern and a calm Dust Bunny (`docs/ART.md`). The first build, 0.1.0 (9), still carries the earlier stand-in (the Dust Bunny alone); the new icon arrives with the next upload.
 - **Nothing here is the App Store.** A public release also needs a privacy policy page, screenshots, a description, an age rating and Apple's review. Pawst Lives has all of that worked out (`docs/SUBMISSION.md` there) and it can be carried over when the game is ready.
 - **Working on it from a Mac**: `npm install`, `npm run ios:sync`, then open `ios/App/App.xcodeproj`. Run `npm run ios:sync` again whenever anything under `web/` changes.
