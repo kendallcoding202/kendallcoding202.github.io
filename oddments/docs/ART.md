@@ -14,7 +14,7 @@
 
 The four candidates used the Pawst Lives sprite style prompt word for word (`tools/art-manifest.mjs`), the same model and the same sizes. They match its outline, shading and colour, but one thing is off and should be decided before more people are painted: **they came out taller and slimmer than the Pawst Lives cats**, about three and a half heads tall where the cats are about two. The next round should ask for "very large head, about two heads tall" so people sit beside the monsters at the same scale.
 
-Everything on the ground in the lane and inside the garden (grass, path, hedges, trees, buildings, gate) is **drawn in code as a stand-in**. It is not art and is not meant to ship.
+Everything on the ground in the lane and inside the garden (grass, the stepping-stone path, hedges, trees, lamps, the gate and all nine buildings) is **drawn in code**, in `web/js/ui/scenery.js`. It is drawn with care, in the look of the sprites (a bold outline, flat colour, one band of light and one of shade), and every place has a building of its own: a cottage, a potting shed with a greenhouse, a brick lean-to with bins, a shop with an awning, a launderette with a porthole, a library, a tall townhouse, a clock tower and a boarded-up shed. It is still a stand-in for painted art: painted buildings and ground would sit beside the monsters more naturally.
 
 ## New art the full game would need
 

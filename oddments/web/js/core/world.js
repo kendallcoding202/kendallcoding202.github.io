@@ -18,7 +18,7 @@ export const WORLD = {
 // front wall. Home is where you are staying; the rest are the eight rooms.
 const AT = {
   home: [320, 1560], garden: [165, 1320], alley: [475, 1150], pantry: [165, 980], wash: [475, 810],
-  stacks: [165, 640], rooftops: [475, 470], attic: [165, 300], dark: [450, 190],
+  stacks: [165, 640], rooftops: [475, 470], attic: [165, 300], dark: [320, 160],
 };
 export const SPOT_IDS = ['home', ...ROOM_IDS];
 export const SPOTS = SPOT_IDS.map((id) => {
@@ -33,7 +33,7 @@ export const spotOf = (id) => SPOTS.find((spot) => spot.id === id) || null;
 // Trees, as circles to walk round.
 export const TREES = [
   [48, 1660, 28], [592, 1666, 30], [600, 1440, 28], [44, 1470, 26], [598, 1300, 28], [42, 1140, 28],
-  [598, 960, 28], [42, 800, 26], [598, 625, 28], [42, 460, 26], [598, 290, 28], [250, 110, 24], [44, 140, 26], [604, 70, 24],
+  [598, 960, 28], [42, 800, 26], [598, 625, 28], [42, 460, 26], [598, 290, 28], [560, 130, 26], [44, 140, 26], [604, 40, 22],
 ].map(([x, y, r]) => ({ x, y, r }));
 
 // A lamp beside every building, on the side the lane is. Thin, but solid.
