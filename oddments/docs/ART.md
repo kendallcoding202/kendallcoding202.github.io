@@ -6,16 +6,17 @@
 
 | | From | Count |
 | --- | --- | --- |
-| Monster sprites | Pawst Lives, copied as they are | 16 (three you start with, eight met in the garden, three more met in Tin Can Alley, and the two bosses) |
+| Monster sprites | Pawst Lives, copied as they are | 21 (three you start with, eight met in the garden, three more met in Tin Can Alley, four more in the Midnight Pantry, and the three bosses). Pawst Lives has 48 in all: 40 kinds and 8 bosses |
 | Room paintings | Pawst Lives, copied as they are | 8 (the garden's and the alley's are used in fights) |
 | Font | Pawst Lives | Fredoka, with its licence |
-| Heirloom (rare colour) sprites | Recoloured in code by `tools/heirlooms.py` | 14 |
+| Heirloom (rare colour) sprites | Recoloured in code by `tools/heirlooms.py` | 18 |
 | The house-sitter | **Generated for this game** | 4 images: four candidate looks (`sitter_a` to `sitter_d`), from the side |
 | The house-sitter, turned | **Generated for this game** | 4 images, one per look, each holding that look from the front and from behind (8 sprites) |
 | The cast | **Generated for this game** | 1 image holding all four: Ines Tock, Dov, Mr. Spick, Great-aunt Maribel |
 | The world | **Generated for this game** | 2 images, which became 14 pictures (below) |
 | Tin Can Alley | **Generated for this game** | 2 images, which became 13 pictures (below) |
-| App icon | **Generated for this game** | 1 image: the house-sitter with a lantern and a calm Dust Bunny. `tools/ios-art.py` makes the icon from it |
+| App icon | **Generated for this game** | 1 image: the house-sitter with a lantern and a calm Hopmote (the dust under the bed). `tools/ios-art.py` makes the icon from it |
+| The insides of home and the Midnight Pantry | Drawn in code by `web/js/ui/roomart.js` | Nothing generated. Walls, floors and furniture are code; the pantry's crates and boxes are Tin Can Alley's paintings; great-aunt Maribel's portrait is her own |
 | Launch image and loading screen | Painted from the game's own world by `tools/postcard.mjs` | A postcard of the lane, home in the middle; nothing generated |
 
 **Fourteen images have been generated in all.** Each was agreed before it was made, and every one came out usable on the first attempt. One has been touched up since, in code and for nothing: on the icon the pencil in her hair was painted lying on top of the bun, and `tools/ios-art.py` grows hair over its lower end so that it comes out of the bun instead. The archived original is as it was painted. Close up, the covered patch is a little softer than the hair round it; a repaint would be one more image.
@@ -53,15 +54,15 @@ The four candidates used the Pawst Lives sprite style prompt word for word (`too
 | Count | What | Notes |
 | --- | --- | --- |
 | 1 | The house-sitter, final sprite | One of the four candidates, or a repaint at Pawst Lives proportions. A repaint would want its front and back views repainted to match. |
-| 40 | Grown-up forms | One per kind. Fourteen are named (below); twenty-six still to design. Bosses do not grow. |
-| 13 | Things for the world | For each of the six places still to build, a sheet of the things that stand in it and a ground of its own, as Tin Can Alley has (12). And one sheet of painted gateways (1). |
+| 40 | Grown-up forms | One per kind. Eighteen are named (below); twenty-two still to design. Bosses do not grow. |
+| 11 | Things for the world | For each of the five places still to build, a sheet of the things that stand in it and a ground of its own, as Tin Can Alley has (10). And one sheet of painted gateways (1). A place can be built with none, drawn in code as the Midnight Pantry is; it looks plainer. |
 | 17 | Icons | Six elements, three Calls, three stats (Health exists), four tabs, the Heirloom mark. |
 | 1 | Title art | The app icon is painted. |
-| **72** | **new images** | Fewer if things are painted several to a sheet. |
+| **70** | **new images** | Fewer if things are painted several to a sheet. Not counted: painted furniture for home and painted things for the pantry (a sheet each) if the rooms drawn in code are to match the painted world. |
 
 No longer needed, because the two world images covered them: a painted map of the neighbourhood, the nine buildings, and a painted map for every place (a ground tile and things to stand on it build those).
 
-The count for the places still to build comes from building one. None of them is a lawn (a pantry, a wash-house, a rooftop), so each wants ground of its own (floorboards, tiles, slates) and a boundary of its own (shelves, a parapet) in place of the grass and the hedge. Tin Can Alley took one sheet and one texture, and that is what is counted for each of the other six. Two places that suit the same floor could share a texture and save an image.
+The count for the places still to build comes from building two. Tin Can Alley took one sheet and one texture, and that is what is counted for each of the other five. The Midnight Pantry took nothing: its floor, wall and shelves are drawn in code and its crates are the alley's. Two places that suit the same floor could share a texture and save an image.
 
 Needs **no** new images:
 
@@ -70,24 +71,28 @@ Needs **no** new images:
 
 Optional, not counted: front and back views of the neighbours if they are ever to walk about, and of the Clutterkin that follow you (48 kinds, so best done a sheet at a time and only for the ones that walk with you most).
 
-## The fourteen grown-up forms named so far
+## The eighteen grown-up forms named so far
 
 | Kind | Grows up into | One line for the painter |
 | --- | --- | --- |
-| Dust Bunny | Dust Jackalope | The same dust rabbit, bigger, with antlers made of bent wire coat hangers. |
-| Sock Eel | Stocking Serpent | A long thigh-high stocking sea serpent with a darning-needle fin. |
-| Toast Ghost | Toastie Phantom | A toasted-sandwich ghost trailing a cloak of melted cheese. |
-| Dandepuff | Dandemane | A dandelion lion: a full seed-head mane on a leafy body. |
-| Thornhog | Bramble Boar | A boar grown from a whole rose hedge, thorn tusks, three roses. |
-| Grumblebee | Rumblebee | A heavier, armoured bee with a fencing foil for a sting. |
-| Snailor | Snadmiral | The snail in an admiral's hat, its shell a little galleon. |
-| Grumpy Gnome | Gnomarch | The gnome crowned with a flowerpot, a wheelbarrow for a throne. |
-| Cap Beetle | Corkscrew Stag | A stag beetle with a corkscrew horn and a shell of many caps. |
-| Sparkplug | Surge Protector | A knightly power strip: six sockets for a visor, cable for a cape. |
-| Ratscal | Ratscallion | The rat in a colander helmet with a spatula halberd. |
-| Can Crab | Dustbin Lobster | A lobster that has moved up to a whole dented dustbin, the lid for a hat. |
-| Sock Goblin | Jumper Troll | A hulking troll knitted from a whole unravelling jumper, sleeves trailing. |
-| Coo-Thug | Coo-Kingpin | The feather-duster pigeon grown stout, in a waistcoat, with a pocket watch. |
+| Hopmote | Lintelope | The same dust rabbit, bigger, with antlers made of bent wire coat hangers. |
+| Eelastic | Toeviathan | A long thigh-high stocking sea serpent with a darning-needle fin. |
+| Crumbwisp | Crustwraith | A toasted-sandwich ghost trailing a cloak of melted cheese. |
+| Wishclock | Wishmane | A dandelion lion: a full seed-head mane on a leafy body. |
+| Pricklebud | Briartusk | A boar grown from a whole rose hedge, thorn tusks, three roses. |
+| Grumbuzz | Rumblepatch | A heavier, armoured bee with a fencing foil for a sting. |
+| Shellfarer | Seawhorl | The snail in an admiral's hat, its shell a little galleon. |
+| Gnomudgeon | Gnomarch | The gnome crowned with a flowerpot, a wheelbarrow for a throne. |
+| Crimpet | Corkhorn | A stag beetle with a corkscrew horn and a shell of many caps. |
+| Strayglow | Floodglow | A knightly power strip: six sockets for a visor, cable for a cape. |
+| Snaffle | Snafflemore | The rat in a colander helmet with a spatula halberd. |
+| Hermitin | Clangster | A lobster that has moved up to a whole dented dustbin, the lid for a hat. |
+| Frayling | Woolligan | A hulking troll knitted from a whole unravelling jumper, sleeves trailing. |
+| Preenager | Kingpinion | The feather-duster pigeon grown stout, in a waistcoat, with a pocket watch. |
+| Scrumpling | Scrumplord | The dumpling grown to a whole steamer basket, lid for a helmet, steam for a plume. |
+| Embernip | Scorchfoot | The chilli grown long and horned, trailing a string of smaller chillies like a tail of sparks. |
+| Eggallant | Eggalahad | The egg in a silver egg cup with a toast-soldier lance and a teaspoon shield. |
+| Wibblet | Blancmangler | A towering moulded jelly in three tiers, a cherry on each, quivering with rage. |
 
 ## Making art
 

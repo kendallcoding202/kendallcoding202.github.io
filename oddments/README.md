@@ -2,9 +2,9 @@
 
 **The house is awake. The cats fight it. You are going to try talking to it.**
 
-A creature-collecting RPG for iPhone set in the world of Pawst Lives. The monsters are things from a house that came alive (Sock Eel, Toast Ghost, Dust Bunny). You are a person, house-sitting, who befriends them and battles alongside them, three against three.
+A creature-collecting RPG for iPhone set in the world of Pawst Lives. The monsters are things from a house that came alive (an odd sock, burnt toast, the dust under the bed). You are a person, house-sitting, who befriends them and battles alongside them, three against three.
 
-This is the **framework and a playable slice**, not the finished game: the whole neighbourhood to walk around, and the first two of its eight places (the garden, then Tin Can Alley) to play.
+This is the **framework and a playable slice**, not the finished game: the whole neighbourhood to walk around, your own home to go indoors in, and the first three of its eight places to play: the garden, Tin Can Alley, and the Midnight Pantry, which is a building you walk into.
 
 - The design on one page: [docs/DESIGN.md](docs/DESIGN.md)
 - The art that exists and the art still needed, with counts: [docs/ART.md](docs/ART.md)
@@ -43,9 +43,9 @@ The browser test plays at six screen sizes, from a small phone to a folding phon
 
 `npm run e2e` needs Playwright: `npm install --no-save playwright && npx playwright install chromium`.
 
-`npm run sim` takes `[players] [--style=friendly|brawler|careless] [--visits=4] [--room=garden|alley]`. A later place is played by someone who has first calmed the ones before it. Today a sensible player calms the garden on the first visit about four times in five and always by the second; Tin Can Alley about half the time on a first visit, nearly always by the second and always by the third. Fights last two to six rounds, and a visit is about four minutes of fighting (the simulator does not count the walking). `tests/unit/pacing.test.mjs` holds the game to that shape.
+`npm run sim` takes `[players] [--style=friendly|brawler|careless] [--visits=4] [--room=garden|alley|pantry]`. A later place is played by someone who has first calmed the ones before it. Today a sensible player calms the garden on the first visit about four times in five and always by the second; Tin Can Alley about half the time on a first visit, nearly always by the second and always by the third; the Midnight Pantry about three times in five on a first visit and nearly always by the second. Fights last two to six rounds, and a visit to a restless place is about four minutes of fighting (the simulator does not count the walking); a stroll through a calm one is under a minute. `tests/unit/pacing.test.mjs` holds the game to that shape.
 
-How much play that is: by the same rough clock, calming both places takes a sensible player about 11 minutes of fighting and three visits, and making a friend of all fourteen kinds about 17. With the walking and talking, call it half an hour to see everything that is built. Heirlooms are the long game: a first one turns up after about three visits, and keeping all fourteen took simulated players a median of about 100 visits (an hour and a half of fighting, more with the walking), nearly all of it in places already calmed, where they come out three times as often.
+How much play that is: by the same rough clock, calming all three places takes a sensible player about 17 minutes of fighting over five visits, and making a friend of all eighteen kinds about 25. With the walking and talking, call it three quarters of an hour to see everything that is built. Heirlooms are the long game: a first one turns up after about four visits, and keeping all eighteen took simulated players a median of about an hour and three quarters of fighting, nearly all of it strolling through places already calmed, where they come out three times as often.
 
 ## How it is built
 
@@ -57,7 +57,8 @@ web/                    the game: what ships
     balance.js          every number and name. Tune here.
     battle.js           the fight: turn order, damage, moves, Calls, reaching out
     progress.js         experience, levels, who comes home
-    rooms.js            who is restless in a place, what ground they hold, and a visit: from stepping in to resting at home
+    rooms.js            who is restless in a place, what ground they hold, and a visit: from stepping in to resting at home; and a stroll through a place that is calm
+    indoors.js          the floors of the buildings you can walk into: where feet can go, what there is to do
     story.js            the people of the lane, what each says and when, and the goal
     world.js            the open world: what stands where, where feet can go, finding the way
     game.js             the Game object: every action a player can take
@@ -65,7 +66,7 @@ web/                    the game: what ships
     trial.js            a save is rehearsed on a copy before the game trusts it
     auto.js             a plain stand-in player, for the simulator and the rehearsal
     util.js             the seeded random generator
-  js/ui/                the screens: the world you walk in, the fight, friends, scrapbook
+  js/ui/                the screens: the world you walk in, the inside of a building, the fight (and how one works), friends, scrapbook
   js/platform/          storage, sound, and the one file that knows about the iOS app's native side
   assets/               sprites, room paintings, the painted world, font (about 2 MB)
 tests/unit/             a test per rule (node:test)
@@ -83,10 +84,10 @@ docs/                   the design and the art list
 
 ## Not done
 
-Two places of eight can be played: the other six are buildings you can walk up to, with nothing behind their doors, and the story stops where Tin Can Alley does. Three neighbours stand in the world and talk, but they stand still, and there is nothing to pick up or do besides meeting Clutterkin. Friends on the green are for looking at, not talking to. You see it from above in 2D. The house-sitter turns to face the way they walk; Clutterkin and neighbours have one view each and only turn left or right. There is sound now (effects, a lullaby in the lane and a livelier tune in a fight, all made in code, with a switch for each in Settings), but nobody has listened to it: it was written and tested by something that cannot hear, so whether it is pleasant is for you to say. No purchases. Clutterkin do not grow up yet (the table says into what; the rule and the art are not there). Looking for Heirlooms is a small game of its own now (calm places bring them out, the scrapbook keeps count), but there is still only one way to better the odds.
+Three places of eight can be played: the other five are buildings you can walk up to, with nothing behind their doors, and the story stops where the Midnight Pantry does. Twenty-two of the forty kinds of Clutterkin are waiting for those five places; their pictures exist and cost nothing. Three neighbours stand in the world and talk, but they stand still, and there is nothing to pick up. Indoors there are two rooms: your home and the pantry. You see it all from above or from the front in 2D. The house-sitter turns to face the way they walk; Clutterkin and neighbours have one view each and only turn left or right. There is sound (effects, a lullaby in the lane, three fight tunes, all made in code, with a switch for each in Settings), but it was written and tested by something that cannot hear, so whether it is pleasant is for you to say. No purchases. Clutterkin do not grow up yet (the table says into what; the rule and the art are not there). The map is one neighbourhood, about three phone screens across; roads on to other areas are not built, though going through a door from one area to another now is.
 
-The buildings, trees, lamps, hedges, grass, and the alley's junk, fence and cobbles are painted (four generated images, see `docs/ART.md`); the streets, their stepping stones, the gateways and the name plates are still drawn in code. The four house-sitter looks are still candidates, taller and slimmer than the Pawst Lives cats. The app icon is painted, with one touch-up done in code (the pencil in her hair).
+The buildings, trees, lamps, hedges, grass, and the alley's junk, fence and cobbles are painted (four generated images, see `docs/ART.md`); the streets, their stepping stones, the gateways and the name plates are drawn in code, and so are both rooms you can walk into: their walls, floors and furniture are code, not paintings, and look plainer than the painted world beside them. The four house-sitter looks are still candidates, taller and slimmer than the Pawst Lives cats. The app icon is painted, with one touch-up done in code (the pencil in her hair).
 
-The balance has only been played by bots: the alley's levels were set with the simulator and no person has played it yet. The browser test runs in Chromium at phone sizes. Two builds are on TestFlight. 0.1.0 (9), the first, has been run on a real iPhone. 0.1.0 (13) has Tin Can Alley, the new icon, the stepping-stone fix and the folding-phone layout, and was made with Xcode 27.1; Apple has processed it, and nobody has yet said how it runs. Sound, the Heirloom hunt and the loading screen (a postcard of the lane) came after it: they are on the web copy and need another upload to reach a phone (`docs/TESTFLIGHT.md`). In iOS's own web engine the alley has not been looked at, and nothing at all has been heard.
+The balance has only been played by bots: the alley's and the pantry's levels were set with the simulator and no person has played either yet. The browser test runs in Chromium at phone sizes. Three builds are on TestFlight. 0.1.0 (9), the first, has been run on a real iPhone. 0.1.0 (13) added Tin Can Alley, the new icon and the folding-phone layout; 0.1.0 (16) adds sound, the Heirloom hunt and the loading screen. Apple has processed all three. A screenshot sent from the app on an iPhone (which build was not said) showed the top of the map hiding under the heading: that is fixed in the game since. Everything since is on the web copy only and needs another upload to reach a phone (`docs/TESTFLIGHT.md`): the new names, going indoors, the Midnight Pantry, calm places staying calm, the dust as a fight begins, two more fight tunes, "Not yet!", the plainer tags over targets, and how a fight works. Nothing has been heard by a person.
 
 iPhone Duo (Apple's folding iPhone): the game is laid out for both of its screens and for being opened and closed mid-game, and has been built with Xcode 27.1 and run on Apple's iPhone Duo simulator closed. It has not been seen open in the simulator, or on a real one, and build 0.1.0 (13) on TestFlight is the first made for it. `docs/TESTFLIGHT.md` has the whole account.
