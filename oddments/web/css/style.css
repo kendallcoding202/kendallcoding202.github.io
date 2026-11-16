@@ -153,7 +153,8 @@ small { color: var(--muted); font-size: 12px; }
 .note.gold { color: var(--gold); }
 
 /* ------------------------------------------------------------ dialogs and toasts */
-.scrim { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(8,6,20,.72); animation: fade .15s; }
+/* (A pop-up sits in the middle of what is clear, not of the whole glass: a folding phone keeps its clock down one side.) */
+.scrim { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 16px calc(16px + var(--safe-right)) 16px calc(16px + var(--safe-left)); background: rgba(8,6,20,.72); animation: fade .15s; }
 .modal { width: 100%; max-width: 420px; max-height: 88%; display: flex; flex-direction: column; border-radius: 18px; background: var(--panel); border: 1.5px solid var(--line); box-shadow: 0 16px 50px rgba(0,0,0,.6); animation: pop .18s; }
 .modal header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 8px; font-size: 19px; font-weight: 700; }
 .modal .x { width: 30px; height: 30px; border-radius: 50%; background: var(--card); font-size: 20px; line-height: 1; color: var(--muted); }
@@ -189,7 +190,7 @@ small { color: var(--muted); font-size: 12px; }
 .moverow .at { display: inline; }
 .moverow.locked { opacity: .6; }
 
-#toasts { position: fixed; left: 0; right: 0; top: calc(var(--safe-top) + 10px); z-index: 30; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
+#toasts { position: fixed; left: var(--safe-left); right: var(--safe-right); top: calc(var(--safe-top) + 10px); z-index: 30; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
 .toast { padding: 8px 16px; border-radius: 16px; background: var(--card-hi); border: 1.5px solid var(--line); font-weight: 600; box-shadow: 0 6px 20px rgba(0,0,0,.5); animation: pop .2s; transition: opacity .4s, transform .4s; }
 .toast.good { border-color: var(--good); } .toast.bad { border-color: var(--bad); }
 .toast.out { opacity: 0; transform: translateY(-8px); }

@@ -57,8 +57,9 @@ jobs:
           xcrun simctl list devices available | grep -iE "duo|fold" || echo "(none)"
           echo "--- iOS versions the Simulator can run"
           xcrun simctl list runtimes | grep -i "ios" || true
-          echo "--- what simctl says about displays, folding and poses"
-          { xcrun simctl help io; xcrun simctl help ui; xcrun simctl help; } 2>&1 | grep -iE "fold|pose|hinge|display|posture" || echo "(nothing)"
+          echo "--- what simctl says about displays, folding and poses (all of its help is kept with the screenshots)"
+          { xcrun simctl help io; xcrun simctl help ui; xcrun simctl help; } > duo-simctl-help.txt 2>&1 || true
+          grep -iE "fold|pose|hinge|display|posture|screenConfig" duo-simctl-help.txt || echo "(nothing)"
       - name: Build for the Simulator (unsigned)
         run: |
           set -o pipefail
@@ -126,5 +127,7 @@ jobs:
         if: always()
         with:
           name: oddments-duo-screenshots
-          path: oddments/duo-*.png
+          path: |
+            oddments/duo-*.png
+            oddments/duo-*.txt
           if-no-files-found: warn
