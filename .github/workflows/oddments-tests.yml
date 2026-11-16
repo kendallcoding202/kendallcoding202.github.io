@@ -19,7 +19,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: oddments
@@ -35,6 +35,8 @@ jobs:
           npm run sim
           npm run sim -- --room=alley
           npm run sim -- --room=pantry
+          npm run sim -- 150 --room=wash
+          npm run sim -- 80 --room=dark --visits=4
       - name: Install a browser for the end-to-end test
         run: |
           npm install --no-save playwright

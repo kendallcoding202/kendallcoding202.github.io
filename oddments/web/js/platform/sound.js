@@ -104,7 +104,7 @@ export const SCENES = {
 };
 export const TUNES = { LULLABY, SCUFFLE, RACKET, RINGLEADER };
 /** The places whose fights have a tune of their own. */
-export const FIGHT_SCENE = { alley: 'clatter' };
+export const FIGHT_SCENE = { alley: 'clatter', rooftops: 'clatter', attic: 'clatter' }; // (where it is tin, slate and clockwork)
 /** Which scene it is: out in the world, or in a fight (in which place, and whether against its ringleader). */
 export const sceneFor = ({ fight = false, boss = false, room = '' } = {}) => (!fight ? 'world' : boss ? 'boss'
   : Object.prototype.hasOwnProperty.call(FIGHT_SCENE, room) ? FIGHT_SCENE[room] : 'fight');

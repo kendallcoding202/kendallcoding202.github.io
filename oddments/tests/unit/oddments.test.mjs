@@ -11,15 +11,21 @@ import {
 
 const ASSETS = fileURLToPath(new URL('../../web/assets/', import.meta.url));
 
-test('there are twenty-one Clutterkin: eighteen who can be friends and three bosses', () => {
-  assert.equal(SPECIES_IDS.length, 21);
-  assert.deepEqual(SPECIES_IDS.filter((id) => SPECIES[id].boss), ['boss_hydra', 'boss_baron', 'boss_crumbwyrm']);
+test('there are forty-eight Clutterkin: forty who can be friends and eight bosses, one to a place', () => {
+  assert.equal(SPECIES_IDS.length, 48);
+  assert.equal(SPECIES_IDS.filter((id) => !SPECIES[id].boss).length, 40);
+  assert.deepEqual(SPECIES_IDS.filter((id) => SPECIES[id].boss), ['boss_hydra', 'boss_baron', 'boss_crumbwyrm', 'boss_spincycle', 'boss_tome', 'boss_warden', 'boss_clock', 'boss_vacuum']);
+  assert.deepEqual(ROOMS.map((room) => room.path[room.path.length - 1].boss), SPECIES_IDS.filter((id) => SPECIES[id].boss), 'in the order their places come');
+  // Every move in the tables is somebody's, and nobody has a move that is not in them.
+  const used = new Set(SPECIES_IDS.flatMap((id) => SPECIES[id].moves.map(([move]) => move)));
+  assert.deepEqual(Object.keys(MOVES).filter((move) => !used.has(move)), []);
+  assert.equal(new Set(Object.values(MOVES).map((move) => move.name)).size, Object.keys(MOVES).length, 'and no two moves share a name');
   // No two share a name, and none is still called what it was before the names were made its own.
   const names = SPECIES_IDS.flatMap((id) => [SPECIES[id].name, ...(SPECIES[id].grown ? [SPECIES[id].grown.name] : [])]);
   assert.equal(new Set(names).size, names.length);
   for (const old of ['Dust Bunny', 'Sock Eel', 'Toast Ghost', 'Dandepuff', 'Thornhog', 'Grumblebee', 'Snailor', 'Grumpy Gnome', 'Cap Beetle', 'Sparkplug', 'Ratscal', 'Can Crab', 'Sock Goblin', 'Coo-Thug', 'Sprinkler Hydra', 'The Bandit Baron']) assert.equal(names.includes(old), false, old);
-  // A name is said in a fight's one line of text, so it is kept short.
-  for (const id of SPECIES_IDS) assert.ok(SPECIES[id].name.length <= 14, SPECIES[id].name);
+  // A name is said in a fight's one line of text, so it is kept short. (A ringleader's may be a little longer: it is never in the longest lines.)
+  for (const id of SPECIES_IDS) assert.ok(SPECIES[id].name.length <= (SPECIES[id].boss ? 18 : 14), SPECIES[id].name);
 });
 
 test('every Clutterkin has an element, four sensible stats, a line of text and its sprite', () => {
@@ -117,14 +123,14 @@ test('you start with three friends of three different elements, each knowing two
   }
 });
 
-test('the lane has eight places; the first three are built and each ends in its boss', () => {
+test('the lane has eight places; all eight are built and each ends in its boss', () => {
   assert.equal(ROOMS.length, 8);
   assert.equal(new Set(ROOMS.map((room) => room.id)).size, 8);
   for (const room of ROOMS) {
     assert.ok(room.name && room.blurb && ELEMENTS[room.element]);
     assert.ok(existsSync(`${ASSETS}bg/${room.bg}.webp`), `${room.id} background`);
   }
-  assert.deepEqual(ROOMS.filter(roomBuilt).map((room) => room.id), ['garden', 'alley', 'pantry']);
+  assert.deepEqual(ROOMS.filter(roomBuilt).map((room) => room.id), ['garden', 'alley', 'pantry', 'wash', 'stacks', 'rooftops', 'attic', 'dark']);
   const bosses = [];
   for (const { path } of ROOMS.filter(roomBuilt)) {
     assert.equal(path.length, 5);
@@ -139,7 +145,8 @@ test('the lane has eight places; the first three are built and each ends in its 
     for (let i = 1; i < path.length; i++) assert.ok(path[i].level[1] >= path[i - 1].level[1] || path[i].boss, 'the path gets harder');
   }
   assert.equal(new Set(bosses).size, bosses.length, 'each place has a boss of its own');
-  assert.equal(new Set(ROOMS.filter(roomBuilt).flatMap((room) => room.path.map((spot) => spot.name))).size, 15, 'and every stop a name of its own');
+  assert.equal(new Set(ROOMS.filter(roomBuilt).flatMap((room) => room.path.map((spot) => spot.name))).size, 40, 'and every stop a name of its own');
+  assert.equal(ROOMS.filter(roomBuilt).flatMap((room) => room.path).length, 40);
   // Each place starts about where the one before left off, and ends higher.
   const built = ROOMS.filter(roomBuilt);
   for (let i = 1; i < built.length; i++) {

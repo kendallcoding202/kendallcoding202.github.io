@@ -62,26 +62,57 @@ const INES = {
   already: 'And the garden is calm already? Maribel said you were quick.',
   nudge: (place) => `${place} first. Everyone else, then the ringleader. And rest when you need to: there is no prize for limping.`,
   reach: 'And do try Reaching out. A friend made is worth more than a fight won.',
-  // What she says on hearing that each place is calm, in the order the places come.
+  // Her first word on hearing that each place is calm.
   calmed: {
-    garden: [
-      'The garden has gone quiet. I could hear it from here: that sprinkler has been hissing since Tuesday.',
-      'That is one place of eight. Tin Can Alley is next: east along the street, past the launderette, and in at the foot of it. The bins had it barricaded all week. Word of a calm garden travels, and they have let it down.',
+    garden: 'The garden has gone quiet. I could hear it from here: that sprinkler has been hissing since Tuesday.',
+    alley: 'Tin Can Alley, quiet. I never thought I would hear the day. The Baron has held court in there since the bin men changed their round.',
+    pantry: 'The pantry, quiet? I thought I could smell toast. That thing has been popping all night for a fortnight.',
+    wash: 'The Wash has stopped thumping. Do you know, I had stopped hearing it. Now I can hear that it has stopped.',
+    stacks: 'Not a page turning in the Dusty Stacks? Then somebody has finally paid that fine.',
+    rooftops: 'I saw the weathervane swing round and settle. So the roofs are quiet. It has not pointed true since the storm.',
+    attic: 'Every clock in that attic struck at once, and then held its tongue. I mend clocks. I know a calm one when I hear it.',
+    dark: 'The cupboard under the stairs has stopped roaring. Then that is all of them. All eight, and Monday not here yet.',
+  },
+  // How to get to each place and what to take: said when the place before it has been calmed.
+  toward: {
+    alley: [
+      'Tin Can Alley is next: east along the street, past the launderette, and in at the foot of it. The bins had it barricaded all week. Word of a calm garden travels, and they have let it down.',
       'It is a narrow place. They come at you one after another, and Baron Pilfer holds court at the far end. Most of them are Clank, and Crumb jams Clank: take your Crumbwisp.',
     ],
-    alley: [
-      'Tin Can Alley, quiet. I never thought I would hear the day. The Baron has held court in there since the bin men changed their round.',
-      'Two places of eight. The Midnight Pantry is next: north of here, up the lane and left at the fork, the shop with the striped awning. That one you walk into, by its front door.',
+    pantry: [
+      'The Midnight Pantry is next: north of here, up the lane and left at the fork, the shop with the striped awning. That one you walk into, by its front door.',
       'Everything in there is past its date, and most of it is Crumb, with the Crumbwyrm at the back: a toaster that kept every crumb it was ever given. Suds wash away Crumb. Take your Eelastic.',
     ],
-    pantry: [
-      'The pantry, quiet? I thought I could smell toast. That thing has been popping all night for a fortnight.',
-      'Three places of eight. The Wash is next, and that I cannot get you into yet: this is as far as the lane is built.',
-      'So walk the garden, the alley and the pantry again. A calm place stays calm, but a few are always wandering about in it, and there are kinds in all three you have not met.',
+    wash: [
+      'The Wash is next: the launderette, east along the street. In by its front door, like the pantry.',
+      'Suds, most of them, and Fluff mops up Suds: take your Hopmote. The Spin Cycle is the machine at the far end. It stopped giving socks back in March.',
+    ],
+    stacks: [
+      'The Dusty Stacks is next: the old library, down the lane and east along the bottom street.',
+      'Paper and dust, so nearly all Fluff, and Spark singes Fluff: take a Strayglow or an Embernip if you have made a friend of one. The Overdue Tome is in the locked case.',
+    ],
+    rooftops: [
+      'Moonlit Rooftops is next: the tall thin house on the bottom street, straight down from the green. In at the door, up the stairs, and out onto the slates.',
+      'Stone and copper up there: Clank. Crumb jams Clank. And mind the Night Warden. It has watched that roof for two hundred years.',
+    ],
+    attic: [
+      'The Tick-Tock Attic is next: the tall house at the west end of the bottom street, right up under the roof.',
+      'Clockwork, mostly: Clank again, so Crumb again. Grandfather Golem keeps the far end. I have been meaning to mend him for thirty years.',
+    ],
+    dark: [
+      'Only the Roaring Dark is left: the far shed, north past the fork and round to the east. It is the cupboard under somebody\'s stairs, and something in it is plugged in.',
+      'Spark, most of it, and Sprout grounds Spark: take a Wishclock or a Pricklebud. It is dark in there; you will see as far as your lantern. What roars is THE VACUUM, and it is Mr. Spick\'s.',
     ],
   },
+  // When the next place is not there to go to, and when there is no next place.
+  again: 'So walk the places you have calmed again. A calm place stays calm, but a few are always wandering about in it, and there are kinds you have not met.',
+  done: [
+    'Mr. Spick will have nothing to put in his van on Monday but his own vacuum cleaner. I should like to see his face.',
+    'Maribel will be so pleased. Go home, dear, and put the kettle on. Your friends will want to hear all about it.',
+  ],
   heard: (place) => `${place} is calm. Good. That is one more off Mr. Spick's list.`,
-  later: (state) => `${placesCalm(state)} of ${ROOMS.length} calm, and Monday coming. We will get there.`,
+  later: (state) => (placesCalm(state) >= ROOMS.length ? 'All eight calm. I keep going to the door to listen, and there is nothing to hear. Lovely.'
+    : `${placesCalm(state)} of ${ROOMS.length} calm, and Monday coming. We will get there.`),
 };
 
 const DOV = {
@@ -99,6 +130,8 @@ const DOV = {
     'My nan says Old Summerlong was never turned off. Imagine being left on all summer. I would be cross too.',
     'You can go indoors, you know. Tap a front door. Yours has a bed in it, and a telephone, and whoever you left at home.',
     'In the pantry they are spread about the floor, not in a line. You can go round them, if you keep wide.',
+    'The gargoyles up on the roofs are really water spouts. Fluff mops up Suds. I am just saying.',
+    'My cousin went in the cupboard under the stairs once. He said you cannot see past your own lantern. He came out very clean.',
     'You can only have one of each kind. If you calm a kind you have already got, it goes off happy and yours learns from it.',
   ],
 };
@@ -113,9 +146,26 @@ const SPICK = {
     const quiet = placesCalm(state);
     const left = ROOMS.length - quiet;
     if (quiet === 0) return `None quiet. ${ROOMS.length} for the van, as it stands.`;
+    if (left === 0) return 'Eight quiet. Nothing for the van. I shall have to put that in writing.';
     return `${quiet} quiet. ${left} for the van, as it stands. I check twice, mind.`;
   },
 };
+
+const COUNT = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight'];
+/**
+ * What Ines Tock says on hearing that a place is calm: her word on it, then how many that makes
+ * and where to go next; or, if the next place is not there to go to, to walk the calm ones again;
+ * or, if there is no next place, that it is done.
+ */
+function inesHears(state, place) {
+  const first = INES.calmed[place.id] || INES.heard(place.name);
+  const next = nextPlace(state);
+  if (!next) return [first, ...INES.done];
+  const count = `${COUNT[placesCalm(state)] || placesCalm(state)} place${placesCalm(state) === 1 ? '' : 's'} of eight.`;
+  if (!roomBuilt(next) || !INES.toward[next.id]) return [first, `${count} ${next.name} is next, and that I cannot get you into yet: this is as far as the lane is built.`, INES.again];
+  const [way, ...more] = INES.toward[next.id];
+  return [first, `${count} ${way}`, ...more];
+}
 
 /** How many calm places Ines Tock has heard about. */
 const reported = (state) => Math.max(0, state.story.ines - 1);
@@ -149,7 +199,7 @@ export function talk(state, who) {
       // However much has gone quiet since she last heard, she hears it all at once, and speaks of the furthest.
       const place = latestCalm(state);
       story.ines = Math.min(MOST, 1 + calmNow);
-      return say(INES.calmed[place.id] || [INES.heard(place.name)]);
+      return say(inesHears(state, place));
     }
     const next = nextPlace(state);
     if (!next || !roomBuilt(next)) return say([INES.later(state)]);
@@ -179,6 +229,11 @@ const CALMING = {
   garden: { title: 'Calm the garden', detail: 'Calm everyone else there and Old Summerlong, the sprinkler, will face you. Rest at home whenever you need to.' },
   alley: { title: 'Calm Tin Can Alley', detail: 'East along the street, past the launderette. A narrow place: they come one after another, and Baron Pilfer is at the far end. Crumb jams Clank.' },
   pantry: { title: 'Calm the Midnight Pantry', detail: 'North of home, left at the fork: go in by its front door. Calm everyone on the floor and the Crumbwyrm will face you. Suds wash away Crumb.' },
+  wash: { title: 'Calm the Wash', detail: 'The launderette, east along the street: in by its front door. Mostly Suds, and Fluff mops up Suds. The Spin Cycle is the machine at the far end.' },
+  stacks: { title: 'Calm the Dusty Stacks', detail: 'The old library, east along the bottom street. Nearly all Fluff, and Spark singes Fluff. The Overdue Tome is in the locked case.' },
+  rooftops: { title: 'Calm Moonlit Rooftops', detail: 'The tall thin house straight down from the green: in, and up onto the slates. Clank up there, and Crumb jams Clank. Mind the Night Warden.' },
+  attic: { title: 'Calm the Tick-Tock Attic', detail: 'The tall house at the west end of the bottom street. Clockwork: Crumb jams Clank. Grandfather Golem keeps the far end.' },
+  dark: { title: 'Calm the Roaring Dark', detail: 'The far shed, north past the fork and round to the east. Mostly Spark, and Sprout grounds Spark. You see as far as your lantern. THE VACUUM is in there.' },
 };
 
 /**

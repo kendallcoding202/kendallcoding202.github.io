@@ -9,7 +9,7 @@
 //
 // Two sorts of inside. Home is somewhere to be: a bed, the telephone, the
 // scrapbook, and whoever of your friends is not out walking with you. A place
-// (the Midnight Pantry) is somewhere to calm: whoever is restless there waits
+// (the Midnight Pantry and the five after it) is somewhere to calm: whoever is restless there waits
 // at its `posts`, one group to each stop of the room's path, its ringleader
 // last, exactly as in the garden.
 import { own } from './util.js';
@@ -69,6 +69,61 @@ export const INSIDES = {
     ],
     spots: [],
     posts: [{ x: 250, y: 1290 }, { x: 520, y: 1070 }, { x: 250, y: 840 }, { x: 520, y: 610 }, { x: 380, y: 350 }],
+  },
+  // The Wash: the launderette. A row of machines along the back wall; Machine Six is the one that roars.
+  wash: {
+    kind: 'place', view: 760, w: 760, h: 1640, wall: 200, people: 1,
+    door: { x: 380, y: 1610 }, start: { x: 380, y: 1500 },
+    blocks: [
+      { id: 'hamper', x: 646, y: 1440, w: 84, h: 50 }, { id: 'bottles', x: 30, y: 1210, w: 80, h: 48 }, { id: 'hamper2', x: 646, y: 960, w: 84, h: 50 },
+      { id: 'boxes', x: 30, y: 730, w: 84, h: 50 }, { id: 'hamper3', x: 646, y: 480, w: 84, h: 50 },
+    ],
+    spots: [],
+    posts: [{ x: 510, y: 1290 }, { x: 240, y: 1070 }, { x: 510, y: 840 }, { x: 240, y: 610 }, { x: 380, y: 350 }],
+  },
+  // The Dusty Stacks: the old library. Bookcases the length of the back wall, a runner down the middle.
+  stacks: {
+    kind: 'place', view: 760, w: 760, h: 1640, wall: 200, people: 1,
+    door: { x: 380, y: 1610 }, start: { x: 380, y: 1500 },
+    blocks: [
+      { id: 'books', x: 30, y: 1420, w: 84, h: 50 }, { id: 'boxes', x: 646, y: 1160, w: 84, h: 50 }, { id: 'books2', x: 30, y: 820, w: 84, h: 50 },
+      { id: 'books3', x: 646, y: 600, w: 84, h: 50 }, { id: 'boxes2', x: 30, y: 420, w: 84, h: 50 },
+    ],
+    spots: [],
+    posts: [{ x: 380, y: 1300 }, { x: 220, y: 1060 }, { x: 540, y: 860 }, { x: 240, y: 620 }, { x: 380, y: 350 }],
+  },
+  // Moonlit Rooftops: in at the door, up the stairs and out onto the slates. The sky is the back wall.
+  rooftops: {
+    kind: 'place', view: 760, w: 760, h: 1640, wall: 200, people: 1,
+    door: { x: 380, y: 1610 }, start: { x: 380, y: 1500 },
+    blocks: [
+      { id: 'chimney', x: 646, y: 1380, w: 84, h: 50 }, { id: 'chimney2', x: 30, y: 1060, w: 84, h: 50 }, { id: 'chimney3', x: 646, y: 800, w: 84, h: 50 },
+      { id: 'chimney4', x: 30, y: 400, w: 84, h: 50 }, { id: 'chimney5', x: 646, y: 500, w: 84, h: 50 },
+    ],
+    spots: [],
+    posts: [{ x: 240, y: 1300 }, { x: 520, y: 1120 }, { x: 380, y: 860 }, { x: 220, y: 620 }, { x: 400, y: 350 }],
+  },
+  // The Tick-Tock Attic: under the rafters, among the trunks and the dust sheets.
+  attic: {
+    kind: 'place', view: 760, w: 760, h: 1640, wall: 200, people: 1,
+    door: { x: 380, y: 1610 }, start: { x: 380, y: 1500 },
+    blocks: [
+      { id: 'trunk', x: 30, y: 1400, w: 84, h: 50 }, { id: 'sheet', x: 646, y: 1080, w: 84, h: 50 }, { id: 'boxes', x: 30, y: 860, w: 84, h: 50 },
+      { id: 'trunk2', x: 646, y: 620, w: 84, h: 50 }, { id: 'sheet2', x: 30, y: 400, w: 84, h: 50 },
+    ],
+    spots: [],
+    posts: [{ x: 520, y: 1300 }, { x: 250, y: 1100 }, { x: 500, y: 860 }, { x: 250, y: 640 }, { x: 380, y: 360 }],
+  },
+  // The Roaring Dark: the cupboard under the stairs. `dim`: you see only as far as your own lantern.
+  dark: {
+    kind: 'place', view: 760, w: 760, h: 1640, wall: 200, people: 1, dim: true,
+    door: { x: 380, y: 1610 }, start: { x: 380, y: 1500 },
+    blocks: [
+      { id: 'boxes', x: 646, y: 1400, w: 84, h: 50 }, { id: 'bucket', x: 30, y: 1080, w: 84, h: 50 }, { id: 'crates', x: 646, y: 860, w: 84, h: 50 },
+      { id: 'boxes2', x: 30, y: 640, w: 84, h: 50 }, { id: 'bucket2', x: 646, y: 420, w: 84, h: 50 },
+    ],
+    spots: [],
+    posts: [{ x: 260, y: 1290 }, { x: 520, y: 1090 }, { x: 260, y: 880 }, { x: 520, y: 660 }, { x: 380, y: 380 }],
   },
 };
 export const INSIDE_IDS = Object.keys(INSIDES);

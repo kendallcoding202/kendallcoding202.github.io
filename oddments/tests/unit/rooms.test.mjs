@@ -42,18 +42,19 @@ test('the same seed meets the same company', () => {
   assert.deepEqual(rollEncounter({ rng: 77 }, GARDEN, 2), rollEncounter({ rng: 77 }, GARDEN, 2));
 });
 
-test('only the first place is open at the start; each opens when the one before is calm; one that is not built never opens', () => {
+test('only the first place is open at the start; each opens when the one before is calm, and not before', () => {
   const state = newState(1e12, 1);
-  assert.equal(roomOpen(state, 'garden'), true);
+  assert.equal(roomOpen(state, ROOMS[0].id), true);
   for (const room of ROOMS.slice(1)) assert.equal(roomOpen(state, room.id), false, room.id);
-  state.rooms.garden.clears = 1;
-  assert.equal(roomOpen(state, 'alley'), true);
-  assert.equal(roomOpen(state, 'pantry'), false);
-  state.rooms.alley.clears = 1;
-  assert.equal(roomOpen(state, 'pantry'), true);
-  assert.equal(roomOpen(state, 'wash'), false);
-  state.rooms.pantry.clears = 1;
-  assert.equal(roomOpen(state, 'wash'), false, 'cleared the way to it, but it is not built in this slice');
+  ROOMS.forEach((room, i) => {
+    state.rooms[room.id].clears = 1;
+    ROOMS.forEach((other, j) => assert.equal(roomOpen(state, other.id), j <= i + 1, `${room.id} calm: ${other.id}`));
+  });
+  // Calm out of turn opens nothing before its time.
+  const skip = newState(1e12, 1);
+  skip.rooms.pantry.clears = 1;
+  assert.equal(roomOpen(skip, 'alley'), false);
+  assert.equal(roomOpen(skip, 'wash'), true, 'the place after a calm one is open, whatever came before');
   assert.equal(roomOpen(state, 'nowhere'), false);
   assert.equal(roomOpen(state, 'constructor'), false);
 });

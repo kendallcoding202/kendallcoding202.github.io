@@ -222,6 +222,13 @@ export function insideScreen(ctx) {
     row.push({ y, draw: () => stand(spriteSrc(view), x, y, 96, aspect !== 'side' || facing > 0, true, hop, Math.sin(stride / (17 * big)) * 0.035 * spring) });
     row.sort((a, b) => a.y - b.y);
     for (const thing of row) thing.draw();
+    // Somewhere dark, you see only as far as your own lantern: a few steps each way.
+    if (room.dim) {
+      const light = pen.createRadialGradient(x, y - 40, 80, x, y - 40, 440);
+      light.addColorStop(0, 'rgba(8,6,20,0)'); light.addColorStop(1, 'rgba(8,6,20,.8)');
+      pen.fillStyle = light; pen.fillRect(cam.x - 2, cam.y - 2, cam.w + 4, cam.h + 4);
+      glow(pen, x, y - 50, 150, '255,214,120', 0.14);
+    }
     // What there is to do in here, each marked where you stand to do it, and named when you are near.
     const by = game.spotNear();
     for (const spot of room.spots) {

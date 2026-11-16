@@ -304,25 +304,285 @@ function paintPantry(pen, room) {
   shell(pen, room);
 }
 
+// ---------------------------------------------------------------- the Wash
+
+function paintWash(pen, room) {
+  const { w, h, wall } = room;
+  tiles(pen, 0, 0, w, wall, 28, '#3d6f80', '#427889', '#2c5361');
+  const dark = pen.createLinearGradient(0, 0, 0, 60);
+  dark.addColorStop(0, 'rgba(8,6,20,.6)'); dark.addColorStop(1, 'rgba(8,6,20,0)');
+  pen.fillStyle = dark; pen.fillRect(0, 0, w, 60);
+  // Six machines along the back wall, doors shut. Machine Six has its light on red.
+  for (let i = 0; i < 6; i++) {
+    const x = 32 + i * 118;
+    box(pen, x, wall - 130, 102, 124, 8, '#e8eef2', 3.5);
+    flat(pen, x + 8, wall - 122, 86, 16, '#b9c7d1');
+    oval(pen, x + 22, wall - 114, 5, 5); paint(pen, i === 5 ? '#d6455d' : '#58d77a');
+    oval(pen, x + 51, wall - 56, 35, 35); paint(pen, '#9fb0c8'); outline(pen, 3.5);
+    oval(pen, x + 51, wall - 56, 25, 25); paint(pen, i === 5 ? '#3a1f3c' : '#1f3f5c');
+    oval(pen, x + 43, wall - 65, 8, 5); paint(pen, 'rgba(255,255,255,.32)');
+  }
+  flat(pen, 0, wall - 6, w, 6, '#1c3540');
+  tiles(pen, 0, wall, w, h - wall, 47.5, '#8fb7c9', '#c9dde6', '#4f6f80');
+  // Puddles: it is that sort of floor.
+  for (const [x, y, rx] of [[170, 1180, 46], [600, 1060, 38], [330, 760, 52], [560, 420, 40], [150, 520, 34], [420, 1420, 30]]) {
+    oval(pen, x, y, rx, rx * 0.42); paint(pen, 'rgba(255,255,255,.2)');
+    oval(pen, x - rx * 0.3, y - rx * 0.1, rx * 0.3, rx * 0.1); paint(pen, 'rgba(255,255,255,.3)');
+  }
+  mat(pen, room);
+  flat(pen, 0, wall, w, h - wall, 'rgba(14,16,44,.42)');
+  for (const post of room.posts) glow(pen, post.x, post.y, 150, '160,220,255', 0.1);
+  shell(pen, room);
+}
+
+/** A laundry basket, heaped. Foot of its floor at (0, 0). */
+function hamper(pen, block) {
+  const w = block.w;
+  oval(pen, 0, 2, w * 0.56, 12); paint(pen, 'rgba(8,6,20,.42)');
+  for (const [dx, dy, r, colour] of [[-16, -50, 17, '#d6455d'], [12, -54, 19, '#4fc4cf'], [-2, -62, 15, '#ffc83d'], [22, -46, 13, '#c9b8e8']]) { oval(pen, dx, dy, r, r * 0.8); paint(pen, colour); outline(pen, 3); }
+  pen.beginPath(); pen.moveTo(-w / 2, -42); pen.lineTo(-w / 2 + 10, 2); pen.lineTo(w / 2 - 10, 2); pen.lineTo(w / 2, -42); pen.closePath();
+  paint(pen, '#e9dcc0'); outline(pen, 4);
+  pen.strokeStyle = 'rgba(13,10,28,.3)'; pen.lineWidth = 2.5;
+  for (let x = -w / 2 + 14; x < w / 2 - 8; x += 13) { pen.beginPath(); pen.moveTo(x, -38); pen.lineTo(x + 2, -2); pen.stroke(); }
+}
+
+// ---------------------------------------------------------------- the Dusty Stacks
+
+function paintStacks(pen, room) {
+  const { w, h, wall } = room;
+  flat(pen, 0, 0, w, wall, '#3d2a22');
+  // Bookcases the length of the back wall.
+  const next = run(53);
+  for (let bay = 0; bay < 5; bay++) {
+    const x = 14 + bay * 147;
+    box(pen, x, 22, 140, wall - 26, 4, '#6b4630', 3.5);
+    flat(pen, x + 8, 30, 124, wall - 42, '#2b1d17');
+    for (let shelf = 0; shelf < 3; shelf++) {
+      const base = 30 + (shelf + 1) * ((wall - 42) / 3);
+      let at = x + 11;
+      while (at < x + 124) {
+        const wide = 7 + next() * 7;
+        const tall = 26 + next() * 16;
+        if (at + wide > x + 130) break;
+        rounded(pen, at, base - tall - 3, wide, tall, 1.5); paint(pen, BOOKS[Math.floor(next() * BOOKS.length)]); outline(pen, 2);
+        at += wide + 1;
+      }
+      flat(pen, x + 6, base - 3, 128, 5, '#8a5f40');
+    }
+  }
+  const dark = pen.createLinearGradient(0, 0, 0, 60);
+  dark.addColorStop(0, 'rgba(8,6,20,.6)'); dark.addColorStop(1, 'rgba(8,6,20,0)');
+  pen.fillStyle = dark; pen.fillRect(0, 0, w, 60);
+  boards(pen, 0, wall, w, h - wall, ['#5d4332', '#553c2c', '#59402f'], '#33231a');
+  // A runner down the middle, worn where everyone has walked.
+  box(pen, 296, wall + 36, 168, h - wall - 150, 6, '#8f2f3a', 4);
+  pen.strokeStyle = '#e2b24a'; pen.lineWidth = 4; pen.strokeRect(310, wall + 50, 140, h - wall - 178);
+  flat(pen, 340, wall + 60, 80, h - wall - 198, 'rgba(13,10,28,.12)');
+  mat(pen, room);
+  flat(pen, 0, wall, w, h - wall, 'rgba(14,16,44,.4)');
+  for (const post of room.posts) glow(pen, post.x, post.y, 160, '255,200,61', 0.12);
+  shell(pen, room);
+}
+
+/** A pile of books somebody meant to put back. Foot at (0, 0). */
+function bookpile(pen, block) {
+  const w = block.w;
+  oval(pen, 0, 2, w * 0.5, 10); paint(pen, 'rgba(8,6,20,.42)');
+  const next = run(block.x + block.y);
+  let top = 0;
+  for (let i = 0; i < 5; i++) {
+    const wide = w * (0.62 + next() * 0.3);
+    const tall = 11 + next() * 5;
+    const lean = (next() - 0.5) * 12;
+    box(pen, -wide / 2 + lean, top - tall, wide, tall, 2.5, BOOKS[Math.floor(next() * BOOKS.length)], 3);
+    flat(pen, -wide / 2 + lean + 4, top - tall + 3, 5, tall - 6, 'rgba(255,247,232,.6)');
+    top -= tall;
+  }
+}
+
+// ---------------------------------------------------------------- Moonlit Rooftops
+
+function paintRooftops(pen, room) {
+  const { w, h, wall } = room;
+  const sky = pen.createLinearGradient(0, 0, 0, wall);
+  sky.addColorStop(0, '#0e1736'); sky.addColorStop(1, '#2a3f78');
+  pen.fillStyle = sky; pen.fillRect(0, 0, w, wall);
+  const next = run(67);
+  for (let i = 0; i < 46; i++) { oval(pen, next() * w, next() * (wall - 50), 1.4 + next() * 1.4, 1.4 + next() * 1.4); paint(pen, `rgba(255,247,232,${0.4 + next() * 0.6})`); }
+  oval(pen, 600, 74, 36, 36); paint(pen, '#fff3c4');
+  oval(pen, 614, 64, 31, 31); paint(pen, '#15214a');
+  glow(pen, 596, 78, 150, '255,243,196', 0.12);
+  // Other people's roofs, a long way down, a window lit here and there.
+  pen.fillStyle = '#131a36';
+  pen.beginPath(); pen.moveTo(0, wall);
+  for (const [x, y] of [[0, 150], [60, 118], [120, 150], [150, 150], [150, 132], [176, 132], [176, 150], [250, 150], [320, 104], [390, 150], [470, 150], [470, 120], [500, 120], [500, 150], [560, 150], [640, 112], [720, 150], [760, 140]]) pen.lineTo(x, y);
+  pen.lineTo(w, wall); pen.closePath(); pen.fill();
+  for (const [x, y] of [[84, 160], [300, 150], [336, 166], [610, 152], [700, 168], [214, 170]]) flat(pen, x, y, 12, 14, '#ffd98a');
+  box(pen, -4, wall - 20, w + 8, 20, 3, '#59607a', 3.5); // the parapet
+  // Slates, row on row.
+  flat(pen, 0, wall, w, h - wall, '#2f3a52');
+  const tone = ['#4a5876', '#53627f', '#44506c', '#4e5c7a'];
+  for (let row = 0, y = wall; y < h; row++, y += 34) {
+    for (let x = (row % 2 ? -30 : 0); x < w; x += 60) {
+      rounded(pen, x + 1.5, y + 1.5, 57, 31, 5); paint(pen, tone[Math.floor(next() * tone.length)]);
+    }
+  }
+  // Skylights: somebody is still up.
+  for (const [x, y] of [[96, 1180], [560, 700], [120, 760]]) {
+    glow(pen, x + 44, y + 30, 150, '255,214,120', 0.2);
+    box(pen, x, y, 88, 60, 5, '#ffd98a', 4);
+    flat(pen, x + 42, y + 3, 4, 54, INK); flat(pen, x + 3, y + 28, 82, 4, INK);
+  }
+  mat(pen, room);
+  flat(pen, 0, wall, w, h - wall, 'rgba(14,16,44,.3)');
+  for (const post of room.posts) glow(pen, post.x, post.y, 150, '168,200,255', 0.1);
+  shell(pen, room);
+}
+
+/** A chimney stack with two pots. Foot at (0, 0). */
+function chimney(pen, block) {
+  const w = block.w * 0.84;
+  oval(pen, 0, 3, w * 0.62, 12); paint(pen, 'rgba(8,6,20,.45)');
+  box(pen, -w / 2, -92, w, 94, 3, '#8a4a3c', 4);
+  pen.strokeStyle = 'rgba(13,10,28,.3)'; pen.lineWidth = 2;
+  for (let row = 0; row < 5; row++) {
+    const y = -78 + row * 18;
+    pen.beginPath(); pen.moveTo(-w / 2 + 3, y); pen.lineTo(w / 2 - 3, y); pen.stroke();
+    for (let x = -w / 2 + (row % 2 ? 12 : 24); x < w / 2 - 4; x += 24) { pen.beginPath(); pen.moveTo(x, y); pen.lineTo(x, y + 18); pen.stroke(); }
+  }
+  box(pen, -w / 2 - 6, -104, w + 12, 14, 3, '#6f7689', 3.5);
+  for (const dx of [-w * 0.22, w * 0.22]) box(pen, dx - 10, -130, 20, 28, 4, '#c0714f', 3.5);
+}
+
+// ---------------------------------------------------------------- the Tick-Tock Attic
+
+function paintAttic(pen, room) {
+  const { w, h, wall } = room;
+  flat(pen, 0, 0, w, wall, '#3b2c26');
+  pen.strokeStyle = 'rgba(13,10,28,.3)'; pen.lineWidth = 3;
+  for (let x = 38; x < w; x += 38) { pen.beginPath(); pen.moveTo(x, 0); pen.lineTo(x, wall); pen.stroke(); }
+  // The gable: two rafters meeting at the ridge, a round window between them, cobwebs in the corners.
+  for (const [x0, x1] of [[-10, w / 2], [w + 10, w / 2]]) {
+    pen.beginPath(); pen.moveTo(x0, wall - 6); pen.lineTo(x1, -10);
+    pen.lineWidth = 26; pen.strokeStyle = INK; pen.stroke();
+    pen.lineWidth = 18; pen.strokeStyle = '#6b4630'; pen.stroke();
+  }
+  oval(pen, w / 2, 112, 50, 50); paint(pen, '#e9dcc0'); outline(pen, 4);
+  const sky = pen.createLinearGradient(0, 70, 0, 154);
+  sky.addColorStop(0, '#141f47'); sky.addColorStop(1, '#27407a');
+  oval(pen, w / 2, 112, 40, 40); paint(pen, sky);
+  oval(pen, w / 2 + 12, 100, 13, 13); paint(pen, '#fff3c4');
+  flat(pen, w / 2 - 2, 72, 4, 80, '#e9dcc0'); flat(pen, w / 2 - 40, 110, 80, 4, '#e9dcc0');
+  pen.strokeStyle = 'rgba(255,255,255,.28)'; pen.lineWidth = 1.6;
+  for (const [cx, side] of [[0, 1], [w, -1]]) {
+    for (const r of [40, 70, 100]) { pen.beginPath(); pen.arc(cx, wall, r, side > 0 ? -Math.PI / 2 : Math.PI, side > 0 ? 0 : -Math.PI / 2); pen.stroke(); }
+    for (const a of [0.2, 0.75, 1.3]) { pen.beginPath(); pen.moveTo(cx, wall); pen.lineTo(cx + side * Math.cos(a) * 108, wall - Math.sin(a) * 108); pen.stroke(); }
+  }
+  const dark = pen.createLinearGradient(0, 0, 0, 60);
+  dark.addColorStop(0, 'rgba(8,6,20,.6)'); dark.addColorStop(1, 'rgba(8,6,20,0)');
+  pen.fillStyle = dark; pen.fillRect(0, 0, w, 60);
+  flat(pen, 0, wall - 8, w, 8, '#241a16');
+  boards(pen, 0, wall, w, h - wall, ['#8a7458', '#7f6a50', '#857055'], '#54432f');
+  // Moonlight from the round window, and dust lying where nobody walks.
+  pen.beginPath(); pen.moveTo(330, wall + 10); pen.lineTo(430, wall + 10); pen.lineTo(520, wall + 420); pen.lineTo(240, wall + 420); pen.closePath();
+  paint(pen, 'rgba(168,220,255,.07)');
+  const next = run(71);
+  for (let i = 0; i < 14; i++) { oval(pen, 50 + next() * (w - 100), wall + 60 + next() * (h - wall - 160), 30 + next() * 40, 10 + next() * 12); paint(pen, 'rgba(255,247,232,.05)'); }
+  mat(pen, room);
+  flat(pen, 0, wall, w, h - wall, 'rgba(14,16,44,.4)');
+  for (const post of room.posts) glow(pen, post.x, post.y, 150, '255,200,61', 0.1);
+  shell(pen, room);
+}
+
+/** A travelling trunk, strapped shut. Foot at (0, 0). */
+function trunk(pen, block) {
+  const w = block.w;
+  oval(pen, 0, 2, w * 0.56, 11); paint(pen, 'rgba(8,6,20,.42)');
+  box(pen, -w / 2, -50, w, 52, 7, '#7a4f38', 4);
+  box(pen, -w / 2, -62, w, 20, 9, '#8a5f40', 4);
+  for (const dx of [-w * 0.26, w * 0.26]) flat(pen, dx - 5, -60, 10, 60, '#3d2a22');
+  box(pen, -8, -44, 16, 14, 3, '#e2b24a', 3);
+}
+
+/** Something under a dust sheet. Nobody remembers what. Foot at (0, 0). */
+function dustsheet(pen, block) {
+  const w = block.w;
+  oval(pen, 0, 2, w * 0.6, 12); paint(pen, 'rgba(8,6,20,.42)');
+  pen.beginPath(); pen.moveTo(-w / 2 - 4, 2);
+  pen.quadraticCurveTo(-w / 2, -70, -w * 0.18, -84); pen.quadraticCurveTo(0, -96, w * 0.2, -80); pen.quadraticCurveTo(w / 2 + 2, -64, w / 2 + 6, 2);
+  pen.closePath(); paint(pen, '#d9d2c0'); outline(pen, 4);
+  pen.strokeStyle = 'rgba(13,10,28,.22)'; pen.lineWidth = 2.5;
+  for (const dx of [-w * 0.24, 0, w * 0.26]) { pen.beginPath(); pen.moveTo(dx, -74); pen.quadraticCurveTo(dx + 6, -40, dx - 2, -2); pen.stroke(); }
+}
+
+// ---------------------------------------------------------------- the Roaring Dark
+
+function paintDark(pen, room) {
+  const { w, h, wall } = room;
+  flat(pen, 0, 0, w, wall, '#241b26');
+  // The underside of the stairs: each tread a step lower, from the left.
+  pen.fillStyle = '#3a2a30';
+  pen.beginPath(); pen.moveTo(0, 0);
+  for (let i = 0; i < 9; i++) { pen.lineTo(i * 84, 18 + i * 14); pen.lineTo((i + 1) * 84, 18 + i * 14); }
+  pen.lineTo(w, 0); pen.closePath(); pen.fill();
+  pen.strokeStyle = INK; pen.lineWidth = 3;
+  pen.beginPath(); pen.moveTo(0, 18);
+  for (let i = 0; i < 9; i++) { pen.lineTo((i + 1) * 84, 18 + i * 14); pen.lineTo((i + 1) * 84, 32 + i * 14); }
+  pen.stroke();
+  // Coats on their hooks, and the fuse box.
+  flat(pen, 40, 150, 430, 8, '#6b4630');
+  [['#5b6f8f', 78], ['#8f2f3a', 168], ['#4f7a5a', 258], ['#c9a04f', 348], ['#59506e', 430]].forEach(([colour, x]) => {
+    pen.beginPath(); pen.moveTo(x - 22, 160); pen.quadraticCurveTo(x - 34, 196, x - 26, wall - 4); pen.lineTo(x + 26, wall - 4); pen.quadraticCurveTo(x + 34, 196, x + 22, 160); pen.closePath();
+    paint(pen, colour); outline(pen, 3);
+    oval(pen, x, 154, 6, 6); paint(pen, '#b9c7d1'); outline(pen, 2);
+  });
+  box(pen, 600, 128, 92, 62, 5, '#8d8798', 3.5);
+  for (let i = 0; i < 4; i++) flat(pen, 612 + i * 18, 140, 10, 26, '#2c3558');
+  oval(pen, 676, 178, 5, 5); paint(pen, '#d6455d');
+  glow(pen, 676, 178, 70, '214,69,93', 0.35);
+  flat(pen, 0, wall - 8, w, 8, '#15101a');
+  boards(pen, 0, wall, w, h - wall, ['#3b3040', '#352b3a', '#382e3d'], '#1e1722');
+  mat(pen, room);
+  // What roars at the far end glows a little, like a standby light.
+  const far = room.posts[room.posts.length - 1];
+  glow(pen, far.x, far.y, 260, '214,69,93', 0.2);
+  flat(pen, 0, wall, w, h - wall, 'rgba(8,6,20,.3)');
+  shell(pen, room);
+}
+
+/** A mop and its bucket. Foot at (0, 0). */
+function bucket(pen, block) {
+  const w = block.w;
+  oval(pen, 0, 2, w * 0.5, 10); paint(pen, 'rgba(8,6,20,.42)');
+  pen.beginPath(); pen.moveTo(22, -40); pen.lineTo(46, -128); pen.lineWidth = 9; pen.strokeStyle = INK; pen.lineCap = 'round'; pen.stroke();
+  pen.lineWidth = 4.5; pen.strokeStyle = '#c08552'; pen.stroke();
+  pen.beginPath(); pen.moveTo(-w * 0.36, -46); pen.lineTo(-w * 0.28, 2); pen.lineTo(w * 0.28, 2); pen.lineTo(w * 0.36, -46); pen.closePath();
+  paint(pen, '#7aa7b8'); outline(pen, 4);
+  oval(pen, 0, -46, w * 0.36, 9); paint(pen, '#4f6f80'); outline(pen, 3.5);
+  for (const dx of [8, 18, 28]) { oval(pen, dx, -44, 7, 10); paint(pen, '#e9dcc0'); outline(pen, 2.5); }
+}
+
 // ---------------------------------------------------------------- which room, and what stands on its floor
 
-const PAINTERS = { home: paintHome, pantry: paintPantry };
+const PAINTERS = { home: paintHome, pantry: paintPantry, wash: paintWash, stacks: paintStacks, rooftops: paintRooftops, attic: paintAttic, dark: paintDark };
 /** Paints a whole room, flat on, with its top left corner at (0, 0). `art` is the paintings it may use. */
 export const paintRoom = (pen, id, room, art) => (PAINTERS[id] || paintPantry)(pen, room, art);
 
 // What stands out on the floor, by the id of the block it stands on: a painting from Tin Can Alley
 // (and how wide it stands), or something drawn here.
 const STANDING = {
-  basket: { draw: basket },
+  basket: { draw: basket }, hamper: { draw: hamper }, books: { draw: bookpile }, chimney: { draw: chimney }, trunk: { draw: trunk }, sheet: { draw: dustsheet }, bucket: { draw: bucket },
   crates: { art: 'a_crate', wide: 96 }, boxes: { art: 'a_boxes', wide: 90 }, bottles: { art: 'a_bottles', wide: 84 },
-  pallets: { art: 'a_pallets', wide: 90 }, sacks: { art: 'a_boxes', wide: 90 }, crates2: { art: 'a_crate', wide: 90 }, boxes2: { art: 'a_boxes', wide: 84 },
+  pallets: { art: 'a_pallets', wide: 90 }, sacks: { art: 'a_boxes', wide: 90 },
 };
+/** What stands on a block: by its id, less any number on the end (a room's second crate is 'crates2'). */
+const standingOf = (block) => STANDING[block.id.replace(/\d+$/, '')] || null;
 /** The paintings a room needs from the world's (assets/world), by name. */
-export const roomArt = (room) => [...new Set(room.blocks.map((block) => STANDING[block.id] && STANDING[block.id].art).filter(Boolean))];
+export const roomArt = (room) => [...new Set(room.blocks.map((block) => standingOf(block) && standingOf(block).art).filter(Boolean))];
 /** Everything standing out on a room's floor: { y: how far down the floor its foot is, paint(pen, art) } with the pen moved to its foot. */
 export function standingIn(room) {
-  return room.blocks.filter((block) => STANDING[block.id]).map((block) => {
-    const what = STANDING[block.id];
+  return room.blocks.filter((block) => standingOf(block)).map((block) => {
+    const what = standingOf(block);
     return {
       id: block.id, x: block.x + block.w / 2, y: block.y + block.h,
       paint: (pen, art) => (what.draw ? what.draw(pen, block) : paintProp(pen, art[what.art], what.wide)),

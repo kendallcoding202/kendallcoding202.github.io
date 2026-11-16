@@ -429,12 +429,12 @@ await snap(page, 'e2e-friends');
 
 section('Scrapbook');
 await tab(page, 'book');
-check((await page.$$('.page-tile')).length === Object.keys(SPECIES).length && Object.keys(SPECIES).length === 21, 'the scrapbook has a page for every kind');
+check((await page.$$('.page-tile')).length === Object.keys(SPECIES).length && Object.keys(SPECIES).length === 48, 'the scrapbook has a page for every kind');
 const met = Object.values(s.book).filter((p) => p.met).length;
 check((await page.$$('.page-tile:not(.unmet)')).length === met, `the ${met} kinds met so far are shown`);
 check(await S(page, () => [...document.querySelectorAll('.page-tile.unmet')].every((t) => t.disabled && t.querySelector('b').textContent === '???')), 'the rest are shadows');
 check((await page.$$('.ring > div')).length === 6, 'and the six elements are explained');
-check(await S(page, () => { const hunt = document.querySelector('.card.hunt'); return !!hunt && hunt.dataset.kept === '0' && hunt.textContent.includes('0 of 18 kept') && hunt.textContent.includes('one in 60') && hunt.textContent.includes('one in 20'); }), 'the scrapbook has the hunt for Heirlooms: none kept yet, and how the odds stand');
+check(await S(page, () => { const hunt = document.querySelector('.card.hunt'); return !!hunt && hunt.dataset.kept === '0' && hunt.textContent.includes('0 of 40 kept') && hunt.textContent.includes('one in 60') && hunt.textContent.includes('one in 20'); }), 'the scrapbook has the hunt for Heirlooms: none kept yet, and how the odds stand');
 check(await S(page, () => document.querySelector('[data-act="where"]').textContent.startsWith('Nowhere is calm yet') && document.querySelector('[data-act="tofind"]').textContent.startsWith('Still to find:') && document.querySelector('[data-act="tofind"]').textContent.includes('???')), 'it says nowhere is calm yet, and lists who is still to find, unmet kinds as ???');
 await snap(page, 'e2e-book');
 
@@ -627,7 +627,7 @@ await page.waitForSelector('.placecard[data-spot="pantry"]');
 check(await S(page, () => !document.querySelector('[data-act="inside"]') && document.querySelector('[data-act="enter"]').textContent.includes('still out calling on The Garden Gate')), 'and so does the door of the pantry');
 await S(page, () => { window.oddments.game.goHome(); window.oddments.game.standAt('wash'); window.oddments.ctx.show('lane'); });
 await page.waitForSelector('.placecard[data-spot="wash"]');
-check(await S(page, () => document.querySelector('[data-act="enter"]').disabled && document.querySelector('[data-act="enter"]').textContent === 'Not built yet' && document.querySelector('.placecard small').textContent.includes('this slice ends at The Midnight Pantry')), 'the place after the pantry is not built: the slice ends there');
+check(await S(page, () => document.querySelector('[data-act="enter"]').disabled && document.querySelector('[data-act="enter"]').textContent === 'Clear The Midnight Pantry first' && !document.querySelector('[data-act="inside"]')), 'the place after the pantry is shut until the pantry is calm, and says so');
 await snap(page, 'e2e-house-cleared');
 
 // =============================================================== going indoors
@@ -796,7 +796,76 @@ await S(page, () => { window.oddments.game.standBy('ines'); window.oddments.ctx.
 await page.waitForSelector('.placecard[data-person="ines"] [data-act="talk"].gold');
 await page.click('[data-act="talk"]');
 check((await hearOut(page)) === 3 && (await state(page)).story.ines === 4, 'Ines Tock hears about the pantry');
-check(await S(page, () => document.querySelector('.goalchip').dataset.goal === 'more' && document.querySelector('.goalchip span').textContent === 'The Wash is next (3 of 8)'), 'three places of eight are calm, and the next is named');
+check(await S(page, () => document.querySelector('.goalchip').dataset.goal === 'calm' && document.querySelector('.goalchip span').textContent === 'Calm the Wash (0 of 5)'), 'three places of eight are calm, and the goal is the fourth');
+
+// =============================================================== the five places after it, and the end
+section('The rest of the lane, to the end');
+// (The stand-in is given the levels for each: this is about every place being there to walk into and calm, and the
+// story reaching its end. How hard each is, is the simulator's business.)
+const LATER = [
+  ['wash', 'The Wash', 'boss_spincycle', 'bg_wash', 'Calm the Dusty Stacks (0 of 5)'],
+  ['stacks', 'The Dusty Stacks', 'boss_tome', 'bg_stacks', 'Calm Moonlit Rooftops (0 of 5)'],
+  ['rooftops', 'Moonlit Rooftops', 'boss_warden', 'bg_rooftops', 'Calm the Tick-Tock Attic (0 of 5)'],
+  ['attic', 'The Tick-Tock Attic', 'boss_clock', 'bg_attic', 'Calm the Roaring Dark (0 of 5)'],
+  ['dark', 'The Roaring Dark', 'boss_vacuum', 'bg_dark', 'The lane is quiet (8 of 8)'],
+];
+for (const [room, name, boss, bg, goalAfter] of LATER) {
+  await S(page, (id) => { const g = window.oddments.game; for (const friend of g.state.friends) friend.level = Math.max(friend.level, 26); g.standAt(id); window.oddments.ctx.show('lane'); }, room);
+  await page.waitForSelector(`.placecard[data-spot="${room}"] [data-act="inside"]`);
+  await page.click('[data-act="inside"]');
+  await page.waitForSelector(`#inside[data-room="${room}"]`);
+  s = await state(page);
+  const painted = await S(page, () => {
+    const canvas = document.querySelector('.lanecanvas');
+    const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    const colours = new Set();
+    for (let i = 0; i < pixels.length; i += 4 * 97) colours.add(`${pixels[i] >> 4},${pixels[i + 1] >> 4},${pixels[i + 2] >> 4}`);
+    return colours.size;
+  });
+  check(s.indoors.id === room && s.visit && s.visit.room === room && s.visit.groups.every((group) => group.foes.length >= 1) && (await S(page, () => document.querySelector('#inside h1').textContent)) === name && painted > 30, `${name}: its door opens, it has a floor of its own, and five groups are waiting on it`, `colours ${painted}`);
+  await page.waitForTimeout(350);
+  await snap(page, `e2e-${room}`);
+  // Everyone but the ringleader is calmed by the rules alone; the ringleader is met and fought on the screen.
+  await page.evaluate(async () => {
+    const { playOut } = await import('./js/core/auto.js');
+    const g = window.oddments.game;
+    while (g.state.visit && g.state.visit.stop < 4) { playOut(g.startEncounter(), { befriend: true, have: g.state.friends.map((f) => f.species) }); g.finishBattle(); }
+    window.oddments.ctx.show('lane');
+  });
+  s = await state(page);
+  if (!s.visit || s.visit.room !== room || s.visit.stop !== 4) { check(false, `${name}: the stand-in calms its first four groups`); continue; }
+  await onward(page, 4);
+  await idle(page);
+  check(await S(page, (want) => !!document.querySelector(`.unit.boss img[src*="${want.boss}"]`) && document.querySelector('#fight img.bg').src.includes(want.bg) && window.oddments.sound().scene === 'boss', { boss, bg }), `${name}: its ringleader is met at the far end, in front of its own painting`);
+  await botFight(page, { befriend: true });
+  const title = await modalTitle(page);
+  const said = await S(page, () => document.querySelector('.modal.result .body').textContent);
+  check(title === 'All calm' && said.includes(`${name} is calm!`) && (room === 'dark' ? said.includes('That is all eight') : said.includes('is next')), `${name}: calming it says so${room === 'dark' ? ', and that it is all eight' : ', and where is next'}`, `${title}: ${said.slice(0, 120)}`);
+  await page.click('[data-id="next"]');
+  await page.waitForSelector(`#inside[data-room="${room}"]`);
+  check((await S(page, () => document.querySelector('#inside .where').textContent)) === 'calm' && (await state(page)).rooms[room].clears === 1, `${name}: and it stays calm`);
+  await S(page, () => { window.oddments.game.standBy('ines'); window.oddments.ctx.show('lane'); });
+  await page.waitForSelector('.placecard[data-person="ines"] [data-act="talk"].gold');
+  await page.click('[data-act="talk"]');
+  const heard = await hearOut(page);
+  check(heard === 3 && (await S(page, () => document.querySelector('.goalchip span').textContent)) === goalAfter, `${name}: Ines Tock hears of it, and the goal moves on: ${goalAfter}`);
+}
+s = await state(page);
+check(Object.values(s.rooms).every((record) => record.clears === 1) && await S(page, () => document.querySelector('.goalchip').dataset.goal === 'more'), 'all eight places are calm: the lane is quiet');
+check(['boss_spincycle', 'boss_tome', 'boss_warden', 'boss_clock', 'boss_vacuum'].every((id) => s.book[id].met), 'and every ringleader is in the scrapbook');
+// Home, and the telephone: great-aunt Maribel hears the end of it.
+await S(page, () => { const g = window.oddments.game; g.standAt('home'); g.enter('home'); g.state.indoors.x = 308; g.state.indoors.y = 392; window.oddments.ctx.show('lane'); });
+await page.waitForSelector('#inside[data-room="home"] [data-act="ring"]');
+await page.click('[data-act="ring"]');
+await page.waitForSelector('.modal.talk');
+check(await S(page, () => document.querySelector('.modal.talk .talkwords').textContent.includes('The lane is quiet')), 'ring great-aunt Maribel, and she knows the lane is quiet');
+await hearOut(page);
+// A calm place walked into at the end is a stroll, indoors as out.
+await S(page, () => { const g = window.oddments.game; g.leave(); g.travelTo('attic'); window.oddments.ctx.show('lane'); });
+await page.waitForSelector('#inside[data-room="attic"]');
+s = await state(page);
+check(s.visit.stroll === true && /^calm · [123] wandering$/.test(await S(page, () => document.querySelector('#inside .where').textContent)) && s.visit.groups[4].foes.length === 0, 'walk back into a calm place indoors and it is a stroll: a few wandering, no ringleader');
+await S(page, () => { const g = window.oddments.game; g.goHome(); window.oddments.ctx.show('lane'); });
 
 // =============================================================== heirlooms
 section('Heirlooms');
@@ -832,7 +901,7 @@ await tab(page, 'friends');
 check(await S(page, (species) => document.querySelector(`.friend[data-species="${species}"] img`).src.includes('_heirloom') && !!document.querySelector(`.friend[data-species="${species}"] .heirloom`), rare.species), 'and is shown as an Heirloom among your friends');
 await tab(page, 'book');
 check(await S(page, (species) => !!document.querySelector(`[data-kind="${species}"] .stamp.gold`) && document.querySelector(`[data-kind="${species}"]`).classList.contains('rare'), rare.species), 'with a gold stamp in the scrapbook');
-check(await S(page, () => document.querySelector('.card.hunt').dataset.kept === '1' && document.querySelector('.card.hunt').textContent.includes('1 of 18 kept')), 'and the hunt counts it: one of eighteen kept');
+check(await S(page, () => document.querySelector('.card.hunt').dataset.kept === '1' && document.querySelector('.card.hunt').textContent.includes('1 of 40 kept')), 'and the hunt counts it: one of forty kept');
 check(await S(page, (name) => !document.querySelector('[data-act="tofind"]').textContent.includes(`${name},`) && !document.querySelector('[data-act="tofind"]').textContent.endsWith(`${name}.`), SPECIES[rare.species].name), 'it is off the list of those still to find');
 await snap(page, 'e2e-heirloom-book');
 // Walking into a place where one is waiting, you are told (and hear it) before you have picked it out.

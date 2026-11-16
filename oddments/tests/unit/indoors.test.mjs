@@ -139,7 +139,8 @@ test('a place you walk into is shut until the one before is calm; going in, rest
   assert.equal(game.enter('pantry'), false);
   assert.equal(game.travelTo('pantry'), false);
   game.standAt('wash');
-  assert.equal(game.mayEnter('wash'), 'away', 'a place that is not built has no inside at all');
+  assert.equal(game.mayEnter('wash'), 'shut', 'and so is every place after it');
+  for (const odd of ['nowhere', 'constructor', '', null]) assert.equal(game.mayEnter(odd), 'away', 'and somewhere that is nowhere has no inside at all');
   openPantry(game);
   // Out calling on the garden, the pantry will not have you.
   assert.equal(game.travelTo('garden'), true);
