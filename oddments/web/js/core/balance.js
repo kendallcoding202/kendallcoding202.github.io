@@ -670,7 +670,10 @@ export const DEFAULT_NAME = 'Sitter';
 
 export const xpNeeded = (level) => Math.round(24 * Math.pow(level, 1.5));
 /** What beating (or calming) one is worth to each friend on the team. */
-export const xpFor = (species, level) => Math.round((6 + 5 * level) * (SPECIES[species].boss ? 4 : 1));
+// (XP_RATE: since whoever you calm stays calm, nobody is fought twice on the way to a ringleader, so
+// each fight has to teach more for the team to keep pace with the lane. At 1 the last places were a wall.)
+export const XP_RATE = 1.3;
+export const xpFor = (species, level) => Math.round((6 + 5 * level) * XP_RATE) * (SPECIES[species].boss ? 4 : 1);
 export const BENCH_SHARE = 0.5; // friends left at home learn half as much
 
 // ---------------------------------------------------------------- rooms

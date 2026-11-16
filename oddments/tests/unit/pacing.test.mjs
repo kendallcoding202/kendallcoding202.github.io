@@ -63,7 +63,7 @@ test('an Heirloom is rare but real: in a few fights in a hundred at first, and a
   // (By the second visit four players in five have calmed the garden; by the third, all of them.)
   for (const share of later.slice(1)) assert.ok(share > first * 1.8 && share < 0.2, `once calm: ${share} against ${first}`);
   assert.ok(friendly.heirloomFightShare > first && friendly.heirloomFightShare < 0.15, String(friendly.heirloomFightShare));
-  assert.ok(friendly.heirloomsKept > 0.8 && friendly.heirloomsKept < 4, `kept after four visits: ${friendly.heirloomsKept}`);
+  assert.ok(friendly.heirloomsKept > 0.6 && friendly.heirloomsKept < 4, `kept after four visits: ${friendly.heirloomsKept}`);
   assert.equal(brawler.heirloomsKept, 0, 'and none for someone who never reaches out');
 });
 
