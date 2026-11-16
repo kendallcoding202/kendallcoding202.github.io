@@ -7,10 +7,12 @@
 // `bake`), then placed each frame, so a frame costs a handful of pictures
 // however detailed the painting was.
 import { ROOMS, SPECIES, ELEMENTS, roomOf, roomBuilt } from '../core/balance.js';
-import { WORLD, POST, SPOTS, TREES, LAMPS, HEDGES, ROAD_POINTS, GREEN, DISTRICTS, spotOf } from '../core/world.js';
+import { WORLD, POST, SPOTS, TREES, LAMPS, HEDGES, ROAD_POINTS, GREEN, DISTRICTS, PEOPLE, spotOf, personAt } from '../core/world.js';
+import { CAST } from '../core/story.js';
 import { h, sprite, spriteSrc } from './dom.js';
 import { elementTag, bar } from './parts.js';
-import { toast } from './modals.js';
+import { modal, toast, modalOpen } from './modals.js';
+import { converse } from './talk.js';
 import { FONT, oval, paint, glow, label, worldSrc, paintGround, paintBuilding, paintProp, paintLamp, paintGate, bushesOf } from './scenery.js';
 
 // How much of the world fits across the screen. People and Oddments are small in a big place.
@@ -45,11 +47,14 @@ export function laneScreen(ctx) {
   const canvas = h('canvas', { class: 'lanecanvas', 'aria-label': 'Tap to walk.' });
   const card = h('div', { class: 'placecard', hidden: true });
   const hint = h('div', { class: 'lanehint', hidden: !!state.seen.walked }, 'Tap or drag to walk');
+  // What to do next, always in sight; a tap opens the story so far.
+  const goalText = h('span');
+  const goalChip = h('button', { class: 'goalchip', data: { act: 'goal' }, onclick: () => journal() }, h('i', null, 'Goal'), goalText);
   const title = h('h1', null, LANE);
   const sub = h('small', { class: 'where' });
   const wrap = h('div', { class: 'lanewrap' }, canvas,
     h('header', { class: 'bar-top over' }, h('div', null, title, sub), h('span', { class: 'who' }, sprite(state.player.look), h('b', null, state.player.name))),
-    hint, card);
+    goalChip, hint, card);
   const el = h('section', { id: 'lane' }, wrap);
   const pen = canvas.getContext('2d');
 
@@ -65,6 +70,7 @@ export function laneScreen(ctx) {
   let clock = 0;
   let drawn = 0;
   let facing = 1;
+  let aspect = 'front'; // which way you are turned: 'side' (see `facing`), 'front' toward the screen, 'back' away from it
   let stride = 0; // how far you have walked, for the bounce in your step
   let spring = 0; // 0 standing still, 1 walking: eased, so a step never snaps
   let cardFor; // what the card is showing (undefined: not drawn yet)
@@ -249,6 +255,57 @@ export function laneScreen(ctx) {
     if (spot.boss && others > 0) label(pen, `calm the other ${others} first`, post.x, top + 38, '#b6b0d6', 'rgba(255,255,255,.14)', 19);
   }
 
+  /** One of the people of the lane: turned toward you, their name over them when you are near, a mark if they have news. */
+  function neighbour(person) {
+    const cast = CAST[person.id];
+    const image = picture(spriteSrc(cast.art));
+    // People were painted to one scale, so a child stands shorter than the grown-ups.
+    const tall = image.naturalHeight ? 96 * (image.naturalHeight / 300) : 96;
+    const you = here();
+    stand(spriteSrc(cast.art), person.x, person.y, tall, you.x >= person.x, true, 0, Math.sin(clock * 1.6 + person.x) * 0.012);
+    const near = Math.hypot(you.x - person.x, you.y - person.y) < 230;
+    if (game.hasNews(person.id)) {
+      const bob = Math.sin(clock * 4) * 3;
+      const top = person.y - tall - (near ? 52 : 22) + bob;
+      pen.beginPath(); pen.arc(person.x, top, 15, 0, Math.PI * 2); paint(pen, '#ffc83d');
+      pen.lineWidth = 3; pen.strokeStyle = 'rgba(13,10,28,.9)'; pen.stroke();
+      pen.font = `700 22px ${FONT}`; pen.textAlign = 'center'; pen.textBaseline = 'middle'; pen.fillStyle = '#17132e';
+      pen.fillText('!', person.x, top + 1);
+    }
+    if (near) label(pen, cast.name, person.x, person.y - tall - 20, '#fff7e8', 'rgba(255,255,255,.28)', 19);
+  }
+
+  /** Where the goal is, if it is somewhere: a person to see, or the gate of a place you are not yet in. */
+  function goalPoint() {
+    const goal = game.goal();
+    if (goal.who) return personAt(goal.who);
+    if (goal.room && DISTRICTS[goal.room] && game.district() !== goal.room) return DISTRICTS[goal.room].gate;
+    return null;
+  }
+
+  /** A gold arrow at the edge of the view, toward the goal, whenever the goal is out of sight. */
+  function pointer() {
+    const to = goalPoint();
+    if (!to) return;
+    const { top, bottom } = over();
+    const box = { x0: cam.x + 44, x1: cam.x + cam.w - 44, y0: cam.y + top + 70, y1: cam.y + cam.h - bottom - 60 };
+    if (to.x > box.x0 && to.x < box.x1 && to.y > box.y0 && to.y < box.y1) return;
+    // From the middle of the view toward the goal, stopped at the edge.
+    const cx = (box.x0 + box.x1) / 2;
+    const cy = (box.y0 + box.y1) / 2;
+    const dx = to.x - cx;
+    const dy = to.y - cy;
+    const reach = Math.min(dx ? ((dx > 0 ? box.x1 : box.x0) - cx) / dx : Infinity, dy ? ((dy > 0 ? box.y1 : box.y0) - cy) / dy : Infinity);
+    const beat = 1 + Math.sin(clock * 5) * 0.08;
+    pen.save();
+    pen.translate(cx + dx * reach, cy + dy * reach);
+    pen.rotate(Math.atan2(dy, dx));
+    pen.scale(beat, beat);
+    pen.beginPath(); pen.moveTo(20, 0); pen.lineTo(-12, -16); pen.lineTo(-5, 0); pen.lineTo(-12, 16); pen.closePath();
+    paint(pen, '#ffc83d'); pen.lineWidth = 4; pen.lineJoin = 'round'; pen.strokeStyle = 'rgba(13,10,28,.9)'; pen.stroke();
+    pen.restore();
+  }
+
   function draw() {
     const k = cam.k * cam.dpr;
     pen.setTransform(k, 0, 0, k, -cam.x * k, -cam.y * k);
@@ -274,6 +331,10 @@ export function laneScreen(ctx) {
       }
       area.posts.forEach((post, index) => { if (seen(post.x, post.y)) things.push({ y: post.y + 22, draw: () => waiting(place, index) }); });
     }
+    for (const person of PEOPLE) {
+      if (!seen(person.x, person.y)) continue;
+      things.push({ y: person.y, draw: () => neighbour(person) });
+    }
     for (const body of homebodies) {
       if (!seen(body.x, body.y)) continue;
       const fly = SPECIES[body.friend.species].fly;
@@ -286,7 +347,8 @@ export function laneScreen(ctx) {
       things.push({ y: pal.y - 0.01, draw: () => stand(spriteSrc(pal.friend.species, pal.friend.heirloom), pal.x, pal.y, 54, pal.f > 0, false, lift) });
     }
     const hop = Math.abs(Math.sin(stride / 17)) * 7 * spring;
-    things.push({ y, draw: () => stand(spriteSrc(state.player.look), x, y, 96, facing > 0, true, hop, Math.sin(stride / 17) * 0.035 * spring) });
+    const view = aspect === 'side' ? state.player.look : `${state.player.look}_${aspect}`;
+    things.push({ y, draw: () => stand(spriteSrc(view), x, y, 96, aspect !== 'side' || facing > 0, true, hop, Math.sin(stride / 17) * 0.035 * spring) });
     things.sort((a, b) => a.y - b.y);
     for (const thing of things) thing.draw();
     for (const fly of FLIES) {
@@ -297,6 +359,7 @@ export function laneScreen(ctx) {
       pen.beginPath(); pen.arc(fx, fy, 6, 0, Math.PI * 2); paint(pen, `rgba(255,224,122,${bright * 0.22})`);
       pen.beginPath(); pen.arc(fx, fy, 2.4, 0, Math.PI * 2); paint(pen, `rgba(255,236,160,${bright})`);
     }
+    if (!everything) pointer();
   }
 
   // ------------------------------------------------------------ the card for wherever you are
@@ -310,20 +373,39 @@ export function laneScreen(ctx) {
 
   function drawCard() {
     const visit = state.visit;
-    const id = game.near();
+    const who = game.personNear();
+    const id = who ? null : game.near();
     const inside = game.district();
-    const key = `${id}|${visit ? `${visit.room}:${visit.stop}` : ''}|${inside}`;
+    const goal = game.goal();
+    const key = `${who}:${who ? game.hasNews(who) : ''}|${id}|${visit ? `${visit.room}:${visit.stop}` : ''}|${inside}|${goal.id}:${goal.count || ''}`;
     if (key === cardFor) return;
     cardFor = key;
+    goalText.textContent = goal.count ? `${goal.title} (${goal.count[0]} of ${goal.count[1]})` : goal.title;
+    goalChip.dataset.goal = goal.id;
     // The heading says where you are, and how a visit is going.
     title.textContent = inside ? roomOf(inside).name : LANE;
     sub.textContent = visit ? `${visit.stop} of ${roomOf(visit.room).path.length} calmed` : '';
-    card.hidden = !id && !visit;
+    card.hidden = !who && !id && !visit;
     card.dataset.spot = id || '';
+    card.dataset.person = who || '';
     card.dataset.visit = visit ? visit.room : '';
     card.dataset.calmed = visit ? String(visit.stop) : '';
-    card.className = `placecard${!id && visit ? ' slim' : ''}`;
+    card.className = `placecard${!who && !id && visit ? ' slim' : ''}`;
     if (card.hidden) return;
+
+    if (who) {
+      const cast = CAST[who];
+      const news = game.hasNews(who);
+      card.replaceChildren(
+        h('div', { class: 'personhead' }, sprite(cast.art), h('div', null, h('h2', null, cast.name), h('small', null, cast.role))),
+        h('button', { class: `btn ${news ? 'gold' : 'plain'}`, data: { act: 'talk' }, onclick: () => {
+          const lines = game.talkTo(who);
+          if (!lines) return;
+          ctx.save();
+          converse(lines, () => { cardFor = undefined; });
+        } }, 'Talk'));
+      return;
+    }
 
     if (id === 'home') {
       if (visit) {
@@ -356,6 +438,22 @@ export function laneScreen(ctx) {
     card.replaceChildren(
       h('div', { class: 'cardhead' }, h('h2', null, room.name, ' ', h('small', null, `${visit.stop} of ${room.path.length} calmed`)), h('small', { class: 'resthint' }, 'Rest at home')),
       teamList());
+  }
+
+  /** The story so far, the aim of it all, and what to do next. */
+  function journal() {
+    const goal = game.goal();
+    const aim = game.aim();
+    const told = game.journal();
+    modal({
+      title: 'What to do', cls: 'journal',
+      body: [
+        h('div', { class: 'aim' }, h('b', null, aim.title), bar('xp', aim.count[0] / aim.count[1], `${aim.count[0]} of ${aim.count[1]} calm`)),
+        h('div', { class: 'now' }, h('small', null, 'Now'), h('b', null, goal.count ? `${goal.title} (${goal.count[0]} of ${goal.count[1]})` : goal.title), h('p', null, goal.detail)),
+        told.length ? h('div', { class: 'sofar' }, h('small', null, 'So far'), h('ul', null, told.map((line) => h('li', null, line)))) : null,
+      ],
+      actions: [{ id: 'ok', label: 'OK', kind: 'plain' }],
+    });
   }
 
   // ------------------------------------------------------------ walking
@@ -420,11 +518,22 @@ export function laneScreen(ctx) {
     }
     // Head for each point of the way in turn.
     while (way.length && Math.hypot(way[0].x - before.x, way[0].y - before.y) < 7) way.shift();
+    if (modalOpen()) { way = []; held.clear(); }
+    // The call that starts the story rings as soon as the game has begun and nothing else is on the
+    // screen (and once, for a save from before there was a story).
+    else if (!state.story.call) {
+      const call = game.takeCall();
+      if (call) { ctx.save(); converse(call, () => { cardFor = undefined; }); }
+    }
     const moving = !met && way.length > 0 && game.walk(way[0], dt);
     const now = here();
     if (moving) {
       const dx = now.x - before.x;
+      const dy = now.y - before.y;
       if (Math.abs(dx) > 0.2) facing = dx > 0 ? 1 : -1;
+      // Turn to face the way you are going. Walking on a slant keeps whichever way you were already turned.
+      if (Math.abs(dy) > Math.abs(dx) * 1.3) aspect = dy > 0 ? 'front' : 'back';
+      else if (Math.abs(dx) > Math.abs(dy) * 1.3) aspect = 'side';
       stride += Math.hypot(dx, now.y - before.y);
       if (Math.hypot(now.x - trail[0].x, now.y - trail[0].y) > 5) { trail.unshift({ x: now.x, y: now.y }); if (trail.length > 60) trail.length = 60; }
     } else if (way.length) way.shift();
@@ -475,18 +584,22 @@ export function laneScreen(ctx) {
     /** Where something in the world is on the screen right now (for tests, which tap it like a finger would). */
     screenOf(id) {
       // A place's door or gate by its id; 'next' is the group to meet next, 'post:2' a group by number;
-      // 'in:garden' is a few steps inside a place's gate.
+      // 'in:garden' is a few steps inside a place's gate; 'person:ines' is a neighbour; 'me' is you.
       const visit = state.visit;
       const area = (room) => DISTRICTS[room];
       let point;
       if (id === 'next') point = visit ? area(visit.room).posts[game.nextGroup()] : null;
       else if (id.startsWith('post:')) point = visit ? area(visit.room).posts[Number(id.slice(5))] : null;
       else if (id.startsWith('in:')) point = { x: area(id.slice(3)).gate.x, y: area(id.slice(3)).gate.y - 96 };
+      else if (id.startsWith('person:')) point = personAt(id.slice(7));
+      else if (id === 'me') point = here();
       else point = spotOf(id).door;
       if (!point) return null;
       const box = canvas.getBoundingClientRect();
       return { x: box.left + (point.x - cam.x) * cam.k, y: box.top + (point.y - cam.y) * cam.k };
     },
+    /** Which way you are turned: 'front', 'back', or 'left' / 'right'. */
+    facing: () => (aspect === 'side' ? (facing > 0 ? 'right' : 'left') : aspect),
     /** The part of the world in view, in the world's own units. */
     view: () => ({ x: cam.x, y: cam.y, w: cam.w, h: cam.h }),
     /** How many frames have been drawn, to measure how smoothly it runs. */

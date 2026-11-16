@@ -45,6 +45,18 @@ const idle = (page) => page.waitForSelector('#fight[data-busy="0"], .modal.resul
 const tab = async (page, id) => { await page.click(`[data-tab="${id}"]`); await page.waitForTimeout(120); };
 const modalTitle = (page) => S(page, () => document.querySelector('.modal header span')?.textContent || null);
 const snap = (page, name) => page.screenshot({ path: `${OUT}${name}.png` });
+/** Hears out whoever is talking, a line at a time, to the end. Returns how many lines there were. */
+async function hearOut(page) {
+  let lines = 0;
+  for (; lines < 30 && await page.$('.modal.talk'); lines++) { await page.click('.modal.talk [data-id="next"]'); await page.waitForTimeout(40); }
+  return lines;
+}
+/** Begins a new game from the intro and hears out the call that follows. */
+async function begin(page) {
+  await page.click('[data-id="begin"]');
+  await page.waitForSelector('.modal.talk');
+  await hearOut(page);
+}
 
 /** Makes one choice the way the stand-in player would, by tapping the real buttons. False once the fight is over. */
 async function botTurn(page, style = {}) {
@@ -81,10 +93,22 @@ await page.fill('[data-field="name"]', 'Marisol');
 await page.click('.modal [data-look="sitter_c"]');
 check(await S(page, () => document.querySelector('[data-look="sitter_c"]').classList.contains('on')), 'picking a look marks it');
 await page.click('[data-id="begin"]');
-await page.waitForTimeout(200);
+await page.waitForSelector('.modal.talk');
 let s = await state(page);
 check(s.started && s.player.name === 'Marisol' && s.player.look === 'sitter_c', 'the house-sitter takes the chosen name and look');
-check(!(await page.$('.modal')), 'the intro closes');
+check(!(await page.$('.modal.intro')), 'the intro closes');
+
+// =============================================================== the story begins
+section('The story begins');
+check((await S(page, () => document.querySelector('.modal.talk .talkname b').textContent)) === 'Great-aunt Maribel' && (await S(page, () => document.querySelector('.modal.talk .talkname small').textContent)) === 'on the phone', 'the phone rings: it is great-aunt Maribel');
+check(await S(page, () => document.querySelector('.modal.talk .talkface img').src.includes('cast_maribel')), 'with her picture');
+check(!(await page.$('.modal.talk .x')), 'the call is heard out, not dismissed');
+await page.waitForTimeout(250);
+await snap(page, 'e2e-call');
+const callLines = await hearOut(page);
+s = await state(page);
+check(callLines === 4 && s.story.call === true && !(await page.$('.modal')), 'she says her piece in four lines, and the call is remembered');
+check(await S(page, () => document.querySelector('.goalchip').dataset.goal === 'meet' && document.querySelector('.goalchip span').textContent === 'Find Ines Tock'), 'and you are left with something to do: find Ines Tock');
 check((await S(page, () => document.querySelector('#lane .who b').textContent)) === 'Marisol', 'the name shows in the lane');
 check(await S(page, () => document.querySelector('#lane .who img').src.includes('sitter_c')), 'and so does the look');
 
@@ -93,12 +117,13 @@ section('The lane (the open world)');
 const game = (p, fn, arg) => S(p, fn, arg);
 const where = (p) => S(p, () => ({ ...window.oddments.game.state.where, near: window.oddments.game.near(), district: window.oddments.game.district() }));
 const view = (p) => S(p, () => window.oddments.lane.view());
-/** One tap toward something in the world, wherever it is: on it if it is in view, else at the edge of the screen nearest it. */
+/** One tap toward something in the world, wherever it is: on it if it is in view, else at the edge of the screen nearest it
+ *  (below the heading and the goal, above the card: a finger aiming to walk taps the world, not the things laid over it). */
 async function tapToward(p, id) {
   const aim = await S(p, (what) => {
     const at = window.oddments.lane.screenOf(what);
     const box = document.querySelector('.lanecanvas').getBoundingClientRect();
-    return { x: Math.min(box.right - 8, Math.max(box.left + 8, at.x)), y: Math.min(box.bottom - 200, Math.max(box.top + 70, at.y)) };
+    return { x: Math.min(box.right - 8, Math.max(box.left + 8, at.x)), y: Math.min(box.bottom - 200, Math.max(box.top + 110, at.y)) };
   }, id);
   await p.touchscreen.tap(aim.x, aim.y);
 }
@@ -154,11 +179,59 @@ const firstView = await view(page);
 check(firstView.w < WORLD.w / 2 && firstView.h < WORLD.h, `the world is much bigger than the screen (${Math.round(firstView.w)} of ${WORLD.w} across, ${Math.round(firstView.h)} of ${WORLD.h} down)`);
 check((await game(page, () => window.oddments.game.travelTo('alley'))) === false, 'a place that is not built cannot be walked into');
 await snap(page, 'e2e-lane');
+
+// --- someone to talk to
+/** Walks up to a neighbour the way a finger would: by tapping them until you are near enough to talk. */
+async function walkUpTo(p, who) {
+  for (let tries = 0; tries < 45 && (await S(p, () => window.oddments.game.personNear())) !== who; tries++) {
+    await tapToward(p, `person:${who}`);
+    await p.waitForTimeout(450);
+  }
+  return (await S(p, () => window.oddments.game.personNear())) === who;
+}
+check(await walkUpTo(page, 'ines'), 'tapping Ines Tock walks you up to her');
+await page.waitForSelector('.placecard[data-person="ines"]');
+check(await S(page, () => document.querySelector('.placecard h2').textContent === 'Ines Tock' && document.querySelector('[data-act="talk"]').classList.contains('gold')), 'standing by her, the card offers to talk, and shows she has news');
+await page.click('[data-act="talk"]');
+await page.waitForSelector('.modal.talk');
+check((await S(page, () => document.querySelector('.modal.talk .talkname b').textContent)) === 'Ines Tock', 'Talk starts the conversation');
+await page.waitForTimeout(250);
+await snap(page, 'e2e-ines');
+check((await hearOut(page)) === 5, 'she explains Oddments, Reaching out and ringleaders in five lines');
+s = await state(page);
+check(s.story.ines === 1 && await S(page, () => document.querySelector('.goalchip').dataset.goal === 'friend' && document.querySelector('.goalchip span').textContent === 'Make a friend in the garden'), 'and the goal moves on: make a friend in the garden');
+await page.waitForSelector('.placecard[data-person="ines"] [data-act="talk"].plain');
+check(true, 'with nothing new to say, her Talk button is plain');
+await page.click('[data-act="goal"]');
+check((await modalTitle(page)) === 'What to do', 'the goal can be tapped for the story so far');
+check(await S(page, () => document.querySelector('.modal.journal .aim b').textContent === 'Calm all eight places before Monday' && document.querySelector('.modal.journal .aim').textContent.includes('0 of 8 calm')), 'which says what the whole game is for, and how far along it is');
+check((await page.$$('.modal.journal .sofar li')).length === 2, 'and what has happened so far');
+await page.waitForTimeout(200);
+await snap(page, 'e2e-journal');
+await page.click('.modal [data-id="ok"]');
+
+// --- facing every way you walk
+await game(page, () => { window.oddments.game.state.where = { x: 1160, y: 1900 }; });
+await page.waitForTimeout(700);
+const turn = async (dx, dy) => {
+  const me = await S(page, () => window.oddments.lane.screenOf('me'));
+  await page.touchscreen.tap(me.x + dx, me.y + dy);
+  await page.waitForTimeout(450);
+  return S(page, () => window.oddments.lane.facing());
+};
+const faced = [await turn(0, -90), await turn(0, 90), await turn(90, 0), await turn(-90, 0)];
+check(JSON.stringify(faced) === JSON.stringify(['back', 'front', 'right', 'left']), 'you turn to face the way you walk: away, toward you, right and left', faced.join(' '));
+at = await where(page);
+
 check(await walkTo(page, 'garden'), 'tapping walks you to the garden gate');
 const moved = await stopped(page);
 check(Math.hypot(moved.x - at.x, moved.y - at.y) > 400, 'by actually crossing the ground between');
 const gateView = await view(page);
 check(Math.abs(gateView.x - firstView.x) > 100 && Math.abs(gateView.y - firstView.y) > 100, 'and the view follows you across the world, both ways');
+check(await walkUpTo(page, 'dov') && await S(page, () => document.querySelector('.placecard').dataset.person === 'dov'), 'Dov is by the garden gate, and can be walked up to');
+await page.click('[data-act="talk"]');
+check((await hearOut(page)) === 3 && (await state(page)).story.dov === 1, 'and has a tip or three');
+check(await walkTo(page, 'garden'), 'the gate is a few steps from him');
 await page.waitForSelector('.placecard[data-spot="garden"]');
 check(await S(page, () => document.querySelector('.placecard h2').textContent.includes('The Garden Gate') && document.querySelector('[data-act="enter"]').textContent.includes('Walk on in')), 'standing at its gate tells you the way in is open');
 check((await state(page)).visit === null && moved.district === null, 'reading the sign is not yet a visit');
@@ -306,6 +379,7 @@ check(await S(page, () => document.querySelector('.placecard').dataset.calmed ==
 s = await state(page);
 check(s.visit.stop === 1 && s.visit.groups[FIRST].done && s.visit.groups.filter((group) => group.done).length === 1, 'that group, and only that group');
 check(Object.values(s.visit.hp).every((hp) => hp > 0), 'with everyone on their feet after a breather');
+check(await S(page, () => document.querySelector('.goalchip').dataset.goal === 'calm' && document.querySelector('.goalchip span').textContent === 'Calm the garden (1 of 5)'), 'with a friend made, the goal becomes the whole garden, and counts');
 const afterWin = await where(page);
 check(Math.abs(afterWin.x - s.where.x) < 1 && afterWin.district === 'garden', 'and you are standing where you stood');
 
@@ -427,6 +501,7 @@ check(s.rooms.garden.clears === 1 && s.rooms.garden.best === 5 && s.visit === nu
 check(s.book.boss_hydra.met && !s.friends.some((f) => SPECIES[f.species].boss), 'the boss was met, and did not come home');
 check(s.friends.length >= 5, `friends were made along the way (${s.friends.length})`);
 check(s.friends.filter((f) => s.team.includes(f.id)).every((f) => f.level > 3), 'and the team grew');
+check(await S(page, () => document.querySelector('.goalchip').dataset.goal === 'report' && document.querySelector('.goalchip span').textContent === 'Tell Ines Tock'), 'the goal is now to tell Ines Tock');
 check((await where(page)).district === 'garden' && (await game(page, () => window.oddments.game.held().length)) === 0, 'you are still standing in the garden, and nobody is about');
 check(await S(page, () => document.querySelector('.placecard').hidden), 'with nothing to report');
 await page.waitForTimeout(400);
@@ -437,7 +512,16 @@ await page.waitForSelector('.placecard[data-spot="garden"]');
 check(await S(page, () => document.querySelector('.placecard small').textContent.includes('Most calmed in one go: 5 of 5') && document.querySelector('[data-act="enter"]').textContent.includes('Walk on in')), 'the garden can be walked again');
 const visitsSoFar = (await state(page)).rooms.garden.visits;
 check(await walkIn(page, 'garden') && (await state(page)).rooms.garden.visits === visitsSoFar + 1 && (await state(page)).visit.stop === 0, 'and stepping back in is a new visit, with everyone restless again');
-await S(page, () => { window.oddments.game.goHome(); window.oddments.game.standAt('alley'); window.oddments.ctx.show('lane'); });
+await S(page, () => { window.oddments.game.goHome(); window.oddments.game.standBy('ines'); window.oddments.ctx.show('lane'); });
+await page.waitForSelector('.placecard[data-person="ines"] [data-act="talk"].gold');
+await page.click('[data-act="talk"]');
+check((await hearOut(page)) === 3 && (await state(page)).story.ines === 2, 'she has news again, and hears about the garden');
+check(await S(page, () => document.querySelector('.goalchip').dataset.goal === 'more' && document.querySelector('.goalchip span').textContent === 'Tin Can Alley is next (1 of 8)'), 'one place of eight is calm, and the next is named');
+await page.click('[data-act="goal"]');
+check(await S(page, () => document.querySelector('.modal.journal .aim').textContent.includes('1 of 8 calm') && [...document.querySelectorAll('.modal.journal .sofar li')].some((li) => li.textContent === 'The Garden Gate is calm.')), 'and the journal has it down');
+await snap(page, 'e2e-journal-calm');
+await page.click('.modal [data-id="ok"]');
+await S(page, () => { window.oddments.game.standAt('alley'); window.oddments.ctx.show('lane'); });
 await page.waitForSelector('.placecard[data-spot="alley"]');
 check(await S(page, () => document.querySelector('[data-act="enter"]').disabled && document.querySelector('[data-act="enter"]').textContent === 'Not built yet'), 'the next place is still not built: the slice ends here');
 await snap(page, 'e2e-house-cleared');
@@ -454,7 +538,7 @@ for (let seed = 1; seed < 20000 && !rareSeed; seed++) {
 check(rareSeed > 0, `a seed whose first fight has an Heirloom exists (${rareSeed})`);
 await page.goto(`${base}?debug&fast&reset&seed=${rareSeed}`);
 await ready(page);
-await page.click('[data-id="begin"]');
+await begin(page);
 await enterGarden(page);
 check((await state(page)).visit.groups[0].foes.some((foe) => foe.heirloom), 'the Heirloom can be seen waiting before it is met');
 await onward(page);
@@ -527,6 +611,12 @@ for (const [name, viewport] of [['small phone (320x568)', { width: 320, height: 
   await other.goto(`${base}?debug&fast&reset&seed=7`);
   await ready(other);
   await other.click('[data-id="begin"]');
+  await other.waitForSelector('.modal.talk');
+  await other.waitForTimeout(300);
+  const fitsTalk = await S(other, () => { const r = document.querySelector('.modal.talk').getBoundingClientRect(); return document.documentElement.scrollWidth <= innerWidth && r.top >= 0 && r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight; });
+  await hearOut(other);
+  await other.waitForTimeout(300);
+  const fitsGoal = await S(other, () => { const r = document.querySelector('.goalchip').getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && r.height < 40; });
   const fitsHome = await S(other, () => document.documentElement.scrollWidth <= innerWidth && document.querySelector('#tabs').getBoundingClientRect().bottom <= innerHeight + 0.5 && document.querySelector('[data-act="friends"]').getBoundingClientRect().bottom <= document.querySelector('#tabs').getBoundingClientRect().top + 0.5);
   await enterGarden(other);
   await other.waitForSelector('.placecard.slim');
@@ -539,7 +629,7 @@ for (const [name, viewport] of [['small phone (320x568)', { width: 320, height: 
     const inside = (el) => { const r = el.getBoundingClientRect(); return r.left >= -0.5 && r.right <= innerWidth + 0.5 && r.bottom <= innerHeight + 0.5 && r.top >= -0.5; };
     return document.documentElement.scrollWidth <= innerWidth && [...document.querySelectorAll('.move, .call, .unit, .order')].every(inside);
   });
-  check(fitsHome && fitsPath && fitsFight, `everything fits on a ${name}`, `home ${fitsHome} path ${fitsPath} fight ${fitsFight}`);
+  check(fitsTalk && fitsGoal && fitsHome && fitsPath && fitsFight, `everything fits on a ${name}`, `talk ${fitsTalk} goal ${fitsGoal} home ${fitsHome} path ${fitsPath} fight ${fitsFight}`);
   await snap(other, `e2e-size-${viewport.width}`);
   await other.context().close();
 }

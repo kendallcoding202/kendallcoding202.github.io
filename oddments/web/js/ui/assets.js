@@ -1,5 +1,6 @@
 // Fetches every picture before the game shows, so nothing pops in mid-fight.
 import { SPECIES, SPECIES_IDS, ROOMS, LOOK_IDS } from '../core/balance.js';
+import { CAST, CAST_IDS } from '../core/story.js';
 import { spriteSrc } from './dom.js';
 import { WORLD_ART, worldSrc } from './scenery.js';
 
@@ -18,7 +19,9 @@ export async function loadAssets(onProgress = () => {}) {
     sources.push(spriteSrc(id));
     if (!SPECIES[id].boss) sources.push(spriteSrc(id, true));
   }
-  for (const look of LOOK_IDS) sources.push(spriteSrc(look));
+  // People: each look of the house-sitter from the side, the front and behind, and the cast.
+  for (const look of LOOK_IDS) sources.push(spriteSrc(look), spriteSrc(`${look}_front`), spriteSrc(`${look}_back`));
+  for (const id of CAST_IDS) sources.push(spriteSrc(CAST[id].art));
   for (const room of ROOMS) sources.push(`assets/bg/${room.bg}.webp`);
   for (const name of WORLD_ART) sources.push(worldSrc(name));
   let done = 0;
