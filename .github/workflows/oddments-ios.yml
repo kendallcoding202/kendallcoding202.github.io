@@ -34,7 +34,7 @@ on:
         type: boolean
         default: false
       check_only:
-        description: Only check the Apple credentials (no build, no upload)
+        description: Only check the Apple credentials and report on uploaded builds (no build, no upload)
         type: boolean
         default: false
 
@@ -194,6 +194,11 @@ jobs:
           node-version: 22
       - name: Check the Apple credentials and the app record
         run: node tools/asc.mjs check
+      # Asked for on its own, the check also reports what Apple has made of the builds sent so far
+      # and who can test them. It changes nothing.
+      - name: What Apple has done with the uploads so far
+        if: ${{ inputs.check_only }}
+        run: node tools/asc.mjs status
 
   testflight:
     needs: preflight

@@ -8,8 +8,8 @@ The iPhone app is the same game in a thin shell (Capacitor, as Pawst Lives uses)
 | --- | --- |
 | Xcode project (`ios/`), stand-in icon and launch image | In the repository |
 | The app compiles, launches in the iOS Simulator, and keeps its save in native storage | Checked by the "Clutterkin iOS" workflow, job "build", which needs no secrets. Its screenshots are attached to each run. |
-| Upload to TestFlight | Wired up (job "testflight"). The app record and the five secrets are in place and the archive builds. The first real attempt was refused by Apple at signing, because the API key did not have Admin access (see step 3). **No build has been uploaded yet.** |
-| A real iPhone | Not tried. TestFlight is how that happens. |
+| Upload to TestFlight | **Working.** The "Clutterkin iOS" workflow archives, has Apple sign it and uploads it. The first build, 0.1.0 (9), went up on 16 November 2026. An internal tester group, "Team", gets every build and the account holder is invited to it. |
+| A real iPhone | Not tried yet by anyone: install the build from TestFlight (step 5). |
 
 ## What only you can do
 
@@ -45,13 +45,13 @@ GitHub → this repository → Settings → Secrets and variables → Actions �
 | `APPLE_TEAM_ID` | Your team id: 10 letters and digits | developer.apple.com/account → Membership details |
 | `IOS_BUNDLE_ID` | The bundle id from step 1 | You chose it |
 
-**The key must have Admin access.** Apple signs the upload with a certificate it keeps itself, and only does that for an Admin key. With any other access the upload stops at "Cloud signing permission error" (this happened on the first real attempt here). A key's access cannot be changed afterwards: generate a new one with Access set to Admin, replace `ASC_KEY_ID` and `ASC_KEY_P8`, and revoke the old one. The Issuer ID does not change.
+**The key must have Admin access.** Apple signs the upload with a certificate it keeps itself, and only does that for an Admin key. With any other access the upload stops at "Cloud signing permission error": this happened on the first two attempts here, with an App Manager key, and the same upload went through as soon as an Admin key replaced it. A key's access cannot be changed afterwards: generate a new one with Access set to Admin, replace `ASC_KEY_ID` and `ASC_KEY_P8`, and revoke the old one. The Issuer ID does not change.
 
 ### 4. Run the upload
 
 GitHub → Actions → **Clutterkin iOS** → Run workflow → tick **Upload to TestFlight** → Run.
 
-- A first job checks the secrets against Apple in a few seconds and says in plain words what is wrong if anything is. The one thing it cannot check is that the key has Admin access (step 3): that only shows when Apple is asked to sign. To run just this check, tick "Only check the Apple credentials" instead.
+- A first job checks the secrets against Apple in a few seconds and says in plain words what is wrong if anything is. The one thing it cannot check is that the key has Admin access (step 3): that only shows when Apple is asked to sign. To run just this check, tick "Only check the Apple credentials" instead; run that way it also reports what Apple has done with each uploaded build and who can test.
 - The second archives the app, has Apple sign it, and uploads it. About ten minutes.
 - It finishes by making an internal tester group called "Team" that gets every build, and inviting the account holder (you), if nobody can test yet.
 
