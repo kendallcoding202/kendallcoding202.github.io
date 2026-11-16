@@ -1,0 +1,49 @@
+# Oddments: runs the rule tests, the simulator and the browser end-to-end
+# test whenever the game changes. Cheap Linux minutes only.
+name: Oddments tests
+
+on:
+  push:
+    branches: [main]
+    paths: ["oddments/**", ".github/workflows/oddments-tests.yml"]
+  pull_request:
+    paths: ["oddments/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oddments-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: oddments
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Rules, save, pacing, iOS 15 and sealed-page tests
+        run: npm test
+      - name: How long fights last and how hard the first place is
+        run: npm run sim
+      - name: Install a browser for the end-to-end test
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: End-to-end test
+        run: npm run e2e
+      - name: Preview build
+        run: node tests/e2e/preview.mjs
+      - name: Keep the screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: oddments-e2e-screenshots
+          path: oddments/tests/e2e/out/*.png
+          if-no-files-found: ignore
