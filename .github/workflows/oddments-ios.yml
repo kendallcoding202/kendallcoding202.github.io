@@ -65,7 +65,7 @@ jobs:
   build:
     if: ${{ !inputs.testflight && !inputs.check_only }}
     runs-on: ${{ inputs.xcode27 && 'xcode-27' || 'macos-15' }}
-    timeout-minutes: 30
+    timeout-minutes: 45 # the Simulator starts slowly on the Xcode 27 Mac: the whole check took 26 minutes there
     env:
       BUNDLE_ID: app.oddments.game # a stand-in: fine for the Simulator, never uploaded
     steps:

@@ -68,9 +68,9 @@ iPhone Duo is Apple's folding iPhone: a 5.4-inch screen when closed and a 7.6-in
 | | Where it stands |
 | --- | --- |
 | The game's layout | Fills both screens, and takes being opened or closed in the middle of a walk or a fight without losing anything. Open, you see about a third more of the world across, lists go four to a row and a fight's moves two to a row. Held to by the browser test at 466x678 points (closed) and 669x951 (open: the size Apple's simulator draws the inner screen at). |
-| Built with Xcode 27.1 | Yes. An app uses all of both screens only when built with an Xcode that knows the phone. The "Clutterkin on iPhone Duo" workflow builds with it, and so does "Clutterkin iOS" when its "xcode27" box is ticked: the Simulator check, the native save check and the upload rehearsal all pass there. |
+| Built with Xcode 27.1 | Yes. An app uses all of both screens only when built with an Xcode that knows the phone. The "Clutterkin on iPhone Duo" workflow builds with it, and so does "Clutterkin iOS" when its "xcode27" box is ticked: the Simulator check, the native save check and the upload rehearsal all pass there (slowly: that Mac's Simulator takes about 25 minutes over it). |
 | On Apple's iPhone Duo simulator, closed | Seen. The game launches, fills the outer screen and keeps clear of the strip the phone puts down its right side for the clock and camera. That strip is wide: about 84 of the outer screen's 466 points, so closed, the game has about the room of a small iPhone. Screenshots are kept with every run of the workflow. |
-| On the simulator, open | **Not seen.** The simulator starts closed and nothing found so far opens it from a script. The inner screen has only been tried at its size in a browser. |
+| On the simulator, open | **Not seen.** The simulator starts closed, and nothing a script can do opens it (switching the inner screen on leaves it blank; opening is done by hand in the Simulator app on a Mac). The inner screen has only been tried at its size, 669x951 points, in a browser. |
 | A real iPhone Duo | **Not tried by anyone.** |
 | The build on TestFlight today | 0.1.0 (9) was built with the older Xcode. By Apple's account an app built that way still runs on an iPhone Duo, but scaled, and without using all of the screen. |
 
