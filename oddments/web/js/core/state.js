@@ -4,9 +4,9 @@ import {
   LOOK_IDS, lookOf, xpNeeded, roomOf, roomBuilt,
 } from './balance.js';
 import { newFriend } from './progress.js';
-import { roomOpen, maxHpOf } from './rooms.js';
+import { roomOpen, maxHpOf, rollEncounter, fairEncounter } from './rooms.js';
 import { own } from './util.js';
-import { settleWhere } from './world.js';
+import { settleWhere, settleInside, areaOf } from './world.js';
 
 export function newState(now = Date.now(), seed = (now ^ 0x9e3779b9) | 0) {
   const friends = START_TEAM.map(([species, level], i) => newFriend(i + 1, species, level));
@@ -22,7 +22,7 @@ export function newState(now = Date.now(), seed = (now ^ 0x9e3779b9) | 0) {
     team: friends.map((friend) => friend.id), // up to three friend ids, in fighting order
     where: settleWhere(null), // where you are standing in the lane; a new game starts at the door of home
     rooms: Object.fromEntries(ROOM_IDS.map((id) => [id, { visits: 0, clears: 0, losses: 0, best: 0 }])),
-    visit: null, // the room being walked: { room, stop, hp: { friendId: health } }
+    visit: null, // the place you are inside: { room, stop, hp: { friendId: health }, at: { x, y }, waiting: [who is at the next stop] }
     // The scrapbook: which kinds have been met, and which as an Heirloom.
     book: Object.fromEntries(SPECIES_IDS.map((id) => [id, { met: friends.some((friend) => friend.species === id), heirloom: false }])),
     stats: { battles: 0, wins: 0, losses: 0, rounds: 0, knockouts: 0, befriended: 0, heirlooms: 0 },
@@ -86,7 +86,13 @@ function reviveVisit(raw, state) {
     visit.hp[id] = int(hp[id], maxHpOf(friend), 0, maxHpOf(friend));
   }
   // Nobody on their feet is not a visit: they are at home.
-  return Object.values(visit.hp).some((left) => left > 0) ? visit : null;
+  if (!Object.values(visit.hp).some((left) => left > 0)) return null;
+  visit.at = settleInside(areaOf(room.id), raw.at, visit.stop);
+  // Who is waiting is kept only if it is a fair roll for that stop; otherwise it is rolled again.
+  visit.waiting = fairEncounter(room, visit.stop, raw.waiting)
+    ? raw.waiting.map((foe) => ({ species: foe.species, level: foe.level, heirloom: foe.heirloom }))
+    : rollEncounter(state, room, visit.stop);
+  return visit;
 }
 
 /** Turns whatever was in storage into a valid current-version state, or null if it is not a save at all. */

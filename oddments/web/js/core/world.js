@@ -51,9 +51,10 @@ export function canStand(x, y) {
 /**
  * One step of walking from `pos` toward `target`, `dt` seconds long. Returns
  * the new position and whether anything moved. A wall is slid along rather
- * than stuck to; if there is no way on, you stop.
+ * than stuck to; if there is no way on, you stop. `can` says where feet may
+ * be: the lane by default, or the inside of a place.
  */
-export function stepWalk(pos, target, dt) {
+export function stepWalk(pos, target, dt, can = canStand) {
   const dx = target.x - pos.x;
   const dy = target.y - pos.y;
   const far = Math.hypot(dx, dy);
@@ -61,13 +62,61 @@ export function stepWalk(pos, target, dt) {
   if (!(far > 1.5) || !(step > 0)) return { x: pos.x, y: pos.y, moving: false };
   const sx = (dx / far) * step;
   const sy = (dy / far) * step;
-  if (canStand(pos.x + sx, pos.y + sy)) return { x: pos.x + sx, y: pos.y + sy, moving: true };
+  if (can(pos.x + sx, pos.y + sy)) return { x: pos.x + sx, y: pos.y + sy, moving: true };
   // Blocked: keep whichever part of the step is still free, preferring the bigger.
   const tries = Math.abs(sx) >= Math.abs(sy) ? [[sx, 0], [0, sy]] : [[0, sy], [sx, 0]];
   for (const [mx, my] of tries) {
-    if (Math.abs(mx) + Math.abs(my) > 0.2 && canStand(pos.x + mx, pos.y + my)) return { x: pos.x + mx, y: pos.y + my, moving: true };
+    if (Math.abs(mx) + Math.abs(my) > 0.2 && can(pos.x + mx, pos.y + my)) return { x: pos.x + mx, y: pos.y + my, moving: true };
   }
   return { x: pos.x, y: pos.y, moving: false };
+}
+
+const CELL = 24; // route-finding works on squares this big
+
+/**
+ * The way to walk from `from` to `to` without going through anything: a list
+ * of points to head for in turn. If `to` is somewhere feet cannot be (a tap
+ * on a building, or on whoever is waiting), the way ends as near to it as
+ * feet can get. `can(x, y)` says where feet may be; `size` is { w, h }.
+ */
+export function routeTo(from, to, can, size) {
+  const cols = Math.ceil(size.w / CELL);
+  const rows = Math.ceil(size.h / CELL);
+  if (!Number.isFinite(to.x) || !Number.isFinite(to.y)) return [];
+  const col = (x) => Math.min(cols - 1, Math.max(0, Math.floor(x / CELL)));
+  const row = (y) => Math.min(rows - 1, Math.max(0, Math.floor(y / CELL)));
+  const start = row(from.y) * cols + col(from.x);
+  const goal = row(to.y) * cols + col(to.x);
+  const open = (cell) => can((cell % cols) * CELL + CELL / 2, Math.floor(cell / cols) * CELL + CELL / 2);
+  const far = (cell) => Math.hypot((cell % cols) * CELL + CELL / 2 - to.x, Math.floor(cell / cols) * CELL + CELL / 2 - to.y);
+  // Breadth-first outward from where you stand, remembering how each square was reached.
+  const prev = new Int32Array(cols * rows).fill(-1);
+  const queue = [start];
+  prev[start] = start;
+  let best = start;
+  let bestFar = far(start);
+  for (let head = 0; head < queue.length && best !== goal; head++) {
+    const cell = queue[head];
+    const c = cell % cols;
+    const r = Math.floor(cell / cols);
+    for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      const nc = c + dc;
+      const nr = r + dr;
+      if (nc < 0 || nr < 0 || nc >= cols || nr >= rows) continue;
+      const next = nr * cols + nc;
+      if (prev[next] !== -1 || !open(next)) continue;
+      // No cutting a corner between two blocked squares.
+      if (dc && dr && (!open(r * cols + nc) || !open(nr * cols + c))) continue;
+      prev[next] = cell;
+      queue.push(next);
+      const d = far(next);
+      if (d < bestFar) { best = next; bestFar = d; }
+    }
+  }
+  const way = [];
+  for (let cell = best; cell !== start; cell = prev[cell]) way.unshift({ x: (cell % cols) * CELL + CELL / 2, y: Math.floor(cell / cols) * CELL + CELL / 2 });
+  if (best === goal && can(to.x, to.y) && Math.hypot(to.x - from.x, to.y - from.y) > 2) { if (way.length) way.pop(); way.push({ x: to.x, y: to.y }); }
+  return way;
 }
 
 /** The place whose door you are standing at, or null. */
@@ -87,4 +136,59 @@ export function settleWhere(raw) {
   if (!raw || typeof raw !== 'object' || typeof raw.x !== 'number' || typeof raw.y !== 'number') return { x: home.x, y: home.y };
   if (!Number.isFinite(raw.x) || !Number.isFinite(raw.y) || !canStand(raw.x, raw.y)) return { x: home.x, y: home.y };
   return { x: raw.x, y: raw.y };
+}
+
+// ---------------------------------------------------------------- inside a place
+//
+// Walk through a door and you are inside the place: a map of its own that you
+// cross on foot. Hedges (`blocks`) leave one winding way from the gate to the
+// far end, and whoever is waiting at each stop stands in a gap of it (`posts`,
+// one per stop of the room's path, in order): there is no getting past them
+// without meeting them. `gate` is where you come in and where you go out.
+export const AREAS = {
+  garden: {
+    w: 720, h: 1500,
+    gate: { x: 360, y: 1430 },
+    blocks: [
+      { x: 0, y: 1160, w: 500, h: 44 }, { x: 220, y: 880, w: 500, h: 44 },
+      { x: 0, y: 600, w: 500, h: 44 }, { x: 220, y: 320, w: 500, h: 44 },
+    ],
+    // Each gap is narrower than the ground a group holds, so there is no squeezing by.
+    posts: [{ x: 605, y: 1182 }, { x: 115, y: 902 }, { x: 605, y: 622 }, { x: 115, y: 342 }, { x: 360, y: 130 }],
+  },
+};
+export const POST = { hold: 100, meet: 118 }; // how much ground a waiting group holds, and how near is meeting it
+export const areaOf = (roomId) => (typeof roomId === 'string' && Object.prototype.hasOwnProperty.call(AREAS, roomId) ? AREAS[roomId] : null);
+
+/**
+ * Whether feet can be at this point inside a place. `stop` is how far you
+ * have got: whoever is waiting at that stop, and at every stop after it,
+ * still holds their ground.
+ */
+export function canStandIn(area, x, y, stop) {
+  if (!(x >= WORLD.edge && x <= area.w - WORLD.edge && y >= WORLD.edge && y <= area.h - WORLD.edge)) return false;
+  const b = WORLD.body;
+  for (const block of area.blocks) {
+    if (x > block.x - b && x < block.x + block.w + b && y > block.y - b && y < block.y + block.h + b) return false;
+  }
+  for (let i = Math.max(0, stop); i < area.posts.length; i++) {
+    const post = area.posts[i];
+    if ((x - post.x) * (x - post.x) + (y - post.y) * (y - post.y) < POST.hold * POST.hold) return false;
+  }
+  return true;
+}
+
+/** Whether you have walked up to whoever is waiting at this stop. */
+export function meetingAt(area, pos, stop) {
+  const post = area.posts[stop];
+  return !!post && Math.hypot(pos.x - post.x, pos.y - post.y) <= POST.meet;
+}
+
+export const atGate = (area, pos) => Math.hypot(pos.x - area.gate.x, pos.y - area.gate.y) <= WORLD.reach;
+
+/** A position inside a place made safe: somewhere feet can be given how far you have got, or the gate. */
+export function settleInside(area, raw, stop) {
+  const ok = raw && typeof raw === 'object' && typeof raw.x === 'number' && typeof raw.y === 'number'
+    && Number.isFinite(raw.x) && Number.isFinite(raw.y) && canStandIn(area, raw.x, raw.y, stop);
+  return ok ? { x: raw.x, y: raw.y } : { x: area.gate.x, y: area.gate.y };
 }

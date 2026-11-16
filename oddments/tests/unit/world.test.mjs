@@ -1,8 +1,9 @@
 // The lane: the open world you walk around between places.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { WORLD, SPOTS, SPOT_IDS, TREES, canStand, stepWalk, spotNear, spotOf, settleWhere } from '../../web/js/core/world.js';
-import { ROOM_IDS } from '../../web/js/core/balance.js';
+import { WORLD, SPOTS, SPOT_IDS, TREES, AREAS, POST, canStand, canStandIn, meetingAt, atGate, areaOf, stepWalk, routeTo, spotNear, spotOf, settleWhere } from '../../web/js/core/world.js';
+import { ROOM_IDS, ROOMS, roomBuilt } from '../../web/js/core/balance.js';
+import { fairEncounter } from '../../web/js/core/rooms.js';
 import { Game } from '../../web/js/core/game.js';
 import { newState, reviveState } from '../../web/js/core/state.js';
 
@@ -138,16 +139,169 @@ test('you can only walk into a room from its door', () => {
   assert.equal(game.enterRoom('garden'), true);
 });
 
-test('there is no walking about while on a path or in a fight', () => {
+test('there is no walking during a fight, and walking inside a place does not move you in the lane', () => {
   const game = new Game(newState(NOW, 3), { now: NOW });
   game.travelTo('garden');
-  const before = { ...game.state.where };
-  assert.equal(game.walk({ x: 300, y: 300 }, 0.1), false);
+  const outside = { ...game.state.where };
+  assert.equal(game.walk({ x: 200, y: 1300 }, 0.1), true, 'inside, you walk');
+  assert.deepEqual(game.state.where, outside);
   assert.equal(game.standAt('home'), false);
+  const inside = { ...game.state.visit.at };
   game.startEncounter();
   assert.equal(game.walk({ x: 300, y: 300 }, 0.1), false);
-  assert.deepEqual(game.state.where, before);
+  assert.deepEqual(game.state.visit.at, inside);
   for (const bad of [null, undefined, {}, { x: NaN, y: 1 }, 'north']) assert.equal(new Game(newState(NOW, 3), { now: NOW }).walk(bad, 0.1), false);
+});
+
+// ---------------------------------------------------------------- inside a place
+
+const GARDEN = AREAS.garden;
+const inside = (x, y, stop = 0) => canStandIn(GARDEN, x, y, stop);
+
+test('every built room has an inside to walk through, with a post for each stop of its path', () => {
+  for (const room of ROOMS) {
+    assert.equal(!!areaOf(room.id), roomBuilt(room), room.id);
+    if (!roomBuilt(room)) continue;
+    const area = areaOf(room.id);
+    assert.equal(area.posts.length, room.path.length);
+    assert.ok(canStandIn(area, area.gate.x, area.gate.y, 0), 'the gate is somewhere feet can be');
+    assert.ok(atGate(area, area.gate));
+  }
+  assert.equal(areaOf('constructor'), null);
+  assert.equal(areaOf('alley'), null);
+});
+
+test('inside, feet cannot go through a hedge or past the edge', () => {
+  for (const block of GARDEN.blocks) assert.equal(inside(block.x + block.w / 2, block.y + block.h / 2, 99), false);
+  assert.equal(inside(-10, 700, 99), false);
+  assert.equal(inside(360, GARDEN.h + 10, 99), false);
+  assert.equal(inside(360, 1300), true);
+});
+
+test('whoever is waiting holds their ground until they are dealt with: there is no way past them', () => {
+  GARDEN.posts.forEach((post, stop) => {
+    assert.equal(inside(post.x, post.y, stop), false, `stop ${stop} holds its post`);
+    assert.equal(inside(post.x, post.y, stop + 1), true, `and it is open ground once they are gone`);
+    assert.equal(meetingAt(GARDEN, { x: post.x, y: post.y + POST.hold + 4 }, stop), true);
+    assert.equal(meetingAt(GARDEN, { x: post.x, y: post.y + POST.meet + 40 }, stop), false);
+  });
+  // Walk at the far end from the gate with nobody dealt with: you get as far as the first group and no further.
+  let pos = { ...GARDEN.gate };
+  const far = GARDEN.posts[GARDEN.posts.length - 1];
+  for (const via of [GARDEN.posts[0], far, { x: 700, y: 20 }, { x: 20, y: 20 }, far]) {
+    for (let i = 0; i < 900; i++) { const next = stepWalk(pos, via, 1 / 30, (x, y) => inside(x, y, 0)); if (!next.moving) break; pos = next; }
+  }
+  assert.ok(pos.y > GARDEN.blocks[0].y, `still below the first hedge at y=${Math.round(pos.y)}`);
+});
+
+/** Walks a route the way the screen does: head for each point in turn. */
+function follow(from, way, can) {
+  let pos = { ...from };
+  for (const point of way) {
+    for (let i = 0; i < 400; i++) { const next = stepWalk(pos, point, 1 / 30, can); if (!next.moving) break; pos = next; }
+  }
+  return pos;
+}
+
+test('with each group dealt with the way on opens, all the way to the boss', () => {
+  let pos = { ...GARDEN.gate };
+  GARDEN.posts.forEach((post, stop) => {
+    const can = (x, y) => inside(x, y, stop);
+    // Tap on them: the way leads round the hedges and stops where they are holding their ground.
+    const way = routeTo(pos, post, can, GARDEN);
+    assert.ok(way.length > 0 && way.every((point) => can(point.x, point.y)), `the way to stop ${stop} never goes through anything`);
+    pos = follow(pos, way, can);
+    assert.equal(meetingAt(GARDEN, pos, stop), true, `walked up to stop ${stop}`);
+  });
+});
+
+test('a way is found round whatever is between, and a tap on something solid leads as near as feet can get', () => {
+  const home = spotOf('home').door;
+  for (const spot of SPOTS) {
+    const way = routeTo(home, spot.door, canStand, WORLD);
+    assert.ok(way.every((point) => canStand(point.x, point.y)));
+    assert.equal(spotNear(follow(home, way, canStand)), spot.id, `the way from home to ${spot.id}`);
+  }
+  const wash = spotOf('wash');
+  const roof = { x: wash.x, y: wash.y - 30 }; // a tap on the building itself
+  assert.equal(canStand(roof.x, roof.y), false);
+  const near = follow(home, routeTo(home, roof, canStand, WORLD), canStand);
+  assert.ok(Math.hypot(near.x - roof.x, near.y - roof.y) < 90, 'ends beside the building');
+  assert.deepEqual(routeTo(home, home, canStand, WORLD), []);
+  assert.deepEqual(routeTo(home, { x: NaN, y: 3 }, canStand, WORLD), []);
+  assert.ok(routeTo(home, { x: 1e9, y: -1e9 }, canStand, WORLD).length > 0, 'a tap far outside the world still walks toward it');
+});
+
+test('the game finds the way for wherever you are, and none during a fight', () => {
+  const game = new Game(newState(NOW, 3), { now: NOW, fx: false });
+  assert.ok(game.routeTo(spotOf('garden').door).length > 3);
+  game.travelTo('garden');
+  assert.deepEqual(game.standing(), GARDEN.gate);
+  const way = game.routeTo(GARDEN.posts[0]);
+  assert.ok(way.length > 3 && way.every((point) => inside(point.x, point.y, 0)));
+  game.startEncounter();
+  assert.equal(game.standing(), null);
+  assert.deepEqual(game.routeTo({ x: 100, y: 100 }), []);
+});
+
+test('walking in puts you at the gate with the first group already waiting where you can see them', () => {
+  const game = new Game(newState(NOW, 3), { now: NOW, fx: false });
+  game.travelTo('garden');
+  const visit = game.state.visit;
+  assert.deepEqual(visit.at, GARDEN.gate);
+  assert.equal(game.atGate(), true);
+  assert.equal(game.meeting(), false);
+  assert.equal(fairEncounter(ROOMS[0], 0, visit.waiting), true);
+  const seen = JSON.stringify(visit.waiting);
+  assert.equal(game.approach(), true);
+  assert.equal(game.meeting(), true);
+  assert.equal(game.atGate(), false);
+  const battle = game.startEncounter();
+  assert.equal(JSON.stringify(battle.units.filter((u) => u.side === 'foe').map((u) => ({ species: u.species, level: u.level, heirloom: u.heirloom }))), seen, 'who you saw is who you fight');
+});
+
+test('after a win the next group is waiting further on; you stay where you were standing', () => {
+  const game = new Game(newState(NOW, 8), { now: NOW, fx: false });
+  game.travelTo('garden');
+  game.approach();
+  const stood = { ...game.state.visit.at };
+  const battle = game.startEncounter();
+  for (const unit of battle.units) if (unit.side === 'foe') unit.hp = 0;
+  battle.phase = 'won';
+  game.finishBattle();
+  assert.equal(game.state.visit.stop, 1);
+  assert.deepEqual(game.state.visit.at, stood);
+  assert.equal(fairEncounter(ROOMS[0], 1, game.state.visit.waiting), true);
+  assert.equal(game.meeting(), false, 'the next ones are further in');
+});
+
+test('a fair roll for a stop is the right boss, the right numbers, the right kinds and levels', () => {
+  const boss = { species: 'boss_hydra', level: 5, heirloom: false };
+  const puff = { species: 'dandepuff', level: 3, heirloom: false };
+  assert.equal(fairEncounter(ROOMS[0], 4, [puff, boss, puff]), true);
+  for (const unfair of [
+    [puff, puff], [boss], [puff, boss, puff, puff], [puff, { ...boss, level: 1 }, puff], [puff, { ...boss, heirloom: true }, puff], [boss, boss, puff],
+    [{ ...puff, level: 9 }, boss, puff], [{ ...puff, species: 'gnome' }, boss, puff], [{ ...puff, species: 'constructor' }, boss, puff],
+    [{ ...puff, heirloom: 'yes' }, boss, puff], [null, boss, puff], 'boss', null, [],
+  ]) assert.equal(fairEncounter(ROOMS[0], 4, unfair), false, JSON.stringify(unfair));
+  assert.equal(fairEncounter(ROOMS[0], 0, [boss]), false, 'no boss at the gate');
+  assert.equal(fairEncounter(ROOMS[0], 9, [puff]), false);
+});
+
+test('a save cannot put you past a group, swap the boss for something soft, or stand you in a hedge', () => {
+  const game = new Game(newState(NOW, 3), { now: NOW, fx: false });
+  game.travelTo('garden');
+  const saved = JSON.parse(game.serialize(NOW));
+  const far = GARDEN.posts[4];
+  const edited = { ...saved, visit: { ...saved.visit, stop: 4, at: { x: far.x, y: far.y }, waiting: [{ species: 'dandepuff', level: 1, heirloom: false }] } };
+  const back = reviveState(edited, NOW);
+  assert.deepEqual(back.visit.at, GARDEN.gate, 'standing on the boss is not somewhere feet can be');
+  assert.equal(fairEncounter(ROOMS[0], 4, back.visit.waiting), true, 'the boss is still the boss');
+  assert.ok(back.visit.waiting.some((foe) => foe.species === 'boss_hydra'));
+  const hedge = GARDEN.blocks[0];
+  assert.deepEqual(reviveState({ ...saved, visit: { ...saved.visit, at: { x: hedge.x + 50, y: hedge.y + 10 } } }, NOW).visit.at, GARDEN.gate);
+  const kept = reviveState(JSON.parse(JSON.stringify(saved)), NOW);
+  assert.deepEqual(kept.visit, saved.visit, 'an honest visit comes back as it was');
 });
 
 test('worn out, the team is carried home; after a win you step back out where you went in', () => {

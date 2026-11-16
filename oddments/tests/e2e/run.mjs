@@ -6,8 +6,8 @@ import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
 import { serve } from '../../tools/serve.mjs';
 import { newState } from '../../web/js/core/state.js';
-import { rollEncounter, enterRoom } from '../../web/js/core/rooms.js';
-import { ROOMS, SPECIES, HEIRLOOM, BREATHER } from '../../web/js/core/balance.js';
+import { enterRoom } from '../../web/js/core/rooms.js';
+import { SPECIES, HEIRLOOM } from '../../web/js/core/balance.js';
 const { chromium } = createRequire(import.meta.url)('playwright'); // preinstalled globally (NODE_PATH)
 
 const OUT = new URL('./out/', import.meta.url).pathname;
@@ -139,22 +139,49 @@ check(Math.abs(again.x - at.x) < 1 && Math.abs(again.y - at.y) < 1 && again.near
 check(await walkTo(page, 'garden'), 'and you can walk back');
 await page.click('.placecard[data-spot="garden"] [data-act="enter"]');
 check((await screen(page)) === 'path', 'Walk in opens the path');
-check(await S(page, () => document.querySelector('#tabs').hidden), 'the tabs are put away on a path');
+check(await S(page, () => document.querySelector('#tabs').hidden), 'the tabs are put away inside a place');
 
-// =============================================================== the path
-section('The path');
-check((await page.$$('.stop')).length === 5, 'the path has five stops');
-check(await S(page, () => document.querySelector('.stop.here').dataset.stop === '0' && !!document.querySelector('.stop.here .sitter')), 'you stand at the first');
-check(await S(page, () => !!document.querySelector('.stop.boss .shadowy')), 'the boss is a shadow until it is met');
+// =============================================================== inside a place
+section('Inside the garden');
+/** Walks straight up to whoever is waiting (the engine's shortcut); the screen notices and the fight starts. */
+async function onward(p) {
+  await S(p, () => window.oddments.game.approach());
+  // Nothing starts until you move: one tap toward them is the step that walks you in.
+  const aim = await S(p, () => {
+    const to = window.oddments.lane.screenOf('next');
+    const box = document.querySelector('.lanecanvas').getBoundingClientRect();
+    return { x: Math.min(box.right - 8, Math.max(box.left + 8, to.x)), y: Math.min(box.bottom - 8, Math.max(box.top + 70, to.y)) };
+  });
+  await p.touchscreen.tap(aim.x, aim.y);
+  await p.waitForSelector('#fight', { timeout: 15000 });
+}
+s = await state(page);
+check(await S(page, () => window.oddments.game.atGate()) && s.visit.stop === 0, 'you come in at the gate');
+check(await S(page, () => document.querySelector('#lane').classList.contains('inside') && document.querySelector('#lane h1').textContent === 'The Garden Gate'), 'and are inside the garden, not on a menu');
+check(s.visit.waiting.length >= 1 && await S(page, () => document.querySelector('.placecard').dataset.stop === '0' && document.querySelector('.placecard h2').textContent.includes('By the Gate')), 'whoever is at the first stop is already waiting');
 check((await page.$$('.teamcard')).length === 3, 'the team of three is listed');
 check(await S(page, () => [...document.querySelectorAll('.teamcard .bar i')].every((i) => i.style.width === '100%')), 'everyone sets out rested');
-await snap(page, 'e2e-path');
-await page.click('[data-act="onward"]');
+await snap(page, 'e2e-inside');
+const stood = s.visit.at;
+// Walk up to them by tapping where they stand, as a finger would.
+for (let tries = 0; tries < 25 && (await S(page, () => window.oddments.game.place())) !== 'fight'; tries++) {
+  const aim = await S(page, () => {
+    const to = window.oddments.lane.screenOf('next');
+    const box = document.querySelector('.lanecanvas').getBoundingClientRect();
+    return { x: Math.min(box.right - 8, Math.max(box.left + 8, to.x)), y: Math.min(box.bottom - 8, Math.max(box.top + 70, to.y)) };
+  });
+  await page.touchscreen.tap(aim.x, aim.y);
+  await page.waitForTimeout(500);
+}
+await page.waitForSelector('#fight', { timeout: 15000 });
+s = await state(page);
+check(Math.hypot(s.visit.at.x - stood.x, s.visit.at.y - stood.y) > 150, 'tapping where they stand walks you there, round the hedge');
 
 // =============================================================== a fight
 section('A fight');
 await idle(page);
-check((await screen(page)) === 'fight', 'Onward starts the fight');
+check((await screen(page)) === 'fight', 'walking into them starts the fight');
+check(JSON.stringify((await battle(page)).units.filter((u) => u.side === 'foe').map((u) => u.species)) === JSON.stringify((await state(page)).visit.waiting.map((f) => f.species)), 'against exactly who was seen waiting');
 let b = await battle(page);
 const foeCount = b.units.filter((u) => u.side === 'foe').length;
 check((await page.$$('.unit.ally')).length === 3 && (await page.$$('.unit.foe')).length === foeCount, 'three friends face whoever turned up');
@@ -235,14 +262,14 @@ check(await S(page, () => document.querySelector('.modal .xp').textContent.inclu
 check(!(await page.$('.modal.result .x')), 'the result has to be acknowledged');
 await snap(page, 'e2e-result');
 await page.click('[data-id="next"]');
-check((await screen(page)) === 'path', 'Onward returns to the path');
-check(await S(page, () => document.querySelector('.stop.here').dataset.stop === '1' && document.querySelectorAll('.stop.done').length === 1), 'one stop further along');
+check((await screen(page)) === 'path', 'Onward puts you back in the garden');
+check(await S(page, () => document.querySelector('.placecard').dataset.stop === '1' && document.querySelector('.placecard h2').textContent.includes('stop 2 of 5')), 'with the next group waiting further in');
 s = await state(page);
 check(s.visit.stop === 1 && Object.values(s.visit.hp).every((hp) => hp > 0), 'with everyone on their feet after a breather');
 
 // =============================================================== walking away, and home
 section('Walking away');
-await page.click('[data-act="onward"]');
+await onward(page);
 await idle(page);
 await page.click('[data-act="menu"]');
 check((await modalTitle(page)) === 'Fight', 'the fight has a menu');
@@ -286,7 +313,7 @@ await snap(page, 'e2e-book');
 section('Saving');
 await tab(page, 'lane');
 await enterGarden(page);
-await page.click('[data-act="onward"]');
+await onward(page);
 await idle(page);
 const beforeReload = await state(page);
 await page.goto(`${base}?debug&fast`);
@@ -294,20 +321,26 @@ await ready(page);
 s = await state(page);
 check(s.player.name === 'Marisol' && s.player.look === 'sitter_c' && s.friends.length === beforeReload.friends.length, 'a reload keeps the house-sitter and every friend');
 check(JSON.stringify(s.team) === JSON.stringify(beforeReload.team) && s.settings.fast === true, 'and the team and settings');
-check((await screen(page)) === 'path' && s.visit && s.visit.stop === 0, 'a reload in the middle of a fight puts you back on the path before it');
+check((await screen(page)) === 'path' && s.visit && s.visit.stop === 0, 'a reload in the middle of a fight puts you back inside the garden before it');
+check(JSON.stringify(s.visit.waiting) === JSON.stringify(beforeReload.visit.waiting) && Math.abs(s.visit.at.x - beforeReload.visit.at.x) < 1, 'facing the same ones, standing where you stood');
+await page.waitForTimeout(600);
+check((await screen(page)) === 'path', 'and nothing starts until you move: you can still walk back out');
 check(!(await page.$('.modal.intro')), 'the intro does not come back');
 check(await S(page, () => Object.keys(localStorage).every((key) => key.startsWith('oddments.'))), 'the save is the only thing kept on the device');
 
 // =============================================================== the whole room
 section('The whole room');
+// (Back to the three you started with: the Friends test above swapped a brand-new, low-level friend in.)
+if ((await screen(page)) === 'path') await page.click('[data-act="home"]');
+await S(page, () => window.oddments.game.setTeam([1, 2, 3]));
 let cleared = false;
 let visits = 0;
-while (!cleared && visits < 4) {
+while (!cleared && visits < 6) {
   visits++;
   if ((await screen(page)) === 'lane') await enterGarden(page);
   while ((await screen(page)) === 'path') {
     const stop = (await state(page)).visit.stop;
-    await page.click('[data-act="onward"]');
+    await onward(page);
     await idle(page);
     if (stop === 4) {
       check((await page.$$('.unit.boss')).length === 1 && (await page.$$('.unit.foe')).length === 3, 'the boss stands with two others');
@@ -342,15 +375,16 @@ section('Heirlooms');
 let rareSeed = 0;
 for (let seed = 1; seed < 20000 && !rareSeed; seed++) {
   const probe = newState(Date.now(), seed);
-  enterRoom(probe, 'garden');
-  if (rollEncounter({ rng: probe.rng }, ROOMS[0], 0).some((foe) => foe.heirloom)) rareSeed = seed;
+  enterRoom(probe, 'garden'); // whoever is at the first stop is rolled as you walk in
+  if (probe.visit.waiting.some((foe) => foe.heirloom)) rareSeed = seed;
 }
 check(rareSeed > 0, `a seed whose first fight has an Heirloom exists (${rareSeed})`);
 await page.goto(`${base}?debug&fast&reset&seed=${rareSeed}`);
 await ready(page);
 await page.click('[data-id="begin"]');
 await enterGarden(page);
-await page.click('[data-act="onward"]');
+check((await state(page)).visit.waiting.some((foe) => foe.heirloom), 'the Heirloom can be seen waiting before it is met');
+await onward(page);
 await idle(page);
 b = await battle(page);
 const rare = b.units.find((u) => u.side === 'foe' && u.heirloom);
@@ -423,7 +457,7 @@ for (const [name, viewport] of [['small phone (320x568)', { width: 320, height: 
   const fitsHome = await S(other, () => document.documentElement.scrollWidth <= innerWidth && document.querySelector('#tabs').getBoundingClientRect().bottom <= innerHeight + 0.5 && document.querySelector('[data-act="friends"]').getBoundingClientRect().bottom <= document.querySelector('#tabs').getBoundingClientRect().top + 0.5);
   await enterGarden(other);
   const fitsPath = await S(other, () => document.documentElement.scrollWidth <= innerWidth && document.querySelector('[data-act="home"]').getBoundingClientRect().bottom <= innerHeight + 0.5);
-  await other.click('[data-act="onward"]');
+  await onward(other);
   await idle(other);
   const fitsFight = await S(other, () => {
     const inside = (el) => { const r = el.getBoundingClientRect(); return r.left >= -0.5 && r.right <= innerWidth + 0.5 && r.bottom <= innerHeight + 0.5 && r.top >= -0.5; };
@@ -444,5 +478,4 @@ check(errors.length === 0, 'no errors, and nothing refused by the content securi
 await browser.close();
 server.close();
 console.log(`\n${passed} passed, ${failed} failed`);
-void BREATHER;
 process.exit(failed ? 1 : 0);

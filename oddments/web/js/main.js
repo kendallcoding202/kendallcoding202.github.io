@@ -6,7 +6,6 @@ import { SPECIES, roomOf, moveOf } from './core/balance.js';
 import { loadAssets } from './ui/assets.js';
 import { h, $, sprite } from './ui/dom.js';
 import { modal, toast } from './ui/modals.js';
-import { pathScreen } from './ui/house.js';
 import { laneScreen } from './ui/lane.js';
 import { fightScreen } from './ui/fight.js';
 import { friendsScreen, bookScreen, settingsScreen, lookDialog } from './ui/friends.js';
@@ -27,7 +26,8 @@ const TABS = [
   { id: 'book', label: 'Scrapbook', build: bookScreen },
   { id: 'settings', label: 'Settings', build: settingsScreen },
 ];
-const SCREENS = { path: pathScreen, fight: fightScreen };
+// A place you have walked into is drawn by the same screen as the lane: it is all one world to walk in.
+const SCREENS = { path: laneScreen, fight: fightScreen };
 for (const tab of TABS) SCREENS[tab.id] = tab.build;
 
 // Once the save is being erased, nothing may write the old game back

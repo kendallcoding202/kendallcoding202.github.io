@@ -1,7 +1,8 @@
 // Rooms: who turns up at each stop on a path, and a visit from walking in to
 // going home. Rules only: no DOM, no clock, no storage.
 import { SPECIES, ROOMS, HEIRLOOM, BREATHER, TEAM_SIZE, roomOf, roomBuilt, statAt } from './balance.js';
-import { nextRandom, rollInt, rollPick } from './util.js';
+import { nextRandom, rollInt, rollPick, own } from './util.js';
+import { areaOf } from './world.js';
 
 /** A room is open once it is built and the room before it has been cleared. */
 export function roomOpen(state, roomId) {
@@ -32,10 +33,44 @@ export function rollEncounter(dice, room, stop) {
 export const maxHpOf = (friend) => statAt(SPECIES[friend.species].hp, friend.level);
 export const teamOf = (state) => state.team.map((id) => state.friends.find((friend) => friend.id === id)).filter(Boolean);
 
-/** Walks into a room with the team rested. Returns false if the room is not open. */
+/**
+ * Whether a list is a fair roll for a stop: the right boss (if any) at the
+ * right level, the right number of others, each from that stop's list and at
+ * its levels. A save cannot swap a boss for something soft.
+ */
+export function fairEncounter(room, stop, list) {
+  const spot = room.path[stop];
+  if (!spot || !Array.isArray(list) || list.length < 1 || list.length > TEAM_SIZE) return false;
+  let bosses = 0;
+  let company = 0;
+  for (const foe of list) {
+    if (!foe || typeof foe !== 'object' || !own(SPECIES, foe.species) || !Number.isInteger(foe.level) || typeof foe.heirloom !== 'boolean') return false;
+    if (SPECIES[foe.species].boss) {
+      if (foe.species !== spot.boss || foe.level !== spot.bossLevel || foe.heirloom) return false;
+      bosses++;
+    } else {
+      if (!spot.pool.some(([id]) => id === foe.species) || foe.level < spot.level[0] || foe.level > spot.level[1]) return false;
+      company++;
+    }
+  }
+  return bosses === (spot.boss ? 1 : 0) && company >= spot.size[0] && company <= spot.size[1];
+}
+
+/**
+ * Walks into a room with the team rested: you stand at its gate, and whoever
+ * is at the first stop is already waiting where you can see them. Returns
+ * false if the room is not open.
+ */
 export function enterRoom(state, roomId) {
   if (state.visit || !roomOpen(state, roomId) || teamOf(state).length === 0) return false;
-  state.visit = { room: roomId, stop: 0, hp: Object.fromEntries(teamOf(state).map((friend) => [friend.id, maxHpOf(friend)])) };
+  const room = roomOf(roomId);
+  const area = areaOf(roomId);
+  state.visit = {
+    room: roomId, stop: 0,
+    hp: Object.fromEntries(teamOf(state).map((friend) => [friend.id, maxHpOf(friend)])),
+    at: area ? { x: area.gate.x, y: area.gate.y } : { x: 0, y: 0 }, // where you are standing inside
+    waiting: rollEncounter(state, room, 0), // who is at the next stop: rolled now, so they can be seen before they are met
+  };
   state.rooms[roomId].visits++;
   return true;
 }
@@ -69,6 +104,7 @@ export function afterFight(state, won, left) {
     return { cleared: true, home: true };
   }
   visit.stop++;
+  visit.waiting = rollEncounter(state, room, visit.stop);
   for (const friend of teamOf(state)) {
     const max = maxHpOf(friend);
     visit.hp[friend.id] = Math.min(max, Math.max(0, left[friend.id] || 0) + Math.ceil(max * BREATHER));

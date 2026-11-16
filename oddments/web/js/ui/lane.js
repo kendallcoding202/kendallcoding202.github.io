@@ -1,13 +1,14 @@
-// The lane: the open world between places. You walk it; the rules for where
-// feet can go are in core/world.js, and this draws them.
+// The world you walk in: the lane between places, and the inside of a place
+// once you have walked through its door. The rules for where feet can go are
+// in core/world.js, and this draws them.
 //
 // Everything on the ground here is drawn in code as a stand-in: there is no
 // painted map yet (see docs/ART.md). The people, the Oddments and the little
 // window in each building are the real art.
 import { ROOMS, SPECIES, ELEMENTS, roomOf, roomBuilt } from '../core/balance.js';
-import { WORLD, SPOTS, TREES, spotOf } from '../core/world.js';
+import { WORLD, SPOTS, TREES, POST, spotOf, areaOf } from '../core/world.js';
 import { h, sprite, spriteSrc } from './dom.js';
-import { elementTag } from './parts.js';
+import { elementTag, bar } from './parts.js';
 
 const VIEW = 580; // how much of the lane fits across the screen, in its own units
 const HOME = { name: 'Home', blurb: 'Great-aunt Maribel\'s house, where you are staying. Out here in the lane everyone gets their breath back.' };
@@ -26,15 +27,24 @@ const FLIES = scatter(34, 29);
 export function laneScreen(ctx) {
   const { game } = ctx;
   const { state } = game;
-  const canvas = h('canvas', { class: 'lanecanvas', 'aria-label': 'The lane. Tap to walk.' });
+  // Inside a place, or out in the lane: the same screen, a different map.
+  const inside = game.place() === 'path';
+  const room = inside ? roomOf(state.visit.room) : null;
+  const area = inside ? areaOf(room.id) : null;
+  const size = inside ? area : WORLD;
+  const here = () => game.standing() || { x: 0, y: 0 };
+  const canvas = h('canvas', { class: 'lanecanvas', 'aria-label': 'Tap to walk.' });
   const card = h('div', { class: 'placecard', hidden: true });
   const hint = h('div', { class: 'lanehint', hidden: !!state.seen.walked }, 'Tap or drag to walk');
+  const title = h('h1', null, inside ? room.name : 'The Lane');
   const wrap = h('div', { class: 'lanewrap' }, canvas,
-    h('header', { class: 'bar-top over' }, h('h1', null, 'The Lane'), h('span', { class: 'who' }, sprite(state.player.look), h('b', null, state.player.name))), hint);
-  const el = h('section', { id: 'lane' }, wrap, card);
+    h('header', { class: 'bar-top over' }, title, h('span', { class: 'who' }, sprite(state.player.look), h('b', null, state.player.name))), hint);
+  const el = h('section', { id: 'lane', class: inside ? 'inside' : '' }, wrap, card);
   const pen = canvas.getContext('2d');
 
-  let target = null; // where you are walking to
+  let way = []; // the points still to walk through to get where you tapped
+  let met = false; // a fight is about to start
+  let stirred = false; // you have touched the screen since it appeared
   let mark = null; // the ring where you last tapped
   let raf = 0;
   let last = 0;
@@ -61,9 +71,9 @@ export function laneScreen(ctx) {
   }
 
   function look() {
-    const { x, y } = state.where;
-    cam.x = Math.max(0, Math.min(WORLD.w - cam.w, x - cam.w / 2));
-    cam.y = Math.max(Math.min(0, WORLD.h - cam.h), Math.min(WORLD.h - cam.h, y - cam.h * 0.56));
+    const { x, y } = here();
+    cam.x = Math.max(0, Math.min(size.w - cam.w, x - cam.w / 2));
+    cam.y = Math.max(Math.min(0, size.h - cam.h), Math.min(size.h - cam.h, y - cam.h * 0.56));
   }
 
   const toWorld = (clientX, clientY) => {
@@ -186,19 +196,90 @@ export function laneScreen(ctx) {
     pen.restore();
   }
 
+  // ------------------------------------------------------------ drawing the inside of a place
+
+  const label = (text, x, y, colour = '#fff7e8', edge = 'rgba(255,255,255,.3)') => {
+    pen.font = '600 17px Fredoka, ui-rounded, system-ui, sans-serif';
+    const tw = pen.measureText(text).width;
+    rounded(x - tw / 2 - 11, y - 14, tw + 22, 27, 13); pen.fillStyle = 'rgba(13,10,28,.82)'; pen.fill();
+    pen.lineWidth = 2; pen.strokeStyle = edge; pen.stroke();
+    pen.textBaseline = 'middle'; pen.textAlign = 'center'; pen.fillStyle = colour;
+    pen.fillText(text, x, y);
+  };
+
+  function insideGround() {
+    pen.fillStyle = room.tint; pen.fillRect(cam.x - 4, cam.y - 4, cam.w + 8, cam.h + 8);
+    pen.fillStyle = 'rgba(13,10,28,.66)'; pen.fillRect(cam.x - 4, cam.y - 4, cam.w + 8, cam.h + 8);
+    for (const tuft of TUFTS) {
+      if (tuft.y > area.h) continue;
+      oval(tuft.x, tuft.y, 40 + tuft.r * 44, 16 + tuft.r * 18);
+      pen.fillStyle = tuft.r > 0.5 ? 'rgba(255,255,255,.045)' : 'rgba(0,0,0,.14)'; pen.fill();
+    }
+    // The worn way through, from the gate past every stop.
+    const through = () => { pen.beginPath(); pen.moveTo(area.gate.x, area.h + 40); pen.lineTo(area.gate.x, area.gate.y); for (const post of area.posts) pen.lineTo(post.x, post.y); };
+    pen.lineCap = 'round'; pen.lineJoin = 'round';
+    through(); pen.strokeStyle = 'rgba(13,10,28,.3)'; pen.lineWidth = 96; pen.stroke();
+    through(); pen.strokeStyle = 'rgba(255,240,200,.1)'; pen.lineWidth = 78; pen.stroke();
+    pen.strokeStyle = '#12202f'; pen.lineWidth = 36; pen.strokeRect(0, 0, area.w, area.h);
+  }
+
+  function hedge(block) {
+    oval(block.x + block.w / 2, block.y + block.h + 4, block.w * 0.5, 9); pen.fillStyle = 'rgba(8,6,20,.35)'; pen.fill();
+    rounded(block.x, block.y - 26, block.w, block.h + 26, 20); pen.fillStyle = '#245c40'; pen.fill(); outline(5);
+    for (let x = block.x + 26; x < block.x + block.w - 10; x += 46) { pen.beginPath(); pen.arc(x, block.y - 14, 13, Math.PI, 0); pen.fillStyle = '#2f7a55'; pen.fill(); }
+  }
+
+  function gate() {
+    const { x, y } = area.gate;
+    const glow = pen.createRadialGradient(x, y, 4, x, y, 80);
+    glow.addColorStop(0, 'rgba(255,200,61,.32)'); glow.addColorStop(1, 'rgba(255,200,61,0)');
+    pen.fillStyle = glow; oval(x, y, 80, 44); pen.fill();
+    for (const side of [-1, 1]) { rounded(x + side * 52 - 8, y - 4, 16, 58, 6); pen.fillStyle = '#6b4a3a'; pen.fill(); outline(4); }
+    label('Out to the lane', x, y + 74, '#ffc83d', 'rgba(255,200,61,.5)');
+  }
+
+  /** Whoever is at a stop: the ones you can see waiting at the next one, a rustle further in. */
+  function waiting(stop) {
+    const post = area.posts[stop];
+    const spot = room.path[stop];
+    if (stop > state.visit.stop) {
+      oval(post.x, post.y + 4, spot.boss ? 66 : 46, spot.boss ? 22 : 16); pen.fillStyle = 'rgba(8,6,20,.5)'; pen.fill();
+      pen.font = '700 34px Fredoka, ui-rounded, system-ui, sans-serif'; pen.textAlign = 'center'; pen.textBaseline = 'middle';
+      pen.fillStyle = spot.boss ? '#ff5a6a' : 'rgba(255,247,232,.55)';
+      pen.fillText('?', post.x + Math.sin(clock * 2 + stop) * 3, post.y - 22);
+      return;
+    }
+    const foes = state.visit.waiting || [];
+    const gap = foes.length > 2 ? 62 : 74;
+    foes.forEach((foe, i) => {
+      const kind = SPECIES[foe.species];
+      const x = post.x + (i - (foes.length - 1) / 2) * gap;
+      const tall = kind.boss ? 150 : 62;
+      if (foe.heirloom) { oval(x, post.y + 2, 30, 11); pen.strokeStyle = `rgba(255,200,61,${0.5 + 0.4 * Math.sin(clock * 5)})`; pen.lineWidth = 4; pen.stroke(); }
+      stand(spriteSrc(foe.species, foe.heirloom), x, post.y - (kind.fly ? 8 + Math.sin(clock * 3 + i) * 4 : 0) + (kind.boss ? -6 : i % 2 ? 6 : 0), tall, false, false, clock * 4 + i * 2);
+    });
+    label(spot.name, post.x, post.y - (foes.some((foe) => SPECIES[foe.species].boss) ? 176 : 88), spot.boss ? '#ffd9de' : '#fff7e8', spot.boss ? '#ff5a6a' : 'rgba(255,255,255,.3)');
+  }
+
   function draw() {
     look();
     pen.setTransform(cam.k * cam.dpr, 0, 0, cam.k * cam.dpr, -cam.x * cam.k * cam.dpr, -cam.y * cam.k * cam.dpr);
-    ground();
+    if (inside) insideGround(); else ground();
     if (mark && mark.life > 0) {
       pen.beginPath(); pen.ellipse(mark.x, mark.y, 22 * (1.3 - mark.life), 10 * (1.3 - mark.life), 0, 0, Math.PI * 2);
       pen.strokeStyle = `rgba(255,200,61,${mark.life})`; pen.lineWidth = 4; pen.stroke();
     }
     // Back to front, so whoever is further down the screen is in front.
     const things = [];
-    for (const spot of SPOTS) things.push({ y: spot.y, draw: () => building(spot) });
-    for (const t of TREES) things.push({ y: t.y, draw: () => tree(t) });
-    const { x, y } = state.where;
+    if (inside) {
+      things.push({ y: area.gate.y - 30, draw: gate });
+      for (const block of area.blocks) things.push({ y: block.y + block.h, draw: () => hedge(block) });
+      for (let stop = state.visit.stop; stop < area.posts.length; stop++) things.push({ y: area.posts[stop].y + 8, draw: () => waiting(stop) });
+    } else {
+      for (const spot of SPOTS) things.push({ y: spot.y, draw: () => building(spot) });
+      for (const t of TREES) things.push({ y: t.y, draw: () => tree(t) });
+    }
+    const { x, y } = here();
     const team = game.team();
     team.forEach((friend, i) => {
       const at = trail[Math.min(trail.length - 1, (i + 1) * 10)] || { x: x - facing * 40 * (i + 1), y: y - 4, f: facing };
@@ -206,9 +287,11 @@ export function laneScreen(ctx) {
       things.push({ y: at.y - 0.01 * (i + 1), draw: () => stand(spriteSrc(friend.species, friend.heirloom), at.x, at.y - fly, 56, at.f > 0, false, moving ? clock * 11 + i * 1.3 : 0) });
     });
     things.push({ y, draw: () => stand(spriteSrc(state.player.look), x, y, 100, facing > 0, true, moving ? clock * 11 : 0) });
+    void POST;
     things.sort((a, b) => a.y - b.y);
     for (const thing of things) thing.draw();
     for (const fly of FLIES) {
+      if (fly.y > size.h) continue;
       const glow = 0.25 + 0.55 * Math.abs(Math.sin(clock * (0.6 + fly.r) + fly.r * 40));
       pen.beginPath(); pen.arc(fly.x + Math.sin(clock * 0.7 + fly.r * 9) * 12, fly.y + Math.cos(clock * 0.5 + fly.r * 7) * 10, 2.6, 0, Math.PI * 2);
       pen.fillStyle = `rgba(255,224,122,${glow})`; pen.fill();
@@ -218,78 +301,112 @@ export function laneScreen(ctx) {
   // ------------------------------------------------------------ the card for wherever you are standing
 
   function drawCard() {
+    if (inside) {
+      // Inside, the card is always there: how far you have got, how everyone is, and the way out.
+      const stop = state.visit.stop;
+      if (cardFor === stop) return;
+      cardFor = stop;
+      const spot = room.path[stop];
+      const health = game.teamHealth();
+      card.hidden = false;
+      card.dataset.spot = room.id;
+      card.dataset.stop = String(stop);
+      card.replaceChildren(
+        h('h2', null, spot.name, ' ', h('small', null, `stop ${stop + 1} of ${room.path.length}`)),
+        h('small', null, spot.boss ? 'Something big is waiting at the far end. Walk up to it when you are ready.' : 'Someone is waiting up ahead. Walk up to them to meet them.'),
+        h('div', { class: 'teamlist' }, game.team().map((friend, i) => h('div', { class: `teamcard${health[i].hp <= 0 ? ' down' : ''}` },
+          sprite(friend.species, friend.heirloom, 'flip'),
+          h('div', null, h('b', null, SPECIES[friend.species].name), bar(`hp${health[i].hp / health[i].max < 0.3 ? ' low' : ''}`, health[i].hp / health[i].max, `${health[i].hp} / ${health[i].max}`))))),
+        h('button', { class: 'btn plain', data: { act: 'home' }, onclick: () => { if (game.leaveRoom()) { ctx.save(); ctx.show('lane'); } } }, 'Back out to the lane'));
+      return;
+    }
     const id = game.near();
     if (id === cardFor) return;
     cardFor = id;
     card.hidden = !id;
     card.dataset.spot = id || '';
     if (!id) return;
-    const room = roomOf(id);
-    if (!room) {
+    const spot = roomOf(id);
+    if (!spot) {
       card.replaceChildren(h('h2', null, HOME.name), h('small', null, HOME.blurb),
         h('button', { class: 'btn plain', data: { act: 'friends' }, onclick: () => ctx.show('friends') }, 'Choose your team'));
       return;
     }
-    const open = game.roomOpen(room.id);
-    const record = state.rooms[room.id];
-    const before = ROOMS[ROOMS.indexOf(room) - 1];
-    const bossId = roomBuilt(room) ? room.path[room.path.length - 1].boss : null;
+    const open = game.roomOpen(spot.id);
+    const record = state.rooms[spot.id];
+    const before = ROOMS[ROOMS.indexOf(spot) - 1];
+    const bossId = roomBuilt(spot) ? spot.path[spot.path.length - 1].boss : null;
     card.replaceChildren(
-      h('h2', null, room.name, ' ', elementTag(room.element)),
-      h('small', null, room.blurb),
-      roomBuilt(room)
-        ? h('small', null, `${room.path.length} stops, the last a boss${bossId && state.book[bossId].met ? `: ${SPECIES[bossId].name}` : ''}. Mostly ${ELEMENTS[room.element].name}.${record.visits ? ` Furthest: stop ${record.best} of ${room.path.length}.` : ''}`)
+      h('h2', null, spot.name, ' ', elementTag(spot.element)),
+      h('small', null, spot.blurb),
+      roomBuilt(spot)
+        ? h('small', null, `${spot.path.length} stops, the last a boss${bossId && state.book[bossId].met ? `: ${SPECIES[bossId].name}` : ''}. Mostly ${ELEMENTS[spot.element].name}.${record.visits ? ` Furthest: stop ${record.best} of ${spot.path.length}.` : ''}`)
         : h('small', null, 'This place is in the lane but not built yet. The slice ends at the garden.'),
       open
-        ? h('button', { class: 'btn gold', data: { act: 'enter' }, onclick: () => { if (game.enterRoom(room.id)) { ctx.save(); ctx.show('path'); } } }, record.clears ? 'Walk in again' : 'Walk in')
-        : h('button', { class: 'btn gold', disabled: true, data: { act: 'enter' } }, roomBuilt(room) ? `Clear ${before.name} first` : 'Not built yet'));
+        ? h('button', { class: 'btn gold', data: { act: 'enter' }, onclick: () => { if (game.enterRoom(spot.id)) { ctx.save(); ctx.show('path'); } } }, record.clears ? 'Walk in again' : 'Walk in')
+        : h('button', { class: 'btn gold', disabled: true, data: { act: 'enter' } }, roomBuilt(spot) ? `Clear ${before.name} first` : 'Not built yet'));
   }
 
   // ------------------------------------------------------------ walking
 
   function aim(event) {
-    target = toWorld(event.clientX, event.clientY);
-    mark = { x: target.x, y: target.y, life: 1 };
+    stirred = true;
+    const to = toWorld(event.clientX, event.clientY);
+    way = game.routeTo(to);
+    mark = { x: to.x, y: to.y, life: 1 };
     if (!state.seen.walked) { state.seen.walked = true; hint.hidden = true; }
   }
   let dragging = false;
-  canvas.addEventListener('pointerdown', (event) => { dragging = true; aim(event); });
-  canvas.addEventListener('pointermove', (event) => { if (dragging) aim(event); });
+  let aimed = 0;
+  canvas.addEventListener('pointerdown', (event) => { dragging = true; aimed = performance.now(); aim(event); });
+  // While a finger is held, follow it, finding the way afresh a few times a second.
+  canvas.addEventListener('pointermove', (event) => { if (dragging && performance.now() - aimed > 140) { aimed = performance.now(); aim(event); } });
   for (const type of ['pointerup', 'pointercancel', 'pointerleave']) canvas.addEventListener(type, () => { dragging = false; });
   const KEYS = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0], w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0] };
-  const keyDown = (event) => { if (KEYS[event.key] && !event.target.closest('input')) held.add(event.key); };
+  const keyDown = (event) => { if (KEYS[event.key] && !event.target.closest('input')) { held.add(event.key); stirred = true; } };
   const keyUp = (event) => held.delete(event.key);
 
   function frame(time) {
     const dt = Math.min(0.1, Math.max(0, (time - last) / 1000));
     last = time;
     clock += dt;
+    const before = here();
     if (held.size) {
       let dx = 0; let dy = 0;
       for (const key of held) { dx += KEYS[key][0]; dy += KEYS[key][1]; }
-      target = dx || dy ? { x: state.where.x + dx * 60, y: state.where.y + dy * 60 } : target;
+      if (dx || dy) way = [{ x: before.x + dx * 60, y: before.y + dy * 60 }];
     }
-    const before = state.where;
-    moving = !!target && game.walk(target, dt);
+    // Head for each point of the way in turn.
+    while (way.length && Math.hypot(way[0].x - before.x, way[0].y - before.y) < 7) way.shift();
+    moving = way.length > 0 && game.walk(way[0], dt);
     if (moving) {
-      const dx = state.where.x - before.x;
+      const dx = here().x - before.x;
       if (Math.abs(dx) > 0.2) facing = dx > 0 ? 1 : -1;
       trail.unshift({ x: before.x, y: before.y, f: facing });
       if (trail.length > 40) trail.length = 40;
-    } else if (target && !held.size) target = null;
+    } else if (way.length) way.shift();
     if (mark) mark.life -= dt * 1.6;
     drawCard();
     draw();
+    // Walk into whoever is waiting and the fight is on. Only once you have moved: after a reload you
+    // may be standing right in front of them, and should get to choose whether to walk in or walk out.
+    if (inside && !met && stirred && game.meeting()) {
+      met = true;
+      way = [];
+      wrap.classList.add('meeting');
+      setTimeout(() => { if (game.startEncounter()) ctx.show('fight'); }, ctx.fast ? 60 : 420);
+    }
     raf = requestAnimationFrame(frame);
   }
 
   const api = {
     /** Where a place's door is on the screen right now (for tests, which tap it like a finger would). */
     screenOf(id) {
-      const spot = spotOf(id);
+      // A place's door out in the lane; inside a place, 'next' is whoever is waiting and 'gate' the way out.
+      const point = inside ? (id === 'gate' ? area.gate : area.posts[state.visit.stop]) : spotOf(id).door;
       const box = canvas.getBoundingClientRect();
       look();
-      return { x: box.left + (spot.door.x - cam.x) * cam.k, y: box.top + (spot.door.y - cam.y) * cam.k, inView: spot.door.y > cam.y + 10 && spot.door.y < cam.y + cam.h - 10 };
+      return { x: box.left + (point.x - cam.x) * cam.k, y: box.top + (point.y - cam.y) * cam.k, inView: point.y > cam.y + 10 && point.y < cam.y + cam.h - 10 };
     },
   };
 

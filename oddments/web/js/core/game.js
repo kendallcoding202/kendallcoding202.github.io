@@ -4,8 +4,8 @@
 import { TEAM_SIZE, NAME_LENGTH, lookOf, roomOf } from './balance.js';
 import { createBattle, choices, act, concede } from './battle.js';
 import { settleUp } from './progress.js';
-import { rollEncounter, enterRoom, leaveRoom, afterFight, roomOpen, teamOf, maxHpOf } from './rooms.js';
-import { stepWalk, spotNear, spotOf } from './world.js';
+import { rollEncounter, fairEncounter, enterRoom, leaveRoom, afterFight, roomOpen, teamOf, maxHpOf } from './rooms.js';
+import { WORLD, stepWalk, routeTo, canStand, spotNear, spotOf, areaOf, canStandIn, meetingAt, atGate } from './world.js';
 
 export class Game {
   /**
@@ -28,12 +28,67 @@ export class Game {
 
   // ------------------------------------------------------------ the lane
 
-  /** Walks toward a point for `dt` seconds. Returns whether you moved. Only out in the lane. */
+  /**
+   * Walks toward a point for `dt` seconds. Returns whether you moved. Out in
+   * the lane, or inside a place; never during a fight.
+   */
   walk(target, dt) {
-    if (this.place() !== 'lane' || !target || !Number.isFinite(target.x) || !Number.isFinite(target.y)) return false;
-    const next = stepWalk(this.state.where, target, dt);
-    this.state.where = { x: next.x, y: next.y };
+    const place = this.place();
+    if (place === 'fight' || !target || !Number.isFinite(target.x) || !Number.isFinite(target.y)) return false;
+    if (place === 'lane') {
+      const next = stepWalk(this.state.where, target, dt);
+      this.state.where = { x: next.x, y: next.y };
+      return next.moving;
+    }
+    const visit = this.state.visit;
+    const area = areaOf(visit.room);
+    const next = stepWalk(visit.at, target, dt, (x, y) => canStandIn(area, x, y, visit.stop));
+    visit.at = { x: next.x, y: next.y };
     return next.moving;
+  }
+
+  /** Where you are standing: in the lane, or inside a place. Null during a fight. */
+  standing() {
+    const place = this.place();
+    if (place === 'fight') return null;
+    return place === 'lane' ? this.state.where : this.state.visit.at;
+  }
+
+  /** The way to walk to a point from where you stand, round whatever is between: points to head for in turn. */
+  routeTo(target) {
+    const from = this.standing();
+    if (!from || !target) return [];
+    if (this.place() === 'lane') return routeTo(from, target, canStand, WORLD);
+    const visit = this.state.visit;
+    const area = areaOf(visit.room);
+    return routeTo(from, target, (x, y) => canStandIn(area, x, y, visit.stop), area);
+  }
+
+  /** Inside a place: whether you have walked up to whoever is waiting at the next stop. */
+  meeting() {
+    const visit = this.state.visit;
+    return this.place() === 'path' && meetingAt(areaOf(visit.room), visit.at, visit.stop);
+  }
+
+  /** Inside a place: whether you are standing at its gate. */
+  atGate() {
+    const visit = this.state.visit;
+    return this.place() === 'path' && atGate(areaOf(visit.room), visit.at);
+  }
+
+  /** Goes straight up to whoever is waiting at the next stop. For the simulator and tests; a player walks. */
+  approach() {
+    if (this.place() !== 'path') return false;
+    const visit = this.state.visit;
+    const area = areaOf(visit.room);
+    const post = area.posts[visit.stop];
+    // Stand just short of them, on the side the gate is: straight below, or failing that either side.
+    for (const [dx, dy] of [[0, 1], [-1, 0], [1, 0], [0, -1]]) {
+      const x = post.x + dx * 108;
+      const y = post.y + dy * 108;
+      if (canStandIn(area, x, y, visit.stop)) { visit.at = { x, y }; return true; }
+    }
+    return false;
   }
 
   /** The place whose door you are standing at: 'home', a room id, or null. */
@@ -99,12 +154,17 @@ export class Game {
 
   // ------------------------------------------------------------ fights
 
-  /** Meets whoever is waiting at this stop on the path. Returns the fight, or null. */
+  /**
+   * Meets whoever is waiting at the next stop. Returns the fight, or null.
+   * (The screen calls this when you walk into them; see `meeting`.)
+   */
   startEncounter() {
     if (this.place() !== 'path') return null;
     const { state } = this;
     const visit = state.visit;
-    const foes = rollEncounter(state, roomOf(visit.room), visit.stop);
+    const room = roomOf(visit.room);
+    if (!fairEncounter(room, visit.stop, visit.waiting)) visit.waiting = rollEncounter(state, room, visit.stop);
+    const foes = visit.waiting;
     for (const foe of foes) {
       state.book[foe.species].met = true;
       if (foe.heirloom) state.book[foe.species].heirloom = true;
