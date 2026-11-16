@@ -26,8 +26,7 @@ const TABS = [
   { id: 'book', label: 'Scrapbook', build: bookScreen },
   { id: 'settings', label: 'Settings', build: settingsScreen },
 ];
-// A place you have walked into is drawn by the same screen as the lane: it is all one world to walk in.
-const SCREENS = { path: laneScreen, fight: fightScreen };
+const SCREENS = { fight: fightScreen };
 for (const tab of TABS) SCREENS[tab.id] = tab.build;
 
 // Once the save is being erased, nothing may write the old game back
@@ -59,10 +58,10 @@ function boot() {
     fast: flag('fast'),
     current: 'lane',
     save: () => (frozen ? false : writeSave(game.serialize(Date.now()))),
-    /** Shows a screen. Where the game is decides: a fight or a path cannot be left by a tab. */
+    /** Shows a screen. A fight cannot be left by a tab; anything else is the world unless a tab is asked for. */
     show(name) {
       const place = game.place();
-      const target = place === 'fight' ? 'fight' : place === 'path' ? 'path' : (TABS.some((tab) => tab.id === name) ? name : 'lane');
+      const target = place === 'fight' ? 'fight' : (TABS.some((tab) => tab.id === name) ? name : 'lane');
       if (showing && showing.gone) showing.gone();
       ctx.current = target;
       const screen = SCREENS[target](ctx);
@@ -70,7 +69,7 @@ function boot() {
       screenRoot.replaceChildren(screen.el);
       screenRoot.scrollTop = 0;
       screenRoot.dataset.screen = target;
-      tabsRoot.hidden = place !== 'lane';
+      tabsRoot.hidden = place === 'fight';
       for (const button of tabsRoot.children) button.classList.toggle('on', button.dataset.tab === target);
       if (screen.shown) screen.shown();
     },
@@ -96,15 +95,15 @@ function boot() {
   });
 }
 
-/** What a fight left behind, then on along the path or home. */
+/** What a fight left behind, then back to the world: where you stood, or home if the team was worn out. */
 function resultDialog(ctx, summary, foes) {
   const { game } = ctx;
   const room = roomOf(summary.room);
   const lines = [];
   const name = (species) => SPECIES[species].name;
 
-  if (summary.cleared) lines.push(h('p', { class: 'big' }, `${room.name} is cleared!`), h('p', null, 'The way on is open. (The next room is not built yet: this slice ends here. You can walk the garden again to make more friends.)'));
-  else if (summary.won) lines.push(h('p', null, 'The way is clear. Everyone catches their breath.'));
+  if (summary.cleared) lines.push(h('p', { class: 'big' }, `${room.name} is calm!`), h('p', null, 'Everyone is rested, and the way on is open. (The next place is not built yet: this slice ends here. Step out of the gate and back in, and the garden will be restless again, with more friends to make.)'));
+  else if (summary.won) lines.push(h('p', null, 'They are calm now. Everyone catches their breath.'));
   else lines.push(h('p', null, 'Your friends are worn out. You carry them home for a rest: you keep everything they learned.'));
 
   for (const joined of summary.joined) {
@@ -131,8 +130,8 @@ function resultDialog(ctx, summary, foes) {
   if (!summary.won && foes.some((foe) => foe.settled)) lines.push(h('p', { class: 'note' }, 'The one you calmed slipped away in the muddle.'));
 
   modal({
-    title: summary.cleared ? 'Room cleared' : summary.won ? 'Won' : 'Home again', cls: `result ${summary.won ? 'won' : 'lost'}`, fixed: true, body: lines,
-    actions: [{ id: 'next', label: summary.home ? 'Back to the lane' : 'Onward', onClick: () => ctx.show(summary.home ? 'lane' : 'path') }],
+    title: summary.cleared ? 'All calm' : summary.won ? 'Won' : 'Home again', cls: `result ${summary.won ? 'won' : 'lost'}`, fixed: true, body: lines,
+    actions: [{ id: 'next', label: summary.home ? 'Home' : 'Onward', onClick: () => ctx.show('lane') }],
   });
   if (summary.joined.length) toast(`${summary.joined.length === 1 ? 'A new friend' : `${summary.joined.length} new friends`}!`, { kind: 'good' });
 }

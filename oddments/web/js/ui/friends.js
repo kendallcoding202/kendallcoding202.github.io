@@ -25,7 +25,7 @@ export function friendsScreen(ctx) {
   }
 
   function change(ids) {
-    if (!game.setTeam(ids)) { toast('The team can only change at home.', { kind: 'bad' }); return; }
+    if (!game.setTeam(ids)) { toast('Rest at home first: the team only changes when everyone is rested.', { kind: 'bad' }); return; }
     ctx.save();
     draw();
   }

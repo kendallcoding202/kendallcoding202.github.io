@@ -16,7 +16,7 @@ export function fightScreen(ctx) {
   const battle = game.battle;
   const visit = game.state.visit;
   const room = roomOf(visit.room);
-  const spot = room.path[visit.stop];
+  const spot = room.path[game.facing];
   const pace = () => (game.state.settings.fast || ctx.fast ? 0.2 : 1);
   const pause = (ms) => wait(ms * pace());
 
@@ -59,7 +59,7 @@ export function fightScreen(ctx) {
   const arena = h('div', { class: `arena${foes.some((unit) => unit.boss) ? ' bossfight' : ''}` },
     h('img', { class: 'bg', src: `assets/bg/${room.bg}.webp`, alt: '' }),
     h('div', { class: 'topline' },
-      h('div', { class: 'roundpill' }, roundEl, h('span', null, `${spot.name} · ${visit.stop + 1}/${room.path.length}`)),
+      h('div', { class: 'roundpill' }, roundEl, h('span', null, `${spot.name} · ${visit.stop} of ${room.path.length} calmed`)),
       h('button', { class: 'iconbtn menu', 'aria-label': 'Menu', data: { act: 'menu' }, onclick: openMenu }, '⋯')),
     units, floaters);
   const orderEl = h('div', { class: 'order' });

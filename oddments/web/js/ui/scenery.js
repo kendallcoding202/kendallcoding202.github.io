@@ -7,6 +7,7 @@
 //
 // Nothing here moves or knows about the game. Each painter draws one thing
 // once; lane.js keeps the results and puts them on screen every frame.
+import { along } from '../core/world.js';
 
 export const INK = '#0d0a1c';
 export const FONT = 'Fredoka, ui-rounded, system-ui, sans-serif';
@@ -14,7 +15,7 @@ export const FONT = 'Fredoka, ui-rounded, system-ui, sans-serif';
 /** The painted pictures of the world, by name, and where each lives. */
 export const WORLD_ART = ['grass', 'earth', 'p_tree', 'p_lamp', 'p_bush', 'b_home', 'b_garden', 'b_alley', 'b_pantry', 'b_wash', 'b_stacks', 'b_rooftops', 'b_attic', 'b_dark'];
 export const worldSrc = (name) => `assets/world/${name}.webp`;
-/** How wide each building stands in the lane, in the world's units. Its height follows from its painting. */
+/** How wide each building stands, in the world's units. Its height follows from its painting. */
 export const BUILDING_WIDE = { home: 240, garden: 214, alley: 208, pantry: 214, wash: 190, stacks: 208, rooftops: 148, attic: 170, dark: 214 };
 
 const parts = (hexColour) => [1, 3, 5].map((i) => parseInt(hexColour.slice(i, i + 2), 16));
@@ -48,10 +49,11 @@ export function glow(pen, x, y, r, rgb, alpha) {
   pen.fillRect(x - r, y - r, r * 2, r * 2);
 }
 
-export function label(pen, text, x, y, colour = '#fff7e8', edge = 'rgba(255,255,255,.28)') {
-  pen.font = `600 19px ${FONT}`;
+export function label(pen, text, x, y, colour = '#fff7e8', edge = 'rgba(255,255,255,.28)', size = 24) {
+  pen.font = `600 ${size}px ${FONT}`;
   const tw = pen.measureText(text).width;
-  rounded(pen, x - tw / 2 - 13, y - 16, tw + 26, 31, 15.5); paint(pen, 'rgba(13,10,28,.88)');
+  const tall = size * 1.6;
+  rounded(pen, x - tw / 2 - size * 0.7, y - tall / 2, tw + size * 1.4, tall, tall / 2); paint(pen, 'rgba(13,10,28,.88)');
   pen.lineWidth = 2; pen.strokeStyle = edge; pen.stroke();
   pen.textBaseline = 'middle'; pen.textAlign = 'center'; pen.fillStyle = colour;
   pen.fillText(text, x, y + 1);
@@ -69,136 +71,134 @@ export function stood(pen, image, x, y, wide) {
 
 const TILE = 300; // how much ground one tile of the grass painting covers
 
-/** Lays the grass painting over a stretch of ground, then a wash of colour to set the hour and the place. */
-function turf(pen, grass, w, top, bottom, wash) {
+/** Lays the grass painting over the ground, then a wash of colour to set the hour. */
+function turf(pen, grass, x0, y0, x1, y1, wash) {
   pen.fillStyle = '#1b3a44';
-  pen.fillRect(-80, top, w + 160, bottom - top);
+  pen.fillRect(x0, y0, x1 - x0, y1 - y0);
   if (arrived(grass)) {
-    for (let y = Math.floor(top / TILE) * TILE; y < bottom; y += TILE) {
-      for (let x = -TILE; x < w + TILE; x += TILE) pen.drawImage(grass, x, y, TILE + 0.5, TILE + 0.5);
+    for (let y = Math.floor(y0 / TILE) * TILE; y < y1; y += TILE) {
+      for (let x = Math.floor(x0 / TILE) * TILE; x < x1; x += TILE) pen.drawImage(grass, x, y, TILE + 0.5, TILE + 0.5);
     }
   }
   pen.fillStyle = wash;
-  pen.fillRect(-80, top, w + 160, bottom - top);
+  pen.fillRect(x0, y0, x1 - x0, y1 - y0);
   // Broad soft patches, so the eye does not find where the tile repeats
   const next = run(11);
-  for (let i = 0; i < 60; i++) {
-    oval(pen, next() * w, top + next() * (bottom - top), 70 + next() * 90, 30 + next() * 34);
+  const count = Math.round(((x1 - x0) * (y1 - y0)) / 26000);
+  for (let i = 0; i < count; i++) {
+    oval(pen, x0 + next() * (x1 - x0), y0 + next() * (y1 - y0), 70 + next() * 90, 30 + next() * 34);
     paint(pen, next() > 0.5 ? 'rgba(255,255,255,.03)' : 'rgba(8,10,30,.12)');
   }
 }
 
-/** Points along a curve through the middles of a line of points, a step apart, each with the way it is heading. */
-function along(points, step, smooth) {
-  const out = [];
-  const add = (p0, c, p1) => {
-    const far = Math.hypot(c.x - p0.x, c.y - p0.y) + Math.hypot(p1.x - c.x, p1.y - c.y);
-    const n = Math.max(1, Math.round(far / step));
-    for (let i = 0; i < n; i++) {
-      const t = i / n;
-      const u = 1 - t;
-      out.push({ x: u * u * p0.x + 2 * u * t * c.x + t * t * p1.x, y: u * u * p0.y + 2 * u * t * c.y + t * t * p1.y, a: Math.atan2(2 * u * (c.y - p0.y) + 2 * t * (p1.y - c.y), 2 * u * (c.x - p0.x) + 2 * t * (p1.x - c.x)) });
-    }
-  };
-  const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
-  if (!smooth) { for (let i = 0; i < points.length - 1; i++) add(points[i], mid(points[i], points[i + 1]), points[i + 1]); return out; }
-  let from = points[0];
-  for (let i = 1; i < points.length - 1; i++) { const to = mid(points[i], points[i + 1]); add(from, points[i], to); from = to; }
-  add(from, mid(from, points[points.length - 1]), points[points.length - 1]);
-  return out;
-}
-
-/** A worn way: a dark edge, packed earth, pebbles at the sides and stepping stones down the middle. */
-function wornWay(pen, trace, stones, earth, tone) {
+/**
+ * Worn ways: a dark edge, packed earth, pebbles at the sides and stepping stones down the middle.
+ * `ways` is a list of lines, each as its points (see `along`); they are laid as one, so where two
+ * meet there is no seam.
+ */
+function wornWays(pen, ways, earth, tone) {
   const next = run(31);
+  const trace = () => { pen.beginPath(); for (const way of ways) way.forEach((p, i) => (i ? pen.lineTo(p.x, p.y) : pen.moveTo(p.x, p.y))); };
   pen.lineCap = 'round'; pen.lineJoin = 'round'; pen.setLineDash([]);
   trace(); pen.strokeStyle = 'rgba(8,10,30,.42)'; pen.lineWidth = 90; pen.stroke();
   trace(); pen.strokeStyle = arrived(earth) ? pen.createPattern(earth, 'repeat') : '#6a5a5e'; pen.lineWidth = 76; pen.stroke();
   trace(); pen.strokeStyle = tone.wash; pen.lineWidth = 76; pen.stroke();
   trace(); pen.strokeStyle = 'rgba(255,240,215,.07)'; pen.lineWidth = 46; pen.stroke();
-  for (const p of stones) {
-    for (let i = 0; i < 2; i++) {
-      const side = (next() > 0.5 ? 1 : -1) * (23 + next() * 12);
-      oval(pen, p.x + Math.cos(p.a + Math.PI / 2) * side + (next() - 0.5) * 14, p.y + Math.sin(p.a + Math.PI / 2) * side + (next() - 0.5) * 14, 2.5 + next() * 2.5, 2 + next() * 2);
-      paint(pen, tone.pebble);
+  for (const stones of ways) {
+    for (const p of stones) {
+      for (let i = 0; i < 2; i++) {
+        const side = (next() > 0.5 ? 1 : -1) * (23 + next() * 12);
+        oval(pen, p.x + Math.cos(p.a + Math.PI / 2) * side + (next() - 0.5) * 14, p.y + Math.sin(p.a + Math.PI / 2) * side + (next() - 0.5) * 14, 2.5 + next() * 2.5, 2 + next() * 2);
+        paint(pen, tone.pebble);
+      }
     }
+    stones.forEach((p, i) => {
+      if (i % 2) return;
+      pen.save();
+      pen.translate(p.x + (next() - 0.5) * 8, p.y + (next() - 0.5) * 8);
+      pen.rotate(p.a + (next() - 0.5) * 0.5);
+      // A worn slab set in the earth: a soft dark edge below it, a little light along its top, no hard line.
+      rounded(pen, -14, -7, 28, 19, 8); paint(pen, 'rgba(8,10,30,.4)');
+      rounded(pen, -14, -9.5, 28, 18, 8); paint(pen, tone.stone);
+      rounded(pen, -9, -7, 13, 4, 2); paint(pen, 'rgba(255,255,255,.16)');
+      pen.restore();
+    });
   }
-  stones.forEach((p, i) => {
-    if (i % 2) return;
-    pen.save();
-    pen.translate(p.x + (next() - 0.5) * 8, p.y + (next() - 0.5) * 8);
-    pen.rotate(p.a + (next() - 0.5) * 0.5);
-    // A worn slab set in the earth: a soft dark edge below it, a little light along its top, no hard line.
-    rounded(pen, -14, -7, 28, 19, 8); paint(pen, 'rgba(8,10,30,.4)');
-    rounded(pen, -14, -9.5, 28, 18, 8); paint(pen, tone.stone);
-    rounded(pen, -9, -7, 13, 4, 2); paint(pen, 'rgba(255,255,255,.16)');
-    pen.restore();
-  });
 }
 
-/** A hedge of painted bushes down both sides of the world. */
-function border(pen, bush, w, top, bottom) {
+/** A hedge of painted bushes all the way round the world, in the dark at the edge of things. */
+function border(pen, bush, w, h) {
   const next = run(97);
   pen.fillStyle = '#10222c';
-  pen.fillRect(-80, top, 92, bottom - top); pen.fillRect(w - 12, top, 92, bottom - top);
-  for (let y = top; y <= bottom; y += 46) {
+  pen.fillRect(-400, -400, w + 800, 412); pen.fillRect(-400, h - 4, w + 800, 700);
+  pen.fillRect(-400, -400, 412, h + 1100); pen.fillRect(w - 12, -400, 412, h + 1100);
+  for (let x = -20; x <= w + 20; x += 46) stood(pen, bush, x + next() * 8, 26 + next() * 6, 88);
+  for (let y = 20; y <= h; y += 46) {
     stood(pen, bush, -14 + next() * 8, y + 30, 88);
     stood(pen, bush, w + 14 - next() * 8, y + 30 + 23, 88);
   }
-  // In the dark at the edge of things
+  for (let x = -20; x <= w + 20; x += 46) stood(pen, bush, x + next() * 8, h + 34 + next() * 6, 88);
   pen.fillStyle = 'rgba(8,10,30,.4)';
-  pen.fillRect(-80, top, 110, bottom - top); pen.fillRect(w - 30, top, 110, bottom - top);
+  pen.fillRect(-400, -400, w + 800, 418); pen.fillRect(-400, h - 12, w + 800, 700);
+  pen.fillRect(-400, 18, 430, h - 30); pen.fillRect(w - 30, 18, 430, h - 30);
 }
 
 const flower = (pen, x, y, colour) => {
   for (let k = 0; k < 5; k++) { disc(pen, x + Math.cos(k * 1.257) * 3.4, y + Math.sin(k * 1.257) * 3.4, 2.6); paint(pen, colour); }
   disc(pen, x, y, 2); paint(pen, '#7a4a00');
 };
+const BLOOMS = ['#ff9bc0', '#ffe07a', '#f4f0ff', '#ffb37a'];
+/** Flowers the way they grow: in drifts, a few together, with the odd one on its own. */
+function drifts(pen, next, x0, y0, x1, y1, count, colours) {
+  for (let i = 0; i < count; i++) {
+    const cx = x0 + next() * (x1 - x0);
+    const cy = y0 + next() * (y1 - y0);
+    const colour = colours[Math.floor(next() * colours.length)];
+    const many = 1 + Math.floor(next() * next() * 9);
+    for (let k = 0; k < many; k++) { const a = next() * Math.PI * 2; const far = next() * 34; flower(pen, cx + Math.cos(a) * far * 1.3, cy + Math.sin(a) * far * 0.7, colour); }
+  }
+}
 
-/** The lane's ground, from well above its top to well below its bottom (the view can scroll a little past both). */
-export function paintLaneGround(pen, size, route, spots, lamps, art) {
-  const top = -260;
-  const bottom = size.h + 420;
-  turf(pen, art.grass, size.w, top, bottom, 'rgba(14,16,44,.42)');
-  const next = run(5);
-  for (let i = 0; i < 90; i++) flower(pen, 30 + next() * (size.w - 60), top + next() * (bottom - top), next() > 0.6 ? '#fff0c8' : '#a8dcff');
-  // The lane itself, from below home past every door in turn
-  const trace = () => {
-    pen.beginPath();
-    pen.moveTo(route[0].x, route[0].y);
-    for (let i = 1; i < route.length - 1; i++) pen.quadraticCurveTo(route[i].x, route[i].y, (route[i].x + route[i + 1].x) / 2, (route[i].y + route[i + 1].y) / 2);
-    pen.lineTo(route[route.length - 1].x, route[route.length - 1].y);
-  };
+/**
+ * The ground of the whole world, and a little past every edge of it (the view can scroll that far).
+ * `world` says what is where: { w, h, roads, spots, lamps, hedges, green, lawns }, a lawn being a
+ * place you walk into: { x, y, w, h, tint, gate, posts }.
+ */
+export function paintGround(pen, world, art) {
+  const { w, h } = world;
+  turf(pen, art.grass, -400, -400, w + 400, h + 700, 'rgba(14,16,44,.42)');
+  drifts(pen, run(5), 40, 40, w - 40, h - 40, 90, ['#fff0c8', '#a8dcff']);
+
+  // The green below home: a lighter sweep of grass
+  const green = world.green;
+  oval(pen, green.x + green.w / 2, green.y + green.h / 2, green.w * 0.62, green.h * 0.74); paint(pen, 'rgba(190,255,170,.07)');
+
+  // Each place you walk into: its own light on the grass, mown in stripes, flower beds along its hedges
+  for (const lawn of world.lawns) {
+    const [r, g, b] = parts(lawn.tint);
+    pen.save();
+    pen.beginPath(); pen.rect(lawn.x, lawn.y, lawn.w, lawn.h); pen.clip();
+    pen.fillStyle = `rgba(${Math.round(r * 0.5)},${Math.round(g * 0.62)},${Math.round(b * 0.34)},.3)`;
+    pen.fillRect(lawn.x, lawn.y, lawn.w, lawn.h);
+    for (let y = lawn.y; y < lawn.y + lawn.h; y += 150) { pen.fillStyle = 'rgba(255,255,255,.035)'; pen.fillRect(lawn.x, y, lawn.w, 75); }
+    const way = [lawn.gate, { x: lawn.gate.x, y: lawn.gate.y - 110 }, ...lawn.posts.map((post) => ({ x: post.x, y: post.y + 20 }))];
+    wornWays(pen, [along(way, 24, true)], art.earth, { wash: 'rgba(120,96,40,.16)', pebble: 'rgba(255,240,205,.34)', stone: '#a89e88' });
+    drifts(pen, run(23), lawn.x + 60, lawn.y + 60, lawn.x + lawn.w - 40, lawn.y + lawn.h - 40, 34, BLOOMS);
+    pen.restore();
+    glow(pen, lawn.gate.x, lawn.gate.y + 30, 130, '255,200,61', 0.2);
+  }
+
+  // The streets
   const tone = { wash: 'rgba(40,34,84,.42)', pebble: 'rgba(205,196,235,.36)', stone: '#857d9e' };
-  wornWay(pen, trace, along(route, 24, true), art.earth, tone);
+  wornWays(pen, world.roads, art.earth, tone);
   // A swept apron in front of every door
-  for (const spot of spots) {
+  for (const spot of world.spots) {
     oval(pen, spot.door.x, spot.door.y - 4, 64, 27); paint(pen, arrived(art.earth) ? pen.createPattern(art.earth, 'repeat') : '#6a5a5e');
     oval(pen, spot.door.x, spot.door.y - 4, 64, 27); paint(pen, tone.wash);
   }
   // Lamplight pooling on the ground
-  for (const lamp of lamps) glow(pen, lamp.x, lamp.y + 4, 150, '255,200,61', 0.22);
-  border(pen, art.bush, size.w, top, bottom);
-}
-
-/** The ground inside a place: the same grass in the room's own light, flower beds, and the way through. */
-export function paintInsideGround(pen, room, area, art) {
-  const top = -260;
-  const bottom = area.h + 420;
-  const [r, g, b] = parts(room.tint);
-  turf(pen, art.grass, area.w, top, bottom, `rgba(${Math.round(r * 0.45)},${Math.round(g * 0.5)},${Math.round(b * 0.3)},.34)`);
-  // Mown in stripes
-  for (let y = top; y < bottom; y += 150) { pen.fillStyle = 'rgba(255,255,255,.03)'; pen.fillRect(-80, y, area.w + 160, 75); }
-  const way = [{ x: area.gate.x, y: area.h + 80 }, area.gate, ...area.posts];
-  wornWay(pen, () => { pen.beginPath(); way.forEach((p, i) => (i ? pen.lineTo(p.x, p.y) : pen.moveTo(p.x, p.y))); }, along(way, 24, false), art.earth,
-    { wash: 'rgba(120,96,40,.16)', pebble: 'rgba(255,240,205,.34)', stone: '#a89e88' });
-  // Flowers, thickest in beds along the foot of each hedge
-  const next = run(23);
-  const colours = ['#ff9bc0', '#ffe07a', '#f4f0ff', '#ffb37a'];
-  for (const block of area.blocks) for (let x = block.x + 16; x < block.x + block.w - 8; x += 24 + next() * 16) flower(pen, x, block.y + block.h + 14 + next() * 14, colours[Math.floor(next() * 4)]);
-  for (let i = 0; i < 70; i++) flower(pen, 40 + next() * (area.w - 80), next() * area.h, colours[Math.floor(next() * 4)]);
-  glow(pen, area.gate.x, area.gate.y, 120, '255,200,61', 0.24);
-  border(pen, art.bush, area.w, top, bottom);
+  for (const lamp of world.lamps) glow(pen, lamp.x, lamp.y + 4, 150, '255,200,61', 0.22);
+  border(pen, art.bush, w, h);
 }
 
 // ---------------------------------------------------------------- things that stand on the ground
@@ -216,29 +216,31 @@ export function paintLamp(pen, image) {
   glow(pen, 0, 6 - tall * 0.78, 52, '255,214,120', 0.5);
 }
 
-/** A hedge filling a block of ground (block.x, block.y is its top-left): painted bushes, shoulder to shoulder. */
-export function paintHedge(pen, block, bush) {
-  oval(pen, block.x + block.w / 2, block.y + block.h + 6, block.w * 0.5, 12); paint(pen, 'rgba(8,6,20,.4)');
-  const count = Math.max(2, Math.round(block.w / 52));
-  for (let i = 0; i < count; i++) stood(pen, bush, block.x + 26 + (i * (block.w - 52)) / (count - 1), block.y + block.h + 10, 92);
+/** Where the bushes of a hedge stand: shoulder to shoulder along whichever way the block is longer. */
+export function bushesOf(block) {
+  if (block.w >= block.h) {
+    const count = Math.max(2, Math.round(block.w / 52));
+    return Array.from({ length: count }, (_, i) => ({ x: block.x + 26 + (i * (block.w - 52)) / (count - 1), y: block.y + block.h + 2 }));
+  }
+  const count = Math.max(2, Math.round(block.h / 44));
+  return Array.from({ length: count }, (_, i) => ({ x: block.x + block.w / 2, y: block.y + 34 + (i * (block.h - 34)) / (count - 1) }));
 }
 
-/** The gate of a place, its opening centred on (0, 0). */
+/** The gateway of a place, its opening centred on (0, 0): two posts and a bar across. */
 export function paintGate(pen) {
+  oval(pen, 0, 18, 84, 12); paint(pen, 'rgba(8,6,20,.35)');
   for (const side of [-1, 1]) {
-    for (let i = 1; i <= 3; i++) { rounded(pen, side * (66 + i * 20) - 6, -30, 12, 44, 5); paint(pen, '#9a6a48'); outline(pen, 3.5); }
-    rounded(pen, side * 110 - 44, -12, 88, 9, 4); paint(pen, '#7a5340'); outline(pen, 3.5);
-    rounded(pen, side * 58 - 10, -54, 20, 70, 7); paint(pen, '#7a5340'); outline(pen, 4.5);
-    disc(pen, side * 58, -58, 9); paint(pen, '#9a6a48'); outline(pen, 4);
+    rounded(pen, side * 62 - 10, -54, 20, 74, 7); paint(pen, '#7a5340'); outline(pen, 4.5);
+    disc(pen, side * 62, -58, 9); paint(pen, '#9a6a48'); outline(pen, 4);
   }
-  rounded(pen, -66, -68, 132, 16, 8); paint(pen, '#9a6a48'); outline(pen, 4.5);
+  rounded(pen, -70, -70, 140, 16, 8); paint(pen, '#9a6a48'); outline(pen, 4.5);
 }
 
 /**
- * One building: its painting standing with the middle of its foot at the spot, its name over it. A
- * place that is shut is in the dark, with a padlock on it.
+ * One building: its painting standing with the middle of its foot at the spot, its name (if it is
+ * given one) over it. A place that is shut is in the dark, with a padlock on it.
  */
-export function paintBuilding(pen, spot, { image, name, open = true, cleared = false }) {
+export function paintBuilding(pen, spot, { image, name = '', open = true, cleared = false }) {
   const { x, y } = spot;
   const wide = BUILDING_WIDE[spot.id] || 210;
   oval(pen, x, y + 6, wide * 0.52, 17); paint(pen, 'rgba(8,6,20,.45)');
@@ -254,5 +256,5 @@ export function paintBuilding(pen, spot, { image, name, open = true, cleared = f
     pen.lineWidth = 4.5; pen.strokeStyle = '#d6d0f0'; pen.lineCap = 'round'; pen.beginPath(); pen.arc(x, y - 33, 7, Math.PI, 0); pen.stroke();
     rounded(pen, x - 10.5, y - 33, 21, 16, 4); paint(pen, '#d6d0f0');
   }
-  label(pen, `${cleared ? '✓ ' : ''}${name}`, x, y - tall - 14, cleared ? '#58d77a' : open ? '#fff7e8' : '#b6b0d6', cleared ? '#58d77a' : open ? 'rgba(255,255,255,.3)' : 'rgba(255,255,255,.14)');
+  if (name) label(pen, `${cleared ? '✓ ' : ''}${name}`, x, y - tall - 18, cleared ? '#58d77a' : open ? '#fff7e8' : '#b6b0d6', cleared ? '#58d77a' : open ? 'rgba(255,255,255,.3)' : 'rgba(255,255,255,.14)');
 }

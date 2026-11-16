@@ -1,6 +1,6 @@
 // End-to-end test: plays the real game in a headless browser, from first
-// launch through walking the lane, a fight, a new friend, the whole first
-// room, a reload and damaged saves.
+// launch through walking the open world, stepping into the garden, a fight,
+// a new friend, resting at home, the whole garden, a reload and damaged saves.
 // node tests/e2e/run.mjs        (exit code 1 on any failure)
 import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
@@ -8,6 +8,7 @@ import { serve } from '../../tools/serve.mjs';
 import { newState } from '../../web/js/core/state.js';
 import { enterRoom } from '../../web/js/core/rooms.js';
 import { SPECIES, HEIRLOOM } from '../../web/js/core/balance.js';
+import { WORLD, DISTRICTS, POST } from '../../web/js/core/world.js';
 const { chromium } = createRequire(import.meta.url)('playwright'); // preinstalled globally (NODE_PATH)
 
 const OUT = new URL('./out/', import.meta.url).pathname;
@@ -89,20 +90,34 @@ check(await S(page, () => document.querySelector('#lane .who img').src.includes(
 
 // =============================================================== the lane
 section('The lane (the open world)');
-const where = (p) => S(p, () => ({ ...window.oddments.game.state.where, near: window.oddments.game.near() }));
+const game = (p, fn, arg) => S(p, fn, arg);
+const where = (p) => S(p, () => ({ ...window.oddments.game.state.where, near: window.oddments.game.near(), district: window.oddments.game.district() }));
+const view = (p) => S(p, () => window.oddments.lane.view());
+/** One tap toward something in the world, wherever it is: on it if it is in view, else at the edge of the screen nearest it. */
+async function tapToward(p, id) {
+  const aim = await S(p, (what) => {
+    const at = window.oddments.lane.screenOf(what);
+    const box = document.querySelector('.lanecanvas').getBoundingClientRect();
+    return { x: Math.min(box.right - 8, Math.max(box.left + 8, at.x)), y: Math.min(box.bottom - 200, Math.max(box.top + 70, at.y)) };
+  }, id);
+  await p.touchscreen.tap(aim.x, aim.y);
+}
 /** Walks to a place the way a finger would: by tapping toward its door until you are standing at it. */
 async function walkTo(p, id) {
-  for (let tries = 0; tries < 30; tries++) {
+  for (let tries = 0; tries < 45; tries++) {
     if ((await where(p)).near === id) return true;
-    const aim = await S(p, (spot) => {
-      const at = window.oddments.lane.screenOf(spot);
-      const box = document.querySelector('.lanecanvas').getBoundingClientRect();
-      return { x: Math.min(box.right - 8, Math.max(box.left + 8, at.x)), y: Math.min(box.bottom - 200, Math.max(box.top + 70, at.y)) };
-    }, id);
-    await p.touchscreen.tap(aim.x, aim.y);
+    await tapToward(p, id);
     await p.waitForTimeout(450);
   }
   return (await where(p)).near === id;
+}
+/** Walks in through a place's gate by tapping, as a finger would. */
+async function walkIn(p, room) {
+  for (let tries = 0; tries < 45 && (await where(p)).district !== room; tries++) {
+    await tapToward(p, `in:${room}`);
+    await p.waitForTimeout(450);
+  }
+  return (await where(p)).district === room;
 }
 /** Waits until the walker has stopped: two looks a moment apart that agree. */
 async function stopped(p) {
@@ -115,10 +130,15 @@ async function stopped(p) {
   }
   return last;
 }
-/** Goes straight to the garden door (the engine's shortcut) and walks in. */
+/** Goes straight in through the garden gate (the engine's shortcut). */
 async function enterGarden(p) {
-  await S(p, () => { window.oddments.game.standAt('garden'); window.oddments.ctx.show('lane'); });
-  await p.click('.placecard[data-spot="garden"] [data-act="enter"]');
+  await S(p, () => { window.oddments.game.travelTo('garden'); window.oddments.ctx.show('lane'); });
+}
+/** Goes straight home and rests there by pressing Rest. */
+async function restAtHome(p) {
+  await S(p, () => { window.oddments.game.standAt('home'); window.oddments.ctx.show('lane'); });
+  await p.click('.placecard[data-spot="home"] [data-act="rest"]');
+  await p.waitForSelector('.placecard[data-spot="home"] [data-act="friends"]');
 }
 check(await S(page, () => {
   const canvas = document.querySelector('.lanecanvas');
@@ -126,74 +146,80 @@ check(await S(page, () => {
   const colours = new Set();
   for (let i = 0; i < pixels.length; i += 4 * 997) colours.add(`${pixels[i] >> 4},${pixels[i + 1] >> 4},${pixels[i + 2] >> 4}`);
   return colours.size > 12;
-}), 'the lane is drawn');
+}), 'the world is drawn');
 let at = await where(page);
 check(at.near === 'home' && (await S(page, () => document.querySelector('.placecard').dataset.spot)) === 'home', 'you start at the door of home');
-check(await S(page, () => !document.querySelector('#tabs').hidden), 'the tabs show out in the lane');
-check((await S(page, () => window.oddments.game.enterRoom('garden'))) === false, 'a room cannot be walked into from somewhere else');
+check(await S(page, () => !document.querySelector('#tabs').hidden), 'the tabs show');
+const firstView = await view(page);
+check(firstView.w < WORLD.w / 2 && firstView.h < WORLD.h, `the world is much bigger than the screen (${Math.round(firstView.w)} of ${WORLD.w} across, ${Math.round(firstView.h)} of ${WORLD.h} down)`);
+check((await game(page, () => window.oddments.game.travelTo('alley'))) === false, 'a place that is not built cannot be walked into');
 await snap(page, 'e2e-lane');
 check(await walkTo(page, 'garden'), 'tapping walks you to the garden gate');
 const moved = await stopped(page);
-check(Math.hypot(moved.x - at.x, moved.y - at.y) > 150, 'by actually crossing the ground between');
+check(Math.hypot(moved.x - at.x, moved.y - at.y) > 400, 'by actually crossing the ground between');
+const gateView = await view(page);
+check(Math.abs(gateView.x - firstView.x) > 100 && Math.abs(gateView.y - firstView.y) > 100, 'and the view follows you across the world, both ways');
 await page.waitForSelector('.placecard[data-spot="garden"]');
-check(await S(page, () => document.querySelector('.placecard h2').textContent.includes('The Garden Gate') && !document.querySelector('[data-act="enter"]').disabled), 'standing at its door offers the way in');
+check(await S(page, () => document.querySelector('.placecard h2').textContent.includes('The Garden Gate') && document.querySelector('[data-act="enter"]').textContent.includes('Walk on in')), 'standing at its gate tells you the way in is open');
+check((await state(page)).visit === null && moved.district === null, 'reading the sign is not yet a visit');
 check((await state(page)).seen.walked === true && await S(page, () => document.querySelector('.lanehint').hidden), 'the walking hint goes once you have walked');
 await snap(page, 'e2e-lane-garden');
 check(await walkTo(page, 'alley'), 'you can walk on to a place that is not built yet');
 await page.waitForSelector('.placecard[data-spot="alley"]');
 check(await S(page, () => document.querySelector('[data-act="enter"]').disabled && document.querySelector('[data-act="enter"]').textContent === 'Not built yet'), 'but its door is locked');
-check((await S(page, () => window.oddments.game.enterRoom('alley'))) === false, 'and the game cannot be told otherwise');
 at = await stopped(page); // still walking the last few steps to the door when the card appears
 await page.goto(`${base}?debug&fast`);
 await ready(page);
 const again = await where(page);
 check(Math.abs(again.x - at.x) < 1 && Math.abs(again.y - at.y) < 1 && again.near === 'alley', 'a reload leaves you standing where you were');
 check(await walkTo(page, 'garden'), 'and you can walk back');
-await page.click('.placecard[data-spot="garden"] [data-act="enter"]');
-check((await screen(page)) === 'path', 'Walk in opens the path');
-check(await S(page, () => document.querySelector('#tabs').hidden), 'the tabs are put away inside a place');
+check(await walkIn(page, 'garden'), 'walking on through the gate takes you into the garden');
+s = await state(page);
+check(s.visit && s.visit.room === 'garden' && s.visit.stop === 0 && s.rooms.garden.visits === 1, 'and that begins a visit: no button to press');
+check((await screen(page)) === 'lane', 'it is the same world, not another screen');
+check(await S(page, () => !document.querySelector('#tabs').hidden), 'and the tabs stay out wherever you walk');
 
 // =============================================================== inside a place
 section('Inside the garden');
-/** Walks straight up to whoever is waiting (the engine's shortcut); the screen notices and the fight starts. */
-async function onward(p) {
-  await S(p, () => window.oddments.game.approach());
+/** Walks straight up to a group (the engine's shortcut: the next one, unless told which); the screen notices and the fight starts. */
+async function onward(p, index) {
+  await S(p, (i) => (i === undefined ? window.oddments.game.approach() : window.oddments.game.approach(i)), index);
   // Nothing starts until you move: one tap toward them is the step that walks you in.
-  const aim = await S(p, () => {
-    const to = window.oddments.lane.screenOf('next');
-    const box = document.querySelector('.lanecanvas').getBoundingClientRect();
-    return { x: Math.min(box.right - 8, Math.max(box.left + 8, to.x)), y: Math.min(box.bottom - 200, Math.max(box.top + 70, to.y)) };
-  });
-  await p.touchscreen.tap(aim.x, aim.y);
+  await tapToward(p, index === undefined ? 'next' : `post:${index}`);
   await p.waitForSelector('#fight', { timeout: 15000 });
 }
-s = await state(page);
-check(await S(page, () => window.oddments.game.atGate()) && s.visit.stop === 0, 'you come in at the gate');
-check(await S(page, () => document.querySelector('#lane').classList.contains('inside') && document.querySelector('#lane h1').textContent === 'The Garden Gate'), 'and are inside the garden, not on a menu');
-check(s.visit.waiting.length >= 1 && await S(page, () => document.querySelector('.placecard').dataset.stop === '0' && document.querySelector('.placecard h2').textContent.includes('By the Gate')), 'whoever is at the first stop is already waiting');
+check(await S(page, () => document.querySelector('#lane h1').textContent === 'The Garden Gate' && document.querySelector('#lane .where').textContent === '0 of 5 calmed'), 'the heading says where you are and how the visit is going');
+check(s.visit.groups.length === 5 && s.visit.groups.every((group) => group.foes.length >= 1 && !group.done), 'everyone restless is already out where you can see them');
+await page.waitForSelector('.placecard.slim');
 check((await page.$$('.teamcard')).length === 3, 'the team of three is listed');
 check(await S(page, () => [...document.querySelectorAll('.teamcard .bar i')].every((i) => i.style.width === '100%')), 'everyone sets out rested');
+await page.waitForTimeout(500);
 await snap(page, 'e2e-inside');
-const stood = s.visit.at;
-// Walk up to them by tapping where they stand, as a finger would.
-for (let tries = 0; tries < 25 && (await S(page, () => window.oddments.game.place())) !== 'fight'; tries++) {
-  const aim = await S(page, () => {
-    const to = window.oddments.lane.screenOf('next');
-    const box = document.querySelector('.lanecanvas').getBoundingClientRect();
-    return { x: Math.min(box.right - 8, Math.max(box.left + 8, to.x)), y: Math.min(box.bottom - 200, Math.max(box.top + 70, to.y)) };
-  });
-  await page.touchscreen.tap(aim.x, aim.y);
+// The boss stands in plain sight, but will not be met yet.
+const bossPost = DISTRICTS.garden.posts[4];
+const cameIn = (await where(page));
+await game(page, (post) => { window.oddments.game.state.where = { x: post[0], y: post[1] }; }, [bossPost.x, bossPost.y + POST.hold + 8]);
+await tapToward(page, 'post:4');
+await page.waitForTimeout(700);
+check((await screen(page)) === 'lane' && (await game(page, () => window.oddments.game.meeting())) === -1, 'the boss will not be met while the others are restless');
+await game(page, (to) => { window.oddments.game.state.where = to; }, { x: cameIn.x, y: cameIn.y });
+// Walk up to one of them by tapping where it stands, as a finger would. Not the nearest: any order will do.
+const FIRST = 1;
+const stood = await where(page);
+for (let tries = 0; tries < 30 && (await S(page, () => window.oddments.game.place())) !== 'fight'; tries++) {
+  await tapToward(page, `post:${FIRST}`);
   await page.waitForTimeout(500);
 }
 await page.waitForSelector('#fight', { timeout: 15000 });
 s = await state(page);
-check(Math.hypot(s.visit.at.x - stood.x, s.visit.at.y - stood.y) > 150, 'tapping where they stand walks you there, round the hedge');
+check(Math.hypot(s.where.x - stood.x, s.where.y - stood.y) > 150, 'tapping where a group stands walks you up to it');
+check((await game(page, () => window.oddments.game.facing)) === FIRST, 'and it is that group you meet, not one you passed on the way');
 
 // =============================================================== a fight
 section('A fight');
 await idle(page);
 check((await screen(page)) === 'fight', 'walking into them starts the fight');
-check(JSON.stringify((await battle(page)).units.filter((u) => u.side === 'foe').map((u) => u.species)) === JSON.stringify((await state(page)).visit.waiting.map((f) => f.species)), 'against exactly who was seen waiting');
+check(JSON.stringify((await battle(page)).units.filter((u) => u.side === 'foe').map((u) => u.species)) === JSON.stringify((await state(page)).visit.groups[FIRST].foes.map((f) => f.species)), 'against exactly who was seen waiting');
 let b = await battle(page);
 const foeCount = b.units.filter((u) => u.side === 'foe').length;
 check((await page.$$('.unit.ally')).length === 3 && (await page.$$('.unit.foe')).length === foeCount, 'three friends face whoever turned up');
@@ -218,6 +244,7 @@ await page.click('.modal .x');
 
 // Reach out, by tapping.
 const huff0 = b.units.find((u) => u.key === 'f0').huff;
+const reachBy = await page.evaluate(async () => { const { reachAmount } = await import('./js/core/battle.js'); const fight = window.oddments.game.battle; return reachAmount(fight, fight.units.find((u) => u.key === 'f0')); });
 await page.click('[data-call="reach"]');
 if (foeCount > 1) {
   check((await page.$$('.unit.pick')).length === foeCount, 'Reach out asks who');
@@ -227,8 +254,8 @@ if (foeCount > 1) {
 }
 await idle(page);
 b = await battle(page);
-check(b.units.find((u) => u.key === 'f0').huff === huff0 - 2, 'reaching out takes two pips off its Huff');
-check((await page.$$('[data-unit="f0"] .pips i.on')).length === huff0 - 2, 'and the pips on screen say so');
+check(reachBy >= 2 && b.units.find((u) => u.key === 'f0').huff === Math.max(0, huff0 - reachBy), `reaching out takes ${reachBy} pips off its Huff`);
+check((await page.$$('[data-unit="f0"] .pips i.on')).length === Math.max(0, huff0 - reachBy), 'and the pips on screen say so');
 check(await S(page, () => [...document.querySelectorAll('.call')].every((c) => c.disabled)), 'one Call a round: the rest wait');
 check(b.order[b.at] === (await S(page, () => window.oddments.game.choices().unit.key)), 'a Call does not use up the friend\'s turn');
 
@@ -274,10 +301,13 @@ check(await S(page, () => document.querySelector('.modal .xp').textContent.inclu
 check(!(await page.$('.modal.result .x')), 'the result has to be acknowledged');
 await snap(page, 'e2e-result');
 await page.click('[data-id="next"]');
-check((await screen(page)) === 'path', 'Onward puts you back in the garden');
-check(await S(page, () => document.querySelector('.placecard').dataset.stop === '1' && document.querySelector('.placecard h2').textContent.includes('stop 2 of 5')), 'with the next group waiting further in');
+check((await screen(page)) === 'lane', 'Onward puts you back in the garden');
+check(await S(page, () => document.querySelector('.placecard').dataset.calmed === '1' && document.querySelector('.placecard h2').textContent.includes('1 of 5 calmed') && document.querySelector('#lane .where').textContent === '1 of 5 calmed'), 'which knows one group is calm');
 s = await state(page);
-check(s.visit.stop === 1 && Object.values(s.visit.hp).every((hp) => hp > 0), 'with everyone on their feet after a breather');
+check(s.visit.stop === 1 && s.visit.groups[FIRST].done && s.visit.groups.filter((group) => group.done).length === 1, 'that group, and only that group');
+check(Object.values(s.visit.hp).every((hp) => hp > 0), 'with everyone on their feet after a breather');
+const afterWin = await where(page);
+check(Math.abs(afterWin.x - s.where.x) < 1 && afterWin.district === 'garden', 'and you are standing where you stood');
 
 // =============================================================== walking away, and home
 section('Walking away');
@@ -292,7 +322,7 @@ await page.waitForSelector('.modal.result');
 check((await modalTitle(page)) === 'Home again', 'walking away ends the visit');
 await page.click('[data-id="next"]');
 s = await state(page);
-check((await screen(page)) === 'lane' && s.visit === null && s.rooms.garden.losses === 1, 'and you are back in the lane');
+check((await screen(page)) === 'lane' && s.visit === null && s.rooms.garden.losses === 1, 'and it is counted');
 check((await where(page)).near === 'home', 'carried home');
 check(s.friends.length === 3 + joined.length, 'with every friend you had');
 
@@ -333,50 +363,81 @@ await ready(page);
 s = await state(page);
 check(s.player.name === 'Marisol' && s.player.look === 'sitter_c' && s.friends.length === beforeReload.friends.length, 'a reload keeps the house-sitter and every friend');
 check(JSON.stringify(s.team) === JSON.stringify(beforeReload.team) && s.settings.fast === true, 'and the team and settings');
-check((await screen(page)) === 'path' && s.visit && s.visit.stop === 0, 'a reload in the middle of a fight puts you back inside the garden before it');
-check(JSON.stringify(s.visit.waiting) === JSON.stringify(beforeReload.visit.waiting) && Math.abs(s.visit.at.x - beforeReload.visit.at.x) < 1, 'facing the same ones, standing where you stood');
+check((await screen(page)) === 'lane' && s.visit && s.visit.stop === 0, 'a reload in the middle of a fight puts you back in the garden before it');
+check(JSON.stringify(s.visit.groups) === JSON.stringify(beforeReload.visit.groups) && Math.abs(s.where.x - beforeReload.where.x) < 1 && Math.abs(s.where.y - beforeReload.where.y) < 1, 'facing the same ones, standing where you stood');
 await page.waitForTimeout(600);
-check((await screen(page)) === 'path', 'and nothing starts until you move: you can still walk back out');
+check((await screen(page)) === 'lane' && (await game(page, () => window.oddments.game.meeting())) >= 0, 'and nothing starts just because you are standing in front of them');
 check(!(await page.$('.modal.intro')), 'the intro does not come back');
 check(await S(page, () => Object.keys(localStorage).every((key) => key.startsWith('oddments.'))), 'the save is the only thing kept on the device');
 
+// =============================================================== resting at home
+section('Resting at home');
+await tab(page, 'friends');
+const teamBefore = JSON.stringify((await state(page)).team);
+await page.click('.grid:not(.team) .friend');
+const swapButton = await page.$('.modal [data-id^="swap-"]');
+if (swapButton) { await swapButton.click(); await page.waitForTimeout(150); }
+check(JSON.stringify((await state(page)).team) === teamBefore, 'the team cannot be changed in the middle of a visit');
+if (await page.$('.modal .x')) await page.click('.modal .x');
+await tab(page, 'lane');
+check(await walkTo(page, 'home'), 'you can walk away from them, out of the garden and all the way home');
+check((await screen(page)) === 'lane' && (await state(page)).stats.battles === beforeReload.stats.battles, 'without a fight starting as you turn to go');
+check((await state(page)).visit !== null, 'walking home is not yet resting');
+await page.waitForSelector('.placecard[data-spot="home"] [data-act="rest"]');
+check((await page.$$('.placecard[data-spot="home"] .teamcard')).length === 3, 'at home the card shows how everyone is, and offers a rest');
+await snap(page, 'e2e-home-rest');
+await page.click('.placecard[data-spot="home"] [data-act="rest"]');
+await page.waitForSelector('.placecard[data-spot="home"] [data-act="friends"]');
+s = await state(page);
+check(s.visit === null, 'Rest ends the visit');
+check(await game(page, () => window.oddments.game.teamHealth().every((member) => member.hp === member.max)), 'and everyone has their breath back');
+
 // =============================================================== the whole room
-section('The whole room');
+section('The whole garden');
 // (Back to the three you started with: the Friends test above swapped a brand-new, low-level friend in.)
-if ((await screen(page)) === 'path') await page.click('[data-act="home"]');
 await S(page, () => window.oddments.game.setTeam([1, 2, 3]));
 let cleared = false;
 let visits = 0;
 while (!cleared && visits < 6) {
   visits++;
-  if ((await screen(page)) === 'lane') await enterGarden(page);
-  while ((await screen(page)) === 'path') {
-    const stop = (await state(page)).visit.stop;
-    await onward(page);
+  if (!(await state(page)).visit) await enterGarden(page);
+  // The first time round, take them out of order: the far ones before the near ones.
+  const order = visits === 1 ? [2, 0, 3, 1, 4] : [0, 1, 2, 3, 4];
+  while ((await state(page)).visit) {
+    const calmed = (await state(page)).visit.stop;
+    const index = order[calmed];
+    await onward(page, index);
     await idle(page);
-    if (stop === 4) {
+    if (index === 4) {
       check((await page.$$('.unit.boss')).length === 1 && (await page.$$('.unit.foe')).length === 3, 'the boss stands with two others');
       check((await S(page, () => document.querySelectorAll('.unit.boss .pips i').length)) === 0, 'and has no Huff to calm');
       check(await S(page, () => document.querySelectorAll('.order .chip.foe img[src*="boss_hydra"]').length === 2), 'it takes two turns a round');
       await snap(page, 'e2e-boss');
     }
-    await botFight(page, { befriend: stop < 4 });
-    cleared = (await modalTitle(page)) === 'Room cleared';
+    await botFight(page, { befriend: index < 4 });
+    cleared = (await modalTitle(page)) === 'All calm';
     if (cleared) await snap(page, 'e2e-cleared');
     await page.click('[data-id="next"]');
     await page.waitForTimeout(80);
   }
 }
 s = await state(page);
-check(cleared, `a sensible player clears the garden (took ${visits} visit${visits === 1 ? '' : 's'})`);
-check(s.rooms.garden.clears === 1 && s.rooms.garden.best === 5 && s.visit === null, 'clearing it is recorded and you are back in the lane');
+check(cleared, `a sensible player calms the whole garden, taking the groups in any order (took ${visits} visit${visits === 1 ? '' : 's'})`);
+check(s.rooms.garden.clears === 1 && s.rooms.garden.best === 5 && s.visit === null, 'clearing it is recorded and the visit is over');
 check(s.book.boss_hydra.met && !s.friends.some((f) => SPECIES[f.species].boss), 'the boss was met, and did not come home');
 check(s.friends.length >= 5, `friends were made along the way (${s.friends.length})`);
 check(s.friends.filter((f) => s.team.includes(f.id)).every((f) => f.level > 3), 'and the team grew');
-check((await where(page)).near === 'garden', 'you step back out at the garden gate');
+check((await where(page)).district === 'garden' && (await game(page, () => window.oddments.game.held().length)) === 0, 'you are still standing in the garden, and nobody is about');
+check(await S(page, () => document.querySelector('.placecard').hidden), 'with nothing to report');
+await page.waitForTimeout(400);
+await snap(page, 'e2e-garden-calm');
+check(await walkTo(page, 'garden'), 'you can walk back out through the gate');
+check((await game(page, () => window.oddments.game.held().length)) === 5, 'and from outside they are back in their bushes');
 await page.waitForSelector('.placecard[data-spot="garden"]');
-check(await S(page, () => document.querySelector('[data-act="enter"]').textContent === 'Walk in again'), 'the garden can be walked again');
-await S(page, () => { window.oddments.game.standAt('alley'); });
+check(await S(page, () => document.querySelector('.placecard small').textContent.includes('Most calmed in one go: 5 of 5') && document.querySelector('[data-act="enter"]').textContent.includes('Walk on in')), 'the garden can be walked again');
+const visitsSoFar = (await state(page)).rooms.garden.visits;
+check(await walkIn(page, 'garden') && (await state(page)).rooms.garden.visits === visitsSoFar + 1 && (await state(page)).visit.stop === 0, 'and stepping back in is a new visit, with everyone restless again');
+await S(page, () => { window.oddments.game.goHome(); window.oddments.game.standAt('alley'); window.oddments.ctx.show('lane'); });
 await page.waitForSelector('.placecard[data-spot="alley"]');
 check(await S(page, () => document.querySelector('[data-act="enter"]').disabled && document.querySelector('[data-act="enter"]').textContent === 'Not built yet'), 'the next place is still not built: the slice ends here');
 await snap(page, 'e2e-house-cleared');
@@ -387,15 +448,15 @@ section('Heirlooms');
 let rareSeed = 0;
 for (let seed = 1; seed < 20000 && !rareSeed; seed++) {
   const probe = newState(Date.now(), seed);
-  enterRoom(probe, 'garden'); // whoever is at the first stop is rolled as you walk in
-  if (probe.visit.waiting.some((foe) => foe.heirloom)) rareSeed = seed;
+  enterRoom(probe, 'garden'); // everyone is rolled as you step in
+  if (probe.visit.groups[0].foes.some((foe) => foe.heirloom)) rareSeed = seed;
 }
 check(rareSeed > 0, `a seed whose first fight has an Heirloom exists (${rareSeed})`);
 await page.goto(`${base}?debug&fast&reset&seed=${rareSeed}`);
 await ready(page);
 await page.click('[data-id="begin"]');
 await enterGarden(page);
-check((await state(page)).visit.waiting.some((foe) => foe.heirloom), 'the Heirloom can be seen waiting before it is met');
+check((await state(page)).visit.groups[0].foes.some((foe) => foe.heirloom), 'the Heirloom can be seen waiting before it is met');
 await onward(page);
 await idle(page);
 b = await battle(page);
@@ -410,7 +471,7 @@ s = await state(page);
 const kept = s.friends.find((f) => f.species === rare.species);
 check(kept && kept.heirloom === true, 'calmed, it comes home in its colours');
 await page.click('[data-id="next"]');
-await page.click('[data-act="home"]');
+await restAtHome(page);
 await tab(page, 'friends');
 check(await S(page, (species) => document.querySelector(`.friend[data-species="${species}"] img`).src.includes('_heirloom') && !!document.querySelector(`.friend[data-species="${species}"] .heirloom`), rare.species), 'and is shown as an Heirloom among your friends');
 await tab(page, 'book');
@@ -431,7 +492,7 @@ edited.friends.push({ id: 1, species: 'boss_hydra', level: 99999 }, { id: 2, spe
 edited.friends[0].level = 1e9;
 edited.team = [1, 1, 99, 'x'];
 edited.player = { name: '<img src=x onerror=window.pwned=1>', look: 'javascript:alert(1)' };
-edited.visit = { room: 'dark', stop: 99, hp: { 1: 1e99 } };
+edited.visit = { room: 'dark', stop: 99, groups: [{ done: true }], hp: { 1: 1e99 } };
 edited.where = { x: 1e308, y: -4 };
 await S(page, (json) => { window.oddments.ctx.save = () => false; localStorage.setItem('oddments.save', json); }, JSON.stringify(edited));
 await page.goto(`${base}?debug&fast`);
@@ -468,7 +529,9 @@ for (const [name, viewport] of [['small phone (320x568)', { width: 320, height: 
   await other.click('[data-id="begin"]');
   const fitsHome = await S(other, () => document.documentElement.scrollWidth <= innerWidth && document.querySelector('#tabs').getBoundingClientRect().bottom <= innerHeight + 0.5 && document.querySelector('[data-act="friends"]').getBoundingClientRect().bottom <= document.querySelector('#tabs').getBoundingClientRect().top + 0.5);
   await enterGarden(other);
-  const fitsPath = await S(other, () => document.documentElement.scrollWidth <= innerWidth && document.querySelector('[data-act="home"]').getBoundingClientRect().bottom <= innerHeight + 0.5);
+  await other.waitForSelector('.placecard.slim');
+  await other.waitForTimeout(400); // the card slides up into place; measure it once it has landed
+  const fitsPath = await S(other, () => document.documentElement.scrollWidth <= innerWidth && document.querySelector('.placecard.slim').getBoundingClientRect().bottom <= document.querySelector('#tabs').getBoundingClientRect().top + 0.5 && document.querySelector('.placecard.slim').getBoundingClientRect().height < innerHeight * 0.25);
   await onward(other);
   await idle(other);
   await other.waitForTimeout(500); // the fight screen arrives with a short zoom; measure it once it has landed

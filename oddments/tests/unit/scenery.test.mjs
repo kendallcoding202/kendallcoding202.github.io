@@ -7,10 +7,9 @@ import assert from 'node:assert/strict';
 import { existsSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
-  WORLD_ART, BUILDING_WIDE, worldSrc, paintLaneGround, paintInsideGround, paintBuilding, paintProp, paintLamp, paintHedge, paintGate, stood, label, mix,
+  WORLD_ART, BUILDING_WIDE, worldSrc, paintGround, paintBuilding, paintProp, paintLamp, paintGate, bushesOf, stood, label, mix,
 } from '../../web/js/ui/scenery.js';
-import { WORLD, SPOTS, LAMPS, AREAS } from '../../web/js/core/world.js';
-import { ROOMS } from '../../web/js/core/balance.js';
+import { WORLD, SPOTS, LAMPS, HEDGES, ROAD_POINTS, GREEN, DISTRICTS, canStand } from '../../web/js/core/world.js';
 
 const WEB = fileURLToPath(new URL('../../web/', import.meta.url));
 
@@ -50,7 +49,10 @@ function standIn() {
 const count = (pen, name) => pen.calls.filter((call) => call === name).length;
 const here = { complete: true, naturalWidth: 360, naturalHeight: 340 }; // a painting that has arrived
 const coming = { complete: false, naturalWidth: 0, naturalHeight: 0 }; // one that has not yet
-const ROUTE = [{ x: WORLD.w / 2, y: WORLD.h + 60 }, ...SPOTS.map((spot) => spot.door)];
+const GROUND = {
+  w: WORLD.w, h: WORLD.h, roads: ROAD_POINTS, spots: SPOTS, lamps: LAMPS, hedges: HEDGES, green: GREEN,
+  lawns: [{ ...DISTRICTS.garden, tint: '#7ac74f' }],
+};
 
 test('every painting the world needs is in the game, and home and every place has a building', () => {
   for (const name of WORLD_ART) {
@@ -90,32 +92,45 @@ test('every building paints, open and shut, with its painting and before it arri
     assert.doesNotThrow(() => paintBuilding(early, spot, { image: coming, name: 'A place', open: true, cleared: true }));
     assert.equal(count(early, 'drawImage'), 0);
     assert.equal(count(early, 'fillText'), 1, 'its name is there even so');
+    const plain = standIn();
+    paintBuilding(plain, spot, { image: here, open: true });
+    assert.equal(count(plain, 'fillText'), 0, 'a building given no name has no name plate');
   }
 });
 
-test('the ground of the lane and of every built place is the grass painting, with a way of earth and stepping stones', () => {
+test('the ground of the whole world is the grass painting, with streets of earth and stepping stones and a lawn for the garden', () => {
   const art = { grass: here, earth: here, bush: here };
-  const lane = standIn();
-  paintLaneGround(lane, WORLD, ROUTE, SPOTS, LAMPS, art);
-  assert.ok(count(lane, 'drawImage') > 40, 'grass laid over the whole lane, and a hedge of bushes down its sides');
-  assert.ok(count(lane, 'createPattern') >= 1, 'the way is earth');
-  assert.ok(count(lane, 'quadraticCurveTo') >= SPOTS.length, 'and curves past every door');
-  assert.ok(count(lane, 'fill') > 200, 'stones, pebbles, flowers');
-  assert.equal(count(lane, 'save'), count(lane, 'restore'));
-  for (const room of ROOMS.filter((r) => AREAS[r.id])) {
-    const inside = standIn();
-    paintInsideGround(inside, room, AREAS[room.id], art);
-    assert.ok(count(inside, 'drawImage') > 40 && count(inside, 'createPattern') >= 1, room.id);
-    assert.equal(count(inside, 'save'), count(inside, 'restore'));
-  }
+  const world = standIn();
+  paintGround(world, GROUND, art);
+  assert.ok(count(world, 'drawImage') > 200, 'grass laid over everything, and a hedge of bushes round the edge');
+  assert.ok(count(world, 'createPattern') >= 2, 'the streets and the garden path are earth');
+  assert.ok(count(world, 'lineTo') > 400, 'every street is traced');
+  assert.ok(count(world, 'fill') > 600, 'stones, pebbles, flowers');
+  assert.equal(count(world, 'clip'), 1, 'the lawn is kept inside its hedge');
+  assert.equal(count(world, 'save'), count(world, 'restore'));
   // Before the paintings arrive the ground still paints: plain, but there.
   const early = standIn();
-  assert.doesNotThrow(() => paintLaneGround(early, WORLD, ROUTE, SPOTS, LAMPS, { grass: coming, earth: coming, bush: coming }));
+  assert.doesNotThrow(() => paintGround(early, GROUND, { grass: coming, earth: coming, bush: coming }));
   assert.equal(count(early, 'drawImage'), 0);
   assert.ok(count(early, 'fillRect') >= 2);
+  // With no place to walk into, it is all lane.
+  assert.doesNotThrow(() => paintGround(standIn(), { ...GROUND, lawns: [] }, art));
 });
 
-test('trees, lamps, hedges, the gate and name plates all paint', () => {
+test('a hedge is bushes shoulder to shoulder, standing on the ground the hedge holds', () => {
+  for (const block of HEDGES) {
+    const bushes = bushesOf(block);
+    const long = Math.max(block.w, block.h);
+    assert.ok(bushes.length >= long / 60 && bushes.length <= long / 38, `${bushes.length} bushes along ${long}`);
+    for (const bush of bushes) {
+      assert.ok(bush.x >= block.x && bush.x <= block.x + block.w && bush.y >= block.y && bush.y <= block.y + block.h + 4, 'each stands in its hedge');
+      if (bush.x > WORLD.edge && bush.y > WORLD.edge) assert.equal(canStand(bush.x, bush.y - 8), false, 'and where a bush is drawn, feet cannot go');
+    }
+  }
+  assert.equal(bushesOf({ x: 0, y: 0, w: 60, h: 44 }).length, 2);
+});
+
+test('trees, lamps, the gate and name plates all paint', () => {
   const tree = standIn();
   paintProp(tree, here, 90);
   assert.equal(count(tree, 'drawImage'), 1);
@@ -123,15 +138,16 @@ test('trees, lamps, hedges, the gate and name plates all paint', () => {
   paintLamp(lamp, here);
   assert.equal(count(lamp, 'drawImage'), 1);
   assert.equal(count(lamp, 'createRadialGradient'), 1, 'and its light');
-  const hedge = standIn();
-  paintHedge(hedge, AREAS.garden.blocks[0], here);
-  assert.ok(count(hedge, 'drawImage') >= 6, 'a hedge is bushes shoulder to shoulder');
   const gate = standIn();
   paintGate(gate);
-  assert.ok(count(gate, 'fill') >= 8);
+  assert.ok(count(gate, 'fill') >= 6);
   const plate = standIn();
   label(plate, 'The Garden Gate', 100, 100);
   assert.equal(count(plate, 'fillText'), 1);
+  assert.ok(plate.sets.some((set) => set.startsWith('font=600 24px')), 'a name plate is big enough to read with the whole lane in view');
+  const small = standIn();
+  label(small, 'calm the others first', 100, 100, '#fff', '#000', 19);
+  assert.ok(small.sets.some((set) => set.startsWith('font=600 19px')));
 });
 
 test('colours mix as told', () => {

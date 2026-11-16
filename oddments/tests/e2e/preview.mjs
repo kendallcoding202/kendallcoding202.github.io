@@ -43,13 +43,18 @@ for (const [name, url] of targets) {
     await page.goto(`${url}${url.includes('?') ? '&' : '?'}debug&fast&reset&seed=7`);
     await page.waitForSelector('.modal.intro', { timeout: 30000 });
     await page.click('[data-id="begin"]');
-    // Walk to the garden gate by tapping, go in, walk up to whoever is waiting, and win.
-    for (let i = 0; i < 30 && (await page.evaluate(() => window.oddments.game.near())) !== 'garden'; i++) {
+    // Walk across the lane to the garden gate by tapping, walk in, walk up to whoever is nearest, and win.
+    for (let i = 0; i < 45 && (await page.evaluate(() => window.oddments.game.near())) !== 'garden'; i++) {
       const aim = await page.evaluate(() => { const to = window.oddments.lane.screenOf('garden'); const box = document.querySelector('.lanecanvas').getBoundingClientRect(); return { x: Math.min(box.right - 8, Math.max(box.left + 8, to.x)), y: Math.min(box.bottom - 200, Math.max(box.top + 70, to.y)) }; });
       await page.touchscreen.tap(aim.x, aim.y);
       await page.waitForTimeout(450);
     }
-    await page.click('.placecard[data-spot="garden"] [data-act="enter"]');
+    // Walk on in through the gate: that begins the visit.
+    for (let i = 0; i < 30 && (await page.evaluate(() => window.oddments.game.district())) !== 'garden'; i++) {
+      const aim = await page.evaluate(() => { const to = window.oddments.lane.screenOf('in:garden'); const box = document.querySelector('.lanecanvas').getBoundingClientRect(); return { x: Math.min(box.right - 8, Math.max(box.left + 8, to.x)), y: Math.min(box.bottom - 200, Math.max(box.top + 70, to.y)) }; });
+      await page.touchscreen.tap(aim.x, aim.y);
+      await page.waitForTimeout(450);
+    }
     for (let i = 0; i < 30 && (await page.evaluate(() => window.oddments.game.place())) !== 'fight'; i++) {
       const aim = await page.evaluate(() => { const to = window.oddments.lane.screenOf('next'); const box = document.querySelector('.lanecanvas').getBoundingClientRect(); return { x: Math.min(box.right - 8, Math.max(box.left + 8, to.x)), y: Math.min(box.bottom - 200, Math.max(box.top + 70, to.y)) }; });
       await page.touchscreen.tap(aim.x, aim.y);
