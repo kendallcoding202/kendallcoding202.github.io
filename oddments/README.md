@@ -39,6 +39,8 @@ node tests/e2e/preview.mjs            # builds the preview and smoke-tests it
 node tests/e2e/preview.mjs https://kendallcoding202.github.io/oddments/web/   # the same against the published copy
 ```
 
+The browser test plays at six screen sizes, from a small phone to a folding phone open, and opens and closes that one in the middle of a fight.
+
 `npm run e2e` needs Playwright: `npm install --no-save playwright && npx playwright install chromium`.
 
 `npm run sim` takes `[players] [--style=friendly|brawler|careless] [--visits=4] [--room=garden|alley]`. A later place is played by someone who has first calmed the ones before it. Today a sensible player calms the garden on the first visit about four times in five and always by the second; Tin Can Alley about half the time on a first visit, nearly always by the second and always by the third. Fights last two to six rounds, and a visit is about four minutes of fighting (the simulator does not count the walking). `tests/unit/pacing.test.mjs` holds the game to that shape.
@@ -86,3 +88,5 @@ Two places of eight can be played: the other six are buildings you can walk up t
 The buildings, trees, lamps, hedges, grass, and the alley's junk, fence and cobbles are painted (four generated images, see `docs/ART.md`); the streets, their stepping stones, the gateways and the name plates are still drawn in code. The four house-sitter looks are still candidates, taller and slimmer than the Pawst Lives cats. The app icon is painted, with one touch-up done in code (the pencil in her hair).
 
 The balance has only been played by bots: the alley's levels were set with the simulator and no person has played it yet. The browser test runs in Chromium at phone sizes. The first build on TestFlight, 0.1.0 (9), has been run on a real iPhone, but it is from before Tin Can Alley, the new icon and the stepping-stone fix: those are on the web copy and need a new upload to reach a phone (`docs/TESTFLIGHT.md`). In iOS's own web engine the alley has not been looked at.
+
+iPhone Duo (Apple's folding iPhone): the game is laid out for both of its screens and for being opened and closed mid-game, and has been built with Xcode 27.1 and run on Apple's iPhone Duo simulator closed. It has not been seen open in the simulator, or on a real one, and the build on TestFlight is not yet one made for it. `docs/TESTFLIGHT.md` has the whole account.

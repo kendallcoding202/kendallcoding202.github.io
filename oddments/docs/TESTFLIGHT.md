@@ -61,6 +61,23 @@ Apple takes a few minutes to process a build. Then: install the **TestFlight** a
 
 The first build of an app sometimes waits on one question in App Store Connect (TestFlight → the build → "Missing Compliance"). The answer is already declared in the app (it uses no encryption beyond what iOS provides), so this should not appear; if it does, answer "None of the algorithms mentioned above".
 
+## iPhone Duo
+
+iPhone Duo is Apple's folding iPhone: a 5.4-inch screen when closed and a 7.6-inch one when open. It runs iPhone apps, so the game is not a separate product for it: the same app, laid out to fit.
+
+| | Where it stands |
+| --- | --- |
+| The game's layout | Fills both screens, and takes being opened or closed in the middle of a walk or a fight without losing anything. Open, you see about a third more of the world across, lists go four to a row and a fight's moves two to a row. Held to by the browser test at 466x678 points (closed) and 669x951 (open: the size Apple's simulator draws the inner screen at). |
+| Built with Xcode 27.1 | Yes. An app uses all of both screens only when built with an Xcode that knows the phone. The "Clutterkin on iPhone Duo" workflow builds with it, and so does "Clutterkin iOS" when its "xcode27" box is ticked: the Simulator check, the native save check and the upload rehearsal all pass there. |
+| On Apple's iPhone Duo simulator, closed | Seen. The game launches, fills the outer screen and keeps clear of the strip the phone puts down its right side for the clock and camera. That strip is wide: about 84 of the outer screen's 466 points, so closed, the game has about the room of a small iPhone. Screenshots are kept with every run of the workflow. |
+| On the simulator, open | **Not seen.** The simulator starts closed and nothing found so far opens it from a script. The inner screen has only been tried at its size in a browser. |
+| A real iPhone Duo | **Not tried by anyone.** |
+| The build on TestFlight today | 0.1.0 (9) was built with the older Xcode. By Apple's account an app built that way still runs on an iPhone Duo, but scaled, and without using all of the screen. |
+
+To put a build on TestFlight that is made for iPhone Duo: run "Clutterkin iOS" with both "testflight" and "xcode27" ticked. That path has been rehearsed on the Xcode 27 Mac as far as an unsigned archive; a real upload from it has not been done yet.
+
+What is not known until someone holds one: how it feels in the hand, whether the fold line crosses anything that matters (nothing has been arranged around it: you stand near the middle of the view, and pop-ups sit in the middle of the screen), and how fast the world draws on the open screen (in a desktop browser at that size it measured 51 to 58 frames a second after the drawing was capped; a phone's graphics chip should do better).
+
 ## Things to know
 
 - **This repository is public, and so is every workflow log.** The upload job hides the secrets, prints only errors and the outcome from the signing step, and removes anything in quotes from those lines, because Xcode can print the certificate owner's name there. If you would rather not rely on that, move the game to a private repository of its own, as Pawst Lives is, before the first upload; nothing else needs to change.
