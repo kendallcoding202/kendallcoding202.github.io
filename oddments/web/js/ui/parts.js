@@ -1,5 +1,6 @@
 // Small pieces of screen used in more than one place.
 import { ELEMENTS, SPECIES, STATS, MAX_LEVEL, moveOf, softSpotOf, statAt, xpNeeded, movesAt } from '../core/balance.js';
+import { aboutOf } from '../core/story.js';
 import { h, sprite } from './dom.js';
 import { modal } from './modals.js';
 
@@ -55,6 +56,8 @@ export function oddmentCard({ species, level, heirloom = false, xp = null, huff 
         h('div', { class: 'tags' }, elementTag(kind.element), heirloom ? heirloomTag() : null, kind.boss ? h('span', { class: 'bosstag' }, 'Boss') : null),
         h('p', { class: 'blurb' }, kind.blurb),
         h('small', null, ringLine(kind.element)))),
+    // One of the three you set out with has its story here too.
+    aboutOf(species) ? h('p', { class: 'about', data: { act: 'about' } }, aboutOf(species).about) : null,
     xp === null ? null : (level >= MAX_LEVEL ? h('small', null, 'As strong as it gets.') : bar('xp', xp / xpNeeded(level), `${xp} / ${xpNeeded(level)} to level ${level + 1}`)),
     h('div', { class: 'stats' }, stats),
     huff === null ? null : h('p', { class: 'note' }, kind.boss

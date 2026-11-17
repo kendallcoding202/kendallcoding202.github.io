@@ -5,7 +5,7 @@
 import { SPECIES, roomOf } from '../core/balance.js';
 import { POST } from '../core/world.js';
 import { insideOf } from '../core/indoors.js';
-import { CAST } from '../core/story.js';
+import { CAST, THREE } from '../core/story.js';
 import { h, sprite, spriteSrc } from './dom.js';
 import { bar } from './parts.js';
 import { howItGoes } from './text.js';
@@ -253,7 +253,7 @@ export function insideScreen(ctx) {
 
   function act(spot) {
     if (spot.does === 'rest') {
-      if (game.rest()) { ctx.save(); play('rest'); toast('Everyone is rested.', { kind: 'good' }); } else toast('Everyone is rested already.');
+      if (game.rest()) { ctx.save(); play('rest'); toast(state.friends.some((friend) => friend.species === THREE[0].kind) ? `Everyone is rested. ${SPECIES[THREE[0].kind].name} slept on your feet.` : 'Everyone is rested.', { kind: 'good' }); } else toast('Everyone is rested already.');
       cardFor = undefined;
     } else if (spot.does === 'ring') {
       const goal = game.goal();

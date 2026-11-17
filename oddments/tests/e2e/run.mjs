@@ -56,11 +56,19 @@ async function hearOut(page) {
   for (; lines < 30 && await page.$('.modal.talk'); lines++) { await page.click('.modal.talk [data-id="next"]'); await page.waitForTimeout(40); }
   return lines;
 }
-/** Begins a new game from the intro and hears out the call that follows. */
+/** Reads the pages about the three you set out with, to the end. Returns how many pages there were. */
+async function meetThree(page) {
+  await page.waitForSelector('.modal.three', { timeout: 8000 });
+  let pages = 0;
+  for (; pages < 9 && await page.$('.modal.three'); pages++) { await page.click('.modal.three [data-id="next"]'); await page.waitForTimeout(40); }
+  return pages;
+}
+/** Begins a new game from the intro, hears out the call that follows, and meets the three. */
 async function begin(page) {
   await page.click('[data-id="begin"]');
   await page.waitForSelector('.modal.talk');
   await hearOut(page);
+  await meetThree(page);
 }
 
 /** Makes one choice the way the stand-in player would, by tapping the real buttons. False once the fight is over. */
@@ -112,7 +120,25 @@ await page.waitForTimeout(250);
 await snap(page, 'e2e-call');
 const callLines = await hearOut(page);
 s = await state(page);
-check(callLines === 4 && s.story.call === true && !(await page.$('.modal')), 'she says her piece in four lines, and the call is remembered');
+check(callLines === 4 && s.story.call === true, 'she says her piece in four lines, and the call is remembered');
+// Then, once, the three who are to walk with you: a page each, with where each came from.
+await page.waitForSelector('.modal.three');
+check(await S(page, () => { const m = document.querySelector('.modal.three'); return m.dataset.page === '1/5' && m.textContent.includes('waiting in the hall') && m.querySelectorAll('.threerow img').length === 3 && !m.querySelector('.x'); }), 'then her three are waiting in the hall: all three in a row, and a page to be read, not dismissed');
+const told = [];
+for (const [kind, name, element, word] of [['dustbunny', 'Hopmote', 'Fluff', 'under the spare bed'], ['sockeel', 'Eelastic', 'Suds', 'one of a pair'], ['toastghost', 'Crumbwisp', 'Crumb', 'in the toaster']]) {
+  await page.click('.modal.three [data-id="next"]');
+  await page.waitForTimeout(60);
+  told.push(await S(page, (want) => { const m = document.querySelector('.modal.three'); const r = m.getBoundingClientRect(); const b = m.querySelector('.body');
+    return m.querySelector(`.threekin[data-kind="${want.kind}"] img`).src.includes(want.kind) && m.querySelector('.threename h3').textContent === want.name && m.querySelector('.threename .el').textContent === want.element
+      && m.textContent.includes(want.word) && r.top >= 0 && r.bottom <= innerHeight && b.scrollHeight <= b.clientHeight + 1; }, { kind, name, element, word }));
+  if (kind === 'sockeel') await snap(page, 'e2e-three');
+}
+check(told.every(Boolean), 'each has a page of its own: its picture, its name and element, and where it came from, all fitting the screen', told.join(','));
+await page.click('.modal.three [data-id="next"]');
+check(await S(page, () => { const m = document.querySelector('.modal.three'); return m.dataset.page === '5/5' && m.textContent.includes('Look after them') && m.querySelector('[data-id="next"]').textContent === 'Off we go'; }), 'and a last word: look after them');
+await page.click('.modal.three [data-id="next"]');
+s = await state(page);
+check(!(await page.$('.modal')) && s.seen.three === true, 'read once, and remembered as read');
 check(await S(page, () => document.querySelector('.goalchip').dataset.goal === 'meet' && document.querySelector('.goalchip span').textContent === 'Find Ines Tock'), 'and you are left with something to do: find Ines Tock');
 check((await S(page, () => document.querySelector('#lane .who b').textContent)) === 'Marisol', 'the name shows in the lane');
 check(await S(page, () => document.querySelector('#lane .who img').src.includes('sitter_c')), 'and so does the look');
@@ -417,6 +443,7 @@ check((await page.$$('.grid.team .friend')).length === 3, 'the team of three is 
 check((await page.$$('.grid:not(.team) .friend')).length === joined.length, 'the new friend is resting at home');
 await page.click(`.grid:not(.team) .friend[data-species="${joined[0]}"]`);
 check((await modalTitle(page))?.startsWith(SPECIES[joined[0]].name), 'tapping a friend opens its card');
+check(!(await page.$('.modal [data-act="about"]')), 'a friend made along the way has no story of its own on it');
 check((await page.$$('.modal .moverow')).length === 3 && (await page.$$('.modal .stat')).length === 4, 'with its four stats and three moves');
 await snap(page, 'e2e-friend');
 const out = s.team[0];
@@ -832,6 +859,7 @@ if (wonFirst) {
 await S(page, () => { for (const friend of window.oddments.game.state.friends) friend.level = Math.max(friend.level, 11); });
 let pantryCalm = false;
 let crumbwyrmSeen = false;
+let toasterWords = null;
 for (let calls = 0; calls < 6 && !pantryCalm; calls++) {
   if (!(await state(page)).visit) await S(page, () => { window.oddments.game.travelTo('pantry'); window.oddments.ctx.show('lane'); });
   else if (!(await indoors(page)).id) await S(page, () => { window.oddments.game.standAt('pantry'); window.oddments.game.enter('pantry'); window.oddments.ctx.show('lane'); });
@@ -845,6 +873,7 @@ for (let calls = 0; calls < 6 && !pantryCalm; calls++) {
       await snap(page, 'e2e-pantry-boss');
     }
     await botFight(page, { befriend: true });
+    if ((await modalTitle(page)) === 'All calm') toasterWords = await S(page, () => { const right = document.querySelector('.modal.result .putright'); return right && { kind: right.dataset.kind, text: right.textContent, art: right.querySelector('img').src }; });
     await page.click('[data-id="next"]');
     await page.waitForTimeout(120);
   }
@@ -852,6 +881,7 @@ for (let calls = 0; calls < 6 && !pantryCalm; calls++) {
 }
 s = await state(page);
 check(pantryCalm && s.rooms.pantry.calmed === 31 && s.book.boss_crumbwyrm.met, 'the pantry is calmed, and the Crumbwyrm is in the scrapbook');
+check(!!toasterWords && toasterWords.kind === 'toastghost' && toasterWords.text.includes('Crumbwisp floats over to the toaster') && toasterWords.art.includes('toastghost'), 'and with it calm, something is put right for Crumbwisp, who was forgotten in that toaster', JSON.stringify(toasterWords));
 check(['dumpling', 'pepperimp', 'eggknight', 'jellywobble'].filter((kind) => s.book[kind].met).length === 4, 'all four of its kinds have been met');
 check(s.indoors && s.indoors.id === 'pantry' && !!(await page.$('#inside[data-room="pantry"]')) && (await S(page, () => document.querySelector('#inside .where').textContent)) === 'calm', 'you are still standing in it, and it says it is calm');
 await page.waitForTimeout(400);
@@ -906,6 +936,11 @@ for (const [room, name, boss, bg, goalAfter] of LATER) {
   const title = await modalTitle(page);
   const said = await S(page, () => document.querySelector('.modal.result .body').textContent);
   check(title === 'All calm' && said.includes(`${name} is calm!`) && (room === 'dark' ? said.includes('That is all eight') : said.includes('is next')), `${name}: calming it says so${room === 'dark' ? ', and that it is all eight' : ', and where is next'}`, `${title}: ${said.slice(0, 120)}`);
+  // For two of the three you set out with, one of these places is where its story began.
+  const right = await S(page, () => { const el = document.querySelector('.modal.result .putright'); return el ? `${el.dataset.kind}: ${el.textContent}` : ''; });
+  if (room === 'wash') check(right.startsWith('sockeel:') && right.includes('Behind Machine Six there is a sock'), 'The Wash: Eelastic, who went into the wash as one of a pair, finds what it was looking for');
+  else if (room === 'dark') check(right.startsWith('dustbunny:') && right.includes('sneezes on it'), 'The Roaring Dark: Hopmote walks up to the one thing it was frightened of');
+  else check(right === '', `${name}: nothing of the kind is said where it does not belong`);
   await page.click('[data-id="next"]');
   await page.waitForSelector(`#inside[data-room="${room}"]`);
   check((await S(page, () => document.querySelector('#inside .where').textContent)) === 'calm' && (await state(page)).rooms[room].clears === 1, `${name}: and it stays calm`);
@@ -1148,6 +1183,12 @@ for (const [name, viewport] of [
   await other.waitForTimeout(300);
   const fitsTalk = await S(other, () => { const r = document.querySelector('.modal.talk').getBoundingClientRect(); return document.documentElement.scrollWidth <= innerWidth && r.top >= 0 && r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight; });
   await hearOut(other);
+  await other.waitForSelector('.modal.three');
+  await other.click('.modal.three [data-id="next"]');
+  await other.waitForTimeout(120);
+  const fitsThree = await S(other, () => { const m = document.querySelector('.modal.three'); const r = m.getBoundingClientRect(); const b = m.querySelector('.body'); return document.documentElement.scrollWidth <= innerWidth && r.top >= 0 && r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight && b.scrollHeight <= b.clientHeight + 1; });
+  check(fitsThree, `${viewport.width}x${viewport.height}: the page about one of the three fits the screen`);
+  for (let pages = 0; pages < 9 && await other.$('.modal.three'); pages++) { await other.click('.modal.three [data-id="next"]'); await other.waitForTimeout(40); }
   await other.waitForTimeout(300);
   const fitsGoal = await S(other, () => { const r = document.querySelector('.goalchip').getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && r.height < 40; });
   const fitsHome = await S(other, () => document.documentElement.scrollWidth <= innerWidth && document.querySelector('#tabs').getBoundingClientRect().bottom <= innerHeight + 0.5 && document.querySelector('[data-act="friends"]').getBoundingClientRect().bottom <= document.querySelector('#tabs').getBoundingClientRect().top + 0.5);
@@ -1208,6 +1249,7 @@ check(snd.running && snd.playing && snd.scene === 'world', 'after it the lullaby
 check(snd.heard.ring === 1 && snd.heard.talk === 1 && snd.heard.tap >= 1, 'the phone rings, great-aunt Maribel has a voice, and a button its tap', JSON.stringify(snd.heard));
 await hearOut(loud);
 check((await sounding(loud)).heard.talk === 4, 'a voice for every line she says');
+await meetThree(loud);
 await walkUpTo(loud, 'ines');
 check((await sounding(loud)).heard.step >= 3, 'footsteps as you walk');
 await S(loud, () => { window.oddments.game.standAt('alley'); window.oddments.ctx.show('lane'); });

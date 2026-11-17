@@ -225,6 +225,47 @@ export function takeCall(state) {
   return CALL;
 }
 
+// ---------------------------------------------------------------- the three you set out with
+//
+// Great-aunt Maribel's own: the three who walk with you from the first night. The game is about
+// things that were left, lost or forgotten, and each of these was. So each has its story, told
+// once at the start (`about`), a word on what it is like in a fight (`knack`), and one place on
+// the lane where that story began. When that place is calm, something is put right (`after`).
+// (The owner asked for this: "explain a little more about your starting companions. Need to build
+// some type of emotional attachment to the game.")
+export const THREE = [
+  {
+    kind: 'dustbunny', what: 'the dust under the bed', place: 'dark',
+    about: 'Hopmote has lived under the spare bed for as long as anyone remembers, minding whatever rolls under there: buttons, a marble, one earring. It is shy of nearly everything and frightened of exactly one thing: a roaring it hears some nights, from somewhere down the lane. Last night it slept on your feet.',
+    knack: 'Quick, and it hits hardest of the three. It does not take a knock well.',
+    after: 'THE VACUUM is quiet. Hopmote walks right up to it, all on its own, and sneezes on it. Nothing happens. It sneezes again, to be sure.',
+  },
+  {
+    kind: 'sockeel', what: 'an odd sock', place: 'wash',
+    about: 'Eelastic went into the wash as one of a pair and came out alone. That was years ago. It still looks behind every door on the lane, in case. It is the steady one: it takes a knock, wrings itself out and carries on.',
+    knack: 'Steady. It has the most Health of the three, and no weak side.',
+    after: 'Behind Machine Six there is a sock. One sock, blue stripes, a little shrunk. Eelastic looks at it for a long time. Then it stops looking behind doors.',
+  },
+  {
+    kind: 'toastghost', what: 'a slice of burnt toast', place: 'pantry',
+    about: 'Somebody put Crumbwisp in the toaster one morning and never came back for it. Great-aunt Maribel did, in the end. It has never quite forgiven the toaster, and it will give its last crumb to anyone who is hurt.',
+    knack: 'Slow and tough. Before long it learns to mend its friends.',
+    after: 'Crumbwisp floats over to the toaster and looks in. Nobody is in there now. It comes back and settles on your shoulder, warm as ever.',
+  },
+];
+export const THREE_WORDS = {
+  open: 'Great-aunt Maribel\'s three are waiting in the hall. They have lived in this house longer than you have been alive, and between them they have decided to keep an eye on you.',
+  again: 'A word about the three who set out with you. They have lived in great-aunt Maribel\'s house longer than you have been alive, and between them they decided to keep an eye on you.',
+  close: 'They are not pets, and they are not yours. They walk with you because Maribel asked them to, and because nobody else will stand up for things like them before Monday. Look after them. They mean to look after you.',
+};
+/** The story of one of the three, by its kind: { what, about, knack }, or null for anyone else. */
+export const aboutOf = (kind) => THREE.find((one) => one.kind === kind) || null;
+/** What is put right for one of the three when a place is calmed: { kind, text }, or null. */
+export function putRight(state, roomId) {
+  const one = THREE.find((each) => each.place === roomId && state.friends.some((friend) => friend.species === each.kind));
+  return one ? { kind: one.kind, text: one.after } : null;
+}
+
 // ---------------------------------------------------------------- what you are trying to do
 
 // How the goal of calming each place is put. (A place not listed here gets a plain line.)

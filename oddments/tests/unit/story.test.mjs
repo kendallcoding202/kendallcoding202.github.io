@@ -393,3 +393,43 @@ test('whatever the story says, in every state, it says it without breaking', () 
     assert.deepEqual(game.aim().count, [8, 8]);
   }
 });
+
+// ------------------------------------------------------------------ the three you set out with
+
+test('each of the three you set out with has a story, a word on what it is like, and a place where something is put right', async () => {
+  const { THREE, THREE_WORDS, aboutOf, putRight } = await import('../../web/js/core/story.js');
+  const { START_TEAM, SPECIES, MOVES, statAt } = await import('../../web/js/core/balance.js');
+  assert.deepEqual(THREE.map((one) => one.kind), START_TEAM.map(([kind]) => kind), 'the three, in the order they walk');
+  for (const one of THREE) {
+    const kind = SPECIES[one.kind];
+    assert.ok(one.about.startsWith(kind.name) || one.about.includes(kind.name), `${one.kind}: its story names it`);
+    assert.ok(one.about.length >= 120 && one.about.length <= 330, `${one.kind}: a few sentences (${one.about.length})`);
+    assert.ok(one.knack.length <= 90 && one.what.length <= 30);
+    assert.equal(aboutOf(one.kind), one);
+    // The place is real, and what happens there names something that is really in it: its ringleader, or one of its stops.
+    const place = ROOMS.find((room) => room.id === one.place);
+    assert.ok(place, `${one.kind}: ${one.place} is a place`);
+    const boss = SPECIES[place.path[place.path.length - 1].boss].name;
+    const named = [boss, ...place.path.map((spot) => spot.name)].map((word) => word.toLowerCase().replace(/^the /, ''));
+    assert.ok(named.some((word) => one.after.toLowerCase().includes(word)), `${one.kind}: "${one.after.slice(0, 40)}..." names ${named.join(' or ')}`);
+    assert.ok(one.after.includes(kind.name) && one.after.length <= 220);
+  }
+  assert.equal(new Set(THREE.map((one) => one.place)).size, 3, 'a place each');
+  assert.equal(aboutOf('gnome'), null);
+  for (const words of Object.values(THREE_WORDS)) assert.ok(words.length > 60 && words.length <= 260);
+  // What it says each is like is true of the numbers.
+  const at = (kind, stat) => statAt(SPECIES[kind][stat], 3);
+  const [quick, steady, kind] = THREE.map((one) => one.kind);
+  assert.ok(at(quick, 'pep') > at(steady, 'pep') && at(quick, 'pep') > at(kind, 'pep') && at(quick, 'oomph') >= at(steady, 'oomph') && at(quick, 'grit') < at(steady, 'grit'), 'the quick one is quickest, hits hardest and is the least tough');
+  assert.ok(at(steady, 'hp') > at(quick, 'hp') && at(steady, 'hp') >= at(kind, 'hp'), 'the steady one has the most Health');
+  assert.ok(at(kind, 'pep') < at(steady, 'pep') && at(kind, 'grit') >= at(steady, 'grit') && SPECIES[kind].moves.some(([move]) => MOVES[move].mend), 'the kind one is slow, tough, and learns to mend');
+  // Something is put right in those three places and nowhere else, and only for one who is with you.
+  const game = fresh();
+  for (const room of ROOMS) {
+    const right = putRight(game.state, room.id);
+    const one = THREE.find((each) => each.place === room.id);
+    assert.deepEqual(right, one ? { kind: one.kind, text: one.after } : null, room.id);
+  }
+  game.state.friends = game.state.friends.filter((friend) => friend.species !== 'sockeel');
+  assert.equal(putRight(game.state, 'wash'), null);
+});

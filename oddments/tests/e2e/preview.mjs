@@ -46,6 +46,9 @@ for (const [name, url] of targets) {
     // Hear out the phone call that starts the story.
     await page.waitForSelector('.modal.talk', { timeout: 5000 }).catch(() => {});
     for (let i = 0; i < 20 && await page.$('.modal.talk'); i++) { await page.click('.modal.talk [data-id="next"]'); await page.waitForTimeout(40); }
+    // And the pages about the three you set out with. (An older published copy has none: then there is nothing to read.)
+    await page.waitForSelector('.modal.three', { timeout: 2500 }).catch(() => {});
+    for (let i = 0; i < 9 && await page.$('.modal.three'); i++) { await page.click('.modal.three [data-id="next"]'); await page.waitForTimeout(40); }
     // Walk across the lane to the garden gate by tapping, walk in, walk up to whoever is nearest, and win.
     for (let i = 0; i < 45 && (await page.evaluate(() => window.oddments.game.near())) !== 'garden'; i++) {
       const aim = await page.evaluate(() => { const to = window.oddments.lane.screenOf('garden'); const box = document.querySelector('.lanecanvas').getBoundingClientRect(); return { x: Math.min(box.right - 8, Math.max(box.left + 8, to.x)), y: Math.min(box.bottom - 200, Math.max(box.top + 110, to.y)) }; });

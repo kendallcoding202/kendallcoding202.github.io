@@ -14,6 +14,7 @@ import { howItGoes } from './text.js';
 import { elementTag, bar } from './parts.js';
 import { modal, toast, modalOpen } from './modals.js';
 import { converse } from './talk.js';
+import { meetTheThree } from './three.js';
 import { play } from '../platform/sound.js';
 import { dustShift, throughDoor } from './shift.js';
 import { insideOf } from '../core/indoors.js';
@@ -634,6 +635,14 @@ export function laneScreen(ctx) {
     else if (!state.story.call) {
       const call = game.takeCall();
       if (call) { ctx.save(); play('ring'); converse(call, () => { cardFor = undefined; }); }
+    }
+    // Then, once, the three who are to walk with you. (A save from before this was written is told
+    // about them as the old friends they are.)
+    else if (state.started && !state.seen.three) {
+      const fresh = state.stats.battles === 0;
+      state.seen.three = true;
+      ctx.save();
+      meetTheThree(fresh, () => { cardFor = undefined; });
     }
     const moving = !met && way.length > 0 && game.walk(way[0], dt);
     const now = here();
