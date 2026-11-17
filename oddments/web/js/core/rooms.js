@@ -189,9 +189,12 @@ export function enterRoom(state, roomId) {
   const calm = room.path.map((_, stop) => stop).filter((stop) => stop < last && staysCalm(state, roomId, stop));
   const most = wanderersMost(state, roomId);
   const about = most > 0 ? wanderedTo(state, calm, most) : new Set();
+  // Rested, everyone steps in fresh. If they have met strays on the way, they step in as worn as that left them.
+  const worn = state.worn || {};
+  state.worn = null;
   state.visit = {
     room: roomId, stop: stroll ? 0 : calm.length, stroll,
-    hp: Object.fromEntries(teamOf(state).map((friend) => [friend.id, maxHpOf(friend)])),
+    hp: Object.fromEntries(teamOf(state).map((friend) => [friend.id, Number.isFinite(worn[friend.id]) ? Math.max(0, Math.min(maxHpOf(friend), worn[friend.id])) : maxHpOf(friend)])),
     groups: room.path.map((_, stop) => {
       if (about.has(stop)) return stroll ? { foes: rollEncounter(state, room, stop, true), done: false } : { foes: rollEncounter(state, room, stop, false), done: false, wander: true };
       if (calm.includes(stop) || (stroll && stop === last)) return nobody();
@@ -202,10 +205,20 @@ export function enterRoom(state, roomId) {
   return true;
 }
 
+/** Whether everyone is rested: not out on a visit, and not worn from meeting strays on the lane. */
+export const rested = (state) => !state.visit && !state.worn;
+
+/** The Health each of the team has just now, by friend id: as the visit has left it, or the lane, or full when rested. */
+export function healthOf(state) {
+  const kept = state.visit ? state.visit.hp : state.worn || {};
+  return Object.fromEntries(teamOf(state).map((friend) => [friend.id, state.visit || state.worn ? Math.max(0, Math.min(maxHpOf(friend), kept[friend.id] || 0)) : maxHpOf(friend)]));
+}
+
 /** Rests at home. Everyone is fresh the next time they set out. Whoever was calmed stays calm; others may have wandered in by then. */
 export function leaveRoom(state) {
-  if (!state.visit) return false;
+  if (rested(state)) return false;
   state.visit = null;
+  state.worn = null;
   return true;
 }
 
@@ -224,6 +237,7 @@ export function afterFight(state, index, won, left) {
   if (!won) {
     record.losses++;
     state.visit = null;
+    state.worn = null;
     return { cleared: false, home: true };
   }
   visit.groups[index].done = true;

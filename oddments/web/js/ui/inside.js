@@ -267,7 +267,7 @@ export function insideScreen(ctx) {
     const visit = state.visit;
     const spot = game.spotNear();
     const goal = game.goal();
-    const key = `${spot ? spot.id : ''}|${visit ? `${visit.room}:${visit.stop}` : ''}|${goal.id}:${goal.count || ''}`;
+    const key = `${spot ? spot.id : ''}|${visit ? `${visit.room}:${visit.stop}` : ''}|${goal.id}:${goal.count || ''}|${game.rested()}`;
     if (key === cardFor) return;
     cardFor = key;
     goalText.textContent = goal.count ? `${goal.title} (${goal.count[0]} of ${goal.count[1]})` : goal.title;
@@ -283,10 +283,11 @@ export function insideScreen(ctx) {
     if (spot) {
       const words = SPOTS[spot.does];
       const resting = spot.does === 'rest';
+      const fresh = game.rested(); // nothing to rest from: not out on a visit, and not worn from strays
       card.replaceChildren(...[h('h2', null, words.name),
-        h('small', null, resting && !visit ? 'Everyone is rested. Come back when they are worn out.' : resting ? `${words.about} ${visit.stroll ? 'Others will have wandered in by the time you go back.' : 'Whoever you have calmed stays calm.'}` : words.about),
-        resting && visit ? teamList() : null,
-        h('button', { class: `btn ${resting && !visit ? 'plain' : 'gold'}`, disabled: resting && !visit, data: { act: spot.does }, onclick: () => act(spot) }, words.label)].filter(Boolean));
+        h('small', null, resting && fresh ? 'Everyone is rested. Come back when they are worn out.' : resting ? `${words.about} ${!visit ? 'Other strays will be out on the lane by the time you set off.' : visit.stroll ? 'Others will have wandered in by the time you go back.' : 'Whoever you have calmed stays calm.'}` : words.about),
+        resting && !fresh ? teamList() : null,
+        h('button', { class: `btn ${resting && fresh ? 'plain' : 'gold'}`, disabled: resting && fresh, data: { act: spot.does }, onclick: () => act(spot) }, words.label)].filter(Boolean));
       return;
     }
     card.replaceChildren(

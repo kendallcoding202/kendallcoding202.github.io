@@ -1,0 +1,123 @@
+// Strays: lost Clutterkin out on the lane itself, between places. They are
+// there to be met if you want them: for the practice, for a kind you missed,
+// for the chance of an Heirloom. Nobody has to. Rules only: no DOM, no clock,
+// no storage.
+//
+// A few turn up each time you set out rested, each small group at one of the
+// world's quiet spots (`WILDS`), and stay where they are until you next rest.
+// They do not hold their ground (you can walk past, or through), and are met
+// only by walking right up to them.
+//
+// They are whoever lives in the places that are open to you, at about the
+// strength of the furthest of those: so they are worth meeting however far
+// you have got, and never a kind from somewhere you have not yet reached.
+//
+// Out on the lane with no visit on, how worn the team is has to be kept
+// somewhere: `state.worn` (friend id to Health), null when rested. Stepping
+// into a place carries it in; resting at home clears it. See rooms.js.
+import { SPECIES, ROOMS, HEIRLOOM, STRAYS, BREATHER, TEAM_SIZE, roomBuilt } from './balance.js';
+import { nextRandom, rollInt, rollPick, own } from './util.js';
+import { WILDS } from './world.js';
+import { roomOpen, maxHpOf, teamOf } from './rooms.js';
+
+/** Strays have dice of their own, so that who wanders the lane never changes how a fight in a place falls out. */
+const diceOf = (state) => ({ rng: state.strayRng | 0 });
+
+/** The furthest place that is open: it sets how strong strays are. */
+export function frontier(state) {
+  let last = ROOMS[0];
+  for (const room of ROOMS) if (roomBuilt(room) && roomOpen(state, room.id)) last = room;
+  return last;
+}
+
+/** How strong strays are just now, as [lowest level, highest]: as whoever waits at the first two stops of the furthest place open. */
+export function strayLevels(state) {
+  const path = frontier(state).path;
+  return [path[0].level[0], Math.max(path[0].level[1], path[1].level[1])];
+}
+
+/** Who may be a stray, as [kind, weight]: every kind that lives in a place that is open, ringleaders apart. */
+export function strayPool(state) {
+  const weights = new Map();
+  for (const room of ROOMS) {
+    if (!roomBuilt(room) || !roomOpen(state, room.id)) continue;
+    for (const spot of room.path) for (const [kind, weight] of spot.pool) weights.set(kind, (weights.get(kind) || 0) + weight);
+  }
+  return [...weights];
+}
+
+/**
+ * Who is out on the lane this time: a few small groups, each at a spot of its own. Called when a
+ * game begins and each time everyone is rested. Returns the list it has put in the save.
+ */
+export function rollStrays(state) {
+  const dice = diceOf(state);
+  const pool = strayPool(state);
+  const [low, high] = strayLevels(state);
+  const spots = WILDS.map((_, index) => index);
+  const count = Math.min(spots.length, rollInt(dice, STRAYS.groups[0], STRAYS.groups[1]));
+  const strays = [];
+  for (let i = 0; i < count; i++) {
+    const at = spots.splice(Math.floor(nextRandom(dice) * spots.length), 1)[0];
+    const foes = [];
+    const size = rollInt(dice, STRAYS.size[0], STRAYS.size[1]);
+    for (let n = 0; n < size; n++) {
+      const [species] = rollPick(dice, pool, ([, weight]) => weight);
+      const level = rollInt(dice, low, high);
+      foes.push({ species, level, heirloom: SPECIES[species].huff > 0 && nextRandom(dice) < HEIRLOOM.odds });
+    }
+    strays.push({ at, foes, done: false });
+  }
+  state.strayRng = dice.rng;
+  state.strays = strays;
+  return strays;
+}
+
+/**
+ * Whether a list is a fair group of strays as things stand: the right number of them, each a kind
+ * that lives somewhere open to you (never a ringleader), no stronger than strays can be. A save
+ * cannot put something soft, or something from further on, out on the lane.
+ */
+export function fairStrays(state, foes) {
+  if (!Array.isArray(foes) || foes.length < STRAYS.size[0] || foes.length > Math.min(STRAYS.size[1], TEAM_SIZE)) return false;
+  const kinds = new Set(strayPool(state).map(([kind]) => kind));
+  const high = strayLevels(state)[1];
+  return foes.every((foe) => !!foe && typeof foe === 'object' && own(SPECIES, foe.species) && kinds.has(foe.species) && !SPECIES[foe.species].boss
+    && Number.isInteger(foe.level) && foe.level >= 1 && foe.level <= high && typeof foe.heirloom === 'boolean');
+}
+
+/** Whoever is still out on the lane: [{ index, x, y, foes }], for the screen and for finding the way round them. */
+export function straysAbout(state) {
+  const about = [];
+  state.strays.forEach((stray, index) => { if (!stray.done) about.push({ index, x: WILDS[stray.at].x, y: WILDS[stray.at].y, foes: stray.foes }); });
+  return about;
+}
+
+/** The strays you have walked right up to (their number in the save's list), or -1. */
+export function strayNear(state, pos) {
+  if (!pos) return -1;
+  for (const stray of straysAbout(state)) if (Math.hypot(pos.x - stray.x, pos.y - stray.y) <= STRAYS.meet) return stray.index;
+  return -1;
+}
+
+/**
+ * Moves things on after a fight with a group of strays. `left` maps friend id to the Health it
+ * finished with. A win and they are gone until you next rest, and everyone takes a breather; a
+ * loss and you are carried home, which ends a visit too, as a loss anywhere does.
+ * Returns { home }.
+ */
+export function afterStrays(state, index, won, left) {
+  if (!won) {
+    state.visit = null;
+    state.worn = null;
+    return { home: true };
+  }
+  state.strays[index].done = true;
+  // On a visit, the visit keeps how everyone is. Out on the lane with none on, the save does.
+  const health = state.visit ? state.visit.hp : (state.worn = state.worn || {});
+  for (const friend of teamOf(state)) {
+    const max = maxHpOf(friend);
+    health[friend.id] = Math.min(max, Math.max(0, left[friend.id] || 0) + Math.ceil(max * BREATHER));
+  }
+  return { home: false };
+}

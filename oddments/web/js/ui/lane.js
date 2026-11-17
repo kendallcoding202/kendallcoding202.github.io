@@ -6,7 +6,7 @@
 // The ground and everything standing on it is painted once and kept (see
 // `bake`), then placed each frame, so a frame costs a handful of pictures
 // however detailed the painting was.
-import { ROOMS, SPECIES, ELEMENTS, roomOf, roomBuilt } from '../core/balance.js';
+import { ROOMS, SPECIES, ELEMENTS, STRAYS, roomOf, roomBuilt } from '../core/balance.js';
 import { WORLD, POST, SPOTS, TREES, LAMPS, HEDGES, ROAD_POINTS, GREEN, DISTRICTS, PEOPLE, spotOf, personAt, districtAt } from '../core/world.js';
 import { CAST } from '../core/story.js';
 import { h, sprite, spriteSrc } from './dom.js';
@@ -98,6 +98,7 @@ export function laneScreen(ctx) {
   // Whoever you were already standing beside when the screen appeared (after a reload, say). They are
   // not met just because you move: only if you tap them, or walk off and come back.
   let passedOver = game.meeting();
+  let passedStray = game.strayNear(); // and the same for a stray you were standing beside
   let mark = null; // the ring where you last tapped
   let raf = 0;
   let last = 0;
@@ -303,6 +304,27 @@ export function laneScreen(ctx) {
     if (spot.boss && others > 0) label(pen, `calm the other ${others} first`, post.x, top + 38, '#b6b0d6', 'rgba(255,255,255,.14)', 19);
   }
 
+  /**
+   * Strays: lost Clutterkin out on the lane, pottering about a spot of their own. They face you as
+   * you come near, and are named for what they are, so nobody takes them for someone in the way.
+   */
+  function strays(stray) {
+    const you = here();
+    const near = Math.hypot(you.x - stray.x, you.y - stray.y) < 260;
+    const size = pop(`stray|${stray.index}`, 'stray');
+    stray.foes.forEach((foe, i) => {
+      const kind = SPECIES[foe.species];
+      // Each ambles a little way about where it stands, in its own time.
+      const drift = Math.sin(clock * 0.55 + stray.index * 2.1 + i * 3.3) * 15;
+      const x = stray.x + (i - (stray.foes.length - 1) / 2) * 62 * size + drift;
+      const y = stray.y + Math.cos(clock * 0.4 + stray.index + i * 1.7) * 6;
+      if (foe.heirloom) glow(pen, x, y - 22, 54, '255,200,61', 0.42 + 0.2 * Math.sin(clock * 5));
+      const turned = near ? you.x > x : Math.cos(clock * 0.55 + stray.index * 2.1 + i * 3.3) > 0;
+      stand(spriteSrc(foe.species, foe.heirloom), x, y - (kind.fly ? 9 + Math.sin(clock * 3 + i) * 4 : 0) * size, 58 * size, turned, false, kind.fly ? 0 : Math.max(0, Math.sin(clock * 3.2 + i * 1.7 + stray.index)) * 3 * size);
+    });
+    if (near && size >= 1) label(pen, stray.foes.length > 1 ? 'strays' : 'a stray', stray.x, stray.y - 92, '#cdeed6', 'rgba(205,238,214,.3)', 21);
+  }
+
   /** One of the people of the lane: turned toward you, their name over them when you are near, a mark if they have news. */
   function neighbour(person) {
     const cast = CAST[person.id];
@@ -389,6 +411,7 @@ export function laneScreen(ctx) {
       if (!seen(person.x, person.y)) continue;
       things.push({ y: person.y, draw: () => neighbour(person) });
     }
+    for (const stray of game.strays()) if (seen(stray.x, stray.y)) things.push({ y: stray.y + 8, draw: () => strays(stray) });
     for (const body of homebodies) {
       if (!seen(body.x, body.y)) continue;
       const fly = SPECIES[body.friend.species].fly;
@@ -441,7 +464,7 @@ export function laneScreen(ctx) {
     const id = who ? null : game.near();
     const inside = game.district();
     const goal = game.goal();
-    const key = `${who}:${who ? game.hasNews(who) : ''}|${id}|${visit ? `${visit.room}:${visit.stop}` : ''}|${inside}|${goal.id}:${goal.count || ''}`;
+    const key = `${who}:${who ? game.hasNews(who) : ''}|${id}|${visit ? `${visit.room}:${visit.stop}` : ''}|${inside}|${goal.id}:${goal.count || ''}|${game.rested()}`;
     if (key === cardFor) return;
     cardFor = key;
     goalText.textContent = goal.count ? `${goal.title} (${goal.count[0]} of ${goal.count[1]})` : goal.title;
@@ -475,8 +498,8 @@ export function laneScreen(ctx) {
 
     if (id === 'home') {
       const inside = (kind) => h('button', { class: `btn ${kind}`, data: { act: 'inside' }, onclick: () => goIn('home') }, 'Go inside');
-      if (visit) {
-        card.replaceChildren(h('h2', null, HOME.name), h('small', null, `Rest here and everyone gets their breath back. ${visit.stroll ? 'Others will have wandered in by the time you go back.' : 'Whoever you have calmed stays calm.'}`), teamList(),
+      if (!game.rested()) {
+        card.replaceChildren(h('h2', null, HOME.name), h('small', null, `Rest here and everyone gets their breath back. ${!visit ? 'Other strays will be out on the lane by the time you set off.' : visit.stroll ? 'Others will have wandered in by the time you go back.' : 'Whoever you have calmed stays calm.'}`), teamList(),
           h('div', { class: 'cardrow' },
             h('button', { class: 'btn gold', data: { act: 'rest' }, onclick: () => { if (game.rest()) { ctx.save(); play('rest'); toast('Everyone is rested.', { kind: 'good' }); cardFor = undefined; } } }, 'Rest'),
             inside('plain')));
@@ -542,6 +565,10 @@ export function laneScreen(ctx) {
     if (passedOver >= 0 && state.visit) {
       const post = DISTRICTS[state.visit.room].posts[passedOver];
       if (Math.hypot(to.x - post.x, to.y - post.y) <= POST.meet) passedOver = -1; // a tap on them is choosing to meet them
+    }
+    if (passedStray >= 0) {
+      const stray = game.strays().find((one) => one.index === passedStray);
+      if (stray && Math.hypot(to.x - stray.x, to.y - stray.y) <= STRAYS.meet + 24) passedStray = -1;
     }
     // A tap on the front door of a building you can go into walks you to it, and in.
     const door = SPOTS.find((spot) => insideOf(spot.id) && Math.abs(to.x - spot.x) <= DOORWAY.wide && to.y >= spot.y - DOORWAY.up && to.y <= spot.y + DOORWAY.down);
@@ -657,6 +684,29 @@ export function laneScreen(ctx) {
     const beside = game.meeting();
     if (beside !== passedOver) passedOver = -1;
     const group = !met && stirred && passedOver < 0 ? beside : -1;
+    // The same for a stray: walk right up to one and you have met it. (Nobody has to: the way found
+    // for you goes round them, and they hold no ground.)
+    const lost = game.strayNear();
+    if (lost !== passedStray) passedStray = -1;
+    if (group < 0 && !met && stirred && passedStray < 0 && lost >= 0) {
+      met = true;
+      way = [];
+      const at = game.strays().find((one) => one.index === lost);
+      const begin = () => { if (game.startStrays(lost)) ctx.show('fight'); else { met = false; passedStray = lost; } };
+      play('meet', { boss: false });
+      wrap.classList.add('meeting');
+      if (ctx.fast) setTimeout(begin, 60);
+      else {
+        const box = canvas.getBoundingClientRect();
+        play('scuffle');
+        dustShift({ from: { x: box.left + (at.x - cam.x) * cam.k, y: box.top + (at.y - 30 - cam.y) * cam.k }, boss: false, covered: () => { begin(); play('poof'); } });
+      }
+    }
+    // The first time one comes into view, a word about what it is.
+    if (!state.seen.strays && !met && game.strays().some((stray) => Math.hypot(stray.x - now.x, stray.y - now.y) < 330)) {
+      state.seen.strays = true;
+      toast('A stray, lost out on the lane. Walk up to it to meet it, or walk on by: it is up to you.');
+    }
     if (group >= 0) {
       met = true;
       way = [];
@@ -699,6 +749,7 @@ export function laneScreen(ctx) {
       else if (id.startsWith('post:')) point = visit ? area(visit.room).posts[Number(id.slice(5))] : null;
       else if (id.startsWith('in:')) point = { x: area(id.slice(3)).gate.x, y: area(id.slice(3)).gate.y - 96 };
       else if (id.startsWith('person:')) point = personAt(id.slice(7));
+      else if (id.startsWith('stray:')) point = game.strays().find((one) => one.index === Number(id.slice(6))) || null;
       else if (id === 'me') point = here();
       else point = spotOf(id).door;
       if (!point) return null;

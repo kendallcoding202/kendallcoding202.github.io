@@ -643,6 +643,58 @@ await page.waitForSelector('.placecard[data-spot="wash"]');
 check(await S(page, () => document.querySelector('[data-act="enter"]').disabled && document.querySelector('[data-act="enter"]').textContent === 'Clear The Midnight Pantry first' && !document.querySelector('[data-act="inside"]')), 'the place after the pantry is shut until the pantry is calm, and says so');
 await snap(page, 'e2e-house-cleared');
 
+// =============================================================== strays
+section('Strays, out on the lane');
+{
+  // (Home, rested, with the garden and the alley calm: everything above has been played.)
+  await S(page, () => { const g = window.oddments.game; if (!g.rested()) g.goHome(); g.standAt('home'); window.oddments.ctx.show('lane'); });
+  s = await state(page);
+  const about = await game(page, () => window.oddments.game.strays());
+  check(about.length >= 2 && about.length <= 4 && s.strays.length === about.length && s.worn === null, `a few strays are out on the lane (${about.length} groups), and everyone is rested`);
+  check((await screen(page)) === 'lane' && !(await page.$('#fight')), 'none of them starts anything while you stand at your own door');
+  // Walk right across the map, to a door on the far side: the way found goes round every one of them.
+  const battlesBefore = s.stats.battles;
+  check(await walkTo(page, 'attic'), 'you can walk from one side of the lane to the other');
+  check((await state(page)).stats.battles === battlesBefore && (await screen(page)) === 'lane', 'and meet no stray on the way: nobody has to');
+  // Now go and meet one: tap it, walk up, and the fight is on.
+  const one = about[0];
+  await S(page, (at) => { window.oddments.game.state.where = { x: at.x - 170, y: at.y + 60 }; window.oddments.ctx.show('lane'); }, one);
+  await page.waitForTimeout(250);
+  check(await game(page, () => window.oddments.game.strayNear()) === -1, 'standing a little way off one, you have not met it');
+  const mark = await S(page, (index) => window.oddments.lane.screenOf(`stray:${index}`), one.index);
+  await page.touchscreen.tap(mark.x, mark.y - 8);
+  await page.waitForSelector('#fight', { timeout: 15000 });
+  await idle(page);
+  check(await S(page, () => document.querySelector('#fight img.bg').src.includes('bg_lane') && document.querySelector('.roundpill').textContent.includes('Out on the lane') && window.oddments.sound().scene === 'fight'), 'tap a stray and you walk up to it: the fight is out on the lane, against the lane\'s own painting');
+  check((await S(page, () => document.querySelectorAll('.unit.foe').length)) === one.foes.length && (await S(page, () => document.querySelectorAll('.unit.boss').length)) === 0, 'against whoever was standing there, and no ringleader');
+  await snap(page, 'e2e-stray-fight');
+  await botFight(page, {});
+  const strayTitle = await modalTitle(page);
+  const strayWords = await S(page, () => document.querySelector('.modal.result .body').textContent);
+  check(strayTitle === 'Won' && strayWords.includes('off home'), 'won, it says they are calm and off home', `${strayTitle}: ${strayWords.slice(0, 80)}`);
+  await page.click('[data-id="next"]');
+  await page.waitForSelector('#lane');
+  s = await state(page);
+  check(s.strays[one.index].done === true && s.visit === null && s.worn !== null && (await game(page, () => window.oddments.game.strays().length)) === about.length - 1, 'they are gone, no visit began, and the team is as worn as the fight left it');
+  check(await game(page, () => window.oddments.game.teamHealth().every((member) => member.hp > 0 && member.hp <= member.max)), 'with a breather taken');
+  // Home: the card offers a rest, and resting brings others out.
+  await S(page, () => { window.oddments.game.standAt('home'); window.oddments.ctx.show('lane'); });
+  await page.waitForSelector('.placecard[data-spot="home"] [data-act="rest"]');
+  check(await S(page, () => document.querySelector('.placecard[data-spot="home"] small').textContent.includes('Other strays will be out')), 'at home there is a rest to be had, and it says other strays will be out');
+  await snap(page, 'e2e-stray-rest');
+  await page.click('.placecard[data-spot="home"] [data-act="rest"]');
+  await page.waitForSelector('.placecard[data-spot="home"] [data-act="friends"]');
+  s = await state(page);
+  check(s.worn === null && s.strays.every((stray) => !stray.done) && s.strays.length >= 2, 'rested, everyone is fresh and a new lot of strays is out');
+  // A reload keeps who is out and who has been met.
+  const again = await game(page, () => window.oddments.game.strays()[0]);
+  await S(page, (index) => { const g = window.oddments.game; g.state.strays[index].done = true; window.oddments.ctx.save(); }, again.index);
+  await page.goto(`${base}?debug&fast`);
+  await ready(page);
+  s = await state(page);
+  check(s.strays[again.index].done === true && s.strays.length >= 2, 'a reload keeps who is out on the lane, and who has been met');
+}
+
 // =============================================================== going indoors
 section('Going indoors: home');
 const indoors = (p) => S(p, () => { const g = window.oddments.game; return { id: g.indoors(), at: g.state.indoors && { ...g.state.indoors }, near: g.near(), by: g.spotNear() && g.spotNear().id, shown: document.querySelector('#screen').dataset.indoors }; });

@@ -24,6 +24,7 @@ export async function loadAssets(onProgress = () => {}) {
   for (const look of LOOK_IDS) sources.push(spriteSrc(look), spriteSrc(`${look}_front`), spriteSrc(`${look}_back`));
   for (const id of CAST_IDS) sources.push(spriteSrc(CAST[id].art));
   for (const room of ROOMS) sources.push(`assets/bg/${room.bg}.webp`);
+  sources.push('assets/bg/bg_lane.webp'); // what a fight with strays, out on the lane, is seen against
   for (const name of WORLD_ART) sources.push(worldSrc(name));
   sources.push(...ROOM_ART); // the insides of buildings: their walls, floors and furniture
   let done = 0;

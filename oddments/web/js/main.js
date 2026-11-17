@@ -84,7 +84,7 @@ async function boot() {
       ctx.current = target;
       // The music follows you: the lullaby out in the world; in a fight the scuffle, or the place's own
       // fight tune where it has one; and a ringleader's own tune wherever one is met.
-      setScene(sceneFor({ fight: target === 'fight', boss: target === 'fight' && game.battle.units.some((unit) => unit.boss), room: game.state.visit ? game.state.visit.room : '' }));
+      setScene(sceneFor({ fight: target === 'fight', boss: target === 'fight' && game.battle.units.some((unit) => unit.boss), room: game.state.visit && game.wild < 0 ? game.state.visit.room : '' }));
       // The Lane tab is wherever you are walking: out in the lane, or on the floor of whatever you are inside.
       const indoors = target === 'lane' ? game.indoors() : null;
       const screen = (indoors ? insideScreen : SCREENS[target])(ctx);
@@ -148,7 +148,7 @@ function resultDialog(ctx, summary, foes) {
       : next ? `Everyone is rested. That is as far as the lane is built: ${next.name} comes next, and is not there yet. (${room.name} will stay calm now. A few will always be wandering about in it: go back for the friends still to make.)`
         : 'That is all eight. Every place on the lane is calm, and it is not Monday yet. Everyone is rested. Ines Tock will want to hear, and so will great-aunt Maribel: the telephone is at home.'));
   }
-  else if (summary.won) lines.push(h('p', null, 'They are calm now. Everyone catches their breath.'));
+  else if (summary.won) lines.push(h('p', null, summary.strays ? `${foes.length > 1 ? 'They are' : 'It is'} calm now, and off home. Everyone catches their breath.` : 'They are calm now. Everyone catches their breath.'));
   else lines.push(h('p', null, 'Your friends are worn out. You carry them home for a rest. Whoever you calmed stays calm, and you keep everything they learned.'));
 
   for (const joined of summary.joined) {

@@ -1,7 +1,7 @@
 // The save file: its shape, a fresh one, and repair of old or damaged ones.
 import {
   SAVE_VERSION, SPECIES, SPECIES_IDS, START_TEAM, ROOM_IDS, TEAM_SIZE, ROSTER_MAX, MAX_LEVEL, NAME_LENGTH, DEFAULT_NAME,
-  LOOK_IDS, lookOf, xpNeeded, roomOf, roomBuilt, WANDERERS,
+  LOOK_IDS, lookOf, xpNeeded, roomOf, roomBuilt, WANDERERS, STRAYS,
 } from './balance.js';
 import { newFriend } from './progress.js';
 import { roomOpen, maxHpOf, rollEncounter, fairEncounter, heldBy, heldIn, placeCalm, someone, staysCalm, calmedIn, wanderersMost } from './rooms.js';
@@ -9,10 +9,12 @@ import { own } from './util.js';
 import { settleWhere, spotNear } from './world.js';
 import { insideOf, settleIn } from './indoors.js';
 import { newStory, reviveStory } from './story.js';
+import { rollStrays, fairStrays } from './strays.js';
+import { WILDS } from './world.js';
 
 export function newState(now = Date.now(), seed = (now ^ 0x9e3779b9) | 0) {
   const friends = START_TEAM.map(([species, level], i) => newFriend(i + 1, species, level));
-  return {
+  const state = {
     v: SAVE_VERSION,
     rng: seed | 0,
     createdAt: now,
@@ -29,6 +31,11 @@ export function newState(now = Date.now(), seed = (now ^ 0x9e3779b9) | 0) {
     // The visit you are on, from stepping into a place until you rest at home:
     // { room, stop: how many stops are calm, hp: { friendId: health }, groups: [{ foes: [who], done, wander: true if a wanderer }] one per stop }
     visit: null,
+    // How worn the team is out on the lane with no visit on (friend id to Health), from meeting strays; null when rested.
+    worn: null,
+    // Who is out on the lane this time: [{ at: which quiet spot, foes: [who], done }]. They have dice of their own.
+    strays: [],
+    strayRng: (seed ^ 0x5bd1e995) | 0,
     // The scrapbook: which kinds have been met, and which as an Heirloom.
     book: Object.fromEntries(SPECIES_IDS.map((id) => [id, { met: friends.some((friend) => friend.species === id), heirloom: false }])),
     stats: { battles: 0, wins: 0, losses: 0, rounds: 0, knockouts: 0, befriended: 0, heirlooms: 0 },
@@ -36,6 +43,8 @@ export function newState(now = Date.now(), seed = (now ^ 0x9e3779b9) | 0) {
     settings: { fast: false, sound: true, music: true }, // fast fights; sound effects; the tunes
     seen: {}, // one-time hints already shown
   };
+  rollStrays(state);
+  return state;
 }
 
 // ---------------------------------------------------------------- repair
@@ -176,6 +185,22 @@ export function reviveState(saved, now = Date.now()) {
   // The world was laid out afresh in version 2: a save from before it wakes up rested, at home.
   const mapped = saved.v >= 2;
   state.visit = mapped ? reviveVisit(saved.visit, state) : null;
+  // Worn from strays, with no visit on: each of the team at a Health they could have. (On a visit, the
+  // visit keeps it. Nobody on their feet is not worn: they were carried home.)
+  if (mapped && !state.visit && isObj(saved.worn)) {
+    const worn = {};
+    for (const id of state.team) { const friend = state.friends.find((f) => f.id === id); worn[id] = int(saved.worn[id], maxHpOf(friend), 0, maxHpOf(friend)); }
+    if (Object.values(worn).some((left) => left > 0)) state.worn = worn;
+  }
+  // Strays: the dice they are rolled with, and whoever is out. Each group is kept only at a quiet spot
+  // of its own and only if it is fair as things stand; a save with none to keep is given a fresh lot.
+  if (typeof saved.strayRng === 'number' && Number.isFinite(saved.strayRng)) state.strayRng = saved.strayRng | 0;
+  const taken = new Set();
+  const kept = (Array.isArray(saved.strays) ? saved.strays.slice(0, 64) : []).filter((stray) => isObj(stray) && Number.isInteger(stray.at) && stray.at >= 0 && stray.at < WILDS.length
+    && !taken.has(stray.at) && fairStrays(state, stray.foes) && taken.add(stray.at)).slice(0, STRAYS.groups[1]);
+  if (Array.isArray(saved.strays) && (kept.length || saved.strays.length === 0)) {
+    state.strays = kept.map((stray) => ({ at: stray.at, foes: stray.foes.map((foe) => ({ species: foe.species, level: foe.level, heirloom: foe.heirloom })), done: stray.done === true }));
+  } else rollStrays(state);
   const where = mapped && isObj(saved.where) ? saved.where : null;
   // (Wherever the save says you stand is checked against the ground held as it would be with you standing there.)
   state.where = settleWhere(where, where ? heldBy(state, where) : []);

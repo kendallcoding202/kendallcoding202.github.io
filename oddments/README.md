@@ -59,6 +59,7 @@ web/                    the game: what ships
     progress.js         experience, levels, who comes home
     rooms.js            who is restless in a place, what ground they hold, which groups are calm for good, and a visit: from stepping in to resting at home; and a stroll through a place that is calm
     indoors.js          the floors of the buildings you can walk into: where feet can go, what there is to do
+    strays.js           lost Clutterkin out on the lane itself: who turns up, how strong, and how worn they leave the team
     story.js            the people of the lane, what each says and when, and the goal
     world.js            the open world: what stands where, where feet can go, finding the way
     game.js             the Game object: every action a player can take

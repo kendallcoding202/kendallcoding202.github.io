@@ -4,7 +4,9 @@
 import { TEAM_SIZE, NAME_LENGTH, lookOf, roomOf, roomBuilt } from './balance.js';
 import { createBattle, choices, act, concede } from './battle.js';
 import { settleUp } from './progress.js';
-import { rollEncounter, fairEncounter, enterRoom, leaveRoom, afterFight, canMeet, nextGroup, heldBy, heldIn, roomOpen, placeCalm, staysCalm, calmedIn, teamOf, maxHpOf } from './rooms.js';
+import { rollEncounter, fairEncounter, enterRoom, leaveRoom, afterFight, canMeet, nextGroup, heldBy, heldIn, roomOpen, placeCalm, staysCalm, calmedIn, teamOf, maxHpOf, rested, healthOf } from './rooms.js';
+import { rollStrays, fairStrays, straysAbout, strayNear, afterStrays } from './strays.js';
+import { STRAYS } from './balance.js';
 import { insideOf, stepIn, routeIn, spotIn, onMat, besidePost } from './indoors.js';
 import { WORLD, POST, stepWalk, routeTo, straighten, roomy, standing, canStand, spotNear, spotOf, districtOf, districtAt, postNear, personNear, personAt, TALK } from './world.js';
 import { goalOf, aimOf, storySoFar, hasNews, talk, takeCall } from './story.js';
@@ -21,6 +23,7 @@ export class Game {
     this.fx = fx;
     this.battle = null; // the fight in progress; never saved
     this.facing = -1; // which group that fight is with
+    this.wild = -1; // or, if it is with strays out on the lane, which of them
   }
 
   /**
@@ -134,7 +137,11 @@ export class Game {
     const berth = POST.meet + 14;
     const beside = (post, point) => Math.hypot(point.x - post.x, point.y - post.y) <= berth;
     const all = this.held();
-    const wide = (start) => all.map((post) => (post.r || beside(post, target) || beside(post, start) ? post : { x: post.x, y: post.y, r: berth }));
+    // Strays hold no ground, but walking into one is meeting it: so the way goes round any you are
+    // not heading for (a tap on one, or right beside it, is heading for it).
+    const round = (start) => this.strays().filter((stray) => Math.hypot(target.x - stray.x, target.y - stray.y) > STRAYS.meet + 24 && Math.hypot(start.x - stray.x, start.y - stray.y) > STRAYS.berth)
+      .map((stray) => ({ x: stray.x, y: stray.y, r: STRAYS.berth }));
+    const wide = (start) => [...all.map((post) => (post.r || beside(post, target) || beside(post, start) ? post : { x: post.x, y: post.y, r: berth })), ...round(start)];
     // And it is found with room to spare on every side; walking it then touches nothing.
     const find = (start, to, can) => straighten(start, routeTo(start, to, can, WORLD), can);
     const into = districtAt(target);
@@ -204,6 +211,45 @@ export class Game {
     }
     return false;
   }
+
+  // ------------------------------------------------------------ strays
+
+  /** Whoever is still out on the lane this time: [{ index, x, y, foes }]. */
+  strays() { return straysAbout(this.state); }
+
+  /** The strays you have walked right up to and can meet (their number), or -1. Never from indoors, or in a fight. */
+  strayNear() { return this.place() === 'fight' || this.state.indoors ? -1 : strayNear(this.state, this.state.where); }
+
+  /** Goes straight up to a group of strays. For the simulator and tests; a player walks. */
+  approachStrays(index) {
+    const stray = this.strays().find((one) => one.index === index);
+    if (this.place() === 'fight' || !stray) return false;
+    this.state.indoors = null;
+    this.state.where = { x: stray.x, y: stray.y + STRAYS.meet - 12 };
+    return true;
+  }
+
+  /** Meets the strays you have walked up to. Returns the fight, or null. */
+  startStrays(index = this.strayNear()) {
+    if (this.place() === 'fight' || this.strayNear() !== index || index < 0) return null;
+    const { state } = this;
+    const stray = state.strays[index];
+    if (!fairStrays(state, stray.foes)) { rollStrays(state); return null; }
+    for (const foe of stray.foes) {
+      state.book[foe.species].met = true;
+      if (foe.heirloom) state.book[foe.species].heirloom = true;
+    }
+    const health = healthOf(state);
+    const allies = this.team().map((friend) => ({ species: friend.species, level: friend.level, hp: health[friend.id], friendId: friend.id, heirloom: friend.heirloom }));
+    if (!allies.some((ally) => ally.hp > 0)) return null;
+    this.wild = index;
+    this.facing = -1;
+    this.battle = createBattle(state, { allies, foes: stray.foes, fx: this.fx });
+    return this.battle;
+  }
+
+  /** Whether everyone is rested: not out on a visit, and not worn from meeting strays. */
+  rested() { return rested(this.state); }
 
   /** The place whose door or gate you are standing at: 'home', a room id, or null. */
   near() { return spotNear(this.state.where); }
@@ -285,7 +331,7 @@ export class Game {
    * rested: nobody is swapped half way through a visit.
    */
   setTeam(ids) {
-    if (this.place() !== 'lane' || !Array.isArray(ids)) return false;
+    if (this.place() !== 'lane' || this.state.worn || !Array.isArray(ids)) return false;
     const team = ids.filter((id, i) => this.friend(id) && ids.indexOf(id) === i);
     if (team.length !== ids.length || team.length < 1 || team.length > TEAM_SIZE) return false;
     this.state.team = team;
@@ -301,22 +347,27 @@ export class Game {
   calmedIn(roomId) { return calmedIn(this.state, roomId); }
 
   /**
-   * Rests at home, which ends a visit: everyone is fresh. Whoever was calmed stays calm.
-   * You have to be standing at home's door.
+   * Rests at home, which ends a visit: everyone is fresh. Whoever was calmed stays calm, and
+   * other strays will be out on the lane. You have to be standing at home's door, with
+   * something to rest from.
    */
-  rest() { return this.place() === 'path' && this.near() === 'home' && leaveRoom(this.state); }
-
-  /** Goes straight home and rests. For the simulator and tests; a player walks there. */
-  goHome() {
-    if (this.place() !== 'path') return false;
-    this.standAt('home');
-    return leaveRoom(this.state);
+  rest() {
+    if (this.place() === 'fight' || this.near() !== 'home' || !leaveRoom(this.state)) return false;
+    rollStrays(this.state);
+    return true;
   }
 
-  /** The Health each team member has right now: as the visit has left it, or full when rested. */
+  /** Goes straight home and rests. For the simulator and tests; a player walks. */
+  goHome() {
+    if (this.place() === 'fight' || this.rested()) return false;
+    this.standAt('home');
+    return this.rest();
+  }
+
+  /** The Health each team member has right now: as the visit has left it, or the lane, or full when rested. */
   teamHealth() {
-    const visit = this.state.visit;
-    return this.team().map((friend) => ({ id: friend.id, max: maxHpOf(friend), hp: visit ? Math.min(maxHpOf(friend), visit.hp[friend.id] || 0) : maxHpOf(friend) }));
+    const health = healthOf(this.state);
+    return this.team().map((friend) => ({ id: friend.id, max: maxHpOf(friend), hp: health[friend.id] }));
   }
 
   // ------------------------------------------------------------ fights
@@ -359,10 +410,21 @@ export class Game {
     const summary = settleUp(state, battle);
     const left = {};
     for (const unit of battle.units) if (unit.side === 'ally') left[unit.friendId] = unit.hp;
+    if (this.wild >= 0) {
+      // Strays, out on the lane: calm, they are gone until you next rest; worn out, you are carried home.
+      const moved = afterStrays(state, this.wild, summary.won, left);
+      if (moved.home) { state.where = { ...spotOf('home').door }; state.indoors = null; rollStrays(state); }
+      for (const friend of state.friends) if (friend.heirloom) state.book[friend.species].heirloom = true;
+      this.battle = null;
+      this.wild = -1;
+      return { ...summary, room: null, stop: -1, cleared: false, home: moved.home, strays: true };
+    }
     const room = state.visit.room;
     const stop = this.facing;
     const moved = afterFight(state, stop, summary.won, left);
     if (!summary.won) { state.where = { ...spotOf('home').door }; state.indoors = null; }
+    // Rested again (carried home, or the place calmed): others will be out on the lane.
+    if (this.rested()) rollStrays(state);
     for (const friend of state.friends) if (friend.heirloom) state.book[friend.species].heirloom = true;
     this.battle = null;
     this.facing = -1;

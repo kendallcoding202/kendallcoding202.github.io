@@ -242,9 +242,10 @@ test('Dov has a first thing to say and then a tip each time, round and round; Mr
   assert.equal(game.talkTo('dov').length, 3);
   assert.equal(game.hasNews('dov'), false);
   const tips = [];
-  for (let i = 0; i < 23; i++) { const said = game.talkTo('dov'); assert.equal(said.length, 1); tips.push(said[0].text); }
-  assert.equal(new Set(tips).size, 11, 'eleven tips');
-  assert.equal(tips[11], tips[0], 'and then round again');
+  for (let i = 0; i < 27; i++) { const said = game.talkTo('dov'); assert.equal(said.length, 1); tips.push(said[0].text); }
+  assert.equal(new Set(tips).size, 13, 'thirteen tips');
+  assert.equal(tips[13], tips[0], 'and then round again');
+  assert.ok(tips.some((tip) => /strays/.test(tip) && /walk past/.test(tip)), 'one of them says nobody has to meet a stray');
   assert.ok(tips.some((tip) => /indoors/.test(tip) && /front door/.test(tip)), 'one of them says you can go indoors');
   assert.ok(tips.some((tip) => /Heirloom/.test(tip) && /calm/.test(tip)), 'one of them says where to look for Heirlooms');
   assert.ok(tips.some((tip) => /alley/.test(tip)), 'one or two of them about the alley');

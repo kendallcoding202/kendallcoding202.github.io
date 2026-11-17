@@ -124,6 +124,7 @@ const DOV = {
   ],
   tips: [
     'Tap one of them in a fight and it tells you its soft spot. Nobody ever taps them. I tap everything.',
+    'See the strays out on the lane? They are lost. You can walk up to one, or walk past. I walk up. It is good practice.',
     'Down the alley they come one at a time. There is no going round. I tried. I got pecked.',
     'Crumb jams Clank. Take your Crumbwisp down Tin Can Alley and watch the tins dent.',
     'Want an Heirloom? Go back where it is calm. They feel safe there and bring out their best colours. I saw three in the garden in one week. Three!',
@@ -134,6 +135,7 @@ const DOV = {
     'The gargoyles up on the roofs are really water spouts. Fluff mops up Suds. I am just saying.',
     'My cousin went in the cupboard under the stairs once. He said you cannot see past your own lantern. He came out very clean.',
     'You can only have one of each kind. If you calm a kind you have already got, it goes off happy and yours learns from it.',
+    'Strays get everyone out of puff, same as anywhere. Go home and rest, and there will be different ones out when you set off again.',
   ],
 };
 

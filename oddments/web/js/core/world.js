@@ -127,6 +127,13 @@ export const ROAD_POINTS = ROADS.map((road) => along(road, 24, true));
 // The green: the open grass below home, kept clear, where friends who stayed home potter about.
 export const GREEN = { x: 930, y: 1570, w: 460, h: 200 };
 
+// The quiet spots where strays turn up (core/strays.js): beside a street but off it, well clear of
+// every door and gate, of the neighbours, of the green and of each other. Picked once, by a tool
+// that looked for such ground, and kept: a spot nobody can reach, or one in the way, would be a bug.
+export const WILDS = [
+  [1844, 631], [244, 1914], [1412, 2119], [1359, 1300], [709, 1442], [827, 2122], [1266, 809], [1688, 1626], [295, 1508], [1643, 1016], [736, 1834], [1321, 1864],
+].map(([x, y]) => ({ x, y }));
+
 // The people of the lane, and where each stands: Ines Tock and Mr. Spick either side of the top of
 // the green, in sight of home's door; Dov by the garden gate. Solid, like a lamp post; you talk to
 // one from a step or two away.

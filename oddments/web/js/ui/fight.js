@@ -17,8 +17,9 @@ export function fightScreen(ctx) {
   const { game } = ctx;
   const battle = game.battle;
   const visit = game.state.visit;
-  const room = roomOf(visit.room);
-  const spot = room.path[game.facing];
+  const wild = game.wild >= 0; // strays, met out on the lane: no place, and no stop of one
+  const room = wild ? null : roomOf(visit.room);
+  const spot = wild ? null : room.path[game.facing];
   const pace = () => (game.state.settings.fast || ctx.fast ? 0.2 : 1);
   const pause = (ms) => wait(ms * pace());
 
@@ -60,9 +61,9 @@ export function fightScreen(ctx) {
   const caller = h('div', { class: 'caller' }, sprite(game.state.player.look));
   const units = [...allies, ...foes].map(buildUnit);
   const arena = h('div', { class: `arena${foes.some((unit) => unit.boss) ? ' bossfight' : ''}` },
-    h('img', { class: 'bg', src: `assets/bg/${room.bg}.webp`, alt: '' }),
+    h('img', { class: 'bg', src: `assets/bg/${wild ? 'bg_lane' : room.bg}.webp`, alt: '' }),
     h('div', { class: 'topline' },
-      h('div', { class: 'roundpill' }, roundEl, h('span', null, visit.stroll ? `${spot.name} · calm` : `${spot.name} · ${howItGoes(visit, room)}`)),
+      h('div', { class: 'roundpill' }, roundEl, h('span', null, wild ? `Out on the lane · ${foes.length > 1 ? 'strays' : 'a stray'}` : visit.stroll ? `${spot.name} · calm` : `${spot.name} · ${howItGoes(visit, room)}`)),
       h('button', { class: 'iconbtn menu', 'aria-label': 'Menu', data: { act: 'menu' }, onclick: openMenu }, '⋯')),
     units, floaters);
   const orderEl = h('div', { class: 'order' });

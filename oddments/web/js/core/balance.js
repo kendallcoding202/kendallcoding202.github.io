@@ -640,6 +640,12 @@ export const VISITORS = { kinds: START_TEAM.map(([id]) => id), weight: 0.4 };
 // to be met; they are there for the friends still to be made, and for Heirlooms.
 export const WANDERERS = { groups: [1, 3] };
 
+// Strays: lost Clutterkin out on the lane itself, between places (core/strays.js). This many small
+// groups turn up each time you set out rested, each of this size. `meet` is how near you must walk
+// to meet one: much nearer than to a group that holds its ground, because nobody has to meet a
+// stray. `berth` is how wide the way found for you goes round one you are not heading for.
+export const STRAYS = { groups: [2, 4], size: [1, 2], meet: 58, berth: 104 };
+
 // ---------------------------------------------------------------- the house-sitter
 //
 // The human makes one Call a round. `every`: 1 = any round, 2 = every other.
