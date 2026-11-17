@@ -9,6 +9,7 @@ import { Game } from '../../web/js/core/game.js';
 import { newState } from '../../web/js/core/state.js';
 import { ROOMS } from '../../web/js/core/balance.js';
 import { WORLD, REGIONS, PROPS, PROP_ROUND, BENCHES, SIT, MAILBOXES, POST_REACH, WILDS, SPOTS, PEOPLE, TREES, LAMPS, ROAD_POINTS, GREEN, DISTRICTS, regionAt, benchNear, mailNear, canStand, districtAt, spotOf, personAt, routeTo, straighten, roomy } from '../../web/js/core/world.js';
+import { mapMarks, paintMap } from '../../web/js/ui/map.js';
 import { PROP_WIDE, WORLD_ART, worldSrc, wallOf } from '../../web/js/ui/scenery.js';
 import { playOut } from '../../web/js/core/auto.js';
 
@@ -194,4 +195,40 @@ test('there is a mailbox by home and by each of the four far houses, and a note 
   game.enter('home');
   assert.equal(game.mailNear(), -1);
   assert.equal(game.standAtMail(99), false);
+});
+
+// ------------------------------------------------------------------ the map
+
+test('the map marks every place with how it stands, the benches, you, and where the goal is; and it paints', () => {
+  const game = fresh(3);
+  game.begin({ name: 'Kit' });
+  let marks = mapMarks(game);
+  assert.deepEqual([marks.w, marks.h], [WORLD.w, WORLD.h]);
+  assert.deepEqual(marks.places.map((place) => `${place.id}:${place.state}`), ['home:home', 'garden:open', 'alley:shut', 'pantry:shut', 'wash:shut', 'stacks:shut', 'rooftops:shut', 'attic:shut', 'dark:shut']);
+  assert.deepEqual(marks.you, game.state.where);
+  assert.deepEqual(marks.goal, { x: personAt('ines').x, y: personAt('ines').y }, 'the goal is to find Ines Tock, and the map marks her');
+  assert.equal(marks.benches.length, BENCHES.length);
+  for (const place of marks.places) {
+    assert.ok(place.x > 0 && place.x < WORLD.w && place.y > 0 && place.y < WORLD.h && place.name.length <= 16 && !place.name.startsWith('The '), place.id);
+    // A place you walk into across the grass is marked in the middle of its ground.
+    if (DISTRICTS[place.id]) assert.equal(districtAt(place), place.id);
+  }
+  // Further on: two calm, the third open and the goal.
+  game.state.story.ines = 3;
+  game.state.rooms.garden.clears = 1;
+  game.state.rooms.alley.clears = 1;
+  marks = mapMarks(game);
+  assert.deepEqual(marks.places.slice(1, 5).map((place) => `${place.id}:${place.state}:${place.goal}`), ['garden:calm:false', 'alley:calm:false', 'pantry:open:true', 'wash:shut:false']);
+  assert.equal(marks.goal, null);
+  // It paints, with a stand-in for the pen: every street, a dot and a name for every place, and you.
+  const calls = [];
+  const pen = new Proxy({}, { get: (_, name) => (typeof name === 'string' && /^(fillStyle|strokeStyle|lineWidth|lineCap|lineJoin|font|textAlign|textBaseline)$/.test(name) ? '' : (...args) => { for (const arg of args) if (typeof arg === 'number') assert.ok(Number.isFinite(arg), `${String(name)} was given ${arg}`); calls.push([name, ...args]); }), set: () => true });
+  paintMap(pen, marks, { k: 0.09, left: 30, wide: 270 });
+  const texts = calls.filter(([name]) => name === 'fillText').map(([, text]) => text);
+  for (const place of marks.places) assert.ok(texts.includes(place.name), `${place.name} is written on it`);
+  assert.equal(texts.filter((text) => text === '✓').length, 2, 'a tick on each calm place');
+  assert.ok(calls.filter(([name]) => name === 'stroke').length >= ROAD_POINTS.length * 2, 'every street is drawn');
+  const dots = calls.filter(([name]) => name === 'arc');
+  assert.ok(dots.some(([, x, y]) => Math.abs(x - (30 + marks.you.x * 0.09)) < 0.01 && Math.abs(y - marks.you.y * 0.09) < 0.01), 'and you are on it, where you stand');
+  assert.ok(dots.every(([, x, y]) => x >= 0 && x <= 270 && y >= 0 && y <= WORLD.h * 0.09 + 1), 'everything is inside the picture');
 });

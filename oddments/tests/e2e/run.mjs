@@ -754,6 +754,26 @@ section('The country beyond the lane');
   s = await state(page);
   check(s.visit === null && s.worn === null && await game(page, () => window.oddments.game.teamHealth().every((member) => member.hp === member.max)), 'sit down, and everyone has their breath back, a long way from home');
   check(roomPictures('assets/world/r_bench.webp') && roomPictures('assets/world/r_signpost.webp') && roomPictures('assets/world/r_pond.webp'), 'the bench, the signposts and the ponds are paintings, fetched with the rest');
+  // The map: opened from "What to do". Every place is on it, with how it stands.
+  await page.click('.goalchip');
+  await page.waitForSelector('.modal.journal [data-id="map"]');
+  await page.click('.modal.journal [data-id="map"]');
+  await page.waitForSelector('.modal.map canvas');
+  const mapped = await S(page, () => {
+    const m = document.querySelector('.modal.map');
+    const canvas = m.querySelector('canvas');
+    const box = canvas.getBoundingClientRect();
+    const frame = m.getBoundingClientRect();
+    const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    const colours = new Set();
+    for (let i = 0; i < pixels.length; i += 4 * 53) colours.add(`${pixels[i] >> 4},${pixels[i + 1] >> 4},${pixels[i + 2] >> 4}`);
+    return { places: m.dataset.places, tall: box.height, wide: box.width, fits: frame.top >= 0 && frame.bottom <= innerHeight && frame.left >= 0 && frame.right <= innerWidth, colours: colours.size, keys: m.querySelectorAll('.mapkey').length };
+  });
+  check(mapped.places.startsWith('home:home,garden:calm,alley:calm,pantry:open') && mapped.places.includes('dark:shut') && mapped.keys === 5, 'the map marks home and all eight places: two calm, the pantry open, the rest still shut', mapped.places);
+  check(mapped.fits && mapped.tall > mapped.wide && mapped.colours > 12, `it is a picture of the whole world, taller than it is wide, and it fits the screen (${Math.round(mapped.wide)} x ${Math.round(mapped.tall)}, ${mapped.colours} colours)`);
+  await snap(page, 'e2e-map');
+  await page.click('.modal.map [data-id="ok"]');
+  check(!(await page.$('.modal')), 'and it closes');
   await S(page, () => { window.oddments.game.standAt('home'); window.oddments.ctx.show('lane'); });
 }
 

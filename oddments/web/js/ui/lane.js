@@ -15,6 +15,7 @@ import { elementTag, bar } from './parts.js';
 import { modal, toast, modalOpen } from './modals.js';
 import { converse } from './talk.js';
 import { meetTheThree } from './three.js';
+import { mapDialog } from './map.js';
 import { play } from '../platform/sound.js';
 import { dustShift, throughDoor } from './shift.js';
 import { insideOf } from '../core/indoors.js';
@@ -620,7 +621,7 @@ export function laneScreen(ctx) {
         h('div', { class: 'now' }, h('small', null, 'Now'), h('b', null, goal.count ? `${goal.title} (${goal.count[0]} of ${goal.count[1]})` : goal.title), h('p', null, goal.detail)),
         told.length ? h('div', { class: 'sofar' }, h('small', null, 'So far'), h('ul', null, told.map((line) => h('li', null, line)))) : null,
       ],
-      actions: [{ id: 'ok', label: 'OK', kind: 'plain' }],
+      actions: [{ id: 'map', label: 'Map', kind: 'plain', onClick: () => { setTimeout(() => mapDialog(game), 0); } }, { id: 'ok', label: 'OK', kind: 'plain' }],
     });
   }
 

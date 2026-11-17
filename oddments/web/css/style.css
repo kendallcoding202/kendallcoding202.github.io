@@ -304,6 +304,14 @@ small { color: var(--muted); font-size: 12px; }
 .putright img { height: 60px; width: 68px; object-fit: contain; flex: none; }
 .putright p { margin: 0; font-size: 14px; line-height: 1.32; }
 .cardtop + p.about, p.about { margin: 0; font-size: 13.5px; line-height: 1.34; color: var(--muted); }
+/* The map: the whole world on one small picture. */
+.modal.map .mapframe { display: flex; justify-content: center; }
+.mapcanvas { display: block; border-radius: 12px; border: 2px solid var(--line); max-width: 100%; height: auto; }
+.mapkeys { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; font-size: 12px; color: var(--muted); }
+.mapkey { display: inline-flex; align-items: center; gap: 5px; }
+.mapkey i { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid #0d0a1c; background: #fff7e8; }
+.mapkey.you i { background: #ff5a6a; border-color: #fff7e8; } .mapkey.calm i { background: #58d77a; } .mapkey.shut i { background: #6f6a8c; }
+.mapkey.bench i { border-radius: 2px; height: 6px; background: #c08552; }
 /* How a fight works: three small pages, read before the first fight. */
 .modal.howto .howpage { display: flex; flex-direction: column; gap: 9px; min-height: 250px; }
 .modal.howto h3 { margin: 0; font-size: 17px; color: var(--gold); }
