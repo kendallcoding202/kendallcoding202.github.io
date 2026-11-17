@@ -7,7 +7,7 @@
 // `bake`), then placed each frame, so a frame costs a handful of pictures
 // however detailed the painting was.
 import { ROOMS, SPECIES, ELEMENTS, STRAYS, roomOf, roomBuilt } from '../core/balance.js';
-import { WORLD, POST, SPOTS, TREES, LAMPS, HEDGES, ROAD_POINTS, GREEN, DISTRICTS, PEOPLE, spotOf, personAt, districtAt } from '../core/world.js';
+import { WORLD, POST, SPOTS, TREES, LAMPS, HEDGES, ROAD_POINTS, GREEN, DISTRICTS, PEOPLE, PROPS, BENCHES, spotOf, personAt, districtAt, regionAt } from '../core/world.js';
 import { CAST } from '../core/story.js';
 import { h, sprite, spriteSrc } from './dom.js';
 import { howItGoes } from './text.js';
@@ -18,7 +18,7 @@ import { meetTheThree } from './three.js';
 import { play } from '../platform/sound.js';
 import { dustShift, throughDoor } from './shift.js';
 import { insideOf } from '../core/indoors.js';
-import { FONT, oval, paint, glow, label, worldSrc, paintGround, paintBuilding, paintProp, paintLamp, paintGate, wallOf } from './scenery.js';
+import { FONT, PROP_WIDE, oval, paint, glow, label, worldSrc, paintGround, paintBuilding, paintProp, paintFlat, paintLamp, paintGate, wallOf } from './scenery.js';
 
 // How much of the world fits across the screen. People and Clutterkin are small in a big place.
 // On a wider screen (a folding phone, open) you see more of the world, not the same view blown up:
@@ -31,7 +31,6 @@ const HOME = { name: 'Home', blurb: 'Great-aunt Maribel\'s house, where you are 
 // to go in. A tap on the ground in front of it is only asking to stand there.
 const DOORWAY = { wide: 50, up: 120, down: 4 };
 const GAP = 60; // how far apart the team walks behind you: a little more than any of them is tall
-const LANE = 'The Lane';
 const HEAD = 62; // how far down the screen the heading reaches at the very least, in screen points
 const HEADROOM = 52; // how far above the top edge of the world whoever stands right against it reaches, in the world's units
 
@@ -53,7 +52,13 @@ const PLACES = ROOMS.filter((room) => roomBuilt(room) && DISTRICTS[room.id]).map
 const EAST = 150; // how far past the east edge of the world the view may travel, so a place along that edge is not seen pressed to the side of the screen
 // Fireflies, and every piece of every wall: fixed, so worked out once. A paved place along the east
 // edge of the world gets a wall of junk there too. That one is looks only: the edge is what stops you.
-const FLIES = (() => { const next = run(29); return Array.from({ length: 120 }, () => ({ x: next() * WORLD.w, y: next() * WORLD.h, r: next() })); })();
+const FLIES = (() => { const next = run(29); return Array.from({ length: Math.round((WORLD.w * WORLD.h) / 42000) }, () => ({ x: next() * WORLD.w, y: next() * WORLD.h, r: next() })); })();
+// The ground is painted a square at a time, as each first comes into view, and only so many are
+// kept: the world is far too big to hold as one picture. GROUND_TOP is how far above the top of
+// the world the ground goes on (the view can travel a little past every edge).
+const CHUNK = 760;
+const GROUND_TOP = -640;
+const CHUNKS_KEPT = 14;
 const WALLS = [
   ...HEDGES,
   ...PLACES.filter(({ area, dress }) => dress.floor === 'cobbles' && area.x + area.w >= WORLD.w).map(({ area }) => ({ x: WORLD.w - 34, y: area.y, w: 44, h: area.h, look: 'junk' })),
@@ -83,7 +88,7 @@ export function laneScreen(ctx) {
   // What to do next, always in sight; a tap opens the story so far.
   const goalText = h('span');
   const goalChip = h('button', { class: 'goalchip', data: { act: 'goal' }, onclick: () => journal() }, h('i', null, 'Goal'), goalText);
-  const title = h('h1', null, LANE);
+  const title = h('h1', null, regionAt(state.where).name);
   const sub = h('small', { class: 'where' });
   const wrap = h('div', { class: 'lanewrap' }, canvas,
     h('header', { class: 'bar-top over' }, h('div', null, title, sub), h('span', { class: 'who' }, sprite(state.player.look), h('b', null, state.player.name))),
@@ -112,6 +117,7 @@ export function laneScreen(ctx) {
   let spring = 0; // 0 standing still, 1 walking: eased, so a step never snaps
   let cardFor; // what the card is showing (undefined: not drawn yet)
   let everything = false; // true while painting the whole world once, before the first frame
+  let ahead = null; // which way you are walking, for painting the ground just ahead ({ x, y } each -1, 0 or 1)
   const cam = { x: 0, y: 0, k: 1, w: VIEW, h: VIEW, dpr: 1, top: HEAD, set: false };
   // Where you have just been, newest first, for the friends walking behind you.
   const start = here();
@@ -208,21 +214,35 @@ export function laneScreen(ctx) {
 
   // ------------------------------------------------------------ drawing
 
+  /** One square of the ground, painted the first time it is wanted and kept a while. */
+  function chunk(col, row) {
+    const key = `ground|${col}|${row}`;
+    // A little soft rather than past what a phone will hold: never more than 1.3 dots to a unit.
+    const sharp = Math.min(1, 1.3 / (cam.k * cam.dpr));
+    if (kept.has(key)) { const piece = kept.get(key); kept.delete(key); kept.set(key, piece); return piece; } // (used last, so thrown out last)
+    const piece = bake(key, col * CHUNK, GROUND_TOP + row * CHUNK, CHUNK, CHUNK, (brush) => paintGround(brush, GROUND, groundArt()), sharp);
+    const squares = [...kept.keys()].filter((name) => name.startsWith('ground|'));
+    for (const old of squares.slice(0, Math.max(0, squares.length - CHUNKS_KEPT))) kept.delete(old);
+    return piece;
+  }
+  const across = Math.ceil((WORLD.w + EAST) / CHUNK);
+  const down = Math.ceil((WORLD.h + 700 - GROUND_TOP) / CHUNK);
+
   function ground() {
-    // The whole ground is one picture; only the part in view is copied to the screen. On a big
-    // screen it is kept a little soft rather than let it grow past what a phone will hold.
-    const { top, bottom } = over();
-    const y0 = -top - HEADROOM - 20;
-    const tall = WORLD.h + top + HEADROOM + bottom + 40;
-    const wide = WORLD.w + EAST;
-    const sharp = Math.min(1, 1.7 / (cam.k * cam.dpr), Math.sqrt(9e6 / (wide * tall)) / (cam.k * cam.dpr));
-    const full = bake('ground', 0, y0, wide, tall, (brush) => paintGround(brush, GROUND, groundArt()), sharp);
-    const scale = full.sheet.width / full.w;
-    const x0 = Math.max(0, cam.x - 2);
-    const x1 = Math.min(full.w, cam.x + cam.w + 2);
-    const from = Math.max(full.y, cam.y - 2);
-    const to = Math.min(full.y + full.h, cam.y + cam.h + 2);
-    pen.drawImage(full.sheet, x0 * scale, (from - full.y) * scale, (x1 - x0) * scale, (to - from) * scale, x0, from, x1 - x0, to - from);
+    // Only the squares in view are put on the screen (and so only they are ever painted).
+    const c0 = Math.max(0, Math.floor((cam.x - 2) / CHUNK));
+    const c1 = Math.min(across - 1, Math.floor((cam.x + cam.w + 2) / CHUNK));
+    const r0 = Math.max(0, Math.floor((cam.y - 2 - GROUND_TOP) / CHUNK));
+    const r1 = Math.min(down - 1, Math.floor((cam.y + cam.h + 2 - GROUND_TOP) / CHUNK));
+    for (let row = r0; row <= r1; row++) for (let col = c0; col <= c1; col++) { const p = chunk(col, row); pen.drawImage(p.sheet, p.x, p.y, p.w + 0.5, p.h + 0.5); }
+    // And one square just out of view, the way you are heading, is painted ahead of time: a frame
+    // spent on it now is a frame not dropped as you walk into it.
+    if (ahead && !everything) {
+      const col = Math.floor((cam.x + cam.w / 2 + ahead.x * (cam.w / 2 + CHUNK * 0.6)) / CHUNK);
+      const row = Math.floor((cam.y + cam.h / 2 + ahead.y * (cam.h / 2 + CHUNK * 0.6) - GROUND_TOP) / CHUNK);
+      if (col >= 0 && col < across && row >= 0 && row < down && !kept.has(`ground|${col}|${row}`)) chunk(col, row);
+      ahead = null;
+    }
   }
 
   /** A sprite standing with its feet at (x, y). Clutterkin are painted facing left; people facing right. */
@@ -413,6 +433,18 @@ export function laneScreen(ctx) {
       things.push({ y: person.y, draw: () => neighbour(person) });
     }
     for (const stray of game.strays()) if (seen(stray.x, stray.y)) things.push({ y: stray.y + 8, draw: () => strays(stray) });
+    // Whatever stands about the country: a bench, a signpost, a well. A pond lies flat, behind whatever stands by it.
+    for (const prop of PROPS) {
+      if (!seen(prop.x, prop.y)) continue;
+      const flat = prop.kind === 'pond';
+      things.push({ y: flat ? prop.y - 60 : prop.y, draw: () => {
+        const wide = PROP_WIDE[prop.kind];
+        put(bake(`prop|${prop.kind}`, -wide * 0.6, flat ? -wide * 0.5 : -wide * 1.6, wide * 1.2, flat ? wide : wide * 1.7 + 16,
+          (brush) => (flat ? paintFlat(brush, painting(`r_${prop.kind}`), wide) : paintProp(brush, painting(`r_${prop.kind}`), wide))), prop.x, prop.y);
+        const you = here();
+        if (prop.says && Math.hypot(you.x - prop.x, you.y - prop.y) < 210) label(pen, prop.says, Math.max(cam.x + 150, Math.min(cam.x + cam.w - 150, prop.x)), prop.y - 124, '#fff7e8', 'rgba(255,255,255,.28)', 18);
+      } });
+    }
     for (const body of homebodies) {
       if (!seen(body.x, body.y)) continue;
       const fly = SPECIES[body.friend.species].fly;
@@ -465,7 +497,9 @@ export function laneScreen(ctx) {
     const id = who ? null : game.near();
     const inside = game.district();
     const goal = game.goal();
-    const key = `${who}:${who ? game.hasNews(who) : ''}|${id}|${visit ? `${visit.room}:${visit.stop}` : ''}|${inside}|${goal.id}:${goal.count || ''}|${game.rested()}`;
+    const bench = who || id ? null : game.benchNear();
+    const region = regionAt(here());
+    const key = `${who}:${who ? game.hasNews(who) : ''}|${id}|${visit ? `${visit.room}:${visit.stop}` : ''}|${inside}|${goal.id}:${goal.count || ''}|${game.rested()}|${bench}|${region.id}`;
     if (key === cardFor) return;
     cardFor = key;
     goalText.textContent = goal.count ? `${goal.title} (${goal.count[0]} of ${goal.count[1]})` : goal.title;
@@ -473,10 +507,10 @@ export function laneScreen(ctx) {
     goalHeard = goal.id;
     goalChip.dataset.goal = goal.id;
     // The heading says where you are, and how a visit is going.
-    title.textContent = inside ? roomOf(inside).name : LANE;
+    title.textContent = inside ? roomOf(inside).name : region.name;
     sub.textContent = visit ? howItGoes(visit, roomOf(visit.room)) : '';
-    card.hidden = !who && !id && !visit;
-    card.dataset.spot = id || '';
+    card.hidden = !who && !id && !visit && !bench;
+    card.dataset.spot = id || (bench ? 'bench' : '');
     card.dataset.person = who || '';
     card.dataset.visit = visit ? visit.room : '';
     card.dataset.calmed = visit ? String(visit.stop) : '';
@@ -494,6 +528,18 @@ export function laneScreen(ctx) {
           ctx.save();
           converse(lines, () => { cardFor = undefined; });
         } }, 'Talk'));
+      return;
+    }
+
+    // A bench: somewhere to sit down and get your breath back, when home is a long walk off.
+    if (bench) {
+      card.className = 'placecard';
+      const fresh = game.rested();
+      card.replaceChildren(...[h('h2', null, 'A bench'),
+        h('small', null, fresh ? 'Somewhere to sit down when your friends are worn out. Nobody needs it just now.'
+          : `Sit down a while and everyone gets their breath back, the same as at home. ${!visit ? 'Other strays will be out by the time you get up.' : visit.stroll ? 'Others will have wandered in by the time you go back.' : 'Whoever you have calmed stays calm.'}`),
+        fresh ? null : teamList(),
+        h('button', { class: `btn ${fresh ? 'plain' : 'gold'}`, disabled: fresh, data: { act: 'rest' }, onclick: () => { if (game.rest()) { ctx.save(); play('rest'); toast('Everyone is rested.', { kind: 'good' }); cardFor = undefined; } } }, 'Sit and rest')].filter(Boolean));
       return;
     }
 
@@ -650,6 +696,7 @@ export function laneScreen(ctx) {
       const dx = now.x - before.x;
       const dy = now.y - before.y;
       if (Math.abs(dx) > 0.2) facing = dx > 0 ? 1 : -1;
+      ahead = { x: Math.abs(dx) > 0.6 ? Math.sign(dx) : 0, y: Math.abs(dy) > 0.6 ? Math.sign(dy) : 0 };
       // Turn to face the way you are going. Walking on a slant keeps whichever way you were already turned.
       if (Math.abs(dy) > Math.abs(dx) * 1.3) aspect = dy > 0 ? 'front' : 'back';
       else if (Math.abs(dx) > Math.abs(dy) * 1.3) aspect = 'side';
@@ -759,6 +806,7 @@ export function laneScreen(ctx) {
       else if (id.startsWith('in:')) point = { x: area(id.slice(3)).gate.x, y: area(id.slice(3)).gate.y - 96 };
       else if (id.startsWith('person:')) point = personAt(id.slice(7));
       else if (id.startsWith('stray:')) point = game.strays().find((one) => one.index === Number(id.slice(6))) || null;
+      else if (id.startsWith('bench:')) point = BENCHES.find((bench) => bench.id === id.slice(6)) || null;
       else if (id === 'me') point = here();
       else point = spotOf(id).door;
       if (!point) return null;

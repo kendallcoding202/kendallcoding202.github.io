@@ -16,7 +16,10 @@ export const FONT = 'Fredoka, ui-rounded, system-ui, sans-serif';
 export const WORLD_ART = [
   'grass', 'earth', 'cobbles', 'p_tree', 'p_lamp', 'p_bush', 'b_home', 'b_garden', 'b_alley', 'b_pantry', 'b_wash', 'b_stacks', 'b_rooftops', 'b_attic', 'b_dark',
   'a_bin', 'a_bin2', 'a_crate', 'a_tyres', 'a_drum', 'a_boxes', 'a_pallets', 'a_bottles', 'a_cone', 'a_heap', 'a_fence', 'a_barricade',
+  'r_bench', 'r_signpost', 'r_well', 'r_haystack', 'r_scarecrow', 'r_logs', 'r_rock', 'r_fence', 'r_wheelbarrow', 'r_mailbox', 'r_pond',
 ];
+/** How wide each thing that stands about the country is painted, in the world's units. (Where each stands is in core/world.js.) */
+export const PROP_WIDE = { bench: 88, signpost: 66, well: 96, haystack: 104, scarecrow: 86, logs: 88, rock: 86, wheelbarrow: 92, mailbox: 38, pond: 170 };
 export const worldSrc = (name) => `assets/world/${name}.webp`;
 /** How wide each building stands, in the world's units. Its height follows from its painting. */
 export const BUILDING_WIDE = { home: 240, garden: 214, alley: 208, pantry: 214, wash: 190, stacks: 208, rooftops: 148, attic: 170, dark: 214 };
@@ -253,7 +256,8 @@ function drifts(pen, next, x0, y0, x1, y1, count, colours) {
 export function paintGround(pen, world, art) {
   const { w, h } = world;
   turf(pen, art.grass, -400, -640, w + 400, h + 700, 'rgba(14,16,44,.42)');
-  drifts(pen, run(5), 40, 40, w - 40, h - 40, 90, ['#fff0c8', '#a8dcff']);
+  // Wild flowers, in drifts: about as thick on the ground however big the world is.
+  drifts(pen, run(5), 40, 40, w - 40, h - 40, Math.round((w * h) / 56000), ['#fff0c8', '#a8dcff']);
 
   // The green below home: a lighter sweep of grass
   const green = world.green;
@@ -293,6 +297,13 @@ export function paintGround(pen, world, art) {
 }
 
 // ---------------------------------------------------------------- things that stand on the ground
+
+/** Something that lies flat on the ground (a pond), its middle at (0, 0): no shadow, nothing behind it. */
+export function paintFlat(pen, image, wide) {
+  if (!arrived(image)) return;
+  const tall = wide * (image.naturalHeight / image.naturalWidth);
+  pen.drawImage(image, -wide / 2, -tall / 2, wide, tall);
+}
 
 /** A painted thing (a tree, a bush) with its foot at (0, 0) and its shadow under it. */
 export function paintProp(pen, image, wide) {
@@ -337,6 +348,10 @@ export function wallOf(block) {
   if (block.look === 'fence') {
     const count = Math.max(1, Math.round(block.w / 84));
     return Array.from({ length: count }, (_, i) => ({ x: block.x + ((i + 0.5) * block.w) / count, y: block.y + block.h + 2, art: 'a_fence', wide: Math.max(92, block.w / count + 12) }));
+  }
+  if (block.look === 'picket') {
+    const count = Math.max(1, Math.round(block.w / 66));
+    return Array.from({ length: count }, (_, i) => ({ x: block.x + ((i + 0.5) * block.w) / count, y: block.y + block.h + 2, art: 'r_fence', wide: block.w / count + 8 }));
   }
   return bushesOf(block).map((bush) => ({ ...bush, art: 'p_bush', wide: 96 }));
 }

@@ -77,7 +77,7 @@ const INES = {
   // How to get to each place and what to take: said when the place before it has been calmed.
   toward: {
     alley: [
-      'Tin Can Alley is next: east along the street, past the launderette, and in at the foot of it. The bins had it barricaded all week. Word of a calm garden travels, and they have let it down.',
+      'Tin Can Alley is next: east along the street to its end, and in at the foot of it. The bins had it barricaded all week. Word of a calm garden travels, and they have let it down.',
       'It is a narrow place. They come at you one after another, and Baron Pilfer holds court at the far end. Most of them are Clank, and Crumb jams Clank: take your Crumbwisp.',
     ],
     pantry: [
@@ -85,23 +85,23 @@ const INES = {
       'Everything in there is past its date, and most of it is Crumb, with the Crumbwyrm at the back: a toaster that kept every crumb it was ever given. Suds wash away Crumb. Take your Eelastic.',
     ],
     wash: [
-      'The Wash is next: the launderette, east along the street. In by its front door, like the pantry.',
+      'The Wash is next, and it is not on this lane. South from the green, down Bramble Way, as far as Lampwick Row: the launderette is on your right as you come in. There is a bench on the Row, if anyone needs to sit down.',
       'Suds, most of them, and Fluff mops up Suds: take your Hopmote. The Spin Cycle is the machine at the far end. It stopped giving socks back in March.',
     ],
     stacks: [
-      'The Dusty Stacks is next: the old library, down the lane and east along the bottom street.',
+      'The Dusty Stacks is next: the old library, on Lampwick Row, east of the launderette.',
       'Paper and dust, so nearly all Fluff, and Spark singes Fluff: take a Strayglow or an Embernip if you have made a friend of one. The Overdue Tome is in the locked case.',
     ],
     rooftops: [
-      'Moonlit Rooftops is next: the tall thin house on the bottom street, straight down from the green. In at the door, up the stairs, and out onto the slates.',
+      'Moonlit Rooftops is next, and further still: east to the end of Lampwick Row, then south across Long Meadow to Chimney Hill. It is the tall thin house. In at the door, up the stairs, and out onto the slates.',
       'Stone and copper up there: Clank. Crumb jams Clank. And mind the Night Warden. It has watched that roof for two hundred years.',
     ],
     attic: [
-      'The Tick-Tock Attic is next: the tall house at the west end of the bottom street, right up under the roof.',
+      'The Tick-Tock Attic is next: the other tall house on Chimney Hill, toward the west end of the street, right up under the roof.',
       'Clockwork, mostly: Clank again, so Crumb again. Grandfather Golem keeps the far end. I have been meaning to mend him for thirty years.',
     ],
     dark: [
-      'Only the Roaring Dark is left: the far shed, north past the fork and round to the east. It is the cupboard under somebody\'s stairs, and something in it is plugged in.',
+      'Only the Roaring Dark is left: the far shed, at the bottom of Dark Lane, past the west end of Chimney Hill. It is the cupboard under somebody\'s stairs, and something in it is plugged in.',
       'Spark, most of it, and Sprout grounds Spark: take a Wishclock or a Pricklebud. It is dark in there; you will see as far as your lantern. What roars is THE VACUUM, and it is Mr. Spick\'s.',
     ],
   },
@@ -136,6 +136,7 @@ const DOV = {
     'My cousin went in the cupboard under the stairs once. He said you cannot see past your own lantern. He came out very clean.',
     'You can only have one of each kind. If you calm a kind you have already got, it goes off happy and yours learns from it.',
     'Strays get everyone out of puff, same as anywhere. Go home and rest, and there will be different ones out when you set off again.',
+    'There is a bench on Lampwick Row and another on Chimney Hill. Sit down and everyone gets their breath back. I timed it. It is the same as going home.',
   ],
 };
 
@@ -271,13 +272,13 @@ export function putRight(state, roomId) {
 // How the goal of calming each place is put. (A place not listed here gets a plain line.)
 const CALMING = {
   garden: { title: 'Calm the garden', detail: 'Calm everyone else there and Old Summerlong, the sprinkler, will face you. Rest at home whenever you need to: whoever you have calmed stays calm.' },
-  alley: { title: 'Calm Tin Can Alley', detail: 'East along the street, past the launderette. A narrow place: they come one after another, and Baron Pilfer is at the far end. Crumb jams Clank.' },
+  alley: { title: 'Calm Tin Can Alley', detail: 'East along the street, to its end. A narrow place: they come one after another, and Baron Pilfer is at the far end. Crumb jams Clank.' },
   pantry: { title: 'Calm the Midnight Pantry', detail: 'North of home, left at the fork: go in by its front door. Calm everyone on the floor and the Crumbwyrm will face you. Suds wash away Crumb.' },
-  wash: { title: 'Calm the Wash', detail: 'The launderette, east along the street: in by its front door. Mostly Suds, and Fluff mops up Suds. The Spin Cycle is the machine at the far end.' },
-  stacks: { title: 'Calm the Dusty Stacks', detail: 'The old library, east along the bottom street. Nearly all Fluff, and Spark singes Fluff. The Overdue Tome is in the locked case.' },
-  rooftops: { title: 'Calm Moonlit Rooftops', detail: 'The tall thin house straight down from the green: in, and up onto the slates. Clank up there, and Crumb jams Clank. Mind the Night Warden.' },
-  attic: { title: 'Calm the Tick-Tock Attic', detail: 'The tall house at the west end of the bottom street. Clockwork: Crumb jams Clank. Grandfather Golem keeps the far end.' },
-  dark: { title: 'Calm the Roaring Dark', detail: 'The far shed, north past the fork and round to the east. Mostly Spark, and Sprout grounds Spark. You see as far as your lantern. THE VACUUM is in there.' },
+  wash: { title: 'Calm the Wash', detail: 'The launderette on Lampwick Row: south from the green, down Bramble Way. In by its front door. Mostly Suds, and Fluff mops up Suds. The Spin Cycle is the machine at the far end.' },
+  stacks: { title: 'Calm the Dusty Stacks', detail: 'The old library on Lampwick Row, east of the launderette. Nearly all Fluff, and Spark singes Fluff. The Overdue Tome is in the locked case.' },
+  rooftops: { title: 'Calm Moonlit Rooftops', detail: 'The tall thin house on Chimney Hill: east along Lampwick Row, then south across Long Meadow. In, and up onto the slates. Clank up there, and Crumb jams Clank. Mind the Night Warden.' },
+  attic: { title: 'Calm the Tick-Tock Attic', detail: 'The other tall house on Chimney Hill, toward the west end of its street. Clockwork: Crumb jams Clank. Grandfather Golem keeps the far end.' },
+  dark: { title: 'Calm the Roaring Dark', detail: 'The far shed, down Dark Lane from the west end of Chimney Hill. Mostly Spark, and Sprout grounds Spark. You see as far as your lantern. THE VACUUM is in there.' },
 };
 
 /**

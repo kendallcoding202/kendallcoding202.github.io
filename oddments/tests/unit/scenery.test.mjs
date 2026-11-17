@@ -152,7 +152,8 @@ test('a hedge is bushes shoulder to shoulder, standing on the ground the hedge h
     }
   }
   assert.equal(bushesOf({ x: 0, y: 0, w: 60, h: 44 }).length, 2);
-  assert.equal(HEDGES.filter((wall) => wall.look === 'bush').length, 3, 'the garden has three hedges');
+  assert.equal(HEDGES.filter((wall) => wall.look === 'bush' && wall.y + wall.h <= 1000).length, 3, 'the garden has three hedges');
+  assert.ok(HEDGES.filter((wall) => wall.look === 'bush' && wall.y > 2200).length >= 8, 'and there are hedgerows out in the country');
 });
 
 test('the alley is walled with junk and fenced at its foot: every piece a painting, standing where feet cannot go', () => {

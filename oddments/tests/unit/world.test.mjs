@@ -100,7 +100,8 @@ test('feet cannot go outside the world, into a building, through a hedge, a tree
 });
 
 test('trees are scattered the same way every time, off the streets, the doors and the green', () => {
-  assert.ok(TREES.length >= 30 && TREES.length <= 60, `${TREES.length} trees`);
+  assert.ok(TREES.length >= 140 && TREES.length <= 200, `${TREES.length} trees`);
+  assert.ok(TREES.filter((tree) => tree.y < 2200).length >= 30 && TREES.filter((tree) => tree.y >= 2200).length >= 90, 'on the lane, and thicker out in the country');
   assert.equal(new Set(TREES.map((tree) => `${tree.x},${tree.y}`)).size, TREES.length);
   for (const tree of TREES) {
     assert.ok(Number.isInteger(tree.x) && Number.isInteger(tree.y) && tree.r >= 20 && tree.r <= 32);
@@ -193,10 +194,13 @@ test('a way keeps a little clear of everything, so walking it never brushes a la
 });
 
 test('a way is found round whatever is between, and a tap on something solid leads as near as feet can get', () => {
+  // (Found the way the game finds it: with a little room on every side, and the corners taken out.)
   for (const spot of SPOTS) {
-    const way = routeTo(HOME, spot.door, canStand);
+    const way = wayTo(HOME, spot.door);
     assert.ok(way.every((point) => canStand(point.x, point.y)));
-    assert.equal(spotNear(follow(HOME, way, canStand).pos), spot.id, `the way from home to ${spot.id}`);
+    const walked = follow(HOME, way, canStand);
+    assert.equal(walked.stuck, false, `the way from home to ${spot.id} is never stuck`);
+    assert.equal(spotNear(walked.pos), spot.id, `the way from home to ${spot.id}`);
   }
   const wash = spotOf('wash');
   const roof = { x: wash.x, y: wash.y - 30 }; // a tap on the building itself

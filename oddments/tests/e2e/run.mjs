@@ -27,6 +27,8 @@ function check(ok, what, detail = '') {
   else { failed++; failures.push(what); console.log(`  FAIL  ${what} ${detail}`); }
 }
 const section = (name) => console.log(`\n${name}`);
+/** Whether a picture has been asked for by the page. */
+const roomPictures = (file) => requests.some((url) => url.endsWith(file));
 
 async function newPage(viewport = { width: 390, height: 844 }) {
   const context = await browser.newContext({ viewport, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
@@ -677,11 +679,11 @@ section('Strays, out on the lane');
   await S(page, () => { const g = window.oddments.game; if (!g.rested()) g.goHome(); g.standAt('home'); window.oddments.ctx.show('lane'); });
   s = await state(page);
   const about = await game(page, () => window.oddments.game.strays());
-  check(about.length >= 2 && about.length <= 4 && s.strays.length === about.length && s.worn === null, `a few strays are out on the lane (${about.length} groups), and everyone is rested`);
+  check(about.length >= 4 && about.length <= 7 && s.strays.length === about.length && s.worn === null, `a few strays are out in the world (${about.length} groups), and everyone is rested`);
   check((await screen(page)) === 'lane' && !(await page.$('#fight')), 'none of them starts anything while you stand at your own door');
-  // Walk right across the map, to a door on the far side: the way found goes round every one of them.
+  // Walk right across the lane, to a door on the far side: the way found goes round every one of them.
   const battlesBefore = s.stats.battles;
-  check(await walkTo(page, 'attic'), 'you can walk from one side of the lane to the other');
+  check(await walkTo(page, 'alley'), 'you can walk from one side of the lane to the other');
   check((await state(page)).stats.battles === battlesBefore && (await screen(page)) === 'lane', 'and meet no stray on the way: nobody has to');
   // Now go and meet one: tap it, walk up, and the fight is on.
   const one = about[0];
@@ -720,6 +722,39 @@ section('Strays, out on the lane');
   await ready(page);
   s = await state(page);
   check(s.strays[again.index].done === true && s.strays.length >= 2, 'a reload keeps who is out on the lane, and who has been met');
+}
+
+// =============================================================== the country beyond the lane
+section('The country beyond the lane');
+{
+  await S(page, () => { const g = window.oddments.game; if (!g.rested()) g.goHome(); g.standAt('home'); window.oddments.ctx.show('lane'); });
+  check((await S(page, () => document.querySelector('#lane h1').textContent)) === 'The Lane', 'at home, the heading says you are on the lane');
+  // South from the green, down Bramble Way, to the first door on Lampwick Row: a long walk, on foot, by tapping.
+  const fightsBefore = (await state(page)).stats.battles;
+  const seenOnTheWay = new Set();
+  const namer = setInterval(async () => { try { seenOnTheWay.add(await S(page, () => document.querySelector('#lane h1') && document.querySelector('#lane h1').textContent)); } catch { /* between screens */ } }, 400);
+  const arrived = await walkTo(page, 'wash');
+  clearInterval(namer);
+  check(arrived, 'you can walk from home all the way to the Wash, on Lampwick Row');
+  check(seenOnTheWay.has('Bramble Way') && (await S(page, () => document.querySelector('#lane h1').textContent)) === 'Lampwick Row', 'the heading names each stretch as you come to it: Bramble Way, then Lampwick Row', [...seenOnTheWay].join(', '));
+  s = await state(page);
+  check(s.where.y > 3200 && s.stats.battles === fightsBefore && (await screen(page)) === 'lane', 'and nothing on the road made you fight: strays are there if you want them');
+  check(await S(page, () => { const card = document.querySelector('.placecard'); return !card.hidden && card.dataset.spot === 'wash' && card.querySelector('h2').textContent.startsWith('The Wash'); }), 'at its door, the Wash has its card');
+  await snap(page, 'e2e-lampwick-row');
+  // The bench on the Row. Rested, it has nothing to offer; worn, it rests everyone as home does.
+  await S(page, () => { window.oddments.game.standAtBench('row'); window.oddments.ctx.show('lane'); });
+  await page.waitForSelector('.placecard[data-spot="bench"]');
+  check(await S(page, () => { const card = document.querySelector('.placecard[data-spot="bench"]'); return card.querySelector('h2').textContent === 'A bench' && card.querySelector('[data-act="rest"]').disabled; }), 'by the bench its card comes up; rested, there is nothing to sit down for');
+  await S(page, () => { const g = window.oddments.game; g.travelTo('garden'); g.state.visit.hp = Object.fromEntries(g.team().map((friend) => [friend.id, 2])); g.standAtBench('row'); window.oddments.ctx.show('lane'); });
+  await page.waitForSelector('.placecard[data-spot="bench"] [data-act="rest"]:not([disabled])');
+  check((await page.$$('.placecard[data-spot="bench"] .teamcard')).length === 3 && await S(page, () => document.querySelector('.placecard[data-spot="bench"] small').textContent.includes('the same as at home')), 'worn, it shows how everyone is and offers a sit down');
+  await snap(page, 'e2e-bench');
+  await page.click('.placecard[data-spot="bench"] [data-act="rest"]');
+  await page.waitForSelector('.placecard[data-spot="bench"] [data-act="rest"][disabled]');
+  s = await state(page);
+  check(s.visit === null && s.worn === null && await game(page, () => window.oddments.game.teamHealth().every((member) => member.hp === member.max)), 'sit down, and everyone has their breath back, a long way from home');
+  check(roomPictures('assets/world/r_bench.webp') && roomPictures('assets/world/r_signpost.webp') && roomPictures('assets/world/r_pond.webp'), 'the bench, the signposts and the ponds are paintings, fetched with the rest');
+  await S(page, () => { window.oddments.game.standAt('home'); window.oddments.ctx.show('lane'); });
 }
 
 // =============================================================== going indoors

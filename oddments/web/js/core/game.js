@@ -8,7 +8,7 @@ import { rollEncounter, fairEncounter, enterRoom, leaveRoom, afterFight, canMeet
 import { rollStrays, fairStrays, straysAbout, strayNear, afterStrays } from './strays.js';
 import { STRAYS } from './balance.js';
 import { insideOf, stepIn, routeIn, spotIn, onMat, besidePost } from './indoors.js';
-import { WORLD, POST, stepWalk, routeTo, straighten, roomy, standing, canStand, spotNear, spotOf, districtOf, districtAt, postNear, personNear, personAt, TALK } from './world.js';
+import { WORLD, POST, BENCHES, SIT, stepWalk, routeTo, straighten, roomy, standing, canStand, spotNear, spotOf, districtOf, districtAt, postNear, personNear, personAt, benchNear, TALK } from './world.js';
 import { goalOf, aimOf, storySoFar, hasNews, talk, takeCall } from './story.js';
 
 export class Game {
@@ -347,14 +347,30 @@ export class Game {
   calmedIn(roomId) { return calmedIn(this.state, roomId); }
 
   /**
-   * Rests at home, which ends a visit: everyone is fresh. Whoever was calmed stays calm, and
-   * other strays will be out on the lane. You have to be standing at home's door, with
-   * something to rest from.
+   * Rests, which ends a visit: everyone is fresh. Whoever was calmed stays calm, and other
+   * strays will be out. You have to be standing at home's door, or at a bench, with something
+   * to rest from.
    */
   rest() {
-    if (this.place() === 'fight' || this.near() !== 'home' || !leaveRoom(this.state)) return false;
+    if (this.place() === 'fight' || (this.near() !== 'home' && !this.benchNear()) || !leaveRoom(this.state)) return false;
     rollStrays(this.state);
     return true;
+  }
+
+  /** The bench you are standing at (see world.BENCHES), or null. Never from indoors, or in a fight. */
+  benchNear() { return this.place() === 'fight' || this.state.indoors ? null : benchNear(this.state.where); }
+
+  /** Goes straight to a bench. For the simulator and tests; a player walks. */
+  standAtBench(id) {
+    const bench = BENCHES.find((one) => one.id === id);
+    if (this.place() === 'fight' || !bench) return false;
+    const held = this.held();
+    for (const [dx, dy] of [[0, 1], [-1, 0], [1, 0], [0, -1]]) {
+      const x = bench.x + dx * (SIT - 30);
+      const y = bench.y + dy * (SIT - 30);
+      if (canStand(x, y, held)) { this.state.where = { x, y }; this.state.indoors = null; return true; }
+    }
+    return false;
   }
 
   /** Goes straight home and rests. For the simulator and tests; a player walks. */

@@ -15,12 +15,13 @@
 | The cast | **Generated for this game** | 1 image holding all four: Ines Tock, Dov, Mr. Spick, Great-aunt Maribel |
 | The world | **Generated for this game** | 2 images, which became 14 pictures (below) |
 | Tin Can Alley | **Generated for this game** | 2 images, which became 13 pictures (below) |
+| The country between the rows of houses | **Generated for this game** | 1 image (`road_sheet`): a sheet of twelve things, of which eleven are used: a bench, a signpost, a well, a haystack, a scarecrow, a pile of logs, a rock, a white fence, a wheelbarrow, a mailbox and a pond. The twelfth, a milestone, came out looking like a headstone and is left out |
 | The lane, as a fight is seen against it | **Generated for this game** | 1 image (`bg_lane`), asked for in the words Pawst Lives used for its eight room paintings, so it sits beside them. It is what a fight with strays, out on the lane, is seen against |
 | App icon | **Generated for this game** | 1 image: the house-sitter with a lantern and a calm Hopmote (the dust under the bed). `tools/ios-art.py` makes the icon from it |
 | The insides of the seven buildings you walk into | **Generated for this game** | 21 images, three to a room, which became 98 pictures (below) |
 | Launch image and loading screen | Painted from the game's own world by `tools/postcard.mjs` | A postcard of the lane, home in the middle; nothing generated |
 
-**Thirty-six images have been generated in all.** The first fourteen were each agreed before they were made. Twenty-one are the rooms, and one is the lane seen as a fight's backdrop, made on 16 November 2026 after the owner approved spending on them ("I approve spending on the rooms and anything we need for the game, I want a polished good looking game"). Every one of the thirty-six came out usable on the first attempt. One has been touched up since, in code and for nothing: on the icon the pencil in her hair was painted lying on top of the bun, and `tools/ios-art.py` grows hair over its lower end so that it comes out of the bun instead. The archived original is as it was painted. Close up, the covered patch is a little softer than the hair round it; a repaint would be one more image.
+**Thirty-seven images have been generated in all.** The first fourteen were each agreed before they were made. Twenty-one are the rooms, one is the lane seen as a fight's backdrop, and one is the sheet of things for the country, made on 16 November 2026 after the owner approved spending on them ("I approve spending on the rooms and anything we need for the game, I want a polished good looking game"). Every one of the thirty-seven came out usable on the first attempt (one thing on the last sheet, a milestone, is not used). One has been touched up since, in code and for nothing: on the icon the pencil in her hair was painted lying on top of the bun, and `tools/ios-art.py` grows hair over its lower end so that it comes out of the bun instead. The archived original is as it was painted. Close up, the covered patch is a little softer than the hair round it; a repaint would be one more image.
 
 ### The world's two images
 
@@ -70,7 +71,7 @@ The four candidates used the Pawst Lives sprite style prompt word for word (`too
 | --- | --- | --- |
 | 1 | The house-sitter, final sprite | One of the four candidates, or a repaint at Pawst Lives proportions. A repaint would want its front and back views repainted to match. |
 | 40 | Grown-up forms | One per kind. Eighteen are named (below); twenty-two still to design. Bosses do not grow. |
-| 1 | Things for the world | One sheet of painted gateways. Every place is built and painted now. A bigger map, with roads on to other areas, would want a sheet and a ground for each new area, as Tin Can Alley has. |
+| 1 | Things for the world | One sheet of painted gateways. Every place is built and painted now, and the country between has its own sheet of things. It shares the lane's grass: a ground of its own (a meadow, a ploughed field) would be one more image each. |
 | 17 | Icons | Six elements, three Calls, three stats (Health exists), four tabs, the Heirloom mark. |
 | 1 | Title art | The app icon is painted. |
 | **60** | **new images** | Fewer if things are painted several to a sheet. |
