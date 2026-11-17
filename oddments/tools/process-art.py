@@ -115,6 +115,15 @@ INSIDES = {
 }
 
 
+# The country's sheet, row by row: things that stand about the roads between the rows of houses
+# (web/assets/world/r_<name>). One was painted and is not used: a milestone that came out looking like a headstone.
+ROAD = [
+    ("bench", 200), ("signpost", 200), ("well", 220), ("haystack", 220),
+    ("scarecrow", 200), ("logs", 200), ("rock", 200), ("fence", 200),
+    ("wheelbarrow", 200), ("mailbox", 180), (None, 0), ("pond", 320),
+]
+
+
 def bands(filled, want):
     """The `want` longest stretches of a row (or column) profile that have paint in them."""
     runs = []
@@ -293,6 +302,13 @@ def process_world(name, im, world):
             dest = os.path.join(world, sprite + ".webp")
             fit(trimmed(piece), longest).save(dest, "WEBP", quality=90, method=6)
             written.append(dest)
+    elif name == "road_sheet":
+        for (sprite, longest), piece in zip(ROAD, cut_cells(im, SHEET_ROWS, SHEET_COLS)):
+            if sprite is None:
+                continue
+            dest = os.path.join(world, "r_" + sprite + ".webp")
+            fit(piece, longest).save(dest, "WEBP", quality=90, method=6)
+            written.append(dest)
     elif name == "alley_cobbles":
         dest = os.path.join(world, "cobbles.webp")
         seamless(im.convert("RGB").resize((512, 512), Image.LANCZOS), 64).save(dest, "WEBP", quality=84, method=6)
@@ -364,9 +380,9 @@ def main():
                 im.convert("RGB").save(os.path.join(RAW, name + ".webp"), "WEBP", lossless=True, method=6)
                 os.remove(os.path.join(RAW, fname))
             continue
-        if room_part(name) or name.startswith(("world_", "alley_")) or name.endswith("_turn") or name == "cast_sheet":
+        if room_part(name) or name.startswith(("world_", "alley_", "road_")) or name.endswith("_turn") or name == "cast_sheet":
             written = (process_room(name, im, os.path.join(OUT, "rooms")) if room_part(name)
-                       else process_world(name, im, os.path.join(OUT, "world")) if name.startswith(("world_", "alley_"))
+                       else process_world(name, im, os.path.join(OUT, "world")) if name.startswith(("world_", "alley_", "road_"))
                        else process_people(name, im, os.path.join(OUT, "sprites")))
             count += 1
             total += sum(os.path.getsize(dest) for dest in written)

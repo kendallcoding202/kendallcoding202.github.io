@@ -248,4 +248,11 @@ export const ART = [
   roomFloor('dark', 'very dark old floorboards, almost black with a hint of purple, planks running left to right.'),
   // ---- out on the lane ----
   backdrop('bg_lane', 'A quiet village lane at night: a row of cosy cottages with warm glowing windows, a tall street lamp, a garden hedge and a wooden gate, a red pillar box, a crescent moon and stars over the rooftops, a few fireflies.'),
+  // ---- the country between the rows of houses ----
+  // (tools/process-art.py cuts the sheet into its twelve things, in this order. The pond lies flat.)
+  roomSheet('road', 'a country lane and its meadows at night', [
+    ['a wooden park bench with iron arms', 'a wooden signpost with two blank pointing arms and no words', 'a round stone well with a little tiled roof and a bucket', 'a haystack'],
+    ['a friendly scarecrow in a patched coat and a straw hat', 'a neat pile of sawn logs', 'a big mossy rock', 'a short section of white picket fence'],
+    ['an old wooden wheelbarrow full of pumpkins', 'a red mailbox on a wooden post', 'a low stone milestone with moss on it and no words', 'a small round pond with lily pads, lying flat, seen from directly above'],
+  ]),
 ];
