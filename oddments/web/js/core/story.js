@@ -137,6 +137,7 @@ const DOV = {
     'You can only have one of each kind. If you calm a kind you have already got, it goes off happy and yours learns from it.',
     'Strays get everyone out of puff, same as anywhere. Go home and rest, and there will be different ones out when you set off again.',
     'There is a bench on Lampwick Row and another on Chimney Hill. Sit down and everyone gets their breath back. I timed it. It is the same as going home.',
+    'You do not have to walk all the way back to tell Ines things. Post her a note. There is a mailbox by every house out there. She writes back before you have let go of the flap.',
   ],
 };
 
@@ -291,7 +292,7 @@ export function goalOf(state) {
   const goal = (id, title, detail, extra = {}) => ({ id, title, detail, who: null, room: null, count: null, ...extra });
   if (story.ines === 0) return goal('meet', 'Find Ines Tock', 'She mends clocks and knows about Clutterkin. She is waiting on the green, just below home.', { who: 'ines' });
   if (placesCalm(state) > reported(state)) {
-    return goal('report', 'Tell Ines Tock', `${latestCalm(state).name} is calm. She will want to know.`, { who: 'ines' });
+    return goal('report', 'Tell Ines Tock', `${latestCalm(state).name} is calm. She will want to know. She is on the green below home; or post her a note from any mailbox, and she answers by return.`, { who: 'ines' });
   }
   const next = nextPlace(state);
   if (next && roomBuilt(next)) {

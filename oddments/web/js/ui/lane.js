@@ -7,7 +7,7 @@
 // `bake`), then placed each frame, so a frame costs a handful of pictures
 // however detailed the painting was.
 import { ROOMS, SPECIES, ELEMENTS, STRAYS, roomOf, roomBuilt } from '../core/balance.js';
-import { WORLD, POST, SPOTS, TREES, LAMPS, HEDGES, ROAD_POINTS, GREEN, DISTRICTS, PEOPLE, PROPS, BENCHES, spotOf, personAt, districtAt, regionAt } from '../core/world.js';
+import { WORLD, POST, SPOTS, TREES, LAMPS, HEDGES, ROAD_POINTS, GREEN, DISTRICTS, PEOPLE, PROPS, BENCHES, MAILBOXES, spotOf, personAt, districtAt, regionAt } from '../core/world.js';
 import { CAST } from '../core/story.js';
 import { h, sprite, spriteSrc } from './dom.js';
 import { howItGoes } from './text.js';
@@ -369,6 +369,8 @@ export function laneScreen(ctx) {
   /** Where the goal is, if it is somewhere: a person to see, or the gate of a place you are not yet in. */
   function goalPoint() {
     const goal = game.goal();
+    // News for Ines Tock can be told to her, or posted: whichever of her and the mailboxes is nearer.
+    if (goal.id === 'report') { const you = here(); return [personAt(goal.who), ...MAILBOXES].reduce((a, b) => (Math.hypot(a.x - you.x, a.y - you.y) <= Math.hypot(b.x - you.x, b.y - you.y) ? a : b)); }
     if (goal.who) return personAt(goal.who);
     if (goal.room && DISTRICTS[goal.room] && game.district() !== goal.room) return DISTRICTS[goal.room].gate;
     if (goal.room && insideOf(goal.room)) return spotOf(goal.room).door; // a place you walk into by its door
@@ -498,8 +500,10 @@ export function laneScreen(ctx) {
     const inside = game.district();
     const goal = game.goal();
     const bench = who || id ? null : game.benchNear();
+    // (A mailbox is worth a card only when there is something to post: by a door, the door's card comes first.)
+    const mail = !who && !bench && game.mailNear() >= 0 && (!id || goal.id === 'report') && state.story.ines > 0;
     const region = regionAt(here());
-    const key = `${who}:${who ? game.hasNews(who) : ''}|${id}|${visit ? `${visit.room}:${visit.stop}` : ''}|${inside}|${goal.id}:${goal.count || ''}|${game.rested()}|${bench}|${region.id}`;
+    const key = `${who}:${who ? game.hasNews(who) : ''}|${id}|${visit ? `${visit.room}:${visit.stop}` : ''}|${inside}|${goal.id}:${goal.count || ''}|${game.rested()}|${bench}|${region.id}|${mail}`;
     if (key === cardFor) return;
     cardFor = key;
     goalText.textContent = goal.count ? `${goal.title} (${goal.count[0]} of ${goal.count[1]})` : goal.title;
@@ -509,8 +513,8 @@ export function laneScreen(ctx) {
     // The heading says where you are, and how a visit is going.
     title.textContent = inside ? roomOf(inside).name : region.name;
     sub.textContent = visit ? howItGoes(visit, roomOf(visit.room)) : '';
-    card.hidden = !who && !id && !visit && !bench;
-    card.dataset.spot = id || (bench ? 'bench' : '');
+    card.hidden = !who && !id && !visit && !bench && !mail;
+    card.dataset.spot = mail ? 'mailbox' : id || (bench ? 'bench' : '');
     card.dataset.person = who || '';
     card.dataset.visit = visit ? visit.room : '';
     card.dataset.calmed = visit ? String(visit.stop) : '';
@@ -528,6 +532,22 @@ export function laneScreen(ctx) {
           ctx.save();
           converse(lines, () => { cardFor = undefined; });
         } }, 'Talk'));
+      return;
+    }
+
+    // A mailbox: news for Ines Tock goes in here, and her answer comes by return.
+    if (mail) {
+      card.className = 'placecard';
+      const news = game.hasNews('ines');
+      card.replaceChildren(h('h2', null, 'A mailbox'),
+        h('small', null, news ? 'Ines Tock will want to hear your news. Post her a note here and she answers by return: no need to walk back to the green.' : 'Nothing to post just now. When a place is calm, Ines Tock can be told from here.'),
+        h('button', { class: `btn ${news ? 'gold' : 'plain'}`, disabled: !news, data: { act: 'post' }, onclick: () => {
+          const lines = game.postToInes();
+          if (!lines) return;
+          ctx.save();
+          play('ring');
+          converse(lines, () => { cardFor = undefined; });
+        } }, 'Post a note to Ines Tock'));
       return;
     }
 
@@ -807,6 +827,7 @@ export function laneScreen(ctx) {
       else if (id.startsWith('person:')) point = personAt(id.slice(7));
       else if (id.startsWith('stray:')) point = game.strays().find((one) => one.index === Number(id.slice(6))) || null;
       else if (id.startsWith('bench:')) point = BENCHES.find((bench) => bench.id === id.slice(6)) || null;
+      else if (id.startsWith('mail:')) point = MAILBOXES[Number(id.slice(5))] || null;
       else if (id === 'me') point = here();
       else point = spotOf(id).door;
       if (!point) return null;

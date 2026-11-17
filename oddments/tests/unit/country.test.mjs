@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { Game } from '../../web/js/core/game.js';
 import { newState } from '../../web/js/core/state.js';
 import { ROOMS } from '../../web/js/core/balance.js';
-import { WORLD, REGIONS, PROPS, PROP_ROUND, BENCHES, SIT, WILDS, SPOTS, PEOPLE, TREES, LAMPS, ROAD_POINTS, GREEN, DISTRICTS, regionAt, benchNear, canStand, districtAt, spotOf, routeTo, straighten, roomy } from '../../web/js/core/world.js';
+import { WORLD, REGIONS, PROPS, PROP_ROUND, BENCHES, SIT, MAILBOXES, POST_REACH, WILDS, SPOTS, PEOPLE, TREES, LAMPS, ROAD_POINTS, GREEN, DISTRICTS, regionAt, benchNear, mailNear, canStand, districtAt, spotOf, personAt, routeTo, straighten, roomy } from '../../web/js/core/world.js';
 import { PROP_WIDE, WORLD_ART, worldSrc, wallOf } from '../../web/js/ui/scenery.js';
 import { playOut } from '../../web/js/core/auto.js';
 
@@ -149,4 +149,49 @@ test('worn out anywhere in the world, you are carried all the way home', () => {
   assert.equal(game.near(), 'home');
   assert.equal(regionAt(game.state.where).id, 'lane');
   assert.equal(game.indoors(), null);
+});
+
+// ------------------------------------------------------------------ mailboxes
+
+test('there is a mailbox by home and by each of the four far houses, and a note posted in one tells Ines Tock what talking to her would', () => {
+  assert.equal(MAILBOXES.length, 5);
+  for (const id of ['home', 'wash', 'stacks', 'rooftops', 'attic']) assert.ok(MAILBOXES.some((box) => far(box, spotOf(id).door) < 260), `one near the door of ${id}`);
+  MAILBOXES.forEach((box, i) => {
+    assert.equal(mailNear({ x: box.x, y: box.y + POST_REACH - 2 }), i);
+    assert.equal(mailNear({ x: box.x, y: box.y + POST_REACH + 6 }), -1);
+  });
+  assert.equal(mailNear(null), -1);
+
+  const game = fresh(8);
+  game.begin({ name: 'Kit' });
+  assert.equal(game.standAtMail(1), true);
+  assert.equal(game.mailNear(), 1);
+  assert.equal(game.postToInes(), null, 'you have not met her yet: a first meeting is face to face');
+  game.standBy('ines');
+  assert.ok(game.talkTo('ines'));
+  game.standAtMail(1);
+  assert.equal(game.postToInes(), null, 'and with no news there is nothing to post');
+  // Calm the garden: now there is news, and it can go in the post from the far end of the world.
+  game.state.rooms.garden.clears = 1;
+  game.state.rooms.garden.calmed = 31;
+  assert.equal(game.goal().id, 'report');
+  assert.match(game.goal().detail, /mailbox/);
+  const twin = new Game(JSON.parse(JSON.stringify(game.state)), { now: NOW, fx: false });
+  twin.standBy('ines');
+  const spoken = twin.talkTo('ines');
+  assert.equal(game.standAtMail(4), true);
+  const written = game.postToInes();
+  assert.deepEqual(written, spoken, 'her answer by return is what she would have said');
+  assert.equal(game.state.story.ines, twin.state.story.ines);
+  assert.notEqual(game.goal().id, 'report', 'and the goal moves on');
+  assert.equal(game.postToInes(), null, 'once told, there is nothing more to post');
+  // Not from across the road, from indoors, or in a fight.
+  game.state.rooms.alley.clears = 1;
+  game.state.where = { x: 1000, y: 1000 };
+  assert.equal(game.mailNear(), -1);
+  assert.equal(game.postToInes(), null);
+  game.standAt('home');
+  game.enter('home');
+  assert.equal(game.mailNear(), -1);
+  assert.equal(game.standAtMail(99), false);
 });

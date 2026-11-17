@@ -979,9 +979,19 @@ for (const [room, name, boss, bg, goalAfter] of LATER) {
   await page.click('[data-id="next"]');
   await page.waitForSelector(`#inside[data-room="${room}"]`);
   check((await S(page, () => document.querySelector('#inside .where').textContent)) === 'calm' && (await state(page)).rooms[room].clears === 1, `${name}: and it stays calm`);
-  await S(page, () => { window.oddments.game.standBy('ines'); window.oddments.ctx.show('lane'); });
-  await page.waitForSelector('.placecard[data-person="ines"] [data-act="talk"].gold');
-  await page.click('[data-act="talk"]');
+  // She is told face to face; except the news of the Dusty Stacks, which goes in the mailbox by its door.
+  if (room === 'stacks') {
+    await S(page, () => { const g = window.oddments.game; g.leave(); g.standAtMail(2); window.oddments.ctx.show('lane'); });
+    await page.waitForSelector('.placecard[data-spot="mailbox"] [data-act="post"]:not([disabled])');
+    check(await S(page, () => document.querySelector('.placecard[data-spot="mailbox"] h2').textContent === 'A mailbox' && document.querySelector('.goalchip').dataset.goal === 'report'), 'The Dusty Stacks: by the mailbox outside, there is a note to post');
+    await page.click('[data-act="post"]');
+    await page.waitForSelector('.modal.talk');
+    check((await S(page, () => document.querySelector('.modal.talk .talkname b').textContent)) === 'Ines Tock', 'and Ines Tock answers by return');
+  } else {
+    await S(page, () => { window.oddments.game.standBy('ines'); window.oddments.ctx.show('lane'); });
+    await page.waitForSelector('.placecard[data-person="ines"] [data-act="talk"].gold');
+    await page.click('[data-act="talk"]');
+  }
   const heard = await hearOut(page);
   check(heard === 3 && (await S(page, () => document.querySelector('.goalchip span').textContent)) === goalAfter, `${name}: Ines Tock hears of it, and the goal moves on: ${goalAfter}`);
 }

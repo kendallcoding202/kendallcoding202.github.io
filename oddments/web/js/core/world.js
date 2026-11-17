@@ -225,6 +225,17 @@ export function benchNear(pos) {
   return null;
 }
 
+// Mailboxes: one by home and one by each of the four far houses. Ines Tock lives on the green, a
+// long walk from the rows beyond; a note posted in any of these reaches her, and her answer comes
+// by return. So telling her a place is calm never means walking the length of the world.
+export const MAILBOXES = PROPS.filter((prop) => prop.kind === 'mailbox');
+export const POST_REACH = 76; // how near counts as at a mailbox
+/** The mailbox you are standing at (its number), or -1. */
+export function mailNear(pos) {
+  for (let i = 0; i < MAILBOXES.length; i++) if (pos && Math.hypot(pos.x - MAILBOXES[i].x, pos.y - MAILBOXES[i].y) <= POST_REACH) return i;
+  return -1;
+}
+
 // The people of the lane, and where each stands: Ines Tock and Mr. Spick either side of the top of
 // the green, in sight of home's door; Dov by the garden gate. Solid, like a lamp post; you talk to
 // one from a step or two away.

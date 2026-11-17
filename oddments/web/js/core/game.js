@@ -8,7 +8,7 @@ import { rollEncounter, fairEncounter, enterRoom, leaveRoom, afterFight, canMeet
 import { rollStrays, fairStrays, straysAbout, strayNear, afterStrays } from './strays.js';
 import { STRAYS } from './balance.js';
 import { insideOf, stepIn, routeIn, spotIn, onMat, besidePost } from './indoors.js';
-import { WORLD, POST, BENCHES, SIT, stepWalk, routeTo, straighten, roomy, standing, canStand, spotNear, spotOf, districtOf, districtAt, postNear, personNear, personAt, benchNear, TALK } from './world.js';
+import { WORLD, POST, BENCHES, SIT, MAILBOXES, POST_REACH, stepWalk, routeTo, straighten, roomy, standing, canStand, spotNear, spotOf, districtOf, districtAt, postNear, personNear, personAt, benchNear, mailNear, TALK } from './world.js';
 import { goalOf, aimOf, storySoFar, hasNews, talk, takeCall } from './story.js';
 
 export class Game {
@@ -287,6 +287,32 @@ export class Game {
 
   /** Talks to whoever you are standing by. Returns what they say (lines of { who, text }), or null. */
   talkTo(who) { return this.personNear() === who ? talk(this.state, who) : null; }
+
+  /** The mailbox you are standing at (its number), or -1. Never from indoors, or in a fight. */
+  mailNear() { return this.place() === 'fight' || this.state.indoors ? -1 : mailNear(this.state.where); }
+
+  /**
+   * Posts Ines Tock a note from the mailbox you are standing at, and has her answer by return:
+   * what she would have said had you walked back and told her. Only once you have met her, and
+   * only when there is news she has not heard. Returns her lines, or null.
+   */
+  postToInes() {
+    if (this.mailNear() < 0 || this.state.story.ines === 0 || !hasNews(this.state, 'ines')) return null;
+    return talk(this.state, 'ines');
+  }
+
+  /** Goes straight to a mailbox. For the simulator and tests; a player walks. */
+  standAtMail(index) {
+    const box = MAILBOXES[index];
+    if (this.place() === 'fight' || !box) return false;
+    const held = this.held();
+    for (const [dx, dy] of [[0, 1], [-1, 0], [1, 0], [0, -1]]) {
+      const x = box.x + dx * (POST_REACH - 30);
+      const y = box.y + dy * (POST_REACH - 30);
+      if (canStand(x, y, held)) { this.state.where = { x, y }; this.state.indoors = null; return true; }
+    }
+    return false;
+  }
 
   /** Takes great-aunt Maribel's first call, once the game has begun. Its lines the first time; null after. */
   takeCall() { return this.state.started && this.place() !== 'fight' ? takeCall(this.state) : null; }
