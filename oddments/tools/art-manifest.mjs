@@ -77,6 +77,16 @@ const roomFloor = (room, what) => ({
     'Slightly desaturated and low in contrast so characters stand out on top of it. The texture fills the whole square image from edge to edge.',
 });
 
+// ---- what a fight is seen against ----
+// The eight places have the room paintings of Pawst Lives. A fight with strays, out on the lane,
+// needs one of its own. BG_STYLE is the Pawst Lives style for those paintings, word for word.
+const BG_STYLE =
+  'Style: clean 2D mobile game background art, painterly flat shapes, soft gradients, no outlines on distant things, ' +
+  'slightly desaturated so characters stand out. Side-scrolling platformer background seen from a low, cat\'s-eye viewpoint, ' +
+  'everyday household things look enormous. The bottom quarter of the image is a flat, even, uncluttered ground strip running ' +
+  'the full width for characters to stand on. No characters, no animals, no text.';
+const backdrop = (id, desc) => ({ id, kind: 'bg', size: '1536x1024', quality: 'medium', transparent: false, prompt: `${desc} ${BG_STYLE}` });
+
 export const ART = [
   // ---- the house-sitter (the player): four candidate looks to choose from ----
   human('sitter_a', 'a young adult woman house-sitter with warm brown skin and curly dark hair in a messy bun held by a pencil, wearing an oversized mustard-yellow knitted cardigan over teal pyjamas, mismatched socks (one red-striped, one blue-dotted) and no shoes, holding up a small glowing brass wind-up lantern in one hand, the other hand held out open in a friendly way.'),
@@ -236,4 +246,6 @@ export const ART = [
   ]),
   roomWall('dark', 'the inside of a cupboard under the stairs at night, very dark: dark wooden boards, a long row of coats, scarves and umbrellas hanging on hooks, one shelf above them with old boxes, jars of screws and a torch, old pipes running along the top, and cobwebs.'),
   roomFloor('dark', 'very dark old floorboards, almost black with a hint of purple, planks running left to right.'),
+  // ---- out on the lane ----
+  backdrop('bg_lane', 'A quiet village lane at night: a row of cosy cottages with warm glowing windows, a tall street lamp, a garden hedge and a wooden gate, a red pillar box, a crescent moon and stars over the rooftops, a few fireflies.'),
 ];

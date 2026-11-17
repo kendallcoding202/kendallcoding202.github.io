@@ -348,6 +348,16 @@ def main():
         kind = kind_of(name)
         im = Image.open(os.path.join(RAW, fname))
         im.load()
+        if name.startswith("bg_"):
+            # What a fight is seen against: sized as Pawst Lives sizes its room paintings, which sit beside it.
+            dest = os.path.join(OUT, "bg", name + ".webp")
+            im.convert("RGB").resize((1152, 768), Image.LANCZOS).save(dest, "WEBP", quality=78, method=6)
+            count += 1
+            total += os.path.getsize(dest)
+            if fname.endswith(".png"):
+                im.convert("RGB").save(os.path.join(RAW, name + ".webp"), "WEBP", lossless=True, method=6)
+                os.remove(os.path.join(RAW, fname))
+            continue
         if name.startswith("app_"):
             # The app's own art (its icon) is not part of the game's pictures: tools/ios-art.py uses it. Only archived here.
             if fname.endswith(".png"):
