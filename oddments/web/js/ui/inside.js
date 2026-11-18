@@ -14,7 +14,7 @@ import { toast, modalOpen } from './modals.js';
 import { converse } from './talk.js';
 import { play } from '../platform/sound.js';
 import { dustShift, throughDoor } from './shift.js';
-import { FONT, oval, paint, glow, label, elementMark } from './scenery.js';
+import { FONT, oval, paint, glow, label, elementMark, hoverOn, hoverLift } from './scenery.js';
 import { paintRoom, roomArt, standingIn } from './roomart.js';
 
 const HOME_NAME = 'Home';
@@ -74,7 +74,7 @@ export function insideScreen(ctx) {
   const cam = { x: 0, y: 0, k: 1, w: room.view, h: room.view, dpr: 1, top: HEAD, set: false };
   const start = here();
   const trail = Array.from({ length: 12 }, (_, i) => ({ x: start.x, y: Math.min(room.h - 24, start.y + i * 14) }));
-  const pals = game.team().map((friend, i) => ({ friend, x: start.x + (i - 1) * 46 * big, y: Math.min(room.h - 24, start.y + 40 + i * 6), f: 1, step: i * 9 }));
+  const pals = game.team().map((friend, i) => ({ friend, x: start.x + (i - 1) * 46 * big, y: Math.min(room.h - 24, start.y + 40 + i * 6), f: 1, step: i * 9, hover: i * 1.7 }));
   // At home, whoever is not walking with you is in here with you, pottering about the floor.
   const stayers = room.kind !== 'home' ? [] : state.friends.filter((friend) => !state.team.includes(friend.id)).slice(0, 6).map((friend, i) => {
     const next = run((friend.id * 48271 + 23) % 2147483646 + 1);
@@ -87,7 +87,7 @@ export function insideScreen(ctx) {
       }
       return { x: room.w / 2, y: room.wall + 300 };
     };
-    return { friend, ...spot(), to: spot(), spot, wait: next() * 3 + i * 0.4, f: 1, step: 0, next };
+    return { friend, ...spot(), to: spot(), spot, wait: next() * 3 + i * 0.4, f: 1, step: 0, hover: i * 2.1, next };
   });
   const things = standingIn(id, room);
   const art = { maribel: picture(spriteSrc(CAST.maribel.art)) };
@@ -211,12 +211,12 @@ export function insideScreen(ctx) {
     room.posts.forEach((post, index) => row.push({ y: post.y + 22, draw: () => waiting(index) }));
     for (const body of stayers) {
       const fly = SPECIES[body.friend.species].fly;
-      row.push({ y: body.y, draw: () => stand(spriteSrc(artOf(body.friend), body.friend.heirloom), body.x, body.y, body.friend.grown ? 70 : 54, body.f > 0, false, fly ? 9 + Math.sin(clock * 3 + body.step) * 4 : Math.abs(Math.sin(body.step / (15 * big))) * 5) });
+      row.push({ y: body.y, draw: () => stand(spriteSrc(artOf(body.friend), body.friend.heirloom), body.x, body.y, body.friend.grown ? 70 : 54, body.f > 0, false, fly ? hoverLift(body.hover) : Math.abs(Math.sin(body.step / (15 * big))) * 5) });
     }
     const { x, y } = here();
     for (const pal of pals) {
       const fly = SPECIES[pal.friend.species].fly;
-      const lift = fly ? 9 + Math.sin(clock * 3 + pal.step) * 4 : Math.abs(Math.sin(pal.step / (15 * big))) * 5 * spring;
+      const lift = fly ? hoverLift(pal.hover) : Math.abs(Math.sin(pal.step / (15 * big))) * 5 * spring;
       row.push({ y: pal.y - 0.01, draw: () => stand(spriteSrc(artOf(pal.friend), pal.friend.heirloom), pal.x, pal.y, pal.friend.grown ? 70 : 54, pal.f > 0, false, lift) });
     }
     const hop = Math.abs(Math.sin(stride / (17 * big))) * 7 * spring;
@@ -332,6 +332,7 @@ export function insideScreen(ctx) {
 
   function potter(dt) {
     for (const body of stayers) {
+      body.hover = hoverOn(body.hover, dt);
       if (body.wait > 0) { body.wait -= dt; continue; }
       const dx = body.to.x - body.x;
       const dy = body.to.y - body.y;
@@ -340,6 +341,7 @@ export function insideScreen(ctx) {
       const step = Math.min(far, 42 * big * dt);
       body.x += (dx / far) * step; body.y += (dy / far) * step;
       body.step += step;
+      body.hover = hoverOn(body.hover, 0, step / big);
       if (Math.abs(dx) > 1) body.f = dx > 0 ? 1 : -1;
     }
   }
@@ -381,6 +383,7 @@ export function insideScreen(ctx) {
       const dy = (to.y - pal.y) * ease;
       pal.x += dx; pal.y += dy;
       pal.step += Math.hypot(dx, dy);
+      pal.hover = hoverOn(pal.hover, dt, Math.hypot(dx, dy) / big);
       if (Math.abs(dx) > 0.25) pal.f = dx > 0 ? 1 : -1;
     });
     potter(dt);

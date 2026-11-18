@@ -211,3 +211,20 @@ test('colours mix as told', () => {
   assert.equal(mix('#ff0000', '#0000ff', 0), 'rgb(255,0,0)');
   assert.equal(mix('#ff0000', '#0000ff', 1), 'rgb(0,0,255)');
 });
+
+test('a flying friend hovers smoothly, at a walk as at rest: never the shiver it once was', async () => {
+  const { HOVER, hoverOn, hoverLift } = await import('../../web/js/ui/scenery.js');
+  const { WORLD } = await import('../../web/js/core/world.js');
+  const frame = 1 / 60;
+  const bobs = (speed) => { let phase = 0; for (let i = 0; i < 60; i++) phase = hoverOn(phase, frame, speed * frame); return phase / (2 * Math.PI); };
+  // Waiting, about one rise and fall every two seconds; following you at a walk, about one a second. (By distance alone it was 44.)
+  assert.ok(bobs(0) > 0.35 && bobs(0) < 0.6, `${bobs(0)} bobs a second at rest`);
+  assert.ok(bobs(WORLD.speed) > bobs(0) && bobs(WORLD.speed) < 1.4, `${bobs(WORLD.speed)} bobs a second at a walk`);
+  // From one frame to the next it moves a fraction of a unit: nothing the eye can catch as a jump.
+  let phase = 0; let before = hoverLift(phase); let most = 0;
+  for (let i = 0; i < 600; i++) { phase = hoverOn(phase, frame, WORLD.speed * frame); const now = hoverLift(phase); most = Math.max(most, Math.abs(now - before)); before = now; }
+  assert.ok(most < 0.6, `at most ${most} units a frame`);
+  // It stays off the ground, and a long frame or a clock that runs backwards does not send it anywhere odd.
+  for (let p = 0; p < 7; p += 0.1) assert.ok(hoverLift(p) >= HOVER.base - HOVER.swing && hoverLift(p) <= HOVER.base + HOVER.swing && hoverLift(p) > 0);
+  assert.equal(hoverOn(2, -1, -50), 2);
+});

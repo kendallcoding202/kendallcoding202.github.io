@@ -21,7 +21,7 @@ import { keyRing } from './keys.js';
 import { play } from '../platform/sound.js';
 import { dustShift, throughDoor } from './shift.js';
 import { insideOf } from '../core/indoors.js';
-import { FONT, PROP_WIDE, oval, paint, glow, label, elementMark, worldSrc, paintGround, paintBuilding, paintProp, paintFlat, paintLamp, paintGate, wallOf } from './scenery.js';
+import { FONT, PROP_WIDE, oval, paint, glow, label, elementMark, hoverOn, hoverLift, worldSrc, paintGround, paintBuilding, paintProp, paintFlat, paintLamp, paintGate, wallOf } from './scenery.js';
 
 // How much of the world fits across the screen. People and Clutterkin are small in a big place.
 // On a wider screen (a folding phone, open) you see more of the world, not the same view blown up:
@@ -127,14 +127,14 @@ export function laneScreen(ctx) {
   // Where you have just been, newest first, for the friends walking behind you.
   const start = here();
   const trail = Array.from({ length: 12 }, (_, i) => ({ x: start.x - i * 16, y: start.y + i * 2.5 }));
-  const pals = game.team().map((friend, i) => ({ friend, x: start.x - (i + 1) * GAP, y: start.y + (i + 1) * 7, f: 1, step: i * 9 }));
+  const pals = game.team().map((friend, i) => ({ friend, x: start.x - (i + 1) * GAP, y: start.y + (i + 1) * 7, f: 1, step: i * 9, hover: i * 1.7 }));
   // Friends who stayed home potter about on the green. Looks only: you walk straight through them.
   const homebodies = state.friends.filter((friend) => !state.team.includes(friend.id)).slice(0, 9).map((friend, i) => {
     // Each has its own run of numbers, well stirred before it is used: small seeds start small.
     const next = run((friend.id * 48271 + 11) % 2147483646 + 1);
     for (let k = 0; k < 4; k++) next();
     const spot = () => ({ x: GREEN.x + 50 + next() * (GREEN.w - 100), y: GREEN.y + 30 + next() * (GREEN.h - 60) });
-    return { friend, ...spot(), to: spot(), spot, wait: next() * 3 + i * 0.4, f: 1, step: 0, next };
+    return { friend, ...spot(), to: spot(), spot, wait: next() * 3 + i * 0.4, f: 1, step: 0, hover: i * 2.1, next };
   });
   // What stands at each post was last seen as (bushes, a group, nothing), and since when: for the little pop as it changes.
   const shown = new Map();
@@ -457,12 +457,12 @@ export function laneScreen(ctx) {
     for (const body of homebodies) {
       if (!seen(body.x, body.y)) continue;
       const fly = SPECIES[body.friend.species].fly;
-      things.push({ y: body.y, draw: () => stand(spriteSrc(artOf(body.friend), body.friend.heirloom), body.x, body.y, body.friend.grown ? 70 : 54, body.f > 0, false, fly ? 9 + Math.sin(clock * 3 + body.step) * 4 : Math.abs(Math.sin(body.step / 15)) * 5) });
+      things.push({ y: body.y, draw: () => stand(spriteSrc(artOf(body.friend), body.friend.heirloom), body.x, body.y, body.friend.grown ? 70 : 54, body.f > 0, false, fly ? hoverLift(body.hover) : Math.abs(Math.sin(body.step / 15)) * 5) });
     }
     const { x, y } = here();
     for (const pal of pals) {
       const fly = SPECIES[pal.friend.species].fly;
-      const lift = fly ? 9 + Math.sin(clock * 3 + pal.step) * 4 : Math.abs(Math.sin(pal.step / 15)) * 5 * spring;
+      const lift = fly ? hoverLift(pal.hover) : Math.abs(Math.sin(pal.step / 15)) * 5 * spring;
       things.push({ y: pal.y - 0.01, draw: () => stand(spriteSrc(artOf(pal.friend), pal.friend.heirloom), pal.x, pal.y, pal.friend.grown ? 70 : 54, pal.f > 0, false, lift) });
     }
     const hop = Math.abs(Math.sin(stride / 17)) * 7 * spring;
@@ -678,6 +678,7 @@ export function laneScreen(ctx) {
   /** Friends on the green amble to a spot, stand a while, and pick another. */
   function potter(dt) {
     for (const body of homebodies) {
+      body.hover = hoverOn(body.hover, dt);
       if (body.wait > 0) { body.wait -= dt; continue; }
       const dx = body.to.x - body.x;
       const dy = body.to.y - body.y;
@@ -686,6 +687,7 @@ export function laneScreen(ctx) {
       const step = Math.min(far, 46 * dt);
       body.x += (dx / far) * step; body.y += (dy / far) * step;
       body.step += step;
+      body.hover = hoverOn(body.hover, 0, step);
       if (Math.abs(dx) > 1) body.f = dx > 0 ? 1 : -1;
     }
   }
@@ -751,6 +753,7 @@ export function laneScreen(ctx) {
       const dy = (to.y - pal.y) * ease;
       pal.x += dx; pal.y += dy;
       pal.step += Math.hypot(dx, dy);
+      pal.hover = hoverOn(pal.hover, dt, Math.hypot(dx, dy));
       if (Math.abs(dx) > 0.25) pal.f = dx > 0 ? 1 : -1;
     });
     // You tapped a door and have walked up to it: in you go. (If it is shut, you are left standing at it, and its card says why.)

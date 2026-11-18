@@ -65,6 +65,16 @@ export function label(pen, text, x, y, colour = '#fff7e8', edge = 'rgba(255,255,
   pen.fillText(text, x, y + 1);
 }
 
+// A friend that flies bobs gently over its shadow. Where it is in its bob (`phase`) moves on by
+// time, and only a little faster while it is travelling, so it is one smooth rise and fall whether
+// it is following you at a walk or waiting. (It once went by the distance walked, which at a walk is
+// more than forty bobs a second: a shiver, not a hover.)
+export const HOVER = { rate: 3, perStep: 1 / 70, base: 9, swing: 4 };
+/** The phase of a hover, `dt` seconds on, having travelled `moved` units in that time. */
+export const hoverOn = (phase, dt, moved = 0) => phase + Math.max(0, dt) * HOVER.rate + Math.max(0, moved) * HOVER.perStep;
+/** How far off the ground a flyer is at this point of its hover. */
+export const hoverLift = (phase) => HOVER.base + Math.sin(phase) * HOVER.swing;
+
 /** A small tag saying an element, in that element's colour: under whoever is waiting, so nobody has to guess. */
 export function elementMark(pen, name, colour, x, y, size = 15) {
   pen.font = `700 ${size}px ${FONT}`;
