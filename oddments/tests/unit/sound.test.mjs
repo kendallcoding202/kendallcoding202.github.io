@@ -286,6 +286,83 @@ test('away from the game there is silence, and it comes back with you', async ()
   assert.doesNotThrow(() => { fresh.hush(true); fresh.hush(false); });
 });
 
+test('an iPhone that has had the app in the background calls the sound "interrupted": it comes back, on return or at the next touch', async () => {
+  // Reported from the phone on 18 November 2026: "after I get out of the app, and come back to it, with out hard
+  // closing it the sound doesn't come back on". Only a clock that said "suspended" was ever woken.
+  const { sound, clock } = await touched();
+  sound.scene('world');
+  assert.equal(sound.state().playing, true);
+  // The app goes away. The phone takes the sound, in its own word for it.
+  sound.hush(true);
+  clock.state = 'interrupted';
+  assert.equal(sound.state().running, false);
+  // Back again: asked to wake at once.
+  sound.hush(false);
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(clock.state, 'running');
+  assert.equal(sound.state().playing, true, 'the music picks up');
+  assert.equal(sound.play('tap'), true, 'and effects are heard again');
+
+  // A phone that will not start sound again until it is touched: nothing on return, everything at the first touch.
+  sound.hush(true);
+  clock.state = 'interrupted';
+  const allowed = clock.resume;
+  clock.resume = () => Promise.reject(new Error('not without a touch'));
+  sound.hush(false);
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(sound.state().playing, false);
+  clock.resume = allowed;
+  sound.unlock();
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(clock.state, 'running');
+  assert.equal(sound.state().playing, true, 'the first touch brings it back');
+
+  // And if the phone hands the sound back by itself, later, the music starts without being asked.
+  sound.hush(true);
+  clock.state = 'interrupted';
+  clock.resume = () => new Promise(() => {}); // never answers
+  sound.hush(false);
+  await Promise.resolve();
+  assert.equal(sound.state().playing, false);
+  clock.state = 'running';
+  clock.onstatechange();
+  assert.equal(sound.state().playing, true);
+  clock.resume = allowed;
+});
+
+test('a clock that will not wake however often it is asked is thrown away, and a new one made on a touch', async () => {
+  const rig = standIn();
+  const sound = createSound(rig.Clock, rig.timers);
+  sound.unlock();
+  await Promise.resolve(); await Promise.resolve();
+  const first = rig.made.clock;
+  sound.scene('world');
+  // It goes silent and stays silent: every request to wake is refused.
+  let closed = 0;
+  first.state = 'interrupted';
+  first.resume = () => Promise.reject(new Error('stuck'));
+  first.close = () => { closed++; first.state = 'closed'; return Promise.resolve(); };
+  sound.unlock(); await Promise.resolve(); await Promise.resolve();
+  sound.unlock(); await Promise.resolve(); await Promise.resolve();
+  assert.equal(rig.made.clocks, 1, 'two touches: still asking the same clock');
+  assert.equal(sound.state().running, false);
+  sound.unlock(); await Promise.resolve(); await Promise.resolve();
+  assert.equal(rig.made.clocks, 2, 'the third touch makes a new one');
+  assert.equal(closed, 1, 'and shuts the old one');
+  assert.notEqual(rig.made.clock, first);
+  assert.equal(rig.made.clock.state, 'running');
+  assert.equal(sound.state().playing, true, 'with the music where the game is');
+  assert.equal(sound.play('tap'), true);
+  // A clock that has been shut for good is replaced at the very next touch.
+  rig.made.clock.state = 'closed';
+  sound.unlock(); await Promise.resolve(); await Promise.resolve();
+  assert.equal(rig.made.clocks, 3);
+  assert.equal(sound.state().running, true);
+  // While it is running, touches cost nothing and make nothing.
+  for (let i = 0; i < 20; i++) sound.unlock();
+  assert.equal(rig.made.clocks, 3);
+});
+
 test('a sound asked for many times at once is made once; an unknown one is not made at all', async () => {
   const { sound, clock } = await touched();
   assert.equal(sound.play('step'), true);

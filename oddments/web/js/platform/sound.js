@@ -317,6 +317,9 @@ export function writeBar(kit, scene, barIndex, at, dest) {
  * The sound of the game, for one kind of audio clock. `AudioClock` is the browser's AudioContext
  * (or a stand-in, in tests); with none, every call quietly does nothing.
  */
+/** How many touches may find the sound not running, and ask it to, before a new clock is made in its place. */
+const STUCK_AFTER = 2;
+
 export function createSound(AudioClock, timers = { every: (fn, ms) => setInterval(fn, ms), stop: (id) => clearInterval(id) }) {
   let audio = null;
   let kit = null;
@@ -327,6 +330,7 @@ export function createSound(AudioClock, timers = { every: (fn, ms) => setInterva
   let sceneName = 'quiet';
   let line = null; // the music playing now: { gain, scene, bar, next }
   let ticker = null;
+  let stuck = 0; // how many touches in a row have found the sound not running, and asked it to
   const last = {};
   // What has been asked for and played, by name: for tests, which cannot listen.
   const heard = {};
@@ -355,9 +359,39 @@ export function createSound(AudioClock, timers = { every: (fn, ms) => setInterva
     musicOut.gain.value = MUSIC;
     musicOut.connect(master);
     kit = kitFor(audio, effectsOut, hissFor(audio));
+    // Whenever it starts running again, by whatever road (a phone hands sound back in its own time
+    // after a call, or after the app has been away), the music picks up where the game is.
+    const mine = audio;
+    try { audio.onstatechange = () => { if (audio === mine && running()) { stuck = 0; startMusic(); } }; } catch (err) { /* then the next touch will */ }
     return audio;
   }
   const running = () => !!audio && audio.state === 'running';
+
+  /**
+   * Asks the sound to run, whatever is stopping it. A browser calls a stopped clock "suspended";
+   * an iPhone that has had the app in the background calls it "interrupted", and it is that one
+   * which used to stay silent for good: only "suspended" was ever woken. Now anything that is
+   * not running is asked to.
+   */
+  function wake() {
+    if (!audio) return;
+    if (audio.state === 'running') { stuck = 0; startMusic(); return; }
+    if (audio.state === 'closed' || !audio.resume) return;
+    let woke = null;
+    try { woke = audio.resume(); } catch (err) { woke = null; }
+    if (woke && woke.then) woke.then(() => { if (running()) { stuck = 0; startMusic(); } }, () => {});
+  }
+
+  /** Throws the clock away and makes another: for one that will not wake however often it is asked. */
+  function rebuild() {
+    stopMusic();
+    const old = audio;
+    audio = null; kit = null; effectsOut = null; musicOut = null;
+    for (const name of Object.keys(last)) delete last[name]; // (times on the old clock mean nothing on the new)
+    try { if (old) { old.onstatechange = null; if (old.close) { const shut = old.close(); if (shut && shut.catch) shut.catch(() => {}); } } } catch (err) { /* it was past helping */ }
+    stuck = 0;
+    return ensure();
+  }
 
   function stopMusic() {
     if (ticker !== null) { timers.stop(ticker); ticker = null; }
@@ -400,10 +434,13 @@ export function createSound(AudioClock, timers = { every: (fn, ms) => setInterva
     /** Browsers allow sound only after a touch: call this from every one (it is cheap). */
     unlock() {
       if (!ensure()) return;
-      if (audio.state === 'suspended' && audio.resume) {
-        const woke = audio.resume();
-        if (woke && woke.then) woke.then(startMusic, () => {});
-      }
+      if (audio.state !== 'running') {
+        // Asked on two touches already and still silent, or shut for good: this clock is not coming
+        // back. A new one, made on this touch, is allowed to sound.
+        if (audio.state === 'closed' || stuck >= STUCK_AFTER) { if (!rebuild()) return; }
+        stuck++;
+        wake();
+      } else stuck = 0;
       startMusic();
     },
     /** The two switches in Settings. */
@@ -414,8 +451,9 @@ export function createSound(AudioClock, timers = { every: (fn, ms) => setInterva
     /** Away from the game (the app in the background, the tab hidden) there is silence. */
     hush(hidden) {
       if (!audio) return;
-      if (hidden) { stopMusic(); if (audio.suspend) { const slept = audio.suspend(); if (slept && slept.catch) slept.catch(() => {}); } return; }
-      if (audio.resume) { const woke = audio.resume(); if (woke && woke.then) woke.then(startMusic, () => {}); }
+      if (hidden) { stopMusic(); if (audio.suspend && audio.state === 'running') { const slept = audio.suspend(); if (slept && slept.catch) slept.catch(() => {}); } return; }
+      // Back again. A phone may refuse to start sound until it is touched: then the first touch does it (see unlock).
+      wake();
     },
     /** Plays an effect by name. `with_` says more where a sound has more than one way to go. */
     play(name, with_ = {}) {

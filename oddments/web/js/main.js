@@ -85,6 +85,10 @@ async function boot() {
   window.addEventListener('pointerdown', unlockSound, true);
   window.addEventListener('keydown', unlockSound, true);
   document.addEventListener('visibilitychange', () => hushSound(document.hidden));
+  // An iPhone does not always say the page was hidden when the app goes into the background, and
+  // not always that it is back. These say so as well: the page shown again, the window looked at again.
+  window.addEventListener('pageshow', () => { if (!document.hidden) hushSound(false); });
+  window.addEventListener('focus', () => { if (!document.hidden) hushSound(false); });
   // Every button makes the same small sound when pressed; what it does may make another.
   document.addEventListener('click', (event) => {
     const button = event.target && event.target.closest ? event.target.closest('button') : null;
