@@ -125,7 +125,7 @@ const DOV = {
   ],
   tips: [
     'Tap one of them in a fight and it tells you its soft spot. Nobody ever taps them. I tap everything.',
-    'See the strays out on the lane? They are lost. You can walk up to one, or walk past. I walk up. It is good practice.',
+    'See the strays out on the lane? They are lost. You can walk up to one, or walk past. I walk up. It is good practice. Two together teach you more than one on its own.',
     'Down the alley they come one at a time. There is no going round. I tried. I got pecked.',
     'Crumb jams Clank. Take your Crumbwisp down Tin Can Alley and watch the tins dent.',
     'Want an Heirloom? Go back where it is calm. They feel safe there and bring out their best colours. I saw three in the garden in one week. Three!',

@@ -645,7 +645,7 @@ export const WANDERERS = { groups: [1, 3] };
 // between the rows of houses. `meet` is how near you must walk
 // to meet one: much nearer than to a group that holds its ground, because nobody has to meet a
 // stray. `berth` is how wide the way found for you goes round one you are not heading for.
-export const STRAYS = { groups: [4, 7], size: [1, 2], meet: 58, berth: 104 };
+export const STRAYS = { groups: [4, 7], size: [1, 3], meet: 58, berth: 104 };
 
 // ---------------------------------------------------------------- the house-sitter
 //
@@ -682,6 +682,11 @@ export const xpNeeded = (level) => Math.round(24 * Math.pow(level, 1.5));
 export const XP_RATE = 1.3;
 export const xpFor = (species, level) => Math.round((6 + 5 * level) * XP_RATE) * (SPECIES[species].boss ? 4 : 1);
 export const BENCH_SHARE = 0.5; // friends left at home learn half as much
+// A fight teaches by its size: something for each of them, so two teach twice what one does and
+// three, three times. And one on its own against your team is hardly a fight, so it teaches only
+// this share of its worth. Only a stray is ever met alone: a place's groups are two or three, and
+// a ringleader has company.
+export const LONE_SHARE = 0.6;
 
 // ---------------------------------------------------------------- rooms
 //

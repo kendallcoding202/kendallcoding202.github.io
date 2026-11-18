@@ -156,7 +156,11 @@ function resultDialog(ctx, summary, foes) {
     if (right) lines.push(h('div', { class: 'putright', data: { kind: right.kind } }, sprite(right.kind, !!game.state.friends.find((friend) => friend.species === right.kind).heirloom, 'flip'), h('p', null, right.text)));
   }
   else if (summary.won) lines.push(h('p', null, summary.strays ? `${foes.length > 1 ? 'They are' : 'It is'} calm now, and off home. Everyone catches their breath.` : 'They are calm now. Everyone catches their breath.'));
-  else lines.push(h('p', null, 'Your friends are worn out. You carry them home for a rest. Whoever you calmed stays calm, and you keep everything they learned.'));
+  else {
+    lines.push(h('p', null, 'Your friends are worn out. You carry them home for a rest. Whoever you calmed stays calm, and you keep everything they learned.'));
+    // Nobody is ever stuck: there is always more practice to be had, and this is where.
+    lines.push(h('p', { class: 'note', data: { act: 'practice' } }, 'Want them stronger first? After a rest there are always strays out on the roads, and a few wandering wherever is calm. The more of them together, the more they teach.'));
+  }
 
   for (const joined of summary.joined) {
     lines.push(h('div', { class: 'joined', data: { joined: joined.species } }, sprite(joined.species, joined.heirloom, 'flip'),
@@ -167,6 +171,8 @@ function resultDialog(ctx, summary, foes) {
 
   if (summary.xp > 0) {
     lines.push(h('p', { class: 'xp' }, `+${summary.xp} experience each`));
+    // One met on its own is quick work, and teaches less than its worth: say so, so the number is no surprise.
+    if (summary.lone) lines.push(h('p', { class: 'note', data: { act: 'lone' } }, 'One on its own is quick work. A bigger fight teaches more.'));
     // Everyone who walked with you, and anyone at home who went up a level.
     lines.push(h('div', { class: 'gains' }, summary.gains.filter((gain) => gain.team || gain.to > gain.from).map((gain) => {
       const friend = game.friend(gain.id);

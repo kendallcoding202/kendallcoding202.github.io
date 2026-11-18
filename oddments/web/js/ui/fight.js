@@ -63,7 +63,7 @@ export function fightScreen(ctx) {
   const arena = h('div', { class: `arena${foes.some((unit) => unit.boss) ? ' bossfight' : ''}` },
     h('img', { class: 'bg', src: `assets/bg/${wild ? 'bg_lane' : room.bg}.webp`, alt: '' }),
     h('div', { class: 'topline' },
-      h('div', { class: 'roundpill' }, roundEl, h('span', null, wild ? `Out on the lane · ${foes.length > 1 ? 'strays' : 'a stray'}` : visit.stroll ? `${spot.name} · calm` : `${spot.name} · ${howItGoes(visit, room)}`)),
+      h('div', { class: 'roundpill' }, roundEl, h('span', null, wild ? `Out on the lane · ${['a stray', 'two strays', 'three strays'][foes.length - 1] || 'strays'}` : visit.stroll ? `${spot.name} · calm` : `${spot.name} · ${howItGoes(visit, room)}`)),
       h('button', { class: 'iconbtn menu', 'aria-label': 'Menu', data: { act: 'menu' }, onclick: openMenu }, '⋯')),
     units, floaters);
   const orderEl = h('div', { class: 'order' });

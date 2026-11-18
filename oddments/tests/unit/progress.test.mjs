@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { gainXp, newFriend, settleUp } from '../../web/js/core/progress.js';
 import { createBattle, unitOf, makeFighter } from '../../web/js/core/battle.js';
 import { newState } from '../../web/js/core/state.js';
-import { xpNeeded, xpFor, MAX_LEVEL, BENCH_SHARE, SPECIES, GROWTH } from '../../web/js/core/balance.js';
+import { xpNeeded, xpFor, MAX_LEVEL, BENCH_SHARE, LONE_SHARE, SPECIES, GROWTH } from '../../web/js/core/balance.js';
 
 test('each level needs more experience than the one before', () => {
   for (let level = 1; level < MAX_LEVEL; level++) {
@@ -75,6 +75,28 @@ test('a win pays the team in full and friends at home a share', () => {
   assert.equal(state.friends[3].xp, Math.floor(total * BENCH_SHARE), 'the Gnome stayed at home');
   assert.equal(summary.gains.filter((g) => g.team).length, 3);
   assert.deepEqual([state.stats.battles, state.stats.wins, state.stats.losses], [1, 1, 0]);
+});
+
+test('a fight teaches by its size: two teach twice what one does, three three times, and one met alone only a share of its worth', () => {
+  const one = (level) => ({ species: 'grumblebee', level });
+  const taught = (foes) => { const { state, battle } = fought(foes, foes.length, 'won'); return settleUp(state, battle); };
+  const worth = xpFor('grumblebee', 3);
+  const [alone, pair, three] = [taught([one(3)]), taught([one(3), one(3)]), taught([one(3), one(3), one(3)])];
+  assert.deepEqual([pair.xp, three.xp], [2 * worth, 3 * worth]);
+  assert.deepEqual([alone.lone, pair.lone, three.lone], [true, false, false]);
+  assert.equal(alone.xp, Math.round(worth * LONE_SHARE));
+  assert.ok(LONE_SHARE > 0.4 && LONE_SHARE < 1, 'less than its worth, but worth meeting');
+  assert.ok(alone.xp * 3 < pair.xp, 'one on its own is worth less than a third of a pair');
+  // The share is of the whole fight, and the friends at home get their share of that.
+  const { state, battle } = fought([one(3)], 1, 'won');
+  settleUp(state, battle);
+  assert.equal(state.friends[0].xp, alone.xp);
+  assert.equal(state.friends[3].xp, Math.floor(alone.xp * BENCH_SHARE));
+  // A ringleader is never short-changed, even if one were ever met alone.
+  const boss = taught([{ species: 'boss_hydra', level: 5 }]);
+  assert.deepEqual([boss.lone, boss.xp], [false, xpFor('boss_hydra', 5)]);
+  // And however strong the one, a pair of the same is always the better lesson.
+  for (let level = 1; level <= MAX_LEVEL; level++) assert.ok(Math.round(xpFor('grumblebee', level) * LONE_SHARE) < xpFor('grumblebee', level));
 });
 
 test('a loss still pays for whoever was knocked down first: nothing is ever a dead end', () => {

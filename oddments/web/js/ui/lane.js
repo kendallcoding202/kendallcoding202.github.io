@@ -345,7 +345,7 @@ export function laneScreen(ctx) {
       const turned = near ? you.x > x : Math.cos(clock * 0.55 + stray.index * 2.1 + i * 3.3) > 0;
       stand(spriteSrc(foe.species, foe.heirloom), x, y - (kind.fly ? 9 + Math.sin(clock * 3 + i) * 4 : 0) * size, 58 * size, turned, false, kind.fly ? 0 : Math.max(0, Math.sin(clock * 3.2 + i * 1.7 + stray.index)) * 3 * size);
     });
-    if (near && size >= 1) label(pen, stray.foes.length > 1 ? 'strays' : 'a stray', stray.x, stray.y - 92, '#cdeed6', 'rgba(205,238,214,.3)', 21);
+    if (near && size >= 1) label(pen, ['a stray', 'two strays', 'three strays'][stray.foes.length - 1] || 'strays', stray.x, stray.y - 92, '#cdeed6', 'rgba(205,238,214,.3)', 21);
   }
 
   /** One of the people of the lane: turned toward you, their name over them when you are near, a mark if they have news. */

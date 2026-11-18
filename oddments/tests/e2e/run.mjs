@@ -729,6 +729,7 @@ section('Strays, out on the lane');
   const strayTitle = await modalTitle(page);
   const strayWords = await S(page, () => document.querySelector('.modal.result .body').textContent);
   check(strayTitle === 'Won' && strayWords.includes('off home'), 'won, it says they are calm and off home', `${strayTitle}: ${strayWords.slice(0, 80)}`);
+  check((await S(page, () => !!document.querySelector('.modal.result [data-act="lone"]'))) === (one.foes.length === 1), `and it says one on its own teaches less only when it was one on its own (there ${one.foes.length === 1 ? 'was one' : `were ${one.foes.length}`})`);
   await page.click('[data-id="next"]');
   await page.waitForSelector('#lane');
   s = await state(page);

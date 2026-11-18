@@ -1,6 +1,6 @@
 // What a fight leaves behind: experience, levels, new moves, and new friends.
 // Rules only: no DOM, no clock, no storage.
-import { SPECIES, MAX_LEVEL, ROSTER_MAX, BENCH_SHARE, xpNeeded, xpFor, movesLearnedAt } from './balance.js';
+import { SPECIES, MAX_LEVEL, ROSTER_MAX, BENCH_SHARE, LONE_SHARE, xpNeeded, xpFor, movesLearnedAt } from './balance.js';
 
 export const newFriend = (id, species, level, heirloom = false) => ({ id, species, level, xp: 0, heirloom: !!heirloom });
 
@@ -25,16 +25,19 @@ export function gainXp(friend, amount) {
  * Experience is paid for every restless Clutterkin knocked down, win or lose,
  * and for every one calmed if the fight was won: the team in full, friends
  * at home a share. A calmed Clutterkin comes home only from a fight that was
- * won. There is one friend of each kind: calming a kind you already have
+ * won. A fight teaches by its size: each of them is worth something, and one
+ * met on its own is worth only a share of that (`lone` in the summary says
+ * so). There is one friend of each kind: calming a kind you already have
  * sends it off happy and gives your friend of that kind the experience
  * (and, if the visitor was an Heirloom, its colours).
  */
 export function settleUp(state, battle) {
   const won = battle.phase === 'won';
   const foes = battle.units.filter((unit) => unit.side === 'foe');
-  const summary = { won, xp: 0, gains: [], joined: [], visited: [], heirlooms: [] };
+  const summary = { won, xp: 0, lone: foes.length === 1 && !SPECIES[foes[0].species].boss, gains: [], joined: [], visited: [], heirlooms: [] };
 
   for (const foe of foes) if (foe.hp <= 0 || (won && foe.settled)) summary.xp += xpFor(foe.species, foe.level);
+  if (summary.lone) summary.xp = Math.round(summary.xp * LONE_SHARE);
   for (const friend of state.friends) {
     const onTeam = state.team.includes(friend.id);
     const before = friend.level;

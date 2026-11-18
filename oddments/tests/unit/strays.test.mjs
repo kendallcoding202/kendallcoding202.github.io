@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Game } from '../../web/js/core/game.js';
 import { newState, reviveState } from '../../web/js/core/state.js';
-import { ROOMS, SPECIES, STRAYS, BREATHER, HEIRLOOM, START_TEAM, roomOf } from '../../web/js/core/balance.js';
+import { LONE_SHARE, xpFor, xpNeeded, ROOMS, SPECIES, STRAYS, BREATHER, HEIRLOOM, START_TEAM, roomOf } from '../../web/js/core/balance.js';
 import { WORLD, WILDS, SPOTS, PEOPLE, GREEN, DISTRICTS, ROAD_POINTS, POST, canStand, districtAt, spotOf, routeTo, roomy, standing, clearWay } from '../../web/js/core/world.js';
 import { rollStrays, fairStrays, strayPool, strayLevels, frontier, straysAbout } from '../../web/js/core/strays.js';
 import { maxHpOf, enterRoom, leaveRoom } from '../../web/js/core/rooms.js';
@@ -277,4 +277,46 @@ test('a save keeps the strays and how worn the team is; one tampered with gets n
   const out = fresh(8);
   out.travelTo('garden');
   assert.equal(back(out, (raw) => { raw.worn = { 1: 1, 2: 1, 3: 1 }; }).worn, null);
+});
+
+// ------------------------------------------------------------------ enough practice to be had
+
+test('strays come alone, in pairs and in threes; one alone teaches least, and a rest brings more out', () => {
+  const sizes = new Set();
+  const game = fresh(11);
+  for (let i = 0; i < 40; i++) { for (const stray of game.strays()) sizes.add(stray.foes.length); rollStrays(game.state); }
+  assert.deepEqual([...sizes].sort(), [1, 2, 3]);
+  assert.deepEqual(STRAYS.size, [1, 3]);
+  // Meet one alone and one in company: the lone one teaches its share, the others each their worth.
+  for (const want of [1, 2, 3]) {
+    const play = fresh(11);
+    let found = null;
+    for (let i = 0; i < 60 && !found; i++) { found = play.strays().find((stray) => stray.foes.length === want) || null; if (!found) rollStrays(play.state); }
+    assert.ok(found, `a group of ${want}`);
+    const worth = found.foes.reduce((sum, foe) => sum + xpFor(foe.species, foe.level), 0);
+    const result = meet(play, found.index);
+    if (result.won) assert.equal(result.xp, want === 1 ? Math.round(worth * LONE_SHARE) : worth);
+    assert.equal(result.lone, want === 1);
+  }
+});
+
+test('there is always enough practice: an outing among the strays is worth about a level, however far along you are', () => {
+  for (const room of ROOMS) {
+    const game = fresh(5);
+    // Everything before this place calm, so this is the furthest place open.
+    for (const before of ROOMS.slice(0, ROOMS.indexOf(room))) { game.state.rooms[before.id].clears = 1; game.state.rooms[before.id].calmed = 31; }
+    assert.equal(frontier(game.state).id, room.id);
+    let total = 0;
+    const outings = 30;
+    for (let i = 0; i < outings; i++) {
+      for (const stray of rollStrays(game.state)) {
+        const worth = stray.foes.reduce((sum, foe) => sum + xpFor(foe.species, foe.level), 0);
+        total += stray.foes.length === 1 ? Math.round(worth * LONE_SHARE) : worth;
+      }
+    }
+    // What a team about to face this place's ringleader needs for its next level.
+    const level = room.path[room.path.length - 1].bossLevel - 1;
+    const share = total / outings / xpNeeded(level);
+    assert.ok(share > 0.7 && share < 2.2, `${room.id}: the strays of one outing are worth ${share.toFixed(2)} of a level at level ${level}`);
+  }
 });
