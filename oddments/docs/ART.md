@@ -19,9 +19,10 @@
 | The lane, as a fight is seen against it | **Generated for this game** | 1 image (`bg_lane`), asked for in the words Pawst Lives used for its eight room paintings, so it sits beside them. It is what a fight with strays, out on the lane, is seen against |
 | App icon | **Generated for this game** | 1 image: the house-sitter with a lantern and a calm Hopmote (the dust under the bed). `tools/ios-art.py` makes the icon from it |
 | The insides of the seven buildings you walk into | **Generated for this game** | 21 images, three to a room, which became 98 pictures (below) |
+| The grown-up form of each of the forty kinds | **Generated for this game** | 40 images, one a kind, each painted from the kind's own Pawst Lives picture so that it is plainly the same creature, older and bigger (below) |
 | Launch image and loading screen | Painted from the game's own world by `tools/postcard.mjs` | A postcard of the lane, home in the middle; nothing generated |
 
-**Thirty-seven images have been generated in all.** The first fourteen were each agreed before they were made. Twenty-one are the rooms, one is the lane seen as a fight's backdrop, and one is the sheet of things for the country, made on 16 November 2026 after the owner approved spending on them ("I approve spending on the rooms and anything we need for the game, I want a polished good looking game"). Every one of the thirty-seven came out usable on the first attempt (one thing on the last sheet, a milestone, is not used). One has been touched up since, in code and for nothing: on the icon the pencil in her hair was painted lying on top of the bun, and `tools/ios-art.py` grows hair over its lower end so that it comes out of the bun instead. The archived original is as it was painted. Close up, the covered patch is a little softer than the hair round it; a repaint would be one more image.
+**One hundred and three images have been generated in all, and seventy-seven of them are used.** Thirty-seven are everything before the grown-up forms, and each of those is in the game. Sixty-six were made for the grown-up forms on 18 November 2026, after the owner said "yes you can start on the new forms": twenty-two to a first brief (the young one, with new things added), which came out as the young one in the same pose wearing something, and were set aside when the owner said "Make sure the change is obvious enough"; eight to try a bolder brief two ways, four with the young one's picture to work from and four from words alone (the four from words alone drifted from the Pawst Lives look and were set aside); and thirty-six more to the bolder brief with the picture. The forty in the game are those thirty-six and the four of the trial that were painted from the picture. Of the first thirty-seven: the first fourteen were each agreed before they were made. Twenty-one are the rooms, one is the lane seen as a fight's backdrop, and one is the sheet of things for the country, made on 16 November 2026 after the owner approved spending on them ("I approve spending on the rooms and anything we need for the game, I want a polished good looking game"). Every one of those thirty-seven came out usable on the first attempt (one thing on the last sheet, a milestone, is not used). One has been touched up since, in code and for nothing: on the icon the pencil in her hair was painted lying on top of the bun, and `tools/ios-art.py` grows hair over its lower end so that it comes out of the bun instead. The archived original is as it was painted. Close up, the covered patch is a little softer than the hair round it; a repaint would be one more image.
 
 ### The world's two images
 
@@ -70,7 +71,6 @@ The four candidates used the Pawst Lives sprite style prompt word for word (`too
 | Count | What | Notes |
 | --- | --- | --- |
 | 1 | The house-sitter, final sprite | One of the four candidates, or a repaint at Pawst Lives proportions. A repaint would want its front and back views repainted to match. |
-| 40 | Grown-up forms | Only if growing up is ever added: it is not in this version, on purpose (see `DESIGN.md`). One per kind. All forty have a name in the table of kinds; eighteen have a line for the painter (below). Bosses do not grow. |
 | 1 | Things for the world | One sheet of painted gateways. Every place is built and painted now, and the country between has its own sheet of things. It shares the lane's grass: a ground of its own (a meadow, a ploughed field) would be one more image each. |
 | 17 | Icons | Six elements, three Calls, three stats (Health exists), four tabs, the Heirloom mark. |
 | 1 | Title art | The app icon is painted. |
@@ -87,37 +87,63 @@ Needs **no** new images:
 
 Optional, not counted: front and back views of the neighbours if they are ever to walk about, and of the Clutterkin that follow you (48 kinds, so best done a sheet at a time and only for the ones that walk with you most).
 
-## The eighteen grown-up forms named so far
+## The forty grown-up forms
 
-| Kind | Grows up into | One line for the painter |
-| --- | --- | --- |
-| Hopmote | Lintelope | The same dust rabbit, bigger, with antlers made of bent wire coat hangers. |
-| Eelastic | Toeviathan | A long thigh-high stocking sea serpent with a darning-needle fin. |
-| Crumbwisp | Crustwraith | A toasted-sandwich ghost trailing a cloak of melted cheese. |
-| Wishclock | Wishmane | A dandelion lion: a full seed-head mane on a leafy body. |
-| Pricklebud | Briartusk | A boar grown from a whole rose hedge, thorn tusks, three roses. |
-| Grumbuzz | Rumblepatch | A heavier, armoured bee with a fencing foil for a sting. |
-| Shellfarer | Seawhorl | The snail in an admiral's hat, its shell a little galleon. |
-| Gnomudgeon | Gnomarch | The gnome crowned with a flowerpot, a wheelbarrow for a throne. |
-| Crimpet | Corkhorn | A stag beetle with a corkscrew horn and a shell of many caps. |
-| Strayglow | Floodglow | A knightly power strip: six sockets for a visor, cable for a cape. |
-| Snaffle | Snafflemore | The rat in a colander helmet with a spatula halberd. |
-| Hermitin | Clangster | A lobster that has moved up to a whole dented dustbin, the lid for a hat. |
-| Frayling | Woolligan | A hulking troll knitted from a whole unravelling jumper, sleeves trailing. |
-| Preenager | Kingpinion | The feather-duster pigeon grown stout, in a waistcoat, with a pocket watch. |
-| Scrumpling | Scrumplord | The dumpling grown to a whole steamer basket, lid for a helmet, steam for a plume. |
-| Embernip | Scorchfoot | The chilli grown long and horned, trailing a string of smaller chillies like a tail of sparks. |
-| Eggallant | Eggalahad | The egg in a silver egg cup with a toast-soldier lance and a teaspoon shield. |
-| Wibblet | Blancmangler | A towering moulded jelly in three tiers, a cherry on each, quivering with rage. |
+Every kind that can be a friend has one (ringleaders do not grow). Each was painted from the young one's own picture, with a brief that asks for a new drawing: a new pose, a bigger build and a changed outline, so that the change is plain at a glance and it is still plainly the same creature. The whole brief for each is in `tools/art-manifest.mjs`; this is the start of it. A grown form's picture is kept a tenth larger than a young one's, and the game draws it bigger again. Its Heirloom colours are the same recolour as its kind's, made by `tools/heirlooms.py`.
+
+| Kind | Grows up into | At level | The brief begins |
+| --- | --- | --- | --- |
+| Hopmote | Lintelope | 8 | A tall, proud stag-like beast made entirely of grey dust and lint. |
+| Eelastic | Toeviathan | 8 | A huge sea serpent made of one very long blue-and-yellow striped stocking. |
+| Crumbwisp | Crustwraith | 8 | A towering hooded wraith made of burnt toast. |
+| Wishclock | Wishmane | 9 | A proud lion made from a dandelion plant. |
+| Pricklebud | Briartusk | 9 | A great wild boar made of a whole rose hedge, head lowered to charge. |
+| Grumbuzz | Rumblepatch | 9 | A huge, heavy bumblebee standing upright like a wrestler, twice as broad as before. |
+| Shellfarer | Seawhorl | 9 | A grand sea snail rearing up tall on a wave-shaped foot. |
+| Gnomudgeon | Gnomarch | 9 | A stout garden-gnome king standing tall with one boot up on an upturned flowerpot. |
+| Crimpet | Corkhorn | 9 | A hulking rhinoceros beetle reared up on its hind legs like a strongman, twice the size. |
+| Strayglow | Floodglow | 9 | A tall armoured knight built from electrical fittings. |
+| Snaffle | Snafflemore | 9 | A big, burly, broad-shouldered brown rat standing tall like a bandit chief. |
+| Hermitin | Clangster | 10 | A huge red lobster-like hermit crab rearing up with both enormous claws raised and snapping. |
+| Frayling | Woolligan | 10 | A hulking troll knitted from a whole red-and-white striped woolly jumper. |
+| Preenager | Kingpinion | 10 | A big, stout, barrel-chested pigeon boss standing with wings on hips. |
+| Scrumpling | Scrumplord | 11 | A big warlord dumpling. |
+| Embernip | Scorchfoot | 11 | A tall, lean, long-limbed red chilli-pepper devil standing upright with arms folded and a swaggering grin. |
+| Eggallant | Eggalahad | 11 | A tall noble egg knight striding forward. |
+| Wibblet | Blancmangler | 11 | A towering wobbling jelly monster in three big tiers like a wedding cake, each tier a deeper pink. |
+| Shimmerbell | Glistenveil | 12 | A tall, queenly jellyfish made of soap bubbles. |
+| Slipsud | Latherback | 12 | A massive pink soap slug reared up like a walrus, three times as big, shaped like a great new bar of soap. |
+| Fluffolith | Linthenge | 12 | A towering giant made of blue-grey dryer lint with button eyes, built like a ring of standing stones. |
+| Pegadile | Clampodile | 12 | A long, heavy crocodile built from dozens of wooden clothes pegs, rearing its head up with jaws wide open. |
+| Footnote | Appendix | 13 | A long, thick green bookworm reared up tall in an S shape out of a towering. |
+| Dribblewax | Candelabrute | 13 | A wax giant: a very tall. |
+| Blottle | Wellspill | 13 | A great wave of dark-blue ink towering up and curling over like a breaking wave out of a large tipped-over glass inkwell, with two big dripping arms spread wide, long splashes and drops flying, white glowing eyes high in the crest of the wave, a gold fountain-pen nib on its head like a crow. |
+| Inkspine | Scrivenspine | 13 | A big porcupine standing upright on its hind legs like a stern clerk, with round glasses on its nose. |
+| Foldwing | Broadsheet | 13 | A tall, elegant origami heron folded from many sheets of newspaper. |
+| Gutterflit | Eaveswoop | 14 | A big purple bat swooping with enormous wings spread wide, each wing covered in overlapping orange. |
+| Shingleskink | Slatedrake | 14 | A big, heavy, broad gecko climbing upward with its body curved in an S, three times as bulky as before. |
+| Vanecrow | Galecomb | 14 | A large, proud green-copper weathercock rooster with wings spread wide and beak open, crowing into a gale. |
+| Spoutling | Grotesque | 14 | A massive hunched stone grotesque crouching on a carved stone ledge, twice as big and broad as before. |
+| Emberdrift | Smokecrown | 14 | A tall towering spirit of purple smoke rising in a great twisting column out of a brick chimney stack with two terracotta pots, with broad smoky shoulders, two long arms of smoke, glowing ember eyes and a wide ember grin, wearing a tall crown made of rings of smoke set with glowing embers like jewels, sparks drifting u. |
+| Cogscuttle | Cogmarshal | 15 | A big brass clockwork beetle standing upright on its hind legs like a general on parade. |
+| Stalwind | Marchwind | 15 | A tall tin toy drum major marching with one knee raised high. |
+| Tocktalon | Midnightjar | 15 | A large night bird bursting out of the top of a tall wooden cuckoo-clock tower with its wings spread wide. |
+| Lampmourn | Lanternlorn | 15 | A large ghostly moth with four great tattered wings spread wide, each with a softly glowing eye spot. |
+| Crankjaw | Jackanapes | 15 | A tall, gangly jester sprung high out of a big fancy striped box on a long coiled spring. |
+| Tanglecoil | Anacorda | 16 | A gigantic snake made of thick braided black power cables with red, yellow and green wires woven through. |
+| Grimeshade | Gloomdrift | 16 | A large, tall, drifting wraith of dark dust and cobwebs with glowing cyan eyes. |
+| Bumpabout | Rovabout | 16 | A big all-terrain robot vacuum cleaner raised high on four chunky off-road wheels with springs. |
 
 ## Making art
 
 ```sh
 NODE_USE_ENV_PROXY=1 node tools/gen-art.mjs   # generates only what is in the manifest and missing. Costs money.
+                                              # (A grown-up form is painted from its kind's picture: set ART_REF_DIR to a folder of the
+                                              # Pawst Lives originals to work from those; otherwise the game's own small copy is used.)
 python3 tools/process-art.py                  # trims and sizes art/raw/ into web/assets/, cuts the sheets, makes the ground tiles
 python3 tools/ios-art.py                      # makes the app icon from the icon painting
 node tools/postcard.mjs                       # paints the loading screen and launch image from the game's own world (needs Playwright)
-python3 tools/heirlooms.py                    # repaints every Heirloom; contact sheet in art/review/heirlooms.jpg
+python3 tools/heirlooms.py                    # repaints every Heirloom, young and grown; contact sheets in art/review/
 ```
 
 Nothing is generated unless it is listed in `tools/art-manifest.mjs`, and nothing goes on that list until it has been agreed.

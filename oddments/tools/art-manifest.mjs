@@ -47,6 +47,28 @@ const WORLD_STYLE =
   'vibrant saturated colors, sticker-like, chunky and cute. ' +
   'No ground, no shadow, no text, no letters, no numbers, no border. Transparent background.';
 
+// A kind's grown-up form, painted from the kind's own picture (the Pawst Lives original, or the
+// game's copy of it) so that it is plainly the same creature, older. Agreed on 18 November 2026:
+// "yes you can start on the new forms", and then: "Make sure the change is obvious enough."
+// A first brief ("the same creature, with these things added") gave paintings that were the young
+// one in the same pose wearing something new, which was not obvious enough. This brief asks for a
+// new drawing: a new pose, a bigger build, a changed outline, and the new features drawn large; and
+// every description below says what the new shape is. Everything faces left, as the monsters do.
+// (The style is the Pawst Lives sprite style, less "chibi": a grown one has a smaller head for its body.)
+const GROWN_STYLE =
+  'Style: clean 2D mobile game art, bold dark outline, flat cel shading with soft highlights, ' +
+  'vibrant saturated colors, sticker-like, chunky cartoon proportions, cute but with attitude. ' +
+  'Full body visible with empty margin on all sides, centered, a single character only, ' +
+  'no ground, no shadow, no text, no border. Transparent background.';
+const grown = (base, desc) => ({
+  id: `${base}_grown`, kind: 'grown', ref: base, size: '1024x1024', quality: 'medium', transparent: true,
+  prompt:
+    `A single game monster sprite. The reference picture shows this creature when it was young and small. Paint the same creature fully grown up, as a new drawing: ${desc} ` +
+    'It has to look obviously different from the reference picture at a glance: much bigger and more heavily built, with sturdier grown-up proportions (a smaller head for its body, a longer and stronger body), in a new, bolder pose that is NOT the pose of the reference picture, and with its new features drawn large. ' +
+    'It must still be recognisably the same creature: the same materials, the same colours, the same kind of face and eyes, the same drawing style. ' +
+    `Facing left in side three-quarter view, proud and fierce with a hint of mischief. An original creature, not based on any existing game, film or cartoon character. ${GROWN_STYLE}`,
+});
+
 // ---- the insides of buildings ----
 // A room you walk into is three pictures: a sheet of twelve things that stand in it (cut apart by
 // tools/process-art.py, in the order given), its back wall seen straight on, and its floor seen
@@ -255,4 +277,74 @@ export const ART = [
     ['a friendly scarecrow in a patched coat and a straw hat', 'a neat pile of sawn logs', 'a big mossy rock', 'a short section of white picket fence'],
     ['an old wooden wheelbarrow full of pumpkins', 'a red mailbox on a wooden post', 'a low stone milestone with moss on it and no words', 'a small round pond with lily pads, lying flat, seen from directly above'],
   ]),
+  // ---- the keys: one for each place, given when it is calmed ----
+  // Asked for on 18 November 2026: "what if we got special looking keys when clearing an area or a house?"
+  // (tools/process-art.py cuts the sheet into its eight keys, in the order of the places.)
+  {
+    id: 'world_keys', kind: 'sheet', size: '1536x1024', quality: 'medium', transparent: true,
+    prompt:
+      'A sprite sheet for a game: exactly eight separate ornate old-fashioned door keys arranged in a neat grid of two rows and four columns, evenly spaced, ' +
+      'each centred in its own cell with clear empty space all around it, none touching or overlapping, all drawn at the same size, ' +
+      'each key lying on a slant with its bow (the handle end) at the top left and its teeth at the bottom right. ' +
+      'Every key is plainly different from the others, with its own colour and its own shape of bow. ' +
+      'Row one, left to right: a green wrought-iron garden-gate key whose bow is shaped like a leaf, with a small daisy and a little moss on it; ' +
+      'a tin key cut from a tin can whose bow is a crimped red bottle cap, with a ring-pull hanging from it; ' +
+      'a warm copper pantry key whose bow is shaped like a slice of toast with a bite taken out, with a tiny cherry charm; ' +
+      'a pale blue enamel laundry key whose bow is a ring of shiny soap bubbles, with a tiny wooden clothes peg clipped to it. ' +
+      'Row two, left to right: an old brass library key whose bow is shaped like an open book, with a red ribbon tassel; ' +
+      'a silver rooftop key whose bow is a crescent moon with a star, with a tiny weathercock on top; ' +
+      'a golden clockwork key whose bow is the two wings of a clock winding key, set with a small gear and a clock hand; ' +
+      'a heavy black iron skeleton key whose bow is a swirl of grey dust around one small glowing red light, with a short length of black cable tied to it. ' +
+      `${WORLD_STYLE}`,
+  },
+  // (The sheet's rooftop key came out as a star set inside a crescent, which reads as an emblem rather than
+  // as a moon over rooftops. This one is used in its place: the same key, with a chimney pot and no star.)
+  {
+    id: 'world_key_rooftops', kind: 'key', size: '1024x1024', quality: 'medium', transparent: true,
+    prompt:
+      'A single ornate old-fashioned door key for a game, lying on a slant with its bow (the handle end) at the top left and its teeth at the bottom right: ' +
+      'a silver rooftop key whose bow is a plain crescent moon with a small terracotta chimney pot and a wisp of smoke sitting in its curve, and a tiny golden weathercock standing on top of the moon. No star anywhere. ' +
+      `One object only, centred with empty margin on all sides. ${WORLD_STYLE}`,
+  },
+  // ---- grown-up forms: one for each of the forty kinds, in the order of the table of kinds ----
+  grown('dustbunny', 'a tall, proud stag-like beast made entirely of grey dust and lint: a big jackalope standing high on four long strong legs with its chest out and head held up, a great branching pair of antlers made of bent wire coat hangers, a thick shaggy mane of lint down its neck and chest, long ears swept back, glowing red eyes, with buttons, a marble and one earring caught in its fur.'),
+  grown('sockeel', 'a huge sea serpent made of one very long blue-and-yellow striped stocking, rearing up high in three great loops like a sea monster rising out of the water, with a tall fin of darning needles all down its back, a frilled ribbed sock-cuff around its head like a mane, a forked tail made from the heel and the toe, the same wide toothy mouth and googly eyes.'),
+  grown('toastghost', 'a towering hooded wraith made of burnt toast: a tall stack of three thick slices of burnt toast for a body, draped in a long hooded cloak of melted cheese that hangs in dripping sleeves, two long reaching arms of toast crust, burning hollow eyes under the hood, the pat of butter melting on top, rising on a great swirling column of smoke.'),
+  grown('dandepuff', 'a proud lion made from a dandelion plant, standing on four strong legs of twisted green stems with one front paw raised and its mouth open in a roar: a big body of layered green dandelion leaves, a huge round mane of white seed fluff around its frowning face, a long stem tail ending in a seed-puff tuft, seeds blowing off the mane.'),
+  grown('thornhog', 'a great wild boar made of a whole rose hedge, head lowered to charge: a massive humped body of tangled green thorny stems and leaves, two huge curved thorn tusks, a ridge of long thorns down its back, four sturdy legs, and three big open red roses blooming on its shoulders.'),
+  grown('grumblebee', 'a huge, heavy bumblebee standing upright like a wrestler, twice as broad as before, in a patchwork quilted waistcoat, with four thick arms: two fists on its hips and two holding a big wooden honey dipper dripping honey like a club; large powerful wings, a fluffy collar, the same furious face.'),
+  grown('snailor', 'a grand sea snail rearing up tall on a wave-shaped foot, wearing an admiral\'s two-cornered hat and gold-fringed shoulder pieces, its spiked teal shell grown into a whole little sailing ship with three masts, striped sails and a flag, an anchor on a chain, a brass telescope held up to one eye stalk.'),
+  grown('gnome', 'a stout garden-gnome king standing tall with one boot up on an upturned flowerpot: a very long white beard down to his boots, a big terracotta flowerpot crown with flowers growing out of it on top of his chipped red hat, a cloak made of a green garden sack, holding a garden spade like a royal sceptre with his fishing rod over his shoulder.'),
+  grown('capbeetle', 'a hulking rhinoceros beetle reared up on its hind legs like a strongman, twice the size, with one enormous horn twisted like a corkscrew and two smaller side horns, a domed shell covered in many overlapping bottle caps in red, gold, green and blue like scale armour, four thick arms flexing.'),
+  grown('sparkplug', 'a tall armoured knight built from electrical fittings: a long white power strip with a row of sockets for its body, a white plug with two metal prongs for its head like a helmet visor with yellow eyes, a thick black cable flowing behind as a cape, holding up a big blazing floodlight lamp on a pole that throws bright rays, with crackling yellow sparks around it.'),
+  grown('ratscal', 'a big, burly, broad-shouldered brown rat standing tall like a bandit chief: a metal colander helmet, a long patched coat, a bulging sack of loot over one shoulder with a fish bone and a cheese rind poking out, a kitchen spatula carried like a halberd, a long thick tail, one torn ear, a gold tooth.'),
+  grown('cancrab', 'a huge red lobster-like hermit crab rearing up with both enormous claws raised and snapping, wearing a whole dented metal dustbin as its shell with the lid on top like a helmet, long whip antennae, a broad fanned tail showing below the bin, twice the size of before.'),
+  grown('sockgoblin', 'a hulking troll knitted from a whole red-and-white striped woolly jumper, hunched forward on long thick arms with huge mitten fists on the ground, a small head with two big button eyes and a stitched grin, the jumper unravelling into long trailing strands of wool, a ball of wool with two knitting needles stuck in it on its back.'),
+  grown('coothug', 'a big, stout, barrel-chested pigeon boss standing with wings on hips: a black bowler hat, a buttoned waistcoat with a gold pocket-watch chain, the same eyepatch and red neckerchief, a broad feather-duster tail fanned out behind like a peacock\'s, chest puffed out, a toothpick in its beak.'),
+  grown('dumpling', 'a big warlord dumpling: a large round steamed dumpling body armoured in a stack of two bamboo steamer baskets, the steamer lid worn as a wide round helmet, a great plume of steam rising from the top, thick arms, a soy-sauce dish for a shield and a pair of long chopsticks held like a spear, standing with feet wide apart, the same angry face.'),
+  grown('pepperimp', 'a tall, lean, long-limbed red chilli-pepper devil standing upright with arms folded and a swaggering grin: a long curved chilli-pepper body, great sweeping curved horns, a big green stalk and leaves like a crest of hair, both feet and both hands wreathed in bright flames, a long whip-like tail ending in a large flame, and a string of dried red chillies worn across its chest like a sash. No wings.'),
+  grown('eggknight', 'a tall noble egg knight striding forward: the egg sits in a tall shining silver egg cup like a suit of armour with silver gauntlets and boots, a long cape made of a checked napkin flying behind, a very long toast-soldier lance held upright, a big round saucer shield with a blue pattern, a tall plume of cress on its cracked shell helmet.'),
+  grown('jellywobble', 'a towering wobbling jelly monster in three big tiers like a wedding cake, each tier a deeper pink, with two heavy jelly arms raised and dripping, a cherry on top and a ring of cherries round each tier, a frill of whipped cream at the base, the same cross face on the middle tier, leaning forward.'),
+  grown('bubblejelly', 'a tall, queenly jellyfish made of soap bubbles: one very large iridescent bubble dome for a head with a tall crown of bubbles on top, a long gown of foam and many long ribbon tentacles of rainbow soap film sweeping far below and behind like a train, two tentacle arms raised holding a big bubble wand that is blowing a stream of bubbles.'),
+  grown('soapslug', 'a massive pink soap slug reared up like a walrus, three times as big, shaped like a great new bar of soap, with a huge shaggy mane of white lather foam along its back and around its neck like a lion\'s, two long foam tusks, tall eye stalks, a bath plug on a chain round its neck, bubbles rising.'),
+  grown('lintgolem', 'a towering giant made of blue-grey dryer lint with button eyes, built like a ring of standing stones: enormous square shoulders and arms like stone pillars, a great stone-circle arch of pressed lint slabs across its back, small head sunk between the shoulders, fists resting on the ground like a gorilla, many wooden clothes pegs stuck along its arms like studs, and an odd sock hanging from one shoulder.'),
+  grown('pegsnapper', 'a long, heavy crocodile built from dozens of wooden clothes pegs, rearing its head up with jaws wide open: the jaws are one huge shiny metal bulldog clip with jagged teeth, a thick peg-plated tail curled up, four strong peg legs, and a washing line strung along its back between two peg posts with tiny socks and shirts pegged on like a crest.'),
+  grown('bookworm', 'a long, thick green bookworm reared up tall in an S shape out of a towering, leaning stack of five heavy old books, three times as long as before, wearing round spectacles and a tasselled scholar\'s cap, a red ribbon bookmark tied round its neck like a scarf, holding a quill pen in the tip of its tail, loose pages fluttering. No words or letters.'),
+  grown('candlecreep', 'a wax giant: a very tall, thick pillar candle that has melted and set many times into a hulking figure with broad sloping shoulders, heavy arms of dripped wax reaching to the ground, a long beard of wax drips, a big bright flame burning on its head, standing in a wide brass dish with a ring handle, a brass candle snuffer hanging at its side, the same sly melted face.'),
+  grown('inkblot', 'a great wave of dark-blue ink towering up and curling over like a breaking wave out of a large tipped-over glass inkwell, with two big dripping arms spread wide, long splashes and drops flying, white glowing eyes high in the crest of the wave, a gold fountain-pen nib on its head like a crown.'),
+  grown('quillhog', 'a big porcupine standing upright on its hind legs like a stern clerk, with round glasses on its nose, a huge fan of long feathered quill pens with inky tips spread wide behind it like a peacock\'s tail, ink-stained paws, a long unrolled paper scroll trailing from one paw with a red wax seal, a quill held in the other paw like a sword. No words or letters.'),
+  grown('papercrane', 'a tall, elegant origami heron folded from many sheets of newspaper, standing on long folded legs with its huge wings spread wide open, a long curved neck, a long sharp folded beak, a fan tail of folded paper pleats, a folded paper hat as a crest. The newsprint is only tiny grey lines, no readable letters.'),
+  grown('gutterbat', 'a big purple bat swooping with enormous wings spread wide, each wing covered in overlapping orange, red and gold autumn leaves like feathers, large ears, a fluffy ruff of leaf litter, an acorn-cup cap, clutching a twig of leaves in its feet, a scatter of raindrops and blown leaves around it.'),
+  grown('slategecko', 'a big, heavy, broad gecko climbing upward with its body curved in an S, three times as bulky as before, still a gecko with sticky round toes: thick armour of overlapping grey roof slates over its whole back and tail like a rooftop, a tall row of curved orange ridge tiles down its spine, two terracotta chimney pots on its back puffing curls of warm smoke, a patch of green moss, a thick curled tail, bright yellow eyes. No wings, no fire: not a dragon.'),
+  grown('weathercock', 'a large, proud green-copper weathercock rooster with wings spread wide and beak open, crowing into a gale: a tall wild comb and very long streaming tail feathers swept back by the wind, perched on top of a tall ornate weather vane with a spinning arrow and three wind cups, big swirls of wind curling round it. No letters on the vane.'),
+  grown('gargoylet', 'a massive hunched stone grotesque crouching on a carved stone ledge, twice as big and broad as before, with huge curled ram horns, great stone wings spread wide, long arms with heavy claws gripping the ledge, thick moss and little ferns growing on its back, a stream of rainwater pouring from its wide-open mouth, a bird\'s nest with eggs on one shoulder.'),
+  grown('chimneywisp', 'a tall towering spirit of purple smoke rising in a great twisting column out of a brick chimney stack with two terracotta pots, with broad smoky shoulders, two long arms of smoke, glowing ember eyes and a wide ember grin, wearing a tall crown made of rings of smoke set with glowing embers like jewels, sparks drifting up.'),
+  grown('gearbeetle', 'a big brass clockwork beetle standing upright on its hind legs like a general on parade: a brass peaked cap, shoulder pieces made of cogs, a chest full of small gear medals, a long clock hand held like a sabre, wing cases open showing whirring gears inside, a large wind-up key on its back, four arms.'),
+  grown('tintrooper', 'a tall tin toy drum major marching with one knee raised high: a very tall plumed hat, a long red coat with gold braid and medals, a big toy bass drum strapped on his front, a long baton with a ball on the end thrust high in the air, a large wind-up key in his back, chipped paint.'),
+  grown('cuckoo', 'a large night bird bursting out of the top of a tall wooden cuckoo-clock tower with its wings spread wide: dark midnight-blue feathers speckled with tiny stars, a long tail, a wide open beak, the clock house below it with a pendulum and two pine-cone weights swinging on chains, its little door hanging open, a small crescent moon charm. No numbers.'),
+  grown('mothphantom', 'a large ghostly moth with four great tattered wings spread wide, each with a softly glowing eye spot, long feathery antennae, a pale fluffy body trailing off into wisps, carrying a big old glowing paper lantern on a hooked stick in its front legs, a drift of moth dust and a warm halo of light around it.'),
+  grown('jackbox', 'a tall, gangly jester sprung high out of a big fancy striped box on a long coiled spring, leaning forward with long arms spread wide: a patchwork harlequin coat with long drooping sleeves, a three-pointed jester hat with bells, a ruffled collar, a wide sharp-toothed grin, juggling three coloured balls, the crank handle on the box spinning.'),
+  grown('cordserpent', 'a gigantic snake made of thick braided black power cables with red, yellow and green wires woven through, wound in huge heavy coils round a big wooden cable drum, its head reared up high: a large three-pin plug for a head with bright orange eyes and metal prong fangs, crackling yellow sparks jumping between its coils, a frayed sparking tail. No hood.'),
+  grown('dustwraith', 'a large, tall, drifting wraith of dark dust and cobwebs with glowing cyan eyes: long ears swept back into a ragged hood, a long body trailing away into a wide drift of dust, two long thin arms with trailing ragged sleeves reaching forward, cobwebs strung between its ears and arms, and lost things caught in it: a coin, an old key, a spoon, a chess pawn.'),
+  grown('robodisc', 'a big all-terrain robot vacuum cleaner raised high on four chunky off-road wheels with springs: a wide round disc body with a red glowing visor of angry eyes, a sturdy front bumper bar, two bright headlamps, large spinning side brushes like whiskers, a tall dust bin on its back, and two antennas, one flying a tiny flag.'),
 ];

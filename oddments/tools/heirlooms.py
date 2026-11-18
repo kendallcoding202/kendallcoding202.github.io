@@ -10,8 +10,10 @@ code, so a rare one costs no new art. For each kind, LOOKS says how:
 
 Dark outline pixels are left alone so the linework stays the same.
 
-  python3 tools/heirlooms.py          writes web/assets/sprites/<kind>_heirloom.webp
-                                      and a contact sheet at art/review/heirlooms.jpg
+  python3 tools/heirlooms.py          writes web/assets/sprites/<kind>_heirloom.webp,
+                                      the same for each kind's grown-up form
+                                      (<kind>_grown_heirloom.webp), and contact sheets
+                                      at art/review/heirlooms.jpg and heirlooms_grown.jpg
 To replace a recolour with a painted sprite later, drop the painted
 <kind>_heirloom.webp into web/assets/sprites/ and remove the kind from LOOKS.
 """
@@ -113,22 +115,31 @@ def recolour(im, turn=0, dye=None, spare=None):
     return Image.fromarray((np.clip(out, 0, 1) * 255).round().astype(np.uint8), "RGBA")
 
 
-def main():
-    os.makedirs(REVIEW, exist_ok=True)
+def paint(suffix, review):
+    """Recolours every kind's sprite named <kind><suffix>.webp that exists. Returns how many."""
+    kinds = [kind for kind in LOOKS if os.path.exists(os.path.join(SPRITES, kind + suffix + ".webp"))]
     cell = 190
-    sheet = Image.new("RGB", (cell * len(LOOKS), cell * 2 + 22), (44, 37, 84))
+    sheet = Image.new("RGB", (cell * max(1, len(kinds)), cell * 2 + 22), (44, 37, 84))
     draw = ImageDraw.Draw(sheet)
-    for i, (kind, look) in enumerate(LOOKS.items()):
-        plain = Image.open(os.path.join(SPRITES, kind + ".webp")).convert("RGBA")
-        rare = recolour(plain, **look)
-        rare.save(os.path.join(SPRITES, kind + "_heirloom.webp"), "WEBP", quality=88, method=6)
+    for i, kind in enumerate(kinds):
+        plain = Image.open(os.path.join(SPRITES, kind + suffix + ".webp")).convert("RGBA")
+        rare = recolour(plain, **LOOKS[kind])
+        rare.save(os.path.join(SPRITES, kind + suffix + "_heirloom.webp"), "WEBP", quality=88, method=6)
         for row, art in enumerate((plain, rare)):
             thumb = art.copy()
             thumb.thumbnail((cell - 14, cell - 14))
             sheet.paste(thumb, (i * cell + (cell - thumb.width) // 2, row * cell + (cell - thumb.height) // 2), thumb)
         draw.text((i * cell + 6, cell * 2 + 4), kind, fill=(255, 255, 255))
-    sheet.save(os.path.join(REVIEW, "heirlooms.jpg"), quality=88)
-    print(f"painted {len(LOOKS)} heirlooms; contact sheet at art/review/heirlooms.jpg")
+    sheet.save(os.path.join(REVIEW, review), quality=88)
+    return len(kinds)
+
+
+def main():
+    os.makedirs(REVIEW, exist_ok=True)
+    young = paint("", "heirlooms.jpg")
+    # A grown-up form wears the same rare colours as its kind: the same recolour, of its own picture.
+    grown = paint("_grown", "heirlooms_grown.jpg")
+    print(f"painted {young} heirlooms and {grown} grown-up heirlooms; contact sheets at art/review/heirlooms.jpg and heirlooms_grown.jpg")
     _ = colorsys  # the maths above is colorsys.rgb_to_hsv / hsv_to_rgb, done on whole images
 
 

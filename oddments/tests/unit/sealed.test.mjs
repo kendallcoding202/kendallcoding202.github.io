@@ -63,8 +63,9 @@ test('everything that ships is a kind of file the game means to ship, and it is 
   const bytes = shipped.reduce((sum, path) => sum + statSync(path).size, 0);
   // (Most of it is pictures: about 35 KB for each of the forty kinds with its Heirloom, and about 250 KB for each
   // of the seven rooms you can walk into: a back wall, a floor and twelve things to stand on it. The limit was
-  // 4 MB until the rooms were painted, on 16 November 2026.)
-  assert.ok(bytes < 6_500_000, `${Math.round(bytes / 1024)} KB`);
+  // 4 MB until the rooms were painted, on 16 November 2026, and 6.5 MB until the forty grown-up forms were, on
+  // 18 November 2026: about 30 KB each, and as much again for each one's Heirloom colours.)
+  assert.ok(bytes < 8_500_000, `${Math.round(bytes / 1024)} KB`);
 });
 
 test('only this device\'s own storage is used, under the game\'s own name', () => {

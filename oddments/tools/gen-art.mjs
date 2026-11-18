@@ -3,13 +3,18 @@
 // Needs OPENAI_API_KEY in the environment (or a proxy that injects it).
 // Every image costs money: nothing is generated unless it is in the manifest
 // and missing, and the manifest only lists art that has been agreed.
-// An entry with `ref` is painted from a picture already made (art/raw/<ref>), so the
-// same character can be shown another way; if the service will not take a picture to
-// work from, the entry's words are used on their own instead.
+// An entry with `ref` is painted from a picture already made, so the same character can
+// be shown another way. The picture is looked for in art/raw/<ref>, then in the folder
+// named by ART_REF_DIR (the Pawst Lives originals, for a monster this game only has a
+// small copy of), then among the game's own sprites. If the service will not take a
+// picture to work from, the entry's words are used on their own instead.
 import { writeFile, readFile, mkdir, access } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
 import { ART } from './art-manifest.mjs';
 
 const OUT = new URL('../art/raw/', import.meta.url);
+const SPRITES = new URL('../web/assets/sprites/', import.meta.url);
+const REFS = process.env.ART_REF_DIR ? pathToFileURL(`${process.env.ART_REF_DIR.replace(/\/+$/, '')}/`) : null;
 const MODEL = process.env.ART_MODEL || 'gpt-image-2.6-flare';
 const KEY = process.env.OPENAI_API_KEY || 'sk-dummy';
 const CONCURRENCY = 4;
@@ -21,9 +26,12 @@ const exists = async (u) => access(u).then(() => true, () => false);
 
 /** The picture an entry is to be painted from: the original as it came, or as archived. */
 async function reference(id) {
-  for (const [ext, type] of [['png', 'image/png'], ['webp', 'image/webp']]) {
-    const url = new URL(`${id}.${ext}`, OUT);
-    if (await exists(url)) return { bytes: await readFile(url), type, name: `${id}.${ext}` };
+  for (const dir of [OUT, REFS, SPRITES]) {
+    if (!dir) continue;
+    for (const [ext, type] of [['png', 'image/png'], ['webp', 'image/webp']]) {
+      const url = new URL(`${id}.${ext}`, dir);
+      if (await exists(url)) return { bytes: await readFile(url), type, name: `${id}.${ext}` };
+    }
   }
   return null;
 }

@@ -25,7 +25,8 @@ RAW = os.path.join(ROOT, "art", "raw")
 OUT = os.path.join(ROOT, "web", "assets")
 
 # Longest side in pixels after trimming. Drawn at up to ~2x on retina phones.
-SIZES = {"human": 300, "mob": 240, "boss": 440, "icon": 128}
+# (A grown-up form is the same creature, bigger: its picture is kept a tenth larger than a young one's.)
+SIZES = {"human": 300, "mob": 240, "grown": 264, "boss": 440, "icon": 128}
 
 
 def kind_of(name):
@@ -35,6 +36,8 @@ def kind_of(name):
         return "boss"
     if name.startswith(("ic_", "el_")):
         return "icon"
+    if name.endswith("_grown"):
+        return "grown"
     return "mob"
 
 
