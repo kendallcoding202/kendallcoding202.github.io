@@ -10,6 +10,7 @@ import { KEY_ART } from './keys.js';
 // them now, and a web server asked for that many at once will now and then refuse one. (In the app
 // they come from the app itself, and this never happens.)
 const AGAIN_AFTER = 700; // milliseconds
+const AT_ONCE = 24; // how many pictures are being fetched at any moment
 function load(src, tries = 2) {
   return new Promise((resolve) => {
     const img = new Image();
@@ -39,8 +40,12 @@ export async function loadAssets(onProgress = () => {}) {
   sources.push('assets/bg/bg_lane.webp'); // what a fight with strays, out on the lane, is seen against
   for (const name of WORLD_ART) sources.push(worldSrc(name));
   sources.push(...ROOM_ART); // the insides of buildings: their walls, floors and furniture
-  sources.push(...KEY_ART); // the eight keys
+  sources.push(...KEY_ART); // a key for each place
+  // Fetched a few dozen at a time, not all at once: there are some hundreds, and a web server asked
+  // for that many in one breath refuses the odd one. (Each of these takes the next when it is done.)
   let done = 0;
-  await Promise.all(sources.map((src) => load(src).then(() => onProgress(++done / sources.length))));
+  let next = 0;
+  const one = async () => { while (next < sources.length) { await load(sources[next++]); onProgress(++done / sources.length); } };
+  await Promise.all(Array.from({ length: Math.min(AT_ONCE, sources.length) }, one));
   try { await document.fonts.load('700 16px Fredoka'); } catch { /* the system font will do */ }
 }
