@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Game } from '../../web/js/core/game.js';
 import { newState, reviveState } from '../../web/js/core/state.js';
-import { LONE_SHARE, xpFor, xpNeeded, ROOMS, SPECIES, STRAYS, BREATHER, HEIRLOOM, START_TEAM, roomOf } from '../../web/js/core/balance.js';
+import { LONE_SHARE, xpFor, xpNeeded, ROOMS, SPECIES, SPECIES_IDS, STRAYS, BREATHER, HEIRLOOM, START_TEAM, roomOf } from '../../web/js/core/balance.js';
 import { WORLD, WILDS, SPOTS, PEOPLE, GREEN, DISTRICTS, ROAD_POINTS, POST, canStand, districtAt, spotOf, routeTo, roomy, standing, clearWay } from '../../web/js/core/world.js';
 import { rollStrays, fairStrays, strayPool, strayLevels, frontier, straysAbout } from '../../web/js/core/strays.js';
 import { maxHpOf, enterRoom, leaveRoom } from '../../web/js/core/rooms.js';
@@ -90,7 +90,8 @@ test('strays are whoever lives where you have got to, at the strength of the fur
   for (const room of ROOMS) state.rooms[room.id].clears = 1;
   assert.equal(frontier(state).id, ROOMS[ROOMS.length - 1].id);
   // (All but the three kinds you set out with, who live nowhere on the lane: they come calling in calm places instead.)
-  assert.equal(strayPool(state).length, 40 - START_TEAM.length);
+  assert.equal(strayPool(state).length, new Set(ROOMS.flatMap((room) => room.path.flatMap((stop) => stop.pool.map(([id]) => id)))).size);
+  assert.equal(strayPool(state).length, SPECIES_IDS.filter((id) => !SPECIES[id].boss).length - START_TEAM.length);
   // Rarely, one is an Heirloom: about as often as anywhere not yet calm.
   let heirlooms = 0; let all = 0;
   for (let i = 0; i < 400; i++) for (const stray of rollStrays(state)) for (const foe of stray.foes) { all++; if (foe.heirloom) heirlooms++; }

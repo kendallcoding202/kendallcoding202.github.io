@@ -11,9 +11,9 @@ import {
 
 const ASSETS = fileURLToPath(new URL('../../web/assets/', import.meta.url));
 
-test('there are forty-eight Clutterkin: forty who can be friends and eight bosses, one to a place', () => {
-  assert.equal(SPECIES_IDS.length, 48);
-  assert.equal(SPECIES_IDS.filter((id) => !SPECIES[id].boss).length, 40);
+test('there are sixty-eight Clutterkin: sixty who can be friends and eight bosses, one to a place', () => {
+  assert.equal(SPECIES_IDS.length, 68);
+  assert.equal(SPECIES_IDS.filter((id) => !SPECIES[id].boss).length, 60);
   assert.deepEqual(SPECIES_IDS.filter((id) => SPECIES[id].boss), ['boss_hydra', 'boss_baron', 'boss_crumbwyrm', 'boss_spincycle', 'boss_tome', 'boss_warden', 'boss_clock', 'boss_vacuum']);
   assert.deepEqual(ROOMS.map((room) => room.path[room.path.length - 1].boss), SPECIES_IDS.filter((id) => SPECIES[id].boss), 'in the order their places come');
   // Every move in the tables is somebody's, and nobody has a move that is not in them.
@@ -161,7 +161,7 @@ test('every kind that can be a friend turns up somewhere in a place that is buil
   // And the second place has kinds of its own, not met in the first.
   const inGarden = new Set(ROOMS[0].path.flatMap((spot) => spot.pool.map(([id]) => id)));
   const onlyAlley = [...new Set(ROOMS[1].path.flatMap((spot) => spot.pool.map(([id]) => id)))].filter((id) => !inGarden.has(id));
-  assert.deepEqual(onlyAlley.sort(), ['cancrab', 'coothug', 'sockgoblin']);
+  assert.deepEqual(onlyAlley.sort(), ['brollybat', 'cancrab', 'conekin', 'coothug', 'sockgoblin', 'trolleypup']);
 });
 
 test('the house-sitter has three Calls and four looks, each with its sprite', () => {

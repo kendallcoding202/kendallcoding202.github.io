@@ -6,7 +6,7 @@ export const SAVE_VERSION = 2;
 export const TITLE = 'Clutterkin'; // the game's name, and what its creatures are called (one Clutterkin, many Clutterkin): clutter to some, kin to you
 
 export const TEAM_SIZE = 3;
-export const ROSTER_MAX = 60; // friends kept; one per kind, so never reached with 40 kinds
+export const ROSTER_MAX = 120; // friends kept; one per kind, so never reached: there are far fewer kinds than that
 export const MAX_LEVEL = 40;
 export const NAME_LENGTH = 12;
 
@@ -280,6 +280,87 @@ export const MOVES = {
   hosewhip: hit('Hose Whip', 'spark', 1.0, 0, 'Ribbed, for extra sting.'),
   fullsuction: sweep('Full Suction', 'spark', 0.6, 2, 'Hold on to something.'),
   bagburst: hit('Bag Burst', 'spark', 1.3, 3, 'Everything it ever ate: lowers Grit.', { sap: { stat: 'grit', by: 0.3, turns: 2 } }),
+  // ---- chapter two: twenty more kinds for the eight places ----
+  // Tintrunk
+  spoutsquirt: hit('Spout Squirt', 'suds', 1.0, 0, 'A cold jet, right in the eye.'),
+  fillup: mend('Fill Up', 'suds', 0.25, 'self', 3, 'Stands under a drip until it feels better.'),
+  roseshower: sweep('Rose Shower', 'suds', 0.7, 3, 'The whole sprinkler rose, over everyone.'),
+  // Fumblethumb
+  greenthumb: hit('Green Thumb', 'sprout', 1.0, 0, 'A firm prod with a muddy thumb.'),
+  fivefingerpinch: hit('Five-Finger Pinch', 'sprout', 1.65, 2, 'All of them at once, and it holds on.'),
+  scattersoil: sweep('Scatter Soil', 'sprout', 0.65, 3, 'A handful of earth for everybody.'),
+  // Brollyflap
+  ribjab: hit('Rib Jab', 'fluff', 1.0, 0, 'One bent rib, well aimed.'),
+  colddrip: sap('Cold Drip', 'fluff', 'pep', 0.2, 2, 'foes', 3, 'Down the back of every neck: lowers Pep.'),
+  gustdive: hit('Gust Dive', 'fluff', 1.65, 2, 'Catches the wind and comes down hard.'),
+  // Wonkwheel
+  wonkyram: hit('Wonky Ram', 'clank', 1.0, 0, 'Meant for your shins. Gets your ankle.'),
+  squeakywheel: hit('Squeaky Wheel', 'clank', 1.1, 2, 'A noise that slows anyone down: lowers Pep.', { sap: { stat: 'pep', by: 0.3, turns: 2 } }),
+  trolleydash: hit('Trolley Dash', 'clank', 1.75, 3, 'Downhill, no brakes.'),
+  // Coneling
+  flashamber: hit('Amber Wink', 'spark', 1.0, 0, 'One sharp flash.'),
+  conecharge: hit('Cone Charge', 'spark', 1.65, 2, 'Pointy end first.'),
+  hazardlights: sweep('Hazard Lights', 'spark', 0.65, 3, 'On, off, on, off, in everybody\'s eyes.'),
+  // Steepling
+  tagflick: hit('Tag Flick', 'suds', 1.0, 0, 'The paper tag, like a wet towel.'),
+  nicecupoftea: mend('Nice Cup of Tea', 'suds', 0.3, 'ally', 2, 'Puts a friend right. It always does.'),
+  stew: sweep('Stewed', 'suds', 0.65, 3, 'Far too strong, all over everyone.'),
+  // Whisklet
+  wirepeck: hit('Wire Peck', 'clank', 1.0, 0, 'Quick, and springy.'),
+  beatstiff: hit('Beat Stiff', 'clank', 1.65, 2, 'Round and round until it stands up by itself.'),
+  whipup: sweep('Whip Up', 'clank', 0.65, 3, 'Cream everywhere. Mostly on them.'),
+  // Gherkroak
+  sourspit: hit('Sour Spit', 'crumb', 1.0, 0, 'Sharp enough to make your eyes water.'),
+  brinesoak: boost('Brine Soak', 'crumb', 'grit', 0.5, 3, 'self', 3, 'A good long pickle: raises Grit.'),
+  jarslam: hit('Jar Slam', 'crumb', 1.75, 3, 'The whole jar, lid first.'),
+  // Steamstoat
+  hotfoot: hit('Hot Foot', 'spark', 1.0, 0, 'Still warm from the last shirt.'),
+  flatten: hit('Flatten', 'spark', 1.1, 2, 'Takes the stiffening out of anybody: lowers Grit.', { sap: { stat: 'grit', by: 0.3, turns: 2 } }),
+  steamburst: sweep('Steam Burst', 'spark', 0.65, 3, 'A hot, wet cloud over the lot of them.'),
+  // Hamperling
+  wickerbump: hit('Wicker Bump', 'fluff', 1.0, 0, 'Slow, scratchy, and it does not stop.'),
+  hamperlid: boost('Shut the Lid', 'fluff', 'grit', 0.5, 3, 'self', 3, 'Shuts itself in: raises Grit.'),
+  heapofwashing: hit('Heap of Washing', 'fluff', 1.75, 3, 'A week of it, all at once.'),
+  // Zipnip
+  zipnip: hit('Nip', 'clank', 1.0, 0, 'A pinch, like a zip on a chin.'),
+  zipup: hit('Zip Up', 'clank', 1.6, 2, 'All the way to the top in one go.'),
+  caughtfast: hit('Caught Fast', 'clank', 0.8, 3, 'Snags them and will not let go: lowers Grit.', { sap: { stat: 'grit', by: 0.3, turns: 2 } }),
+  // Stampling
+  thump: hit('Thump', 'clank', 1.0, 0, 'Down, firmly, in purple.'),
+  overdue: hit('Overdue', 'clank', 1.1, 2, 'Nobody argues with a stamp: lowers Oomph.', { sap: { stat: 'oomph', by: 0.3, turns: 2 } }),
+  stampstampstamp: sweep('Stamp, Stamp, Stamp', 'clank', 0.65, 3, 'One for each of them.'),
+  // Globlet
+  spinbump: hit('Spin Bump', 'fluff', 1.0, 0, 'A slow turn with some weight behind it.'),
+  curlround: boost('Curl Round', 'fluff', 'grit', 0.5, 3, 'self', 3, 'Tucks everything in: raises Grit.'),
+  roundtheworld: hit('Round the World', 'fluff', 1.75, 3, 'Once round, and into you.'),
+  // Statichare
+  staticnip: hit('Static Nip', 'spark', 1.0, 0, 'A small, mean crackle.'),
+  snowonthescreen: sap('Snow on the Screen', 'spark', 'oomph', 0.2, 2, 'foes', 3, 'Nobody can see what they are doing: lowers Oomph.'),
+  signaljolt: hit('Signal Jolt', 'spark', 1.65, 2, 'Every channel at once.'),
+  // Snagkite
+  taillash: hit('Tail Lash', 'fluff', 1.0, 0, 'A flick of ribbon bows.'),
+  catchthewind: boost('Catch the Wind', 'fluff', 'pep', 0.4, 3, 'self', 3, 'Finds a good breeze: raises Pep.'),
+  stringburn: hit('String Burn', 'fluff', 1.75, 3, 'Down the line, fast.'),
+  // Patchpaw
+  bearcuff: hit('Bear Cuff', 'fluff', 1.0, 0, 'Soft paw. Not a soft hit.'),
+  bearhug: mend('Bear Hug', 'fluff', 0.3, 'ally', 2, 'The one thing it was made for: mends a friend.'),
+  stuffingstorm: sweep('Stuffing Storm', 'fluff', 0.65, 3, 'It comes out at the seams and gets everywhere.'),
+  // Flurryglobe
+  snowballflick: hit('Snowball', 'suds', 1.0, 0, 'Small, cold, and down your collar.'),
+  shakeup: sap('Shake Up', 'suds', 'pep', 0.2, 2, 'foes', 3, 'Turns everything over: lowers Pep.'),
+  whiteout: sweep('White Out', 'suds', 0.7, 3, 'Nobody can see a thing.'),
+  // Burrowbeam
+  noselight: hit('Nose Light', 'spark', 1.0, 0, 'Straight in the eyes.'),
+  dazzle: hit('Dazzle', 'spark', 0.8, 2, 'They see spots for a while: lowers Oomph.', { sap: { stat: 'oomph', by: 0.3, turns: 2 } }),
+  fullbeam: hit('Full Beam', 'spark', 1.75, 3, 'Every last bit of battery.'),
+  // Scuffpup
+  scuff: hit('Scuff', 'fluff', 1.0, 0, 'A muddy toe-cap.'),
+  lacetrip: hit('Lace Trip', 'fluff', 0.8, 2, 'Round the ankles and down you go: lowers Pep.', { sap: { stat: 'pep', by: 0.3, turns: 2 } }),
+  theboot: hit('The Boot', 'fluff', 1.75, 3, 'Exactly what it sounds like.'),
+  // Dustpincer
+  sweepaside: hit('Sweep Aside', 'clank', 1.0, 0, 'Out of the way, with bristles.'),
+  panguard: boost('Pan Guard', 'clank', 'grit', 0.5, 3, 'self', 3, 'Gets behind the dustpan: raises Grit.'),
+  cleansweep: hit('Clean Sweep', 'clank', 1.75, 3, 'One long stroke, wall to wall.'),
 };
 
 // Anyone can do this instead of a move: sit tight until its next turn.
@@ -584,6 +665,151 @@ export const SPECIES = {
     notYet: 'reverses, beeping',
     grown: { at: 16, name: 'Rovabout' },
   },
+  // ---- chapter two: twenty more kinds, two or three to each of the eight places. Each grows up at the
+  // level the other kinds of its place do. ----
+  canphant: {
+    name: 'Tintrunk', element: 'suds', hp: 56, oomph: 10, grit: 13, pep: 6, huff: 5,
+    moves: [['spoutsquirt', 1], ['fillup', 3], ['roseshower', 6]],
+    blurb: 'A watering can somebody left out in the rain. It filled up and walked off.',
+    notYet: 'squirts you and backs away',
+    grown: { at: 9, name: 'Raintusker' },
+  },
+  glovecrab: {
+    name: 'Fumblethumb', element: 'sprout', hp: 40, oomph: 13, grit: 8, pep: 15, huff: 4,
+    moves: [['greenthumb', 1], ['fivefingerpinch', 3], ['scattersoil', 6]],
+    blurb: 'One gardening glove. The other is still in the shed, and they are not speaking.',
+    notYet: 'scuttles off sideways',
+    grown: { at: 9, name: 'Secateer' },
+  },
+  brollybat: {
+    name: 'Brollyflap', element: 'fluff', hp: 40, oomph: 13, grit: 8, pep: 16, huff: 4,
+    moves: [['ribjab', 1], ['colddrip', 3], ['gustdive', 6]],
+    fly: true,
+    blurb: 'Blew inside out in the gale of \'98 and has refused to fold ever since.',
+    notYet: 'snaps shut and sulks',
+    grown: { at: 10, name: 'Squallbrella' },
+  },
+  trolleypup: {
+    name: 'Wonkwheel', element: 'clank', hp: 50, oomph: 12, grit: 12, pep: 9, huff: 4,
+    moves: [['wonkyram', 1], ['squeakywheel', 3], ['trolleydash', 6]],
+    blurb: 'One wheel has always wanted to go somewhere else.',
+    notYet: 'veers off to the left',
+    grown: { at: 10, name: 'Trundlebeast' },
+  },
+  conekin: {
+    name: 'Coneling', element: 'spark', hp: 42, oomph: 13, grit: 9, pep: 14, huff: 4,
+    moves: [['flashamber', 1], ['conecharge', 3], ['hazardlights', 6]],
+    blurb: 'Nobody remembers what it was put there to warn about. It remembers.',
+    notYet: 'flashes amber at you',
+    grown: { at: 10, name: 'Beaconspire' },
+  },
+  teabagjelly: {
+    name: 'Steepling', element: 'suds', hp: 46, oomph: 11, grit: 11, pep: 10, huff: 4,
+    moves: [['tagflick', 1], ['nicecupoftea', 3], ['stew', 6]],
+    fly: true,
+    blurb: 'Left in the cup too long. It has gone strong, and a bit bitter.',
+    notYet: 'bobs back down into the cup',
+    grown: { at: 11, name: 'Teapotentate' },
+  },
+  whiskbird: {
+    name: 'Whisklet', element: 'clank', hp: 40, oomph: 14, grit: 8, pep: 15, huff: 4,
+    moves: [['wirepeck', 1], ['beatstiff', 3], ['whipup', 6]],
+    blurb: 'Beats eggs, cream, and anyone who calls it an egg beater.',
+    notYet: 'spins round on the spot',
+    grown: { at: 11, name: 'Whirlwhisk' },
+  },
+  picklefrog: {
+    name: 'Gherkroak', element: 'crumb', hp: 56, oomph: 10, grit: 14, pep: 6, huff: 5,
+    moves: [['sourspit', 1], ['brinesoak', 3], ['jarslam', 6]],
+    blurb: 'The last gherkin in the jar. It has had a long time to think.',
+    notYet: 'sinks back into its jar',
+    grown: { at: 11, name: 'Brinebelly' },
+  },
+  ironweasel: {
+    name: 'Steamstoat', element: 'spark', hp: 42, oomph: 13, grit: 9, pep: 14, huff: 4,
+    moves: [['hotfoot', 1], ['flatten', 3], ['steamburst', 6]],
+    blurb: 'A travel iron. It has been everywhere and pressed all of it flat.',
+    notYet: 'hisses and slides away',
+    grown: { at: 12, name: 'Starchback' },
+  },
+  baskettortoise: {
+    name: 'Hamperling', element: 'fluff', hp: 58, oomph: 9, grit: 15, pep: 5, huff: 5,
+    moves: [['wickerbump', 1], ['hamperlid', 3], ['heapofwashing', 6]],
+    blurb: 'Has been full since the summer. Nobody dares lift the lid.',
+    notYet: 'pulls its head under its lid',
+    grown: { at: 12, name: 'Wickerback' },
+  },
+  zipcrawler: {
+    name: 'Zipnip', element: 'clank', hp: 40, oomph: 14, grit: 8, pep: 16, huff: 3,
+    moves: [['zipnip', 1], ['zipup', 3], ['caughtfast', 6]],
+    blurb: 'Got stuck half way in 2009. Now it gets everything else stuck.',
+    notYet: 'zips itself up to the chin',
+    grown: { at: 12, name: 'Zipperpede' },
+  },
+  stamphopper: {
+    name: 'Stampling', element: 'clank', hp: 42, oomph: 13, grit: 9, pep: 14, huff: 4,
+    moves: [['thump', 1], ['overdue', 3], ['stampstampstamp', 6]],
+    blurb: 'Has said the same date since the ink ran dry.',
+    notYet: 'hops back onto its ink pad',
+    grown: { at: 13, name: 'Inkstomper' },
+  },
+  globehog: {
+    name: 'Globlet', element: 'fluff', hp: 56, oomph: 10, grit: 14, pep: 6, huff: 5,
+    moves: [['spinbump', 1], ['curlround', 3], ['roundtheworld', 6]],
+    blurb: 'A desk globe from before half these countries. It rolls where it likes.',
+    notYet: 'rolls away under a shelf',
+    grown: { at: 13, name: 'Worldwhirl' },
+  },
+  aerialhare: {
+    name: 'Statichare', element: 'spark', hp: 40, oomph: 14, grit: 8, pep: 16, huff: 4,
+    moves: [['staticnip', 1], ['snowonthescreen', 3], ['signaljolt', 6]],
+    blurb: 'Picks up three channels and a great deal of thunder.',
+    notYet: 'bounds to the next chimney',
+    grown: { at: 14, name: 'Dishleaper' },
+  },
+  kiteray: {
+    name: 'Snagkite', element: 'fluff', hp: 38, oomph: 13, grit: 8, pep: 16, huff: 3,
+    moves: [['taillash', 1], ['catchthewind', 3], ['stringburn', 6]],
+    fly: true,
+    blurb: 'Got away from somebody in 1996. It has stayed up here since, on purpose.',
+    notYet: 'lets out more string',
+    grown: { at: 14, name: 'Stunthawk' },
+  },
+  teddybear: {
+    name: 'Patchpaw', element: 'fluff', hp: 54, oomph: 11, grit: 12, pep: 8, huff: 4,
+    moves: [['bearcuff', 1], ['bearhug', 3], ['stuffingstorm', 6]],
+    blurb: 'Loved until one eye came off, then put in a box. It kept the other eye open.',
+    notYet: 'turns its back, arms folded',
+    grown: { at: 15, name: 'Darnbruin' },
+  },
+  snowglobe: {
+    name: 'Flurryglobe', element: 'suds', hp: 46, oomph: 12, grit: 11, pep: 10, huff: 4,
+    moves: [['snowballflick', 1], ['shakeup', 3], ['whiteout', 6]],
+    blurb: 'Somebody shook it once, hard. It has been snowing in there ever since.',
+    notYet: 'turns upside down',
+    grown: { at: 15, name: 'Blizzardome' },
+  },
+  torchmole: {
+    name: 'Burrowbeam', element: 'spark', hp: 48, oomph: 13, grit: 10, pep: 11, huff: 4,
+    moves: [['noselight', 1], ['dazzle', 3], ['fullbeam', 6]],
+    blurb: 'A torch nobody could find in the dark, which is the trouble with torches.',
+    notYet: 'switches itself off',
+    grown: { at: 16, name: 'Dazzledig' },
+  },
+  bootpup: {
+    name: 'Scuffpup', element: 'fluff', hp: 46, oomph: 13, grit: 10, pep: 13, huff: 4,
+    moves: [['scuff', 1], ['lacetrip', 3], ['theboot', 6]],
+    blurb: 'The left one. It waits by the door for walks that stopped years ago.',
+    notYet: 'chews its own laces',
+    grown: { at: 16, name: 'Hobnailhound' },
+  },
+  dustpancrab: {
+    name: 'Dustpincer', element: 'clank', hp: 56, oomph: 10, grit: 15, pep: 5, huff: 5,
+    moves: [['sweepaside', 1], ['panguard', 3], ['cleansweep', 6]],
+    blurb: 'Pan in one claw, brush in the other. It has never once finished.',
+    notYet: 'sweeps itself under the mat',
+    grown: { at: 16, name: 'Sweepclaw' },
+  },
   boss_hydra: {
     name: 'Old Summerlong', element: 'suds', hp: 118, oomph: 11, grit: 12, pep: 9, huff: 0, boss: true, turns: 2,
     moves: [['nozzlejet', 1], ['fullsprinkle', 1], ['hosedown', 1]],
@@ -721,9 +947,9 @@ export const ROOMS = [
     blurb: 'Long grass, a gate that sticks, and a sprinkler nobody turned off.',
     path: [
       { name: 'By the Gate', size: [2, 2], level: [1, 2], pool: [['dandepuff', 3], ['ratscal', 2]] },
-      { name: 'The Washing Line', size: [2, 2], level: [2, 3], pool: [['dandepuff', 2], ['grumblebee', 2], ['snailor', 2], ['sparkplug', 2]] },
-      { name: 'The Flower Bed', size: [3, 3], level: [2, 3], pool: [['dandepuff', 2], ['thornhog', 2], ['grumblebee', 2], ['sparkplug', 1]] },
-      { name: 'The Potting Shed', size: [3, 3], level: [3, 4], pool: [['gnome', 3], ['capbeetle', 3], ['thornhog', 1], ['ratscal', 1], ['snailor', 1]] },
+      { name: 'The Washing Line', size: [2, 2], level: [2, 3], pool: [['dandepuff', 2], ['grumblebee', 2], ['snailor', 2], ['sparkplug', 2], ['canphant', 2]] },
+      { name: 'The Flower Bed', size: [3, 3], level: [2, 3], pool: [['dandepuff', 2], ['thornhog', 2], ['grumblebee', 2], ['sparkplug', 1], ['glovecrab', 2]] },
+      { name: 'The Potting Shed', size: [3, 3], level: [3, 4], pool: [['gnome', 3], ['capbeetle', 3], ['thornhog', 1], ['ratscal', 1], ['snailor', 1], ['canphant', 2], ['glovecrab', 2]] },
       { name: 'The Sprinkler', boss: 'boss_hydra', bossLevel: 5, size: [2, 2], level: [3, 3], pool: [['snailor', 1], ['dandepuff', 2]] },
     ],
   },
@@ -731,10 +957,10 @@ export const ROOMS = [
     id: 'alley', name: 'Tin Can Alley', bg: 'bg_alley', tint: '#8c9bb5', element: 'clank',
     blurb: 'Bins, bottle caps and whoever is in charge of them. A narrow place: they come one after another.',
     path: [
-      { name: 'The Dented Bins', size: [2, 2], level: [4, 4], pool: [['cancrab', 3], ['ratscal', 2]] },
-      { name: 'The Bottle Bank', size: [2, 3], level: [4, 5], pool: [['capbeetle', 3], ['sockgoblin', 2], ['cancrab', 1]] },
-      { name: 'The Fire Escape', size: [3, 3], level: [4, 5], pool: [['coothug', 3], ['sockgoblin', 2], ['sparkplug', 1]] },
-      { name: 'The Loading Bay', size: [3, 3], level: [5, 5], pool: [['cancrab', 2], ['coothug', 2], ['capbeetle', 2], ['ratscal', 1]] },
+      { name: 'The Dented Bins', size: [2, 2], level: [4, 4], pool: [['cancrab', 3], ['ratscal', 2], ['brollybat', 1], ['conekin', 1]] },
+      { name: 'The Bottle Bank', size: [2, 3], level: [4, 5], pool: [['capbeetle', 3], ['sockgoblin', 2], ['cancrab', 1], ['trolleypup', 1], ['conekin', 1]] },
+      { name: 'The Fire Escape', size: [3, 3], level: [4, 5], pool: [['coothug', 3], ['sockgoblin', 2], ['sparkplug', 1], ['brollybat', 1]] },
+      { name: 'The Loading Bay', size: [3, 3], level: [5, 5], pool: [['cancrab', 2], ['coothug', 2], ['capbeetle', 2], ['ratscal', 1], ['trolleypup', 1]] },
       { name: 'The Baron\'s Court', boss: 'boss_baron', bossLevel: 6, size: [1, 2], level: [4, 4], pool: [['coothug', 2], ['ratscal', 2]] },
     ],
   },
@@ -742,10 +968,10 @@ export const ROOMS = [
     id: 'pantry', name: 'The Midnight Pantry', bg: 'bg_pantry', tint: '#f2a65a', element: 'crumb',
     blurb: 'Everything in here is past its date and wide awake.',
     path: [
-      { name: 'The Bottom Shelf', size: [2, 2], level: [5, 5], pool: [['dumpling', 3], ['jellywobble', 1]] },
-      { name: 'The Spice Rack', size: [2, 2], level: [6, 6], pool: [['pepperimp', 2], ['dumpling', 2]] },
-      { name: 'The Egg Cups', size: [3, 3], level: [6, 6], pool: [['eggknight', 3], ['jellywobble', 2], ['pepperimp', 1]] },
-      { name: 'The Cold Shelf', size: [3, 3], level: [6, 7], pool: [['jellywobble', 3], ['eggknight', 2], ['dumpling', 1]] },
+      { name: 'The Bottom Shelf', size: [2, 2], level: [5, 5], pool: [['dumpling', 3], ['jellywobble', 1], ['teabagjelly', 2]] },
+      { name: 'The Spice Rack', size: [2, 2], level: [6, 6], pool: [['pepperimp', 2], ['dumpling', 2], ['whiskbird', 2]] },
+      { name: 'The Egg Cups', size: [3, 3], level: [6, 6], pool: [['eggknight', 3], ['jellywobble', 2], ['pepperimp', 1], ['teabagjelly', 2], ['picklefrog', 2]] },
+      { name: 'The Cold Shelf', size: [3, 3], level: [6, 7], pool: [['jellywobble', 3], ['eggknight', 2], ['dumpling', 1], ['whiskbird', 2], ['picklefrog', 2]] },
       { name: 'The Toaster', boss: 'boss_crumbwyrm', bossLevel: 7, size: [1, 2], level: [6, 6], pool: [['pepperimp', 2], ['dumpling', 2]] },
     ],
   },
@@ -753,10 +979,10 @@ export const ROOMS = [
     id: 'wash', name: 'The Wash', bg: 'bg_wash', tint: '#4fc4cf', element: 'suds',
     blurb: 'Where socks go in as pairs.',
     path: [
-      { name: 'The Sock Basket', size: [2, 2], level: [7, 7], pool: [['pegsnapper', 3], ['soapslug', 2]] },
-      { name: 'The Soap Shelf', size: [2, 2], level: [7, 8], pool: [['soapslug', 3], ['bubblejelly', 2]] },
-      { name: 'The Dryers', size: [2, 3], level: [7, 8], pool: [['lintgolem', 3], ['pegsnapper', 2], ['bubblejelly', 1]] },
-      { name: 'The Rinse', size: [3, 3], level: [7, 8], pool: [['bubblejelly', 3], ['lintgolem', 2], ['soapslug', 1]] },
+      { name: 'The Sock Basket', size: [2, 2], level: [7, 7], pool: [['pegsnapper', 3], ['soapslug', 2], ['ironweasel', 2]] },
+      { name: 'The Soap Shelf', size: [2, 2], level: [7, 8], pool: [['soapslug', 3], ['bubblejelly', 2], ['baskettortoise', 2]] },
+      { name: 'The Dryers', size: [2, 3], level: [7, 8], pool: [['lintgolem', 3], ['pegsnapper', 2], ['bubblejelly', 1], ['ironweasel', 2], ['zipcrawler', 2]] },
+      { name: 'The Rinse', size: [3, 3], level: [7, 8], pool: [['bubblejelly', 3], ['lintgolem', 2], ['soapslug', 1], ['baskettortoise', 2], ['zipcrawler', 2]] },
       { name: 'Machine Six', boss: 'boss_spincycle', bossLevel: 9, size: [1, 2], level: [7, 7], pool: [['pegsnapper', 2], ['bubblejelly', 2]] },
     ],
   },
@@ -764,10 +990,10 @@ export const ROOMS = [
     id: 'stacks', name: 'The Dusty Stacks', bg: 'bg_stacks', tint: '#c08552', element: 'fluff',
     blurb: 'Overdue books and what lives between the pages.',
     path: [
-      { name: 'The Returns Desk', size: [2, 2], level: [8, 9], pool: [['bookworm', 3], ['papercrane', 2]] },
-      { name: 'Periodicals', size: [2, 2], level: [9, 9], pool: [['papercrane', 3], ['inkblot', 2]] },
-      { name: 'The Reading Lamp', size: [2, 3], level: [9, 9], pool: [['candlecreep', 3], ['bookworm', 2], ['inkblot', 1]] },
-      { name: 'Reference Only', size: [2, 3], level: [9, 9], pool: [['quillhog', 3], ['inkblot', 2], ['candlecreep', 1]] },
+      { name: 'The Returns Desk', size: [2, 2], level: [8, 9], pool: [['bookworm', 3], ['papercrane', 2], ['stamphopper', 2]] },
+      { name: 'Periodicals', size: [2, 2], level: [9, 9], pool: [['papercrane', 3], ['inkblot', 2], ['globehog', 2]] },
+      { name: 'The Reading Lamp', size: [2, 3], level: [9, 9], pool: [['candlecreep', 3], ['bookworm', 2], ['inkblot', 1], ['stamphopper', 2]] },
+      { name: 'Reference Only', size: [2, 3], level: [9, 9], pool: [['quillhog', 3], ['inkblot', 2], ['candlecreep', 1], ['globehog', 2]] },
       { name: 'The Locked Case', boss: 'boss_tome', bossLevel: 10, size: [1, 1], level: [9, 9], pool: [['bookworm', 2], ['candlecreep', 2]] },
     ],
   },
@@ -775,10 +1001,10 @@ export const ROOMS = [
     id: 'rooftops', name: 'Moonlit Rooftops', bg: 'bg_rooftops', tint: '#7d6bd6', element: 'clank',
     blurb: 'Slates, chimneys and a long way down.',
     path: [
-      { name: 'The Gutter', size: [2, 2], level: [9, 10], pool: [['gutterbat', 3], ['slategecko', 2]] },
-      { name: 'The Ridge', size: [2, 2], level: [10, 10], pool: [['slategecko', 3], ['weathercock', 2]] },
-      { name: 'The Chimney Pots', size: [2, 3], level: [10, 10], pool: [['chimneywisp', 3], ['gutterbat', 2], ['weathercock', 1]] },
-      { name: 'The Parapet', size: [3, 3], level: [10, 11], pool: [['gargoylet', 3], ['slategecko', 2], ['chimneywisp', 1]] },
+      { name: 'The Gutter', size: [2, 2], level: [9, 10], pool: [['gutterbat', 3], ['slategecko', 2], ['aerialhare', 2]] },
+      { name: 'The Ridge', size: [2, 2], level: [10, 10], pool: [['slategecko', 3], ['weathercock', 2], ['kiteray', 2]] },
+      { name: 'The Chimney Pots', size: [2, 3], level: [10, 10], pool: [['chimneywisp', 3], ['gutterbat', 2], ['weathercock', 1], ['aerialhare', 2]] },
+      { name: 'The Parapet', size: [3, 3], level: [10, 11], pool: [['gargoylet', 3], ['slategecko', 2], ['chimneywisp', 1], ['kiteray', 2]] },
       { name: 'The Weathervane', boss: 'boss_warden', bossLevel: 11, size: [1, 2], level: [10, 10], pool: [['weathercock', 2], ['gutterbat', 2]] },
     ],
   },
@@ -786,10 +1012,10 @@ export const ROOMS = [
     id: 'attic', name: 'The Tick-Tock Attic', bg: 'bg_attic', tint: '#d9a441', element: 'clank',
     blurb: 'Every clock up here is wrong in a different way.',
     path: [
-      { name: 'The Hatch', size: [2, 2], level: [10, 11], pool: [['tintrooper', 3], ['gearbeetle', 2]] },
-      { name: 'The Toy Chest', size: [2, 2], level: [11, 11], pool: [['jackbox', 3], ['tintrooper', 2]] },
-      { name: 'The Dust Sheets', size: [2, 3], level: [11, 11], pool: [['mothphantom', 3], ['cuckoo', 2], ['jackbox', 1]] },
-      { name: 'The Clock Shelf', size: [2, 3], level: [11, 12], pool: [['gearbeetle', 3], ['cuckoo', 2], ['mothphantom', 1]] },
+      { name: 'The Hatch', size: [2, 2], level: [10, 11], pool: [['tintrooper', 3], ['gearbeetle', 2], ['teddybear', 2]] },
+      { name: 'The Toy Chest', size: [2, 2], level: [11, 11], pool: [['jackbox', 3], ['tintrooper', 2], ['snowglobe', 2]] },
+      { name: 'The Dust Sheets', size: [2, 3], level: [11, 11], pool: [['mothphantom', 3], ['cuckoo', 2], ['jackbox', 1], ['teddybear', 2]] },
+      { name: 'The Clock Shelf', size: [2, 3], level: [11, 12], pool: [['gearbeetle', 3], ['cuckoo', 2], ['mothphantom', 1], ['snowglobe', 2]] },
       { name: 'The Long Case', boss: 'boss_clock', bossLevel: 12, size: [1, 2], level: [11, 11], pool: [['tintrooper', 2], ['cuckoo', 2]] },
     ],
   },
@@ -797,10 +1023,10 @@ export const ROOMS = [
     id: 'dark', name: 'The Roaring Dark', bg: 'bg_dark', tint: '#d6455d', element: 'spark',
     blurb: 'The cupboard under the stairs. Something in it is plugged in.',
     path: [
-      { name: 'The Coat Hooks', size: [2, 2], level: [11, 11], pool: [['dustwraith', 3], ['sparkplug', 2]] },
-      { name: 'The Fuse Box', size: [2, 2], level: [11, 12], pool: [['cordserpent', 3], ['sparkplug', 2]] },
-      { name: 'The Shoe Rack', size: [2, 3], level: [12, 12], pool: [['robodisc', 3], ['dustwraith', 2], ['cordserpent', 1]] },
-      { name: 'The Back Corner', size: [2, 3], level: [12, 12], pool: [['cordserpent', 2], ['dustwraith', 2], ['robodisc', 2]] },
+      { name: 'The Coat Hooks', size: [2, 2], level: [11, 11], pool: [['dustwraith', 3], ['sparkplug', 2], ['torchmole', 2]] },
+      { name: 'The Fuse Box', size: [2, 2], level: [11, 12], pool: [['cordserpent', 3], ['sparkplug', 2], ['bootpup', 2]] },
+      { name: 'The Shoe Rack', size: [2, 3], level: [12, 12], pool: [['robodisc', 3], ['dustwraith', 2], ['cordserpent', 1], ['torchmole', 2], ['dustpancrab', 2]] },
+      { name: 'The Back Corner', size: [2, 3], level: [12, 12], pool: [['cordserpent', 2], ['dustwraith', 2], ['robodisc', 2], ['bootpup', 2], ['dustpancrab', 2]] },
       { name: 'The Plug Socket', boss: 'boss_vacuum', bossLevel: 13, size: [1, 1], level: [11, 11], pool: [['cordserpent', 2], ['robodisc', 2]] },
     ],
   },

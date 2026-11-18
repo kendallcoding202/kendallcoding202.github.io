@@ -7,8 +7,11 @@ import { mkdirSync, readdirSync } from 'node:fs';
 import { serve } from '../../tools/serve.mjs';
 import { newState } from '../../web/js/core/state.js';
 import { enterRoom } from '../../web/js/core/rooms.js';
-import { SPECIES, HEIRLOOM } from '../../web/js/core/balance.js';
+import { SPECIES, HEIRLOOM, ROOMS } from '../../web/js/core/balance.js';
 import { WORLD, DISTRICTS, POST } from '../../web/js/core/world.js';
+
+// How many kinds can be made friends of: every kind but the ringleaders.
+const FRIENDLY = Object.keys(SPECIES).filter((id) => !SPECIES[id].boss).length;
 const { chromium } = createRequire(import.meta.url)('playwright'); // preinstalled globally (NODE_PATH)
 
 const OUT = new URL('./out/', import.meta.url).pathname;
@@ -486,12 +489,12 @@ await snap(page, 'e2e-friends');
 
 section('Scrapbook');
 await tab(page, 'book');
-check((await page.$$('.page-tile')).length === Object.keys(SPECIES).length && Object.keys(SPECIES).length === 48, 'the scrapbook has a page for every kind');
+check((await page.$$('.page-tile')).length === Object.keys(SPECIES).length && Object.keys(SPECIES).length >= 68, 'the scrapbook has a page for every kind');
 const met = Object.values(s.book).filter((p) => p.met).length;
 check((await page.$$('.page-tile:not(.unmet)')).length === met, `the ${met} kinds met so far are shown`);
 check(await S(page, () => [...document.querySelectorAll('.page-tile.unmet')].every((t) => t.disabled && t.querySelector('b').textContent === '???')), 'the rest are shadows');
 check((await page.$$('.ring > div')).length === 6, 'and the six elements are explained');
-check(await S(page, () => { const hunt = document.querySelector('.card.hunt'); return !!hunt && hunt.dataset.kept === '0' && hunt.textContent.includes('0 of 40 kept') && hunt.textContent.includes('one in 60') && hunt.textContent.includes('one in 20'); }), 'the scrapbook has the hunt for Heirlooms: none kept yet, and how the odds stand');
+check(await S(page, (friendly) => { const hunt = document.querySelector('.card.hunt'); return !!hunt && hunt.dataset.kept === '0' && hunt.textContent.includes(`0 of ${friendly} kept`) && hunt.textContent.includes('one in 60') && hunt.textContent.includes('one in 20'); }, FRIENDLY), 'the scrapbook has the hunt for Heirlooms: none kept yet, and how the odds stand');
 check(await S(page, () => document.querySelector('[data-act="where"]').textContent.startsWith('Nowhere is calm yet') && document.querySelector('[data-act="tofind"]').textContent.startsWith('Still to find:') && document.querySelector('[data-act="tofind"]').textContent.includes('???')), 'it says nowhere is calm yet, and lists who is still to find, unmet kinds as ???');
 await snap(page, 'e2e-book');
 
@@ -667,7 +670,7 @@ check((await game(page, () => window.oddments.game.facing)) === 0, 'tapping the 
 await idle(page);
 check(await S(page, () => document.querySelector('#fight img.bg').src.includes('bg_alley')), 'the fight is in the alley');
 check(await S(page, () => window.oddments.sound().scene === 'clatter'), 'to the alley\'s own fight tune, not the garden\'s');
-check((await battle(page)).units.filter((u) => u.side === 'foe').every((u) => ['cancrab', 'ratscal'].includes(u.species)), 'against the kinds that hang about its bins');
+check((await battle(page)).units.filter((u) => u.side === 'foe').every((u) => ROOMS[1].path[0].pool.some(([id]) => id === u.species)), 'against the kinds that hang about its bins');
 let alleyCalm = false;
 let calls = 0;
 let baronSeen = false;
@@ -734,7 +737,7 @@ section('Strays, out on the lane');
   check(await walkTo(page, 'alley'), 'you can walk from one side of the lane to the other');
   check((await state(page)).stats.battles === battlesBefore && (await screen(page)) === 'lane', 'and meet no stray on the way: nobody has to');
   // Now go and meet one: tap it, walk up, and the fight is on.
-  const one = about[0];
+  const one = [...about].sort((a, b) => a.foes.length - b.foes.length)[0]; // the smallest group: this is about meeting one, not about winning against three
   await S(page, (at) => { window.oddments.game.state.where = { x: at.x - 170, y: at.y + 60 }; window.oddments.ctx.show('lane'); }, one);
   await page.waitForTimeout(250);
   check(await game(page, () => window.oddments.game.strayNear()) === -1, 'standing a little way off one, you have not met it');
@@ -951,7 +954,7 @@ for (let tries = 0; tries < 30 && (await S(page, () => window.oddments.game.plac
 await page.waitForSelector('#fight', { timeout: 15000 });
 await idle(page);
 check((await game(page, () => window.oddments.game.facing)) === 0 && await S(page, () => document.querySelector('#fight img.bg').src.includes('bg_pantry')), 'tapping a group walks you into it, and the fight is in the pantry');
-check((await battle(page)).units.filter((u) => u.side === 'foe').every((u) => ['dumpling', 'jellywobble'].includes(u.species)), 'against kinds met nowhere else');
+check((await battle(page)).units.filter((u) => u.side === 'foe').every((u) => ROOMS[2].path[0].pool.some(([id]) => id === u.species)), 'against the kinds of its bottom shelf');
 check(await S(page, () => window.oddments.sound().scene === 'fight'), 'to the scuffle: the pantry has no tune of its own yet');
 await botFight(page, { befriend: true });
 const wonFirst = (await modalTitle(page)) === 'Won';
@@ -1130,7 +1133,7 @@ await tab(page, 'friends');
 check(await S(page, (species) => document.querySelector(`.friend[data-species="${species}"] img`).src.includes('_heirloom') && !!document.querySelector(`.friend[data-species="${species}"] .heirloom`), rare.species), 'and is shown as an Heirloom among your friends');
 await tab(page, 'book');
 check(await S(page, (species) => !!document.querySelector(`[data-kind="${species}"] .stamp.gold`) && document.querySelector(`[data-kind="${species}"]`).classList.contains('rare'), rare.species), 'with a gold stamp in the scrapbook');
-check(await S(page, () => document.querySelector('.card.hunt').dataset.kept === '1' && document.querySelector('.card.hunt').textContent.includes('1 of 40 kept')), 'and the hunt counts it: one of forty kept');
+check(await S(page, (friendly) => document.querySelector('.card.hunt').dataset.kept === '1' && document.querySelector('.card.hunt').textContent.includes(`1 of ${friendly} kept`), FRIENDLY), 'and the hunt counts it: one of them kept');
 check(await S(page, (name) => !document.querySelector('[data-act="tofind"]').textContent.includes(`${name},`) && !document.querySelector('[data-act="tofind"]').textContent.endsWith(`${name}.`), SPECIES[rare.species].name), 'it is off the list of those still to find');
 await snap(page, 'e2e-heirloom-book');
 // Walking into a place where one is waiting, you are told (and hear it) before you have picked it out.
@@ -1569,7 +1572,7 @@ section('Growing up');
   check(await S(grow, () => { const m = document.querySelector('.modal.oddment'); return m.querySelector('header span').textContent.startsWith('Stripes ·') && m.querySelector('[data-act="kind"]').textContent === 'Toeviathan'; }), 'Stripes\'s card says its kind is Toeviathan now');
   await grow.click('.modal.oddment .x');
   await tab(grow, 'book');
-  check(await S(grow, () => { const tile = document.querySelector('.page-tile[data-kind="dustbunny"]'); return document.querySelector('[data-act="counts"]').textContent.includes('Grown up 3 of 40') && tile.classList.contains('grown') && !!tile.querySelector('.stamp.grownup') && tile.querySelector('b').textContent === 'Hartmote' && tile.querySelector('img').src.endsWith('/dustbunny_grown.webp') && !document.querySelector('.page-tile[data-kind="dandepuff"] .stamp.grownup'); }), 'the scrapbook counts three grown up of forty, and marks each');
+  check(await S(grow, (friendly) => { const tile = document.querySelector('.page-tile[data-kind="dustbunny"]'); return document.querySelector('[data-act="counts"]').textContent.includes(`Grown up 3 of ${friendly}`) && tile.classList.contains('grown') && !!tile.querySelector('.stamp.grownup') && tile.querySelector('b').textContent === 'Hartmote' && tile.querySelector('img').src.endsWith('/dustbunny_grown.webp') && !document.querySelector('.page-tile[data-kind="dandepuff"] .stamp.grownup'); }, FRIENDLY), 'the scrapbook counts three grown up of them all, and marks each');
   await snap(grow, 'e2e-grown-book');
   // The next fight: grown friends stand plainly bigger than they did, and than whoever they face.
   await tab(grow, 'lane');
@@ -1647,7 +1650,7 @@ const roomPaintings = readdirSync(new URL('../../web/assets/rooms/', import.meta
 check(roomPaintings.length === 98 && roomPaintings.every((file) => requests.some((url) => url.endsWith(`assets/rooms/${file}`))), `every painting of every room was fetched (${roomPaintings.length} of them)`);
 check(['garden', 'alley', 'pantry', 'wash', 'stacks', 'rooftops', 'attic', 'dark'].every((id) => requests.some((url) => url.endsWith(`assets/keys/${id}.webp`))), 'every key\'s picture was fetched');
 const grownKinds = Object.keys(SPECIES).filter((id) => SPECIES[id].grown);
-check(grownKinds.length === 40 && grownKinds.every((id) => requests.some((url) => url.endsWith(`assets/sprites/${id}_grown.webp`)) && requests.some((url) => url.endsWith(`assets/sprites/${id}_grown_heirloom.webp`))), 'every grown form\'s picture was fetched, and its Heirloom colours');
+check(grownKinds.length === FRIENDLY && grownKinds.every((id) => requests.some((url) => url.endsWith(`assets/sprites/${id}_grown.webp`)) && requests.some((url) => url.endsWith(`assets/sprites/${id}_grown_heirloom.webp`))), 'every grown form\'s picture was fetched, and its Heirloom colours');
 check(errors.length === 0, 'no errors, and nothing refused by the content security policy', errors.slice(0, 5).join(' | '));
 
 await browser.close();

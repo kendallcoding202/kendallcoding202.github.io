@@ -142,7 +142,9 @@ test('nothing in a save can be bigger than the game allows', () => {
   assert.ok(Object.keys(state.seen).length <= 64);
   assert.ok(state.stats.battles <= 1e9 && state.stats.wins === 0 && state.stats.rounds === 0);
   assert.equal(state.extra, undefined);
-  assert.ok(JSON.stringify(state).length < 6000);
+  // (A save keeps a line of the scrapbook for every kind there is, about sixty letters each, and little else.)
+  const size = JSON.stringify(state).length;
+  assert.ok(size < 3500 + Object.keys(SPECIES).length * 64, `${size} letters`);
 });
 
 test('a value nested thousands deep is dropped, not saved back', () => {
