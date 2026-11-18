@@ -7,7 +7,7 @@
 // `bake`), then placed each frame, so a frame costs a handful of pictures
 // however detailed the painting was.
 import { ROOMS, SPECIES, ELEMENTS, STRAYS, roomOf, roomBuilt } from '../core/balance.js';
-import { WORLD, POST, SPOTS, TREES, LAMPS, HEDGES, ROAD_POINTS, GREEN, DISTRICTS, PEOPLE, PROPS, BENCHES, MAILBOXES, spotOf, personAt, districtAt, regionAt } from '../core/world.js';
+import { WORLD, POST, SPOTS, TREES, LAMPS, HEDGES, ROAD_POINTS, GREEN, DISTRICTS, PEOPLE, PROPS, BENCHES, MAILBOXES, RIVER, BRIDGE, spotOf, personAt, districtAt, regionAt, whereabouts } from '../core/world.js';
 import { CAST } from '../core/story.js';
 import { nameOf, artOf } from '../core/names.js';
 import { h, sprite, spriteSrc } from './dom.js';
@@ -21,7 +21,7 @@ import { keyRing } from './keys.js';
 import { play } from '../platform/sound.js';
 import { dustShift, throughDoor } from './shift.js';
 import { insideOf } from '../core/indoors.js';
-import { FONT, PROP_WIDE, oval, paint, glow, label, elementMark, hoverOn, hoverLift, worldSrc, paintGround, paintBuilding, paintProp, paintFlat, paintLamp, paintGate, wallOf } from './scenery.js';
+import { FONT, PROP_WIDE, GATE_WIDE, oval, paint, glow, label, elementMark, hoverOn, hoverLift, worldSrc, paintGround, paintBuilding, paintProp, paintFlat, paintLamp, paintGate, paintBridgeGate, ripples, wallOf } from './scenery.js';
 
 // How much of the world fits across the screen. People and Clutterkin are small in a big place.
 // On a wider screen (a folding phone, open) you see more of the world, not the same view blown up:
@@ -56,6 +56,8 @@ const EAST = 150; // how far past the east edge of the world the view may travel
 // Fireflies, and every piece of every wall: fixed, so worked out once. A paved place along the east
 // edge of the world gets a wall of junk there too. That one is looks only: the edge is what stops you.
 const FLIES = (() => { const next = run(29); return Array.from({ length: Math.round((WORLD.w * WORLD.h) / 42000) }, () => ({ x: next() * WORLD.w, y: next() * WORLD.h, r: next() })); })();
+// Lily pads on the river, clear of the bridge: [x, y, how wide]. Looks only.
+const LILIES = [[240, 5522, 120], [540, 5572, 96], [800, 5500, 110], [1500, 5566, 118], [1830, 5506, 100], [2090, 5578, 112]];
 // The ground is painted a square at a time, as each first comes into view, and only so many are
 // kept: the world is far too big to hold as one picture. GROUND_TOP is how far above the top of
 // the world the ground goes on (the view can travel a little past every edge).
@@ -68,6 +70,7 @@ const WALLS = [
 ].flatMap(wallOf);
 const GROUND = {
   w: WORLD.w, h: WORLD.h, roads: ROAD_POINTS, spots: SPOTS.filter((spot) => !DISTRICTS[spot.id]), lamps: LAMPS, hedges: HEDGES, green: GREEN,
+  river: RIVER, bridge: BRIDGE,
   lawns: PLACES.map(({ room, area, dress }) => ({ x: area.x, y: area.y, w: area.w, h: area.h, tint: room.tint, gate: area.gate, posts: area.posts, floor: dress.floor })),
 };
 // Where feet fall on stone, not grass, and how far apart footfalls are. And the goal as last heard
@@ -93,7 +96,7 @@ export function laneScreen(ctx) {
   const goalChip = h('button', { class: 'goalchip', data: { act: 'goal' }, onclick: () => journal() }, h('i', null, 'Goal'), goalText);
   // The map, one tap away: beside the goal, always in sight.
   const mapChip = h('button', { class: 'mapchip', data: { act: 'map' }, 'aria-label': 'Open the map', onclick: () => mapDialog(game) }, h('i'), 'Map');
-  const title = h('h1', null, regionAt(state.where).name);
+  const title = h('h1', null, whereabouts(state.where));
   const sub = h('small', { class: 'where' });
   const wrap = h('div', { class: 'lanewrap' }, canvas,
     h('header', { class: 'bar-top over' }, h('div', null, title, sub), h('span', { class: 'who' }, sprite(state.player.look), h('b', null, state.player.name))),
@@ -411,6 +414,7 @@ export function laneScreen(ctx) {
     const k = cam.k * cam.dpr;
     pen.setTransform(k, 0, 0, k, -cam.x * k, -cam.y * k);
     ground();
+    if (cam.y + cam.h > RIVER.y - 20 && cam.y < RIVER.y + RIVER.h + 20) ripples(pen, RIVER, clock, cam.x, cam.x + cam.w, BRIDGE);
     if (mark && mark.life > 0) {
       pen.beginPath(); pen.ellipse(mark.x, mark.y, 24 * (1.3 - mark.life), 11 * (1.3 - mark.life), 0, 0, Math.PI * 2);
       pen.strokeStyle = `rgba(255,200,61,${Math.max(0, mark.life)})`; pen.lineWidth = 4; pen.stroke();
@@ -442,6 +446,25 @@ export function laneScreen(ctx) {
       things.push({ y: person.y, draw: () => neighbour(person) });
     }
     for (const stray of game.strays()) if (seen(stray.x, stray.y)) things.push({ y: stray.y + 8, draw: () => strays(stray) });
+    // The gate on the bridge: shut, with its eight locks, until the whole lane is calm; then only its posts.
+    if (seen(BRIDGE.gate.x, BRIDGE.gate.y, 260)) {
+      const open = game.bridgeOpen();
+      things.push({ y: BRIDGE.gate.y + (open ? -40 : 30), draw: () => {
+        put(bake(`bridgegate|${open}`, -GATE_WIDE * 0.6, -GATE_WIDE, GATE_WIDE * 1.2, GATE_WIDE + 24, (brush) => paintBridgeGate(brush, painting('r_gate'), GATE_WIDE, open)), BRIDGE.gate.x, BRIDGE.gate.y + 24);
+        if (open) return;
+        const you = here();
+        if (Math.hypot(you.x - BRIDGE.gate.x, you.y - BRIDGE.gate.y) < 330) {
+          const keys = ROOMS.filter((room) => room.chapter !== 2 && state.rooms[room.id].clears > 0).length;
+          label(pen, 'Kettle Bridge', BRIDGE.gate.x, BRIDGE.gate.y - 196, '#b6b0d6', 'rgba(255,255,255,.14)');
+          label(pen, `eight locks: you hold ${keys} of the keys`, BRIDGE.gate.x, BRIDGE.gate.y - 160, '#b6b0d6', 'rgba(255,255,255,.14)', 19);
+        }
+      } });
+    }
+    // Lily pads on the river: they lie flat, behind everything.
+    for (const [lx, ly, wide] of LILIES) {
+      if (!seen(lx, ly, 120)) continue;
+      things.push({ y: RIVER.y - 400, draw: () => put(bake(`lilies|${wide}`, -wide * 0.6, -wide * 0.5, wide * 1.2, wide, (brush) => paintFlat(brush, painting('r_lilies'), wide)), lx, ly) });
+    }
     // Whatever stands about the country: a bench, a signpost, a well. A pond lies flat, behind whatever stands by it.
     for (const prop of PROPS) {
       if (!seen(prop.x, prop.y)) continue;
@@ -510,7 +533,7 @@ export function laneScreen(ctx) {
     // (A mailbox is worth a card only when there is something to post: by a door, the door's card comes first.)
     const mail = !who && !bench && game.mailNear() >= 0 && (!id || goal.id === 'report') && state.story.ines > 0;
     const region = regionAt(here());
-    const key = `${who}:${who ? game.hasNews(who) : ''}|${id}|${visit ? `${visit.room}:${visit.stop}` : ''}|${inside}|${goal.id}:${goal.count || ''}|${game.rested()}|${bench}|${region.id}|${mail}`;
+    const key = `${who}:${who ? game.hasNews(who) : ''}|${id}|${visit ? `${visit.room}:${visit.stop}` : ''}|${inside}|${goal.id}:${goal.count || ''}|${game.rested()}|${bench}|${whereabouts(here())}|${mail}`;
     if (key === cardFor) return;
     cardFor = key;
     goalText.textContent = goal.count ? `${goal.title} (${goal.count[0]} of ${goal.count[1]})` : goal.title;
@@ -518,7 +541,7 @@ export function laneScreen(ctx) {
     goalHeard = goal.id;
     goalChip.dataset.goal = goal.id;
     // The heading says where you are, and how a visit is going.
-    title.textContent = inside ? roomOf(inside).name : region.name;
+    title.textContent = inside ? roomOf(inside).name : whereabouts(here());
     sub.textContent = visit ? howItGoes(visit, roomOf(visit.room)) : '';
     card.hidden = !who && !id && !visit && !bench && !mail;
     card.dataset.spot = mail ? 'mailbox' : id || (bench ? 'bench' : '');
@@ -708,7 +731,7 @@ export function laneScreen(ctx) {
     if (modalOpen()) { way = []; held.clear(); }
     // The call that starts the story rings as soon as the game has begun and nothing else is on the
     // screen (and once, for a save from before there was a story).
-    else if (!state.story.call) {
+    else if (game.callDue()) {
       const call = game.takeCall();
       if (call) { ctx.save(); play('ring'); converse(call, () => { cardFor = undefined; }); }
     }

@@ -22,17 +22,17 @@ function fresh(seed = 3) {
   return new Game(state, { now: NOW, fx: false });
 }
 
-test('the world is the lane and the country south of it: five stretches from top to bottom, each with a name', () => {
-  assert.deepEqual(REGIONS.map((region) => region.id), ['lane', 'bramble', 'row', 'meadow', 'hill']);
+test('the world is the lane, the country south of it, and the far bank over the river: seven stretches from top to bottom, each with a name', () => {
+  assert.deepEqual(REGIONS.map((region) => region.id), ['lane', 'bramble', 'row', 'meadow', 'hill', 'bank', 'bobbin']);
   assert.equal(REGIONS[0].y, 0);
   for (let i = 1; i < REGIONS.length; i++) assert.ok(REGIONS[i].y > REGIONS[i - 1].y + 400 && REGIONS[i].y < WORLD.h - 400, `${REGIONS[i].id} is a good stretch of ground`);
   assert.equal(new Set(REGIONS.map((region) => region.name)).size, REGIONS.length);
   assert.ok(WORLD.h >= 4800, 'the world is several lanes long');
   // Home and the first three places are on the lane; two more on each of the rows beyond; the far shed at the very end.
   const where = Object.fromEntries(SPOTS.map((spot) => [spot.id, regionAt(spot.door).id]));
-  assert.deepEqual(where, { home: 'lane', garden: 'lane', alley: 'lane', pantry: 'lane', wash: 'row', stacks: 'row', rooftops: 'hill', attic: 'hill', dark: 'hill' });
+  assert.deepEqual(where, { home: 'lane', garden: 'lane', alley: 'lane', pantry: 'lane', wash: 'row', stacks: 'row', rooftops: 'hill', attic: 'hill', dark: 'hill', glasshouse: 'bank', deepend: 'bank', shed: 'bobbin', mending: 'bobbin' });
   assert.equal(regionAt({ x: 5, y: -40 }).id, 'lane');
-  assert.equal(regionAt({ x: 5, y: 1e9 }).id, 'hill');
+  assert.equal(regionAt({ x: 5, y: 1e9 }).id, 'bobbin');
   assert.equal(regionAt(null).id, 'lane');
   // Places open in the order you come to them walking south: nothing asks you to walk past a later one to an earlier.
   const south = ROOMS.map((room) => spotOf(room.id).door.y);
@@ -91,7 +91,7 @@ test('most of the quiet spots where strays turn up are out in the country, and s
 });
 
 test('there is a bench on each row beyond the lane, and sitting on one rests everyone as home does', () => {
-  assert.deepEqual(BENCHES.map((bench) => bench.id).sort(), ['hill', 'row']);
+  assert.deepEqual(BENCHES.map((bench) => bench.id).sort(), ['bank', 'bobbin', 'hill', 'row']);
   for (const bench of BENCHES) {
     assert.equal(regionAt(bench).id, bench.id);
     assert.ok(far(bench, spotOf('home').door) > 1500, 'it is a long walk from home');
@@ -154,9 +154,9 @@ test('worn out anywhere in the world, you are carried all the way home', () => {
 
 // ------------------------------------------------------------------ mailboxes
 
-test('there is a mailbox by home and by each of the four far houses, and a note posted in one tells Ines Tock what talking to her would', () => {
-  assert.equal(MAILBOXES.length, 5);
-  for (const id of ['home', 'wash', 'stacks', 'rooftops', 'attic']) assert.ok(MAILBOXES.some((box) => far(box, spotOf(id).door) < 260), `one near the door of ${id}`);
+test('there is a mailbox by home and by each of the eight far houses, and a note posted in one tells Ines Tock what talking to her would', () => {
+  assert.equal(MAILBOXES.length, 9);
+  for (const id of ['home', 'wash', 'stacks', 'rooftops', 'attic', 'glasshouse', 'deepend', 'shed', 'mending']) assert.ok(MAILBOXES.some((box) => far(box, spotOf(id).door) < 260), `one near the door of ${id}`);
   MAILBOXES.forEach((box, i) => {
     assert.equal(mailNear({ x: box.x, y: box.y + POST_REACH - 2 }), i);
     assert.equal(mailNear({ x: box.x, y: box.y + POST_REACH + 6 }), -1);
@@ -204,7 +204,8 @@ test('the map marks every place with how it stands, the benches, you, and where 
   game.begin({ name: 'Kit' });
   let marks = mapMarks(game);
   assert.deepEqual([marks.w, marks.h], [WORLD.w, WORLD.h]);
-  assert.deepEqual(marks.places.map((place) => `${place.id}:${place.state}`), ['home:home', 'garden:open', 'alley:shut', 'pantry:shut', 'wash:shut', 'stacks:shut', 'rooftops:shut', 'attic:shut', 'dark:shut']);
+  assert.deepEqual(marks.places.map((place) => `${place.id}:${place.state}`), ['home:home', 'garden:open', 'alley:shut', 'pantry:shut', 'wash:shut', 'stacks:shut', 'rooftops:shut', 'attic:shut', 'dark:shut', 'glasshouse:shut', 'deepend:shut', 'shed:shut', 'mending:shut']);
+  assert.equal(marks.bridge, 'shut');
   assert.deepEqual(marks.you, game.state.where);
   assert.deepEqual(marks.goal, { x: personAt('ines').x, y: personAt('ines').y }, 'the goal is to find Ines Tock, and the map marks her');
   assert.equal(marks.benches.length, BENCHES.length);

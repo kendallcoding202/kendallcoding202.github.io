@@ -149,10 +149,13 @@ function resultDialog(ctx, summary, foes) {
 
   if (summary.cleared) {
     const next = ROOMS[ROOMS.indexOf(room) + 1];
-    lines.push(h('p', { class: 'big' }, `${room.name} is calm!`), h('p', null, next && roomBuilt(next)
+    lines.push(h('p', { class: 'big' }, `${room.name} is calm!`), h('p', null, next && next.chapter === 2 && room.chapter !== 2
+      // The last place on the lane: the first chapter's end. What comes next, great-aunt Maribel will ring about.
+      ? 'That is all eight. Every place on the lane is calm, and it is not Monday yet. Everyone is rested. Ines Tock will want to hear, and so will great-aunt Maribel.'
+      : next && roomBuilt(next)
       ? `Everyone is rested, and the way on is open: ${next.name} is next. Ines Tock will want to hear. (${room.name} will stay calm now. A few will always be wandering about in it: go back for the friends still to make.)`
       : next ? `Everyone is rested. That is as far as the lane is built: ${next.name} comes next, and is not there yet. (${room.name} will stay calm now. A few will always be wandering about in it: go back for the friends still to make.)`
-        : 'That is all eight. Every place on the lane is calm, and it is not Monday yet. Everyone is rested. Ines Tock will want to hear, and so will great-aunt Maribel: the telephone is at home.'));
+        : 'That is all four over the water, and both banks quiet. Everyone is rested. Ines Tock will want to hear: there is a mailbox on Bobbin Row.'));
     // Its ringleader hands over the key to the place: yours to keep.
     const key = keyOf(room.id);
     if (key) lines.push(h('div', { class: 'keywon', data: { key: key.room } }, keyPicture(key.room), h('div', null, h('b', null, key.name), h('small', null, key.line))));

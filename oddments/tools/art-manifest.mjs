@@ -459,4 +459,69 @@ export const ART = [
   grown('scissorstork', 'a tall grand crane with a huge pair of black-handled tailor\'s shears for a beak, wide wings made of fabric swatches in many patterns cut with zigzag edges, long knitting-needle legs, a tape measure draped round its neck like a stole, a spool of thread unwinding behind it.'),
   grown('buttonowl', 'a great horned owl made of hundreds of buttons, its wide wings spread to show rows of buttons like feathers, two big horn toggles for ear tufts, huge mother-of-pearl button eyes, ribbons and lace trailing from its talons.'),
   grown('lacespider', 'a large elegant spider with a body like a big spool of white thread, long crochet-hook legs, wearing a veil and a wide fan collar of fine lace, weaving a great lace web hung with wooden lace bobbins, a ruby brooch on its back.'),
+  // ---- chapter two: the four new places, each a room you walk into ----
+  // Agreed on 18 November 2026: "Go with the four new places". Spending on rooms was approved on 16 November 2026.
+  roomSheet('glasshouse', 'an old glass greenhouse at night', [
+    ['a stack of terracotta flowerpots', 'a wooden seed tray full of green seedlings', 'a dented metal watering can', 'a plump sack of compost with no words on it'],
+    ['a tomato plant heavy with red tomatoes growing up a bamboo cane in a big pot', 'a wooden potting bench with flowerpots and a trowel on it', 'a tall leafy palm in a round pot', 'a wooden crate of carrots and marrows'],
+    ['a coiled green garden hose', 'a small wooden stepladder with a flowerpot on each step', 'a glass bell cloche over a little plant', 'a green doormat with a leaf pattern lying flat, seen from directly above'],
+  ]),
+  roomWall('glasshouse', 'the end wall of an old glass greenhouse at night: tall glass panes in white-painted iron frames from one edge to the other, misted with condensation, a big moon and stars seen through them, one long wooden shelf across the middle crowded with terracotta pots of seedlings and flowers, and green vines climbing the frames. Under the glass is a low red brick wall.'),
+  roomFloor('glasshouse', 'old red brick paving laid in a herringbone pattern, with a little green moss between the bricks.'),
+  roomSheet('deepend', 'a big old-fashioned bathroom at night', [
+    ['a white pedestal washbasin with two brass taps', 'a tall brass towel rail hung with striped towels', 'old-fashioned bathroom weighing scales with a big round dial and no numbers', 'a wooden stool with a neat stack of folded towels'],
+    ['a big fern in a pot on a tall plant stand', 'a tin bucket full of sponges and bath toys', 'a white enamel jug standing in a wash bowl on a small table', 'a tall oval mirror on a wooden stand'],
+    ['an old iron radiator with a towel drying on it', 'a small white bathroom cabinet on legs with a plain door', 'a little shelf unit of soap bars and coloured bottles with no labels', 'a pale blue bath mat lying flat, seen from directly above'],
+  ]),
+  roomWall('deepend', 'a big old-fashioned bathroom at night: white and sea-green wall tiles with a wave-pattern border from one edge to the other, three tall frosted windows with moonlight behind them, brass pipes running along the top, a big round mirror in a brass frame, and one long shelf of bottles and folded towels. Under the tiles is a plain dark skirting band.'),
+  // (Painted twice. The first was a black and white checkerboard, and nobody could be seen against it.)
+  roomFloor('deepend', 'small square bathroom floor tiles in two soft, close shades of pale sea-green, laid as a gentle checkerboard, very low in contrast, a little wet and shiny, with thin pale grout.'),
+  roomSheet('shed', 'an old wooden tool shed and workshop at night', [
+    ['a sturdy wooden workbench with a vice and a few tools on it', 'a red metal tool chest on wheels', 'a stack of old paint tins with drips of coloured paint', 'a wooden barrel full of rakes, spades and brooms standing upright'],
+    ['a big coil of thick rope', 'a wooden sawhorse with a plank and a hand saw on it', 'a neat pile of timber planks', 'a small shelf unit of jam jars full of screws and nails'],
+    ['a round grindstone wheel on a wooden frame', 'a wooden stepladder standing open', 'a metal dustbin full of wood offcuts and sawdust', 'a brown bristly doormat lying flat, seen from directly above'],
+  ]),
+  roomWall('shed', 'the inside wall of an old wooden garden shed at night: rough wooden planks from one edge to the other, a big pegboard hung with hammers, saws, spanners and pliers, a small cobwebbed window with moonlight, one long shelf of jam jars and oil cans, and a bare light bulb on a cord glowing warm yellow.'),
+  roomFloor('shed', 'old grey-brown wooden shed floorboards with a light dusting of sawdust, planks running left to right.'),
+  roomSheet('mending', 'a cosy old sewing room at night', [
+    ['a dressmaker\'s dummy on a wooden stand with a tape measure round its neck', 'a round wicker basket overflowing with balls of wool', 'a very big glass jar of colourful buttons', 'a stack of folded cloth in different patterns'],
+    ['a wooden chair with a patchwork cushion', 'a tall wooden rack of big cotton reels in rainbow colours', 'a small round table with a pincushion, a pair of scissors and a teacup on it', 'a floor lamp with a fringed shade, lit and glowing'],
+    ['a wooden chest of many little drawers with brass handles', 'a stand of ribbon and lace rolls', 'a soft pile of folded patchwork quilts', 'a round pink rag rug lying flat, seen from directly above'],
+  ]),
+  roomWall('mending', 'a cosy old sewing room at night: wallpaper with a small flower pattern above pale wood panelling from one edge to the other, a window in the middle with lace curtains and a crescent moon outside, one long shelf of cotton reels and folded cloth, a pegboard of scissors and tape measures, and two framed embroidered pictures of flowers.'),
+  roomFloor('mending', 'a soft faded rose-and-cream carpet with a small repeating diamond pattern.'),
+  // ---- the far bank: its four buildings, and eight things that stand about it, on one sheet ----
+  // (tools/process-art.py cuts the sheet into its twelve sprites, in this order. The lily pads lie flat.)
+  {
+    id: 'world_far_sheet', kind: 'sheet', size: '1536x1024', quality: 'medium', transparent: true,
+    prompt:
+      'A sprite sheet for a game: exactly twelve separate objects arranged in a neat grid of three rows and four columns, evenly spaced, ' +
+      'each centred in its own cell with clear empty space all around it, none touching or overlapping, all drawn at a similar size. ' +
+      'Four are tiny storybook buildings at night, each a different shape and colour, each seen from the front and slightly from above, ' +
+      'with its door at the bottom centre facing the viewer and warm yellow light glowing in its windows. ' +
+      'Row one, left to right: a pretty Victorian glass greenhouse with a white iron frame, a curved glass roof and green plants pressing against the panes; ' +
+      'a small old public bath house of white and sea-green tiles with a blue domed roof, round steamy windows and a wave pattern over the door; ' +
+      'a big crooked wooden workshop shed painted barn red, with a tin chimney, a cogwheel over the door and tools hanging on its wall; ' +
+      'a little lilac haberdashery shop with a bay window full of ribbons and a big wooden cotton reel and a pair of scissors over the door. ' +
+      'Row two, left to right: a tall ornate wrought-iron double gate, shut, with stone gateposts topped by lanterns and a row of eight small brass keyholes across its middle, seen from the front; ' +
+      'a small wooden rowing boat with two oars, pulled up out of the water; a clump of tall bulrushes and reeds; ' +
+      'a cluster of green lily pads with two pink water lilies, lying flat, seen from directly above. ' +
+      'Row three, left to right: a white wooden beehive with a little sloping roof; a wooden market barrow with two wheels, loaded with flowerpots; ' +
+      'an old cast-iron village water pump with a stone trough; a stack of wooden apple crates. ' +
+      WORLD_STYLE,
+  },
+  // ---- the four keys of chapter two (tools/process-art.py cuts the sheet, in the order of the places) ----
+  {
+    id: 'world_keys2', kind: 'sheet', size: '1024x1024', quality: 'medium', transparent: true,
+    prompt:
+      'A sprite sheet for a game: exactly four separate ornate old-fashioned door keys arranged in a neat grid of two rows and two columns, evenly spaced, ' +
+      'each centred in its own cell with clear empty space all around it, none touching or overlapping, all drawn at the same size, ' +
+      'each key lying on a slant with its bow (the handle end) at the top left and its teeth at the bottom right. ' +
+      'Every key is plainly different from the others, with its own colour and its own shape of bow. ' +
+      'Row one, left to right: a key of green bottle glass in a white iron frame whose bow is a little arched greenhouse window with a yellow marrow flower growing through it; ' +
+      'a white porcelain and brass bathroom key whose bow is a four-spoked brass tap handle, with a rubber bath plug hanging from it on a bead chain. ' +
+      'Row two, left to right: a grey steel workshop key whose bow is a toothed cogwheel with a small spanner crossed over it, with a brown luggage tag tied on with string; ' +
+      'a rose-gold sewing key whose bow is the two finger loops of a pair of scissors, with a length of red thread wound round it and a tiny silver thimble charm. ' +
+      `${WORLD_STYLE}`,
+  },
 ];

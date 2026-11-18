@@ -8,7 +8,7 @@ import { serve } from '../../tools/serve.mjs';
 import { newState } from '../../web/js/core/state.js';
 import { enterRoom } from '../../web/js/core/rooms.js';
 import { SPECIES, HEIRLOOM, ROOMS } from '../../web/js/core/balance.js';
-import { WORLD, DISTRICTS, POST } from '../../web/js/core/world.js';
+import { WORLD, DISTRICTS, POST, BRIDGE, RIVER } from '../../web/js/core/world.js';
 
 // How many kinds can be made friends of: every kind but the ringleaders.
 const FRIENDLY = Object.keys(SPECIES).filter((id) => !SPECIES[id].boss).length;
@@ -651,7 +651,8 @@ section('Tin Can Alley');
 await S(page, () => { window.oddments.game.standAt('alley'); window.oddments.ctx.show('lane'); });
 await page.waitForSelector('.placecard[data-spot="alley"]');
 check(await S(page, () => document.querySelector('.placecard h2').textContent.includes('Tin Can Alley') && document.querySelector('[data-act="enter"]').textContent.includes('Walk on in')), 'with the garden calm, its barricade is down and its gate open');
-check(await game(page, () => window.oddments.game.held().every((point) => !point.r)), 'nothing is left in the gateway');
+check(await S(page, (gate) => window.oddments.game.held().every((point) => !point.r || (point.x === gate.x && point.y === gate.y)), BRIDGE.gate), 'nothing is left in the gateway');
+check(await S(page, (gate) => window.oddments.game.bridgeOpen() === false && window.oddments.game.held().some((point) => point.x === gate.x && point.y === gate.y), BRIDGE.gate), 'far to the south, the gate on Kettle Bridge is shut, and stays shut until the whole lane is calm');
 await page.waitForTimeout(400);
 await snap(page, 'e2e-alley-gate');
 check(await walkIn(page, 'alley'), 'you walk in through the gate');
@@ -1011,8 +1012,8 @@ await page.click('[data-act="talk"]');
 check((await hearOut(page)) === 3 && (await state(page)).story.ines === 4, 'Ines Tock hears about the pantry');
 check(await S(page, () => document.querySelector('.goalchip').dataset.goal === 'calm' && document.querySelector('.goalchip span').textContent === 'Calm the Wash (0 of 5)'), 'three places of eight are calm, and the goal is the fourth');
 
-// =============================================================== the five places after it, and the end
-section('The rest of the lane, to the end');
+// =============================================================== the five places after it, the end of the lane, and the far bank
+section('The rest of the lane, and over the water');
 // (The stand-in is given the levels for each: this is about every place being there to walk into and calm, and the
 // story reaching its end. How hard each is, is the simulator's business.)
 const LATER = [
@@ -1020,7 +1021,12 @@ const LATER = [
   ['stacks', 'The Dusty Stacks', 'boss_tome', 'bg_stacks', 'Calm Moonlit Rooftops (0 of 5)'],
   ['rooftops', 'Moonlit Rooftops', 'boss_warden', 'bg_rooftops', 'Calm the Tick-Tock Attic (0 of 5)'],
   ['attic', 'The Tick-Tock Attic', 'boss_clock', 'bg_attic', 'Calm the Roaring Dark (0 of 5)'],
-  ['dark', 'The Roaring Dark', 'boss_vacuum', 'bg_dark', 'The lane is quiet (8 of 8)'],
+  ['dark', 'The Roaring Dark', 'boss_vacuum', 'bg_dark', 'Calm the Glasshouse (0 of 5)'],
+  // Chapter two: the four over the water, the same way.
+  ['glasshouse', 'The Glasshouse', 'boss_marrow', 'bg_glasshouse', 'Calm the Deep End (0 of 5)'],
+  ['deepend', 'The Deep End', 'boss_bathtub', 'bg_deepend', 'Calm the Tinker\'s Shed (0 of 5)'],
+  ['shed', 'The Tinker\'s Shed', 'boss_mower', 'bg_shed', 'Calm the Mending Room (0 of 5)'],
+  ['mending', 'The Mending Room', 'boss_treadle', 'bg_mending', 'Both banks are quiet (12 of 12)'],
 ];
 for (const [room, name, boss, bg, goalAfter] of LATER) {
   await S(page, (id) => { const g = window.oddments.game; for (const friend of g.state.friends) friend.level = Math.max(friend.level, 26); g.standAt(id); window.oddments.ctx.show('lane'); }, room);
@@ -1053,7 +1059,9 @@ for (const [room, name, boss, bg, goalAfter] of LATER) {
   await botFight(page, { befriend: true });
   const title = await modalTitle(page);
   const said = await S(page, () => document.querySelector('.modal.result .body').textContent);
-  check(title === 'All calm' && said.includes(`${name} is calm!`) && (room === 'dark' ? said.includes('That is all eight') : said.includes('is next')), `${name}: calming it says so${room === 'dark' ? ', and that it is all eight' : ', and where is next'}`, `${title}: ${said.slice(0, 120)}`);
+  const ending = { dark: 'That is all eight', mending: 'That is all four over the water' }[room];
+  check(title === 'All calm' && said.includes(`${name} is calm!`) && said.includes(ending || 'is next'), `${name}: calming it says so${ending ? `, and "${ending}"` : ', and where is next'}`, `${title}: ${said.slice(0, 120)}`);
+  check(await S(page, (id) => { const won = document.querySelector('.modal.result .keywon'); return !!won && won.dataset.key === id && won.querySelector('img').src.endsWith(`/keys/${id}.webp`); }, room), `${name}: and its ringleader hands over its key`);
   // For two of the three you set out with, one of these places is where its story began.
   const right = await S(page, () => { const el = document.querySelector('.modal.result .putright'); return el ? `${el.dataset.kind}: ${el.textContent}` : ''; });
   if (room === 'wash') check(right.startsWith('sockeel:') && right.includes('Behind Machine Six there is a sock'), 'The Wash: Eelastic, who went into the wash as one of a pair, finds what it was looking for');
@@ -1075,22 +1083,51 @@ for (const [room, name, boss, bg, goalAfter] of LATER) {
     await page.waitForSelector('.placecard[data-person="ines"] [data-act="talk"].gold');
     await page.click('[data-act="talk"]');
   }
-  const heard = await hearOut(page);
+  let heard = await hearOut(page);
+  if (room === 'dark') {
+    // The lane is quiet and she knows: the telephone rings, by itself, and it is great-aunt Maribel about the far bank.
+    check(heard === 3 || heard === 7, 'The Roaring Dark: Ines Tock hears of it', `${heard} lines`);
+    if (heard === 3) {
+      check(await S(page, () => ['call', 'calm'].includes(document.querySelector('.goalchip').dataset.goal)), 'and the telephone is ringing');
+      await page.waitForSelector('.modal.talk', { timeout: 5000 });
+      check((await S(page, () => document.querySelector('.modal.talk .talkname b').textContent)) === 'Great-aunt Maribel', 'it is great-aunt Maribel again');
+      await snap(page, 'e2e-second-call');
+      heard += await hearOut(page);
+    }
+    s = await state(page);
+    check(heard === 7 && s.story.call2 === true && (await S(page, () => window.oddments.game.journal().some((line) => line.includes('rang again')))), 'she rings about the far bank, over Kettle Bridge: four more places', `${heard} lines`);
+    check(await S(page, () => window.oddments.game.bridgeOpen() === true && document.querySelector('.goalchip span').textContent === 'Calm the Glasshouse (0 of 5)'), 'the gate on the bridge is open, and the goal is the first place over the water');
+    // All eight keys are on the ring, and now there are four more hooks on it.
+    await tab(page, 'book');
+    check(await S(page, () => { const el = document.querySelector('#book .keyring'); return el.dataset.held === '8' && el.querySelectorAll('.keyslot.held').length === 8 && el.querySelector('.keyhead small').textContent === '8 of 12' && el.querySelectorAll('.keyrow[data-chapter="1"] .keyslot').length === 8 && el.querySelectorAll('.keyrow[data-chapter="2"] .keyslot').length === 4 && el.querySelector('.keyabout').textContent.startsWith('The Dark Key.'); }), 'all eight keys are on the ring, in the scrapbook too, with four more hooks under them for the far bank');
+    await snap(page, 'e2e-keys-all');
+    await tab(page, 'lane');
+    // Standing on the bridge, the heading says where you are; and the river is drawn under it.
+    await S(page, (at) => { window.oddments.game.state.where = { x: at.x, y: at.y }; window.oddments.ctx.show('lane'); }, { x: BRIDGE.x + BRIDGE.w / 2, y: RIVER.y + RIVER.h / 2 });
+    await page.waitForTimeout(400);
+    check((await S(page, () => document.querySelector('#lane h1').textContent)) === 'Kettle Bridge', 'on the bridge, the heading says Kettle Bridge');
+    await snap(page, 'e2e-bridge');
+    await S(page, (at) => { window.oddments.game.state.where = { x: at.x, y: at.y }; window.oddments.ctx.show('lane'); }, { x: 1150, y: 6190 });
+    await page.waitForTimeout(400);
+    check((await S(page, () => document.querySelector('#lane h1').textContent)) === 'Far Bank', 'and beyond it, Far Bank');
+    await snap(page, 'e2e-far-bank');
+    continue;
+  }
   check(heard === 3 && (await S(page, () => document.querySelector('.goalchip span').textContent)) === goalAfter, `${name}: Ines Tock hears of it, and the goal moves on: ${goalAfter}`);
 }
 s = await state(page);
-check(Object.values(s.rooms).every((record) => record.clears === 1) && await S(page, () => document.querySelector('.goalchip').dataset.goal === 'more'), 'all eight places are calm: the lane is quiet');
-check(['boss_spincycle', 'boss_tome', 'boss_warden', 'boss_clock', 'boss_vacuum'].every((id) => s.book[id].met), 'and every ringleader is in the scrapbook');
+check(Object.values(s.rooms).every((record) => record.clears === 1) && Object.keys(s.rooms).length === 12 && await S(page, () => document.querySelector('.goalchip').dataset.goal === 'more'), 'all twelve places are calm: both banks are quiet');
+check(['boss_spincycle', 'boss_tome', 'boss_warden', 'boss_clock', 'boss_vacuum', 'boss_marrow', 'boss_bathtub', 'boss_mower', 'boss_treadle'].every((id) => s.book[id].met), 'and every ringleader is in the scrapbook');
 await tab(page, 'book');
-check(await S(page, () => { const el = document.querySelector('#book .keyring'); return el.dataset.held === '8' && el.querySelectorAll('.keyslot.held').length === 8 && el.querySelector('.keyhead small').textContent === '8 of 8' && el.querySelector('.keyabout').textContent.startsWith('The Dark Key.'); }), 'and all eight keys are on the ring, in the scrapbook too');
-await snap(page, 'e2e-keys-all');
+check(await S(page, () => { const el = document.querySelector('#book .keyring'); return el.dataset.held === '12' && el.querySelectorAll('.keyslot.held').length === 12 && el.querySelector('.keyhead small').textContent === '12 of 12' && el.querySelector('.keyabout').textContent.startsWith('The Thimble Key.'); }), 'and all twelve keys are on the ring');
+await snap(page, 'e2e-keys-twelve');
 await tab(page, 'lane');
 // Home, and the telephone: great-aunt Maribel hears the end of it.
 await page.evaluate(async () => { const { INSIDES } = await import('./js/core/indoors.js'); const g = window.oddments.game; const phone = INSIDES.home.spots.find((spot) => spot.does === 'ring'); g.standAt('home'); g.enter('home'); g.state.indoors.x = phone.x; g.state.indoors.y = phone.y; window.oddments.ctx.show('lane'); });
 await page.waitForSelector('#inside[data-room="home"] [data-act="ring"]');
 await page.click('[data-act="ring"]');
 await page.waitForSelector('.modal.talk');
-check(await S(page, () => document.querySelector('.modal.talk .talkwords').textContent.includes('The lane is quiet')), 'ring great-aunt Maribel, and she knows the lane is quiet');
+check(await S(page, () => document.querySelector('.modal.talk .talkwords').textContent.includes('Both banks are quiet')), 'ring great-aunt Maribel, and she knows both banks are quiet');
 await hearOut(page);
 // A calm place walked into at the end is a stroll, indoors as out.
 await S(page, () => { const g = window.oddments.game; g.leave(); g.travelTo('attic'); window.oddments.ctx.show('lane'); });
@@ -1647,7 +1684,7 @@ const foreign = requests.filter((url) => !url.startsWith(base));
 check(foreign.length === 0, 'every request the game made was for one of its own files', foreign.slice(0, 3).join(' '));
 check(requests.length > 40, `(${requests.length} requests watched)`);
 const roomPaintings = readdirSync(new URL('../../web/assets/rooms/', import.meta.url));
-check(roomPaintings.length === 98 && roomPaintings.every((file) => requests.some((url) => url.endsWith(`assets/rooms/${file}`))), `every painting of every room was fetched (${roomPaintings.length} of them)`);
+check(roomPaintings.length === 154 && roomPaintings.every((file) => requests.some((url) => url.endsWith(`assets/rooms/${file}`))), `every painting of every room was fetched (${roomPaintings.length} of them)`);
 check(['garden', 'alley', 'pantry', 'wash', 'stacks', 'rooftops', 'attic', 'dark'].every((id) => requests.some((url) => url.endsWith(`assets/keys/${id}.webp`))), 'every key\'s picture was fetched');
 const grownKinds = Object.keys(SPECIES).filter((id) => SPECIES[id].grown);
 check(grownKinds.length === FRIENDLY && grownKinds.every((id) => requests.some((url) => url.endsWith(`assets/sprites/${id}_grown.webp`)) && requests.some((url) => url.endsWith(`assets/sprites/${id}_grown_heirloom.webp`))), 'every grown form\'s picture was fetched, and its Heirloom colours');

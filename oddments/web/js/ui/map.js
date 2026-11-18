@@ -4,7 +4,7 @@
 // stands (calm, open, still shut), the benches, where you are, and where
 // your goal is. Opened from "What to do".
 import { roomOf } from '../core/balance.js';
-import { WORLD, REGIONS, ROAD_POINTS, SPOTS, DISTRICTS, BENCHES, GREEN, HEDGES, personAt } from '../core/world.js';
+import { WORLD, REGIONS, ROAD_POINTS, SPOTS, DISTRICTS, BENCHES, GREEN, HEDGES, RIVER, BRIDGE, personAt } from '../core/world.js';
 import { h } from './dom.js';
 import { modal } from './modals.js';
 import { FONT } from './scenery.js';
@@ -27,7 +27,7 @@ export function mapMarks(game) {
     return { id: spot.id, name: room ? short(room.name) : 'Home', ...at, state: !room ? 'home' : state.rooms[spot.id].clears > 0 ? 'calm' : game.roomOpen(spot.id) ? 'open' : 'shut', goal: goal.room === spot.id };
   });
   const person = goal.who ? personAt(goal.who) : null;
-  return { w: WORLD.w, h: WORLD.h, places, benches: BENCHES.map(({ x, y }) => ({ x, y })), you: { x: state.where.x, y: state.where.y }, goal: person ? { x: person.x, y: person.y } : null };
+  return { w: WORLD.w, h: WORLD.h, places, benches: BENCHES.map(({ x, y }) => ({ x, y })), you: { x: state.where.x, y: state.where.y }, goal: person ? { x: person.x, y: person.y } : null, bridge: game.bridgeOpen() ? 'open' : 'shut' };
 }
 
 /**
@@ -54,12 +54,18 @@ export function paintMap(pen, marks, { k, left, wide }) {
   pen.fillStyle = 'rgba(190,255,170,.16)'; pen.fillRect(X(GREEN.x), Y(GREEN.y), GREEN.w * k, GREEN.h * k);
   pen.fillStyle = 'rgba(40,120,60,.9)';
   for (const hedge of HEDGES) if (hedge.look === 'bush') pen.fillRect(X(hedge.x), Y(hedge.y), Math.max(1.5, hedge.w * k), Math.max(1.5, hedge.h * k));
+  // The river, from side to side.
+  pen.fillStyle = '#2c6a8a'; pen.fillRect(X(0), Y(RIVER.y), marks.w * k, Math.max(3, RIVER.h * k));
   // The streets.
   pen.lineCap = 'round'; pen.lineJoin = 'round';
   for (const [colour, width] of [[INK, 4.4], ['#cdbb96', 2.4]]) {
     pen.strokeStyle = colour; pen.lineWidth = width;
     for (const road of ROAD_POINTS) { pen.beginPath(); road.forEach((point, i) => (i ? pen.lineTo(X(point.x), Y(point.y)) : pen.moveTo(X(point.x), Y(point.y)))); pen.stroke(); }
   }
+  // The bridge: a pale bar over the river, with a dark bar across it while its gate is shut.
+  pen.fillStyle = INK; pen.fillRect(X(BRIDGE.x) - 3, Y(RIVER.y) - 2, BRIDGE.w * k + 6, Math.max(3, RIVER.h * k) + 4);
+  pen.fillStyle = '#cdbb96'; pen.fillRect(X(BRIDGE.x) - 1.5, Y(RIVER.y) - 0.5, BRIDGE.w * k + 3, Math.max(3, RIVER.h * k) + 1);
+  if (marks.bridge === 'shut') { pen.fillStyle = '#6f6a8c'; pen.fillRect(X(BRIDGE.x) - 5, Y(RIVER.y) - 3.5, BRIDGE.w * k + 10, 3); }
   // Benches: a small brown bar.
   for (const bench of marks.benches) { pen.fillStyle = INK; pen.fillRect(X(bench.x) - 5, Y(bench.y) - 3, 10, 6); pen.fillStyle = '#c08552'; pen.fillRect(X(bench.x) - 4, Y(bench.y) - 2, 8, 4); }
   // Every place: a dot that says how it stands, and its name beside it, on whichever side has the room.
@@ -97,7 +103,7 @@ export function mapDialog(game) {
   const marks = mapMarks(game);
   // As tall as the screen has room for; the world is much taller than it is wide, so the picture
   // is given room either side of it for names.
-  const tall = Math.round(Math.max(240, Math.min(470, window.innerHeight - 350)));
+  const tall = Math.round(Math.max(240, Math.min(620, window.innerHeight - 382)));
   const k = tall / marks.h;
   const wide = Math.round(Math.max(marks.w * k, Math.min(270, window.innerWidth - 70)));
   const left = (wide - marks.w * k) / 2;

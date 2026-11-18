@@ -4,12 +4,12 @@
 import { TEAM_SIZE, NAME_LENGTH, lookOf, roomOf, roomBuilt } from './balance.js';
 import { createBattle, choices, act, concede } from './battle.js';
 import { settleUp } from './progress.js';
-import { rollEncounter, fairEncounter, enterRoom, leaveRoom, afterFight, canMeet, nextGroup, heldBy, heldIn, roomOpen, placeCalm, staysCalm, calmedIn, teamOf, maxHpOf, rested, healthOf } from './rooms.js';
+import { rollEncounter, fairEncounter, enterRoom, leaveRoom, afterFight, canMeet, nextGroup, heldBy, heldIn, roomOpen, bridgeOpen, placeCalm, staysCalm, calmedIn, teamOf, maxHpOf, rested, healthOf } from './rooms.js';
 import { rollStrays, fairStrays, straysAbout, strayNear, afterStrays } from './strays.js';
 import { STRAYS } from './balance.js';
 import { insideOf, stepIn, routeIn, spotIn, onMat, besidePost } from './indoors.js';
 import { WORLD, POST, BENCHES, SIT, MAILBOXES, POST_REACH, stepWalk, routeTo, straighten, roomy, standing, canStand, spotNear, spotOf, districtOf, districtAt, postNear, personNear, personAt, benchNear, mailNear, TALK } from './world.js';
-import { goalOf, aimOf, storySoFar, hasNews, talk, takeCall } from './story.js';
+import { goalOf, aimOf, storySoFar, hasNews, talk, takeCall, callDue } from './story.js';
 import { nameOf, giveName } from './names.js';
 
 export class Game {
@@ -318,6 +318,12 @@ export class Game {
 
   /** Takes great-aunt Maribel's first call, once the game has begun. Its lines the first time; null after. */
   takeCall() { return this.state.started && this.place() !== 'fight' ? takeCall(this.state) : null; }
+
+  /** Whether the gate on Kettle Bridge stands open: the whole lane is calm. */
+  bridgeOpen() { return bridgeOpen(this.state); }
+
+  /** Whether the telephone is ringing: the first call, or the one that opens the far bank. */
+  callDue() { return callDue(this.state); }
 
   /** Goes straight up to a neighbour. For the simulator and tests; a player walks. */
   standBy(who) {

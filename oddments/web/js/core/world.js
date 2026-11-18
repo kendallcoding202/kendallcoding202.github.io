@@ -3,14 +3,17 @@
 // hedged corner you walk straight into, Tin Can Alley down its east side, the
 // Midnight Pantry north of home. From the foot of the lane a road runs south
 // through open country to two more clusters of places, and at the far end of
-// the last of those is the far shed. It is all one map: no doors between.
+// the last of those is the far shed. Below that runs the river, from one side of
+// the world to the other, with one bridge over it; and beyond the bridge is the
+// far bank, chapter two: two more streets and four more places. It is all one
+// map: no doors between.
 // Rules only: where things stand, where feet can go, and how one step of
 // walking works. No drawing, no clock: the caller says how much time has passed.
 import { ROOM_IDS } from './balance.js';
 import { own } from './util.js';
 
 export const WORLD = {
-  w: 2280, h: 5400, // the size of the world, in its own units: the lane is the top 2200 of it
+  w: 2280, h: 7700, // the size of the world, in its own units: the lane is the top 2200 of it, the far bank the last 2050
   edge: 34, // how close to the edge of the world feet may go
   speed: 280, // walking, in units a second
   reach: 86, // how near a door counts as being at it
@@ -65,6 +68,8 @@ export const REGIONS = [
   { id: 'row', name: 'Lampwick Row', y: 3120 },
   { id: 'meadow', name: 'Long Meadow', y: 3640 },
   { id: 'hill', name: 'Chimney Hill', y: 4560 },
+  { id: 'bank', name: 'Far Bank', y: 5535 }, // (from the middle of the river)
+  { id: 'bobbin', name: 'Bobbin Row', y: 6760 },
 ];
 /** The stretch of the world a point is in. */
 export function regionAt(pos) {
@@ -77,15 +82,18 @@ export function regionAt(pos) {
 // map, so streets run along the foot of each row. The garden's shed stands inside the garden.
 // On the lane: home, the garden, Tin Can Alley, the Midnight Pantry. On Lampwick Row: the Wash and
 // the Dusty Stacks. On Chimney Hill: Moonlit Rooftops and the Tick-Tock Attic, and down Dark Lane
-// at the very end, the far shed.
+// at the very end, the far shed. Over the bridge, on Far Bank: the Glasshouse and the Deep End (the
+// old bath house). On Bobbin Row: the Mending Room and the Tinker's Shed.
 const AT = {
   home: [1180, 1420], garden: [250, 262], alley: [1880, 1860], pantry: [1290, 520],
   wash: [760, 3330], stacks: [1540, 3330],
   rooftops: [1520, 4830], attic: [720, 4830],
   dark: [380, 5240],
+  glasshouse: [640, 6080], deepend: [1640, 6080],
+  shed: [1580, 7260], mending: [680, 7260],
 };
 // Most buildings are much of a size; home is broader, and two are tall and thin.
-const WIDE = { home: 226, wash: 176, rooftops: 136, attic: 158 };
+const WIDE = { home: 226, wash: 176, rooftops: 136, attic: 158, glasshouse: 216, deepend: 186, shed: 206 };
 const TALL = { home: 230, rooftops: 250, attic: 250 };
 export const SPOT_IDS = ['home', ...ROOM_IDS];
 export const SPOTS = SPOT_IDS.map((id) => {
@@ -98,6 +106,24 @@ export const SPOTS = SPOT_IDS.map((id) => {
   return { id, x, y, w, tall, block: { x: x - w / 2, y: y - 64, w, h: 64 }, door: district ? { x: district.gate.x, y: district.gate.y + 84 } : { x, y: y + 34 } };
 });
 export const spotOf = (id) => SPOTS.find((spot) => spot.id === id) || null;
+
+// The river: water from one side of the world to the other, below Chimney Hill. Nobody walks on
+// water; the one way over is Kettle Bridge. Across the north end of the bridge stands a gate with
+// eight locks, one for each key of the lane: it is shut until all eight places there are calm (see
+// rooms.bridgeOpen), and `BRIDGE.gate` is the ground it holds while it is.
+export const RIVER = { y: 5440, h: 190 };
+export const BRIDGE = { x: 1090, w: 180, y: RIVER.y - 22, h: RIVER.h + 44, gate: { x: 1180, y: RIVER.y - 6, r: 104 } };
+/** The water either side of the bridge, as blocks nobody can stand in. */
+export const WATER = [
+  { x: 0, y: RIVER.y, w: BRIDGE.x, h: RIVER.h },
+  { x: BRIDGE.x + BRIDGE.w, y: RIVER.y, w: 2280 - BRIDGE.x - BRIDGE.w, h: RIVER.h },
+];
+/** Whether a point is on the bridge. */
+export const onBridge = (pos) => !!pos && pos.x > BRIDGE.x && pos.x < BRIDGE.x + BRIDGE.w && pos.y > BRIDGE.y && pos.y < BRIDGE.y + BRIDGE.h;
+/** What the heading says where you stand: the name of the stretch of the world you are in, or of the bridge while you are on it. */
+export const whereabouts = (pos) => (onBridge(pos) ? 'Kettle Bridge' : regionAt(pos).name);
+/** Whether a point is south of the river: on the far bank. */
+export const overTheWater = (pos) => !!pos && pos.y > RIVER.y + RIVER.h / 2;
 
 // Walls: solid blocks of ground, each made of whatever suits the place (`look`). The first three
 // are the garden's hedge, leaving its gate; the rest wall Tin Can Alley off with junk, and fence
@@ -118,6 +144,11 @@ export const HEDGES = [
   // And a length of white fence in front of a garden or two, on the rows.
   { x: 520, y: 3500, w: 260, h: 26, look: 'picket' }, { x: 1480, y: 3500, w: 180, h: 26, look: 'picket' },
   { x: 1300, y: 5000, w: 260, h: 26, look: 'picket' },
+  // The far bank: hedgerows along its roads, and white fence in front of a garden on each street.
+  { x: 1400, y: 5760, w: 280, h: 44, look: 'bush' }, { x: 640, y: 5800, w: 44, h: 150, look: 'bush' },
+  { x: 880, y: 6430, w: 300, h: 44, look: 'bush' }, { x: 1500, y: 6560, w: 44, h: 200, look: 'bush' },
+  { x: 1040, y: 6800, w: 44, h: 220, look: 'bush' }, { x: 1240, y: 7560, w: 260, h: 44, look: 'bush' },
+  { x: 820, y: 6250, w: 240, h: 26, look: 'picket' }, { x: 900, y: 7430, w: 180, h: 26, look: 'picket' },
 ];
 
 // The streets, as the points each one bends through. Looks and a guide only: you can walk anywhere.
@@ -135,6 +166,11 @@ export const ROADS = [
   [[1860, 3410], [1960, 3660], [1740, 3930], [1880, 4230], [1760, 4560], [1880, 4900]], // across Long Meadow to Chimney Hill
   [[380, 4900], [720, 4900], [1120, 4900], [1520, 4900], [1880, 4900]], // the street on Chimney Hill, past two more
   [[380, 4900], [250, 5060], [232, 5250], [380, 5302]], // and Dark Lane, down and round to the door of the far shed
+  [[1200, 4900], [1215, 5100], [1180, 5300], [1180, 5640], [1165, 5850], [1140, 6150]], // from Chimney Hill down to Kettle Bridge, over it, and up to Far Bank
+  [[360, 6150], [640, 6150], [1140, 6150], [1640, 6150], [1920, 6160]], // the street on Far Bank, past two doors
+  [[360, 6150], [300, 6420], [520, 6700], [380, 6980], [470, 7330]], // the west way down to Bobbin Row
+  [[1920, 6160], [2000, 6450], [1800, 6750], [1930, 7050], [1900, 7330]], // and the east way
+  [[470, 7330], [680, 7330], [1120, 7330], [1580, 7330], [1900, 7330]], // Bobbin Row, past two more
 ].map((road) => road.map(([x, y]) => ({ x, y })));
 
 /**
@@ -173,13 +209,15 @@ export const WILDS = [
   [1706, 730], [1199, 789], [682, 1304], [1865, 1424], [235, 1625], [449, 2125], [1314, 2202], [991, 2203],
   [1311, 2799], [950, 2953], [420, 3260], [1010, 3325], [2013, 3421], [2019, 3781], [1643, 3947], [1688, 4347],
   [1946, 4666], [944, 4760], [380, 4760], [1273, 4816], [1835, 5040], [119, 5276],
+  // On the far bank: nobody strays there until the bridge is open (see strays.js), so these come last.
+  [1080, 6234], [2083, 6247], [259, 6250], [1793, 6506], [284, 6624], [614, 6680], [1968, 6855], [282, 7159], [993, 7218], [1854, 7470],
 ].map(([x, y]) => ({ x, y }));
 
 // Things that stand about the country and the rows of houses: benches, signposts, a well, haystacks,
 // ponds. [what, x, y, and for a signpost what it says]. Solid: each takes up as much ground as
 // PROP_ROUND says. A bench is somewhere to sit down and get your breath back when home is a long
 // walk off: one on Lampwick Row and one on Chimney Hill.
-export const PROP_ROUND = { bench: 22, signpost: 8, well: 30, haystack: 32, scarecrow: 9, logs: 28, rock: 26, wheelbarrow: 24, mailbox: 7, pond: 50 };
+export const PROP_ROUND = { bench: 22, signpost: 8, well: 30, haystack: 32, scarecrow: 9, logs: 28, rock: 26, wheelbarrow: 24, mailbox: 7, pond: 50, boat: 34, reeds: 14, beehive: 18, barrow: 28, pump: 24, crates: 26 };
 export const PROPS = [
   ['mailbox', 1036, 1452],
   ['signpost', 1210, 2236, 'South: Bramble Way, and Lampwick Row'],
@@ -216,6 +254,32 @@ export const PROPS = [
   ['logs', 700, 5230],
   ['rock', 2010, 5210],
   ['well', 1700, 5120],
+  // The far bank. A signpost at each end of the bridge; a boat pulled up below it; a bench and a
+  // mailbox or two on each street; and what stands about a place where people grow and mend things.
+  ['signpost', 1336, 5296, 'South: Kettle Bridge, and the Far Bank'],
+  ['boat', 900, 5700],
+  ['reeds', 1400, 5672], ['reeds', 640, 5676], ['reeds', 1960, 5680], ['reeds', 300, 5674],
+  ['signpost', 1262, 5830, 'North: the bridge, and the lane'],
+  ['mailbox', 824, 6066],
+  ['mailbox', 1775, 6062],
+  ['bench', 1320, 6240],
+  ['beehive', 330, 5940], ['beehive', 436, 5890],
+  ['barrow', 950, 5990],
+  ['pump', 1900, 5920],
+  ['crates', 1400, 6020],
+  ['signpost', 1212, 6276, 'South, either way round: Bobbin Row'],
+  ['pond', 1300, 6640],
+  ['haystack', 760, 6560],
+  ['rock', 1640, 6900],
+  ['logs', 700, 6900],
+  ['scarecrow', 1320, 7020],
+  ['mailbox', 520, 7250],
+  ['mailbox', 1715, 7242],
+  ['bench', 1120, 7420],
+  ['pump', 1120, 7200],
+  ['crates', 1830, 7200],
+  ['barrow', 380, 7480],
+  ['well', 1700, 7540],
 ].map(([kind, x, y, says]) => ({ kind, x, y, r: PROP_ROUND[kind], ...(says ? { says } : {}) }));
 export const BENCHES = PROPS.filter((prop) => prop.kind === 'bench').map((bench) => ({ ...bench, id: regionAt(bench).id }));
 export const SIT = 84; // how near counts as at a bench
@@ -248,7 +312,9 @@ export const personAt = (id) => PEOPLE.find((person) => person.id === id) || nul
 export const LAMPS = [
   ...SPOTS.filter((spot) => spot.id !== 'alley').map((spot) => ({ x: spot.x + (spot.id === 'home' || spot.x < AT.home[0] ? 1 : -1) * (spot.w / 2 + 30), y: spot.y + 26, r: 7 })),
   ...[[602, 1012], [798, 1012], [800, 1470], [785, 1790], [1515, 1780], [1415, 1225], [250, 1790], [2080, 1644], [2220, 1644], [1560, 900],
-    [1050, 2230], [1300, 2700], [1090, 3130], [440, 3350], [1085, 3345], [1890, 3350], [2020, 3690], [1940, 4270], [400, 4850], [1120, 4850], [1920, 4850], [170, 5080]].map(([x, y]) => ({ x, y, r: 7 })),
+    [1050, 2230], [1300, 2700], [1090, 3130], [440, 3350], [1085, 3345], [1890, 3350], [2020, 3690], [1940, 4270], [400, 4850], [1120, 4850], [1920, 4850], [170, 5080],
+    // The far end of the bridge (the gateposts at the near end carry lanterns of their own), and along the two streets beyond it.
+    [1060, 5682], [1300, 5682], [380, 6100], [1076, 6096], [1900, 6100], [300, 6500], [2064, 6500], [404, 7290], [1120, 7280], [1964, 7290]].map(([x, y]) => ({ x, y, r: 7 })),
 ];
 
 // Trees, as circles to walk round: [x, y, how big]. They were scattered once by a fixed run of
@@ -276,8 +342,16 @@ export const TREES = [
   [1098, 4278, 29], [192, 4289, 27], [367, 4310, 24], [2181, 4312, 25], [2025, 4319, 28], [1364, 4363, 27], [969, 4395, 26], [1694, 4428, 28],
   [502, 4436, 29], [78, 4450, 24], [1532, 4457, 30], [1878, 4510, 30], [1205, 4542, 27], [837, 4556, 26], [249, 4558, 29], [1399, 4648, 24],
   [962, 4651, 24], [547, 4658, 27], [277, 4739, 28], [2128, 4761, 24], [102, 4768, 26], [1054, 4783, 28], [1748, 4804, 29], [231, 4920, 24],
-  [1923, 4965, 27], [2152, 5043, 24], [756, 5082, 29], [129, 5128, 29], [1252, 5147, 25], [1562, 5157, 27], [1011, 5169, 29], [2154, 5233, 24],
-  [1805, 5263, 27], [1153, 5268, 24], [1626, 5323, 25], [892, 5323, 25],
+  [1923, 4965, 27], [2152, 5043, 24], [756, 5082, 29], [129, 5128, 29], [1562, 5157, 27], [1011, 5169, 29], [2154, 5233, 24],
+  [1805, 5263, 27], [1626, 5323, 25], [892, 5323, 25],
+  // The far bank, planted by the same rule.
+  [776, 5709, 30], [1597, 5719, 28], [171, 5724, 27], [1803, 5736, 28], [1325, 5738, 26], [360, 5750, 24], [1066, 5816, 28], [2090, 5877, 29],
+  [113, 5883, 30], [889, 5906, 25], [1308, 5913, 24], [213, 6020, 27], [204, 6181, 30], [2143, 6190, 28], [1473, 6237, 27], [465, 6296, 28],
+  [2047, 6350, 26], [1245, 6367, 30], [1774, 6370, 24], [240, 6397, 25], [1503, 6401, 24], [649, 6418, 29], [1665, 6585, 28], [102, 6602, 30],
+  [1451, 6632, 28], [974, 6633, 25], [1131, 6653, 30], [358, 6703, 28], [2157, 6738, 25], [1722, 6766, 29], [603, 6770, 27], [1944, 6777, 24],
+  [297, 6859, 26], [2072, 6877, 27], [124, 6886, 26], [1425, 6889, 29], [2189, 7002, 27], [1172, 7004, 27], [882, 7009, 30], [1543, 7013, 29],
+  [560, 7018, 26], [283, 7040, 29], [1334, 7154, 29], [2110, 7181, 26], [864, 7234, 29], [186, 7337, 26], [2107, 7372, 25], [634, 7424, 26],
+  [1956, 7457, 26], [239, 7494, 30], [1391, 7510, 27], [88, 7542, 24], [2162, 7558, 25], [723, 7576, 24], [1823, 7613, 24], [1538, 7615, 27],
 ].map(([x, y, r]) => ({ x, y, r }));
 
 // ---------------------------------------------------------------- where feet can go
@@ -293,7 +367,7 @@ function stand(thing, x0, y0, x1, y1) {
     for (let c = Math.max(0, Math.floor(x0 / SQUARE)); c <= Math.min(ACROSS - 1, Math.floor(x1 / SQUARE)); c++) solid[r * ACROSS + c].push(thing);
   }
 }
-for (const block of [...SPOTS.map((spot) => spot.block), ...HEDGES]) {
+for (const block of [...SPOTS.map((spot) => spot.block), ...HEDGES, ...WATER]) {
   const b = WORLD.body;
   stand({ x0: block.x - b, y0: block.y - b, x1: block.x + block.w + b, y1: block.y + block.h + b }, block.x - b, block.y - b, block.x + block.w + b, block.y + block.h + b);
 }

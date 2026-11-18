@@ -61,7 +61,7 @@ export const GROWN_BOOST = 1.05;
 // The share of the restless that are grown, place by place: none on the lane itself, a few from
 // the Wash, more than half by the Roaring Dark. So the further you go the more of a mix you meet.
 // Strays go by the furthest place open to you. Ringleaders are as they are.
-export const GROWN_ODDS = { garden: 0, alley: 0, pantry: 0, wash: 0.2, stacks: 0.3, rooftops: 0.4, attic: 0.5, dark: 0.6 };
+export const GROWN_ODDS = { garden: 0, alley: 0, pantry: 0, wash: 0.2, stacks: 0.3, rooftops: 0.4, attic: 0.5, dark: 0.6, glasshouse: 0.6, deepend: 0.65, shed: 0.7, mending: 0.7 };
 export const grownOdds = (room) => (room && GROWN_ODDS[room.id]) || 0;
 // A grown one teaches this much more than a young one of its level.
 export const GROWN_WORTH = 1.25;
@@ -361,6 +361,103 @@ export const MOVES = {
   sweepaside: hit('Sweep Aside', 'clank', 1.0, 0, 'Out of the way, with bristles.'),
   panguard: boost('Pan Guard', 'clank', 'grit', 0.5, 3, 'self', 3, 'Gets behind the dustpan: raises Grit.'),
   cleansweep: hit('Clean Sweep', 'clank', 1.75, 3, 'One long stroke, wall to wall.'),
+  // ---- chapter two: the four new places ----
+  // Sproutlark
+  seedspit: hit('Seed Spit', 'sprout', 1.0, 0, 'Pip, pip, pip.'),
+  dawnchorus: boost('Dawn Chorus', 'sprout', 'oomph', 0.3, 2, 'allies', 3, 'Gets everyone up: raises its whole side\'s Oomph.'),
+  divesow: hit('Dive and Sow', 'sprout', 1.65, 2, 'Plants one right on your head.'),
+  // Terracub
+  potbutt: hit('Pot Butt', 'clank', 1.0, 0, 'Rim first.'),
+  crockup: boost('Crock Up', 'clank', 'grit', 0.5, 3, 'self', 3, 'Pulls the pot down tight: raises Grit.'),
+  claytumble: hit('Clay Tumble', 'clank', 1.75, 3, 'Rolls the whole length of the bench.'),
+  // Mulchkin
+  clodlob: hit('Clod Lob', 'sprout', 1.0, 0, 'Warm, damp, and well aimed.'),
+  feedthesoil: mend('Feed the Soil', 'sprout', 0.3, 'ally', 2, 'Does a friend a power of good.'),
+  steamingheap: sweep('Steaming Heap', 'sprout', 0.65, 3, 'Turns itself over on top of them.'),
+  // Tomarin
+  pipflick: hit('Pip Flick', 'crumb', 1.0, 0, 'A seed, hard, between the eyes.'),
+  vineswing: hit('Vine Swing', 'crumb', 1.65, 2, 'Feet first off the nearest cane.'),
+  overripe: hit('Overripe', 'crumb', 0.8, 3, 'Goes off all over them: lowers Grit.', { sap: { stat: 'grit', by: 0.3, turns: 2 } }),
+  // Trailbloom
+  petalsting: hit('Petal Sting', 'suds', 1.0, 0, 'Prettier than it feels.'),
+  dripdrip: sap('Drip, Drip', 'suds', 'grit', 0.2, 2, 'foes', 3, 'On every head, for ever: lowers Grit.'),
+  traillash: hit('Trailing Lash', 'suds', 1.65, 2, 'A long wet swipe of ivy.'),
+  // The Prize Marrow
+  tendrillash: hit('Tendril Lash', 'sprout', 1.0, 0, 'A long green reach.'),
+  benchroll: sweep('Show Bench Roll', 'sprout', 0.6, 2, 'Rolls the length of the bench, over everyone.'),
+  firstprize: hit('First Prize', 'sprout', 1.3, 3, 'The full weight of a champion: lowers Grit.', { sap: { stat: 'grit', by: 0.3, turns: 2 } }),
+  // Squeakbill
+  beakbop: hit('Beak Bop', 'suds', 1.0, 0, 'Harder than rubber ought to be.'),
+  bigsqueak: sap('SQUEAK', 'suds', 'oomph', 0.2, 2, 'foes', 3, 'Right through everyone\'s teeth: lowers Oomph.'),
+  bathbomb: hit('Bath Bomb', 'suds', 1.65, 2, 'Fizzes on the way in.'),
+  // Mintgrub
+  mintyspit: hit('Minty Spit', 'suds', 1.0, 0, 'Stings a bit. Fresh, though.'),
+  squeezeupwards: mend('Squeeze Upwards', 'suds', 0.25, 'self', 3, 'Finds a bit more in itself.'),
+  stripe: sweep('Triple Stripe', 'suds', 0.7, 3, 'Red, white and blue, over everyone.'),
+  // Loofling
+  scratchyroll: hit('Scratchy Roll', 'sprout', 1.0, 0, 'Like being scrubbed by a hedge.'),
+  curluptight: boost('Curl Up Tight', 'sprout', 'grit', 0.5, 3, 'self', 3, 'Nothing gets in: raises Grit.'),
+  scrubdown: hit('Scrub Down', 'sprout', 1.75, 3, 'Takes the top layer off.'),
+  // Clogtuft
+  wetknot: hit('Wet Knot', 'fluff', 1.0, 0, 'Round your fingers, and tight.'),
+  clog: hit('Clog', 'fluff', 1.1, 2, 'Slows everything to a trickle: lowers Pep.', { sap: { stat: 'pep', by: 0.3, turns: 2 } }),
+  hairball: sweep('Hairball', 'fluff', 0.65, 3, 'Nobody wants this.'),
+  // Showershade
+  clingyslap: hit('Clingy Slap', 'fluff', 1.0, 0, 'Cold, wet, and it sticks.'),
+  clammycling: hit('Clammy Cling', 'fluff', 0.8, 2, 'Wraps right round: lowers Pep.', { sap: { stat: 'pep', by: 0.3, turns: 2 } }),
+  coldshower: sweep('Cold Shower', 'fluff', 0.65, 3, 'For everyone, without warning.'),
+  // Old Clawfoot
+  clawstomp: hit('Iron Foot', 'suds', 1.0, 0, 'One of four, and heavy.'),
+  overflow: sweep('Overflow', 'suds', 0.6, 2, 'Over the side, on everyone.'),
+  pulltheplug: hit('Pull the Plug', 'suds', 1.3, 3, 'Everything goes down with it: lowers Grit.', { sap: { stat: 'grit', by: 0.3, turns: 2 } }),
+  // Tapetail
+  tapesnap: hit('Tape Snap', 'clank', 1.0, 0, 'Steel, with a sharp edge.'),
+  measuretwice: boost('Measure Twice', 'clank', 'oomph', 0.4, 3, 'self', 3, 'Lines it up properly: raises Oomph.'),
+  whiplash: hit('Full Extension', 'clank', 1.7, 2, 'All five metres, at speed.'),
+  // Peckhammer
+  taptap: hit('Tap Tap', 'clank', 1.0, 0, 'Finding the spot.'),
+  hitthenail: hit('Hit the Nail', 'clank', 1.7, 2, 'On the head. First time.'),
+  ratatat: sweep('Rat-a-Tat', 'clank', 0.65, 3, 'Along the whole row of them.'),
+  // Daubfox
+  daub: hit('Daub', 'suds', 1.0, 0, 'A wet swipe of blue.'),
+  wetpaint: hit('Wet Paint', 'suds', 0.8, 2, 'Sticks them where they stand: lowers Pep.', { sap: { stat: 'pep', by: 0.3, turns: 2 } }),
+  splatter: sweep('Splatter', 'suds', 0.65, 3, 'One good shake of the tail.'),
+  // Sawnose
+  roughcut: hit('Rough Cut', 'clank', 1.0, 0, 'Near enough.'),
+  againstthegrain: hit('Against the Grain', 'clank', 1.1, 2, 'Leaves them splintery: lowers Grit.', { sap: { stat: 'grit', by: 0.3, turns: 2 } }),
+  sawduststorm: sweep('Sawdust Storm', 'clank', 0.65, 3, 'In everyone\'s eyes and down every neck.'),
+  // Filamoth
+  flicker: hit('Flicker', 'spark', 1.0, 0, 'On, off, and a sting.'),
+  glare: sap('Glare', 'spark', 'oomph', 0.2, 2, 'foes', 3, 'A bare bulb at eye level: lowers Oomph.'),
+  hundredwatts: hit('Hundred Watts', 'spark', 1.65, 2, 'Far brighter than is safe.'),
+  // Captain Twostroke
+  bladespin: hit('Blade Spin', 'clank', 1.0, 0, 'Short back and sides.'),
+  grassclippings: sweep('Grass Clippings', 'clank', 0.6, 2, 'A green fog over everyone.'),
+  fullthrottle: hit('Full Throttle', 'clank', 1.3, 3, 'Straight through, and never mind the edges: lowers Grit.', { sap: { stat: 'grit', by: 0.3, turns: 2 } }),
+  // Pinbobber
+  pinprick: hit('Pin Prick', 'fluff', 1.0, 0, 'Just the one. This time.'),
+  puffup: boost('Puff Up', 'fluff', 'grit', 0.5, 3, 'self', 3, 'Twice as round and twice as prickly: raises Grit.'),
+  pinsandneedles: sweep('Pins and Needles', 'fluff', 0.7, 3, 'All of them. Outwards.'),
+  // Thimblet
+  needlejab: hit('Needle Jab', 'clank', 1.0, 0, 'En garde.'),
+  thimblecharge: hit('Thimble Charge', 'clank', 1.65, 2, 'Head down, helmet first.'),
+  stitchintime: mend('Stitch in Time', 'clank', 0.15, 'allies', 4, 'A quick mend for everyone on its side.'),
+  // Snipstork
+  snip: hit('Snip', 'clank', 1.0, 0, 'A neat one.'),
+  cutonthebias: hit('Cut on the Bias', 'clank', 1.7, 2, 'Corner to corner, in one stroke.'),
+  loosethreads: hit('Loose Threads', 'clank', 0.8, 3, 'They start to come apart: lowers Grit.', { sap: { stat: 'grit', by: 0.3, turns: 2 } }),
+  // Buttonhoot
+  toggleshot: hit('Toggle Shot', 'fluff', 1.0, 0, 'Four holes, one bruise.'),
+  wiselook: sap('Wise Look', 'fluff', 'oomph', 0.2, 2, 'foes', 3, 'Makes everyone feel a bit silly: lowers Oomph.'),
+  spillthejar: sweep('Spill the Jar', 'fluff', 0.65, 3, 'Thousands of them, across the floor.'),
+  // Doilyspin
+  threadsnare: hit('Thread Snare', 'fluff', 1.0, 0, 'One loop, pulled tight.'),
+  weboflace: sap('Web of Lace', 'fluff', 'pep', 0.25, 2, 'foes', 3, 'Too pretty to break, too fine to see: lowers Pep.'),
+  bobbindrop: hit('Bobbin Drop', 'fluff', 1.65, 2, 'From the ceiling, on a thread.'),
+  // Madam Treadle
+  needledown: hit('Needle Down', 'fluff', 1.0, 0, 'Up, down, and through.'),
+  runaseam: sweep('Run a Seam', 'fluff', 0.6, 2, 'One long line through all of them.'),
+  sewnshut: hit('Sewn Shut', 'fluff', 1.3, 3, 'Neat, tight, and you cannot move: lowers Grit.', { sap: { stat: 'grit', by: 0.3, turns: 2 } }),
 };
 
 // Anyone can do this instead of a move: sit tight until its next turn.
@@ -810,6 +907,152 @@ export const SPECIES = {
     notYet: 'sweeps itself under the mat',
     grown: { at: 16, name: 'Sweepclaw' },
   },
+  // ---- chapter two: the kinds of the four new places, five to each ----
+  seedfinch: {
+    name: 'Sproutlark', element: 'sprout', hp: 40, oomph: 14, grit: 8, pep: 16, huff: 4,
+    moves: [['seedspit', 1], ['dawnchorus', 3], ['divesow', 6]],
+    fly: true,
+    blurb: 'Hatched out of a packet of mixed seeds. Nobody knows what it will come up as.',
+    notYet: 'flits up into the rafters',
+    grown: { at: 16, name: 'Harvestwing' },
+  },
+  potcub: {
+    name: 'Terracub', element: 'clank', hp: 58, oomph: 10, grit: 15, pep: 5, huff: 5,
+    moves: [['potbutt', 1], ['crockup', 3], ['claytumble', 6]],
+    blurb: 'Somebody planted a bulb in it and forgot. The bulb did not.',
+    notYet: 'ducks down inside its pot',
+    grown: { at: 16, name: 'Kilnbear' },
+  },
+  compostkin: {
+    name: 'Mulchkin', element: 'sprout', hp: 52, oomph: 11, grit: 12, pep: 8, huff: 4,
+    moves: [['clodlob', 1], ['feedthesoil', 3], ['steamingheap', 6]],
+    blurb: 'Peelings, grass and a great deal of time. Warm to the touch, and proud of it.',
+    notYet: 'burrows into itself',
+    grown: { at: 16, name: 'Steamheap' },
+  },
+  tomatomonkey: {
+    name: 'Tomarin', element: 'crumb', hp: 42, oomph: 14, grit: 8, pep: 15, huff: 4,
+    moves: [['pipflick', 1], ['vineswing', 3], ['overripe', 6]],
+    blurb: 'Ripened on the vine. Stayed on the vine. Swings on the vine.',
+    notYet: 'swings up out of reach',
+    grown: { at: 16, name: 'Tomatogre' },
+  },
+  basketjelly: {
+    name: 'Trailbloom', element: 'suds', hp: 44, oomph: 12, grit: 10, pep: 12, huff: 4,
+    moves: [['petalsting', 1], ['dripdrip', 3], ['traillash', 6]],
+    fly: true,
+    blurb: 'Watered every day for a summer, then never again. It waters itself now.',
+    notYet: 'drifts up to the roof',
+    grown: { at: 16, name: 'Hangarden' },
+  },
+  rubberduck: {
+    name: 'Squeakbill', element: 'suds', hp: 48, oomph: 13, grit: 10, pep: 12, huff: 4,
+    moves: [['beakbop', 1], ['bigsqueak', 3], ['bathbomb', 6]],
+    blurb: 'Squeaks when squeezed. Bites when squeezed twice.',
+    notYet: 'paddles off in a huff',
+    grown: { at: 17, name: 'Squeakswan' },
+  },
+  pastegrub: {
+    name: 'Mintgrub', element: 'suds', hp: 56, oomph: 10, grit: 14, pep: 6, huff: 5,
+    moves: [['mintyspit', 1], ['squeezeupwards', 3], ['stripe', 6]],
+    blurb: 'Rolled up from the bottom, properly, for once.',
+    notYet: 'screws its cap back on',
+    grown: { at: 17, name: 'Pastepillar' },
+  },
+  loofahdillo: {
+    name: 'Loofling', element: 'sprout', hp: 58, oomph: 9, grit: 15, pep: 5, huff: 5,
+    moves: [['scratchyroll', 1], ['curluptight', 3], ['scrubdown', 6]],
+    blurb: 'Rough on the outside. Also rough on the inside.',
+    notYet: 'rolls into a ball',
+    grown: { at: 17, name: 'Scrubadillo' },
+  },
+  drainhair: {
+    name: 'Clogtuft', element: 'fluff', hp: 40, oomph: 13, grit: 8, pep: 15, huff: 4,
+    moves: [['wetknot', 1], ['clog', 3], ['hairball', 6]],
+    blurb: 'Everybody\'s hair, and nobody\'s. It came up out of the plughole to see who.',
+    notYet: 'slips back down the plughole',
+    grown: { at: 17, name: 'Clogmane' },
+  },
+  curtainghost: {
+    name: 'Showershade', element: 'fluff', hp: 42, oomph: 12, grit: 9, pep: 13, huff: 4,
+    moves: [['clingyslap', 1], ['clammycling', 3], ['coldshower', 6]],
+    fly: true,
+    blurb: 'It only wants to cling to somebody. It cannot see why that is a problem.',
+    notYet: 'billows away along the rail',
+    grown: { at: 17, name: 'Curtaincall' },
+  },
+  tapelizard: {
+    name: 'Tapetail', element: 'clank', hp: 42, oomph: 14, grit: 9, pep: 15, huff: 4,
+    moves: [['tapesnap', 1], ['measuretwice', 3], ['whiplash', 6]],
+    blurb: 'Five metres long when it wants to be. It usually wants to be.',
+    notYet: 'retracts with a snap',
+    grown: { at: 18, name: 'Yardwhip' },
+  },
+  hammerpecker: {
+    name: 'Peckhammer', element: 'clank', hp: 46, oomph: 14, grit: 9, pep: 12, huff: 4,
+    moves: [['taptap', 1], ['hitthenail', 3], ['ratatat', 6]],
+    blurb: 'Has one answer to every problem, and it is nearly always right.',
+    notYet: 'hammers at the wall instead',
+    grown: { at: 18, name: 'Sledgebeak' },
+  },
+  brushfox: {
+    name: 'Daubfox', element: 'suds', hp: 46, oomph: 13, grit: 10, pep: 13, huff: 4,
+    moves: [['daub', 1], ['wetpaint', 3], ['splatter', 6]],
+    blurb: 'Leaves paw prints in three colours. None of them the colours anyone chose.',
+    notYet: 'flicks paint and trots off',
+    grown: { at: 18, name: 'Glossvixen' },
+  },
+  sawfish: {
+    name: 'Sawnose', element: 'clank', hp: 48, oomph: 13, grit: 11, pep: 10, huff: 4,
+    moves: [['roughcut', 1], ['againstthegrain', 3], ['sawduststorm', 6]],
+    blurb: 'Swims through sawdust. Measures nothing, cuts everything.',
+    notYet: 'dives into the sawdust',
+    grown: { at: 18, name: 'Bandsawback' },
+  },
+  bulbmoth: {
+    name: 'Filamoth', element: 'spark', hp: 38, oomph: 14, grit: 8, pep: 16, huff: 4,
+    moves: [['flicker', 1], ['glare', 3], ['hundredwatts', 6]],
+    fly: true,
+    blurb: 'The bulb went years ago. Nobody told the moth.',
+    notYet: 'flutters back to the light',
+    grown: { at: 18, name: 'Lumenwing' },
+  },
+  pinpuffer: {
+    name: 'Pinbobber', element: 'fluff', hp: 54, oomph: 10, grit: 15, pep: 7, huff: 5,
+    moves: [['pinprick', 1], ['puffup', 3], ['pinsandneedles', 6]],
+    fly: true,
+    blurb: 'Everything sharp in the house ends up in it. It has stopped minding.',
+    notYet: 'puffs up to twice the size',
+    grown: { at: 19, name: 'Needleglobe' },
+  },
+  thimblemouse: {
+    name: 'Thimblet', element: 'clank', hp: 40, oomph: 13, grit: 9, pep: 16, huff: 4,
+    moves: [['needlejab', 1], ['thimblecharge', 3], ['stitchintime', 6]],
+    blurb: 'Small enough to be overlooked. Sharp enough to make that a mistake.',
+    notYet: 'hides under its thimble',
+    grown: { at: 19, name: 'Thimbleguard' },
+  },
+  scissorstork: {
+    name: 'Snipstork', element: 'clank', hp: 46, oomph: 14, grit: 9, pep: 13, huff: 4,
+    moves: [['snip', 1], ['cutonthebias', 3], ['loosethreads', 6]],
+    blurb: 'Measures once and cuts twice. It likes the cutting.',
+    notYet: 'stalks off on tiptoe',
+    grown: { at: 19, name: 'Shearcrane' },
+  },
+  buttonowl: {
+    name: 'Buttonhoot', element: 'fluff', hp: 50, oomph: 12, grit: 12, pep: 9, huff: 4,
+    moves: [['toggleshot', 1], ['wiselook', 3], ['spillthejar', 6]],
+    blurb: 'Every spare button from every coat. It knows which one is yours.',
+    notYet: 'turns its head right round',
+    grown: { at: 19, name: 'Haberhoot' },
+  },
+  lacespider: {
+    name: 'Doilyspin', element: 'fluff', hp: 40, oomph: 13, grit: 8, pep: 15, huff: 4,
+    moves: [['threadsnare', 1], ['weboflace', 3], ['bobbindrop', 6]],
+    blurb: 'Has been making the same doily since 1962. It is nearly happy with it.',
+    notYet: 'scurries back up its thread',
+    grown: { at: 19, name: 'Lacewidow' },
+  },
   boss_hydra: {
     name: 'Old Summerlong', element: 'suds', hp: 118, oomph: 11, grit: 12, pep: 9, huff: 0, boss: true, turns: 2,
     moves: [['nozzlejet', 1], ['fullsprinkle', 1], ['hosedown', 1]],
@@ -849,6 +1092,26 @@ export const SPECIES = {
     name: 'THE VACUUM', element: 'spark', hp: 120, oomph: 12, grit: 13, pep: 11, huff: 0, boss: true, turns: 2,
     moves: [['hosewhip', 1], ['fullsuction', 1], ['bagburst', 1]],
     blurb: 'Mr. Spick\'s. It does not calm things. It collects them.',
+  },
+  boss_marrow: {
+    name: 'The Prize Marrow', element: 'sprout', hp: 122, oomph: 12, grit: 13, pep: 10, huff: 0, boss: true, turns: 2,
+    moves: [['tendrillash', 1], ['benchroll', 1], ['firstprize', 1]],
+    blurb: 'First prize, 1987. It never stopped growing, and it wants the cup back.',
+  },
+  boss_bathtub: {
+    name: 'Old Clawfoot', element: 'suds', hp: 124, oomph: 12, grit: 13, pep: 9, huff: 0, boss: true, turns: 2,
+    moves: [['clawstomp', 1], ['overflow', 1], ['pulltheplug', 1]],
+    blurb: 'A bath that got up on its four iron feet one night. It has been running ever since.',
+  },
+  boss_mower: {
+    name: 'Captain Twostroke', element: 'clank', hp: 126, oomph: 12, grit: 13, pep: 10, huff: 0, boss: true, turns: 2,
+    moves: [['bladespin', 1], ['grassclippings', 1], ['fullthrottle', 1]],
+    blurb: 'Started first pull in 1974. Nobody has found the off switch.',
+  },
+  boss_treadle: {
+    name: 'Madam Treadle', element: 'fluff', hp: 120, oomph: 12, grit: 13, pep: 10, huff: 0, boss: true, turns: 2,
+    moves: [['needledown', 1], ['runaseam', 1], ['sewnshut', 1]],
+    blurb: 'Has run the same seam since 1953. It will stitch anything that stands still.',
   },
 };
 export const SPECIES_IDS = Object.keys(SPECIES);
@@ -890,7 +1153,7 @@ export const WANDERERS = { groups: [1, 3] };
 // between the rows of houses. `meet` is how near you must walk
 // to meet one: much nearer than to a group that holds its ground, because nobody has to meet a
 // stray. `berth` is how wide the way found for you goes round one you are not heading for.
-export const STRAYS = { groups: [4, 7], size: [1, 3], meet: 58, berth: 104 };
+export const STRAYS = { groups: [4, 7], farGroups: [6, 9], size: [1, 3], meet: 58, berth: 104 }; // (`farGroups`: once the far bank is open too)
 
 // ---------------------------------------------------------------- the house-sitter
 //
@@ -1028,6 +1291,50 @@ export const ROOMS = [
       { name: 'The Shoe Rack', size: [2, 3], level: [12, 12], pool: [['robodisc', 3], ['dustwraith', 2], ['cordserpent', 1], ['torchmole', 2], ['dustpancrab', 2]] },
       { name: 'The Back Corner', size: [2, 3], level: [12, 12], pool: [['cordserpent', 2], ['dustwraith', 2], ['robodisc', 2], ['bootpup', 2], ['dustpancrab', 2]] },
       { name: 'The Plug Socket', boss: 'boss_vacuum', bossLevel: 13, size: [1, 1], level: [11, 11], pool: [['cordserpent', 2], ['robodisc', 2]] },
+    ],
+  },
+  {
+    id: 'glasshouse', name: 'The Glasshouse', bg: 'bg_glasshouse', tint: '#8fd17a', element: 'sprout', chapter: 2,
+    blurb: 'Warm, wet, and everything in it has been growing all night.',
+    path: [
+      { name: 'The Seed Trays', size: [2, 2], level: [12, 12], pool: [['seedfinch', 3], ['compostkin', 2]] },
+      { name: 'The Potting Bench', size: [2, 2], level: [12, 13], pool: [['potcub', 3], ['seedfinch', 2], ['compostkin', 1]] },
+      { name: 'The Tomato Row', size: [2, 3], level: [13, 13], pool: [['tomatomonkey', 3], ['potcub', 2], ['basketjelly', 1]] },
+      { name: 'The Hanging Baskets', size: [3, 3], level: [13, 13], pool: [['basketjelly', 3], ['tomatomonkey', 2], ['compostkin', 1]] },
+      { name: 'The Show Bench', boss: 'boss_marrow', bossLevel: 14, size: [1, 2], level: [12, 12], pool: [['compostkin', 2], ['potcub', 2]] },
+    ],
+  },
+  {
+    id: 'deepend', name: 'The Deep End', bg: 'bg_deepend', tint: '#6fd0dc', element: 'suds', chapter: 2,
+    blurb: 'The old bath house, with the taps left running and the light off.',
+    path: [
+      { name: 'The Bath Mat', size: [2, 2], level: [13, 13], pool: [['rubberduck', 3], ['drainhair', 2]] },
+      { name: 'The Basin', size: [2, 2], level: [13, 14], pool: [['pastegrub', 3], ['rubberduck', 2], ['drainhair', 1]] },
+      { name: 'The Cabinet', size: [2, 3], level: [14, 14], pool: [['loofahdillo', 3], ['pastegrub', 2], ['curtainghost', 1]] },
+      { name: 'The Shower', size: [3, 3], level: [14, 14], pool: [['curtainghost', 3], ['loofahdillo', 2], ['drainhair', 2]] },
+      { name: 'The Tub', boss: 'boss_bathtub', bossLevel: 15, size: [1, 2], level: [13, 13], pool: [['rubberduck', 2], ['drainhair', 2]] },
+    ],
+  },
+  {
+    id: 'shed', name: 'The Tinker\'s Shed', bg: 'bg_shed', tint: '#c9a36a', element: 'clank', chapter: 2,
+    blurb: 'Every tool he ever borrowed, and the mower he never took back.',
+    path: [
+      { name: 'The Woodpile', size: [2, 2], level: [14, 14], pool: [['sawfish', 3], ['hammerpecker', 2]] },
+      { name: 'The Workbench', size: [2, 2], level: [14, 15], pool: [['hammerpecker', 3], ['tapelizard', 2], ['sawfish', 1]] },
+      { name: 'The Paint Shelf', size: [2, 3], level: [15, 15], pool: [['brushfox', 3], ['tapelizard', 2], ['bulbmoth', 1]] },
+      { name: 'The Pegboard', size: [3, 3], level: [15, 15], pool: [['bulbmoth', 3], ['brushfox', 2], ['tapelizard', 2]] },
+      { name: 'The Mower Bay', boss: 'boss_mower', bossLevel: 16, size: [1, 1], level: [14, 14], pool: [['hammerpecker', 2], ['sawfish', 2]] },
+    ],
+  },
+  {
+    id: 'mending', name: 'The Mending Room', bg: 'bg_mending', tint: '#d9a5c8', element: 'fluff', chapter: 2,
+    blurb: 'A sewing room where something has been stitching all night, and has started on the door.',
+    path: [
+      { name: 'The Scrap Basket', size: [2, 2], level: [15, 15], pool: [['thimblemouse', 3], ['lacespider', 2]] },
+      { name: 'The Button Jar', size: [2, 2], level: [15, 16], pool: [['buttonowl', 3], ['thimblemouse', 2], ['pinpuffer', 1]] },
+      { name: 'The Cutting Table', size: [2, 3], level: [16, 16], pool: [['scissorstork', 3], ['buttonowl', 2], ['lacespider', 1]] },
+      { name: 'The Dress Form', size: [3, 3], level: [16, 16], pool: [['pinpuffer', 3], ['scissorstork', 2], ['lacespider', 2]] },
+      { name: 'The Machine', boss: 'boss_treadle', bossLevel: 17, size: [1, 2], level: [14, 14], pool: [['thimblemouse', 2], ['pinpuffer', 2]] },
     ],
   },
 ];

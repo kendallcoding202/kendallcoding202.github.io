@@ -4,9 +4,9 @@ import {
   LOOK_IDS, lookOf, xpNeeded, roomOf, roomBuilt, WANDERERS, STRAYS,
 } from './balance.js';
 import { newFriend } from './progress.js';
-import { roomOpen, maxHpOf, rollEncounter, fairEncounter, heldBy, heldIn, placeCalm, someone, staysCalm, calmedIn, wanderersMost } from './rooms.js';
+import { roomOpen, bridgeOpen, maxHpOf, rollEncounter, fairEncounter, heldBy, heldIn, placeCalm, someone, staysCalm, calmedIn, wanderersMost } from './rooms.js';
 import { own } from './util.js';
-import { settleWhere, spotNear } from './world.js';
+import { settleWhere, spotNear, overTheWater } from './world.js';
 import { insideOf, settleIn } from './indoors.js';
 import { newStory, reviveStory } from './story.js';
 import { rollStrays, fairStrays } from './strays.js';
@@ -205,13 +205,16 @@ export function reviveState(saved, now = Date.now()) {
   if (typeof saved.strayRng === 'number' && Number.isFinite(saved.strayRng)) state.strayRng = saved.strayRng | 0;
   const taken = new Set();
   const kept = (Array.isArray(saved.strays) ? saved.strays.slice(0, 64) : []).filter((stray) => isObj(stray) && Number.isInteger(stray.at) && stray.at >= 0 && stray.at < WILDS.length
-    && !taken.has(stray.at) && fairStrays(state, stray.foes) && taken.add(stray.at)).slice(0, STRAYS.groups[1]);
+    && (bridgeOpen(state) || !overTheWater(WILDS[stray.at]))
+    && !taken.has(stray.at) && fairStrays(state, stray.foes) && taken.add(stray.at)).slice(0, (bridgeOpen(state) ? STRAYS.farGroups : STRAYS.groups)[1]);
   if (Array.isArray(saved.strays) && (kept.length || saved.strays.length === 0)) {
     state.strays = kept.map((stray) => ({ at: stray.at, foes: stray.foes.map(keptFoe), done: stray.done === true }));
   } else rollStrays(state);
   const where = mapped && isObj(saved.where) ? saved.where : null;
   // (Wherever the save says you stand is checked against the ground held as it would be with you standing there.)
   state.where = settleWhere(where, where ? heldBy(state, where) : []);
+  // Nobody is over the water while the gate on the bridge is shut: a save that says so wakes at home.
+  if (overTheWater(state.where) && !bridgeOpen(state)) state.where = settleWhere(null);
   // Indoors only if it is somewhere there is to be, you are at its door in the world, and the point
   // is one feet can be at. A place still shut, or one you are not visiting while visiting another,
   // is not somewhere you can be standing: then you are outside its door.
@@ -233,6 +236,8 @@ export function reviveState(saved, now = Date.now()) {
   const stats = isObj(saved.stats) ? saved.stats : {};
   for (const key of Object.keys(state.stats)) state.stats[key] = int(stats[key], 0);
   state.story = reviveStory(saved.story);
+  // The second call cannot have been taken before the lane was quiet.
+  if (state.story.call2 && !bridgeOpen(state)) state.story.call2 = false;
   const settings = isObj(saved.settings) ? saved.settings : {};
   // A switch an older save has never heard of keeps its usual setting: sound is on unless turned off.
   for (const key of Object.keys(state.settings)) if (typeof settings[key] === 'boolean') state.settings[key] = settings[key];

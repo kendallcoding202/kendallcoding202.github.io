@@ -104,6 +104,38 @@ const PAINTED = {
     // What roars at the far end glows a little, like a standby light.
     lights: [{ x: 380, y: 380, r: 260, rgb: '214,69,93', alpha: 0.2 }],
   },
+  // ---- chapter two's four: each back wall one painting right across ----
+  glasshouse: {
+    wall: 'once', tile: 380, night: 0.24, mat: 124,
+    flat: [],
+    things: { pots: 44, seedtray: 72, can: 56, compost: 58, tomato: 58, bench: 88, palm: 68, crate: 72, hose: 60, steps: 62, cloche: 44 },
+    // Moonlight through the glass.
+    lights: [{ x: 520, y: 480, r: 330, rgb: '168,200,255', alpha: 0.12 }],
+  },
+  deepend: {
+    wall: 'once', tile: 300, night: 0.28, mat: 124,
+    flat: [],
+    things: { basin: 58, rail: 70, scales: 50, stool: 54, fern: 60, bucket: 52, jug: 60, mirror: 52, radiator: 76, cabinet: 56, bottles: 58 },
+    // The two wall lamps either side of the round mirror, and the wet they shine on.
+    lights: [{ x: 206, y: 470, r: 210, rgb: WARM, alpha: 0.16 }, { x: 572, y: 470, r: 210, rgb: WARM, alpha: 0.16 }],
+    glows: [{ x: 206, y: 106, r: 52, rgb: WARM, alpha: 0.4 }, { x: 572, y: 106, r: 52, rgb: WARM, alpha: 0.4 }],
+    puddles: [[190, 1360, 44], [590, 1180, 36], [340, 800, 50], [560, 560, 40], [170, 640, 32], [430, 1450, 30]],
+  },
+  shed: {
+    wall: 'once', tile: 340, night: 0.34, mat: 124,
+    flat: [],
+    things: { bench: 90, chest: 62, paint: 58, tools: 54, rope: 60, sawhorse: 78, planks: 72, jars: 64, grindstone: 70, ladder: 60, bin: 54 },
+    // The bare bulb, at the right-hand end of the wall.
+    lights: [{ x: 640, y: 500, r: 300, rgb: WARM, alpha: 0.2 }],
+    glows: [{ x: 664, y: 88, r: 60, rgb: WARM, alpha: 0.45 }],
+  },
+  mending: {
+    wall: 'once', tile: 300, night: 0.28, mat: 126,
+    flat: [],
+    things: { dummy: 50, wool: 62, buttons: 50, fabric: 62, chair: 54, reels: 62, table: 66, lamp: 46, drawers: 80, ribbons: 58, quilts: 68 },
+    // Its own lamp, lit, where it stands; and the moon in the window.
+    lights: [{ x: 658, y: 560, r: 230, rgb: WARM, alpha: 0.22 }, { x: 420, y: 470, r: 280, rgb: '168,200,255', alpha: 0.08 }],
+  },
 };
 /** Whether somewhere is a room with paintings of its own. */
 export const painted = (id) => Object.prototype.hasOwnProperty.call(PAINTED, id);

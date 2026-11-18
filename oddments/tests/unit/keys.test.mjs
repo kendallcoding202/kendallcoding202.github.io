@@ -52,7 +52,9 @@ test('you hold the key of every place you have calmed, and no other; the save ke
   assert.equal(keysOf(game.state).filter((key) => key.held).length, ROOMS.length);
   // Nothing about keys is in the save, so a save cannot hand out a key: only calming does.
   const raw = JSON.parse(game.serialize(NOW));
-  assert.ok(!JSON.stringify(raw).toLowerCase().includes('key'));
+  // (Nothing in the save is named for a key. One kind's own name happens to end in the word, so it is the names of things that are looked at.)
+  const names = (thing) => (thing && typeof thing === 'object' ? Object.entries(thing).flatMap(([name, value]) => [name, ...names(value)]) : []);
+  assert.deepEqual(names(raw).filter((name) => /key/i.test(name) && !SPECIES[name]), []);
   raw.keys = ['dark'];
   raw.rooms.dark.clears = 0;
   const state = reviveState(raw, NOW);

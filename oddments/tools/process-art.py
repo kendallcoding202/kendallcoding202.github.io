@@ -46,6 +46,7 @@ def kind_of(name):
 
 # The keys: one for each place, in the order the sheet has them. Longest side on the web.
 KEYS = ["garden", "alley", "pantry", "wash", "stacks", "rooftops", "attic", "dark"]
+KEYS2 = ["glasshouse", "deepend", "shed", "mending"]  # chapter two's, on a sheet of their own: two rows of two
 KEY_SIZE = 200
 
 
@@ -75,6 +76,15 @@ ALLEY = [
     ("a_bin", 200), ("a_bin2", 200), ("a_crate", 200), ("a_tyres", 200),
     ("a_drum", 200), ("a_boxes", 200), ("a_pallets", 220), ("a_bottles", 200),
     ("a_barricade", 420), ("a_fence", 260), ("a_heap", 200), ("a_cone", 160),
+]
+
+
+# The far bank's sheet (chapter two): its four buildings, the gate on the bridge, and things that
+# stand about it and on the river. (The lily pads lie flat.)
+FAR = [
+    ("b_glasshouse", 400), ("b_deepend", 380), ("b_shed", 380), ("b_mending", 380),
+    ("r_gate", 420), ("r_boat", 260), ("r_reeds", 200), ("r_lilies", 220),
+    ("r_beehive", 180), ("r_barrow", 230), ("r_pump", 200), ("r_crates", 200),
 ]
 
 
@@ -121,6 +131,27 @@ INSIDES = {
     "dark": {
         "sheet": [("shoes", 170), ("shoeboxes", 150), ("toolbox", 150), ("ladder", 160), ("umbrellas", 160), ("broom", 160), ("paint", 150), ("cables", 170), ("reel", 150), ("board", 160), ("papers", 150), ("mat", 220)],
         "wall": (34, 842, 800),
+        "floor": 512,
+    },
+    # Chapter two's four. Each back wall is one painting right across, like the attic's.
+    "glasshouse": {
+        "sheet": [("pots", 150), ("seedtray", 170), ("can", 160), ("compost", 160), ("tomato", 180), ("bench", 190), ("palm", 180), ("crate", 170), ("hose", 160), ("steps", 170), ("cloche", 150), ("mat", 220)],
+        "wall": (80, 850, 1400),
+        "floor": 512,
+    },
+    "deepend": {
+        "sheet": [("basin", 170), ("rail", 180), ("scales", 150), ("stool", 160), ("fern", 180), ("bucket", 160), ("jug", 170), ("mirror", 190), ("radiator", 180), ("cabinet", 170), ("bottles", 170), ("mat", 220)],
+        "wall": (100, 870, 1400),
+        "floor": 512,
+    },
+    "shed": {
+        "sheet": [("bench", 190), ("chest", 170), ("paint", 160), ("tools", 170), ("rope", 160), ("sawhorse", 180), ("planks", 170), ("jars", 170), ("grindstone", 170), ("ladder", 180), ("bin", 170), ("mat", 220)],
+        "wall": (130, 900, 1400),
+        "floor": 512,
+    },
+    "mending": {
+        "sheet": [("dummy", 180), ("wool", 170), ("buttons", 160), ("fabric", 160), ("chair", 170), ("reels", 180), ("table", 170), ("lamp", 180), ("drawers", 180), ("ribbons", 180), ("quilts", 170), ("mat", 220)],
+        "wall": (100, 870, 1400),
         "floor": 512,
     },
 }
@@ -327,6 +358,17 @@ def process_world(name, im, world):
         for place, piece in zip(KEYS, cut_cells(im, 2, 4)):
             if place == "rooftops":
                 continue
+            dest = os.path.join(keys, place + ".webp")
+            fit(piece, KEY_SIZE).save(dest, "WEBP", quality=90, method=6)
+            written.append(dest)
+    elif name == "world_far_sheet":
+        for (sprite, longest), piece in zip(FAR, cut_cells(im, SHEET_ROWS, SHEET_COLS)):
+            dest = os.path.join(world, sprite + ".webp")
+            fit(trimmed(piece), longest).save(dest, "WEBP", quality=90, method=6)
+            written.append(dest)
+    elif name == "world_keys2":
+        keys = os.path.join(os.path.dirname(world), "keys")
+        for place, piece in zip(KEYS2, cut_cells(im, 2, 2)):
             dest = os.path.join(keys, place + ".webp")
             fit(piece, KEY_SIZE).save(dest, "WEBP", quality=90, method=6)
             written.append(dest)

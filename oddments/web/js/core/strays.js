@@ -17,8 +17,8 @@
 // into a place carries it in; resting at home clears it. See rooms.js.
 import { SPECIES, ROOMS, HEIRLOOM, STRAYS, BREATHER, TEAM_SIZE, roomBuilt, grownOdds } from './balance.js';
 import { nextRandom, rollInt, rollPick, own } from './util.js';
-import { WILDS } from './world.js';
-import { roomOpen, maxHpOf, teamOf } from './rooms.js';
+import { WILDS, overTheWater } from './world.js';
+import { roomOpen, bridgeOpen, maxHpOf, teamOf } from './rooms.js';
 
 /** Strays have dice of their own, so that who wanders the lane never changes how a fight in a place falls out. */
 const diceOf = (state) => ({ rng: state.strayRng | 0 });
@@ -55,8 +55,12 @@ export function rollStrays(state) {
   const pool = strayPool(state);
   const [low, high] = strayLevels(state);
   const grownShare = grownOdds(frontier(state)); // as many of them grown as in the furthest place open
-  const spots = WILDS.map((_, index) => index);
-  const count = Math.min(spots.length, rollInt(dice, STRAYS.groups[0], STRAYS.groups[1]));
+  // Nobody strays where you cannot go: the quiet spots over the water are used once the bridge is open,
+  // and then there are a couple more groups about, for there is more world to be about in.
+  const far = bridgeOpen(state);
+  const spots = WILDS.map((_, index) => index).filter((index) => far || !overTheWater(WILDS[index]));
+  const [fewest, most] = far ? STRAYS.farGroups : STRAYS.groups;
+  const count = Math.min(spots.length, rollInt(dice, fewest, most));
   const strays = [];
   for (let i = 0; i < count; i++) {
     const at = spots.splice(Math.floor(nextRandom(dice) * spots.length), 1)[0];

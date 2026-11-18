@@ -23,7 +23,7 @@
 | The eight keys | **Generated for this game** | 2 images: one sheet of eight keys, and the rooftop key again on its own (below) |
 | Launch image and loading screen | Painted from the game's own world by `tools/postcard.mjs` | A postcard of the lane, home in the middle; nothing generated |
 
-**One hundred and five images have been generated in all, and seventy-nine of them are used.** Thirty-seven are everything before the grown-up forms, and each of those is in the game. Sixty-six were made for the grown-up forms on 18 November 2026, after the owner said "yes you can start on the new forms": twenty-two to a first brief (the young one, with new things added), which came out as the young one in the same pose wearing something, and were set aside when the owner said "Make sure the change is obvious enough"; eight to try a bolder brief two ways, four with the young one's picture to work from and four from words alone (the four from words alone drifted from the Pawst Lives look and were set aside); and thirty-six more to the bolder brief with the picture. The forty in the game are those thirty-six and the four of the trial that were painted from the picture. Two are the keys, made the same day when the owner asked for "special looking keys": a sheet of eight, and one more of the rooftop key, because on the sheet its bow came out as a star set inside a crescent, which reads as an emblem and not as a moon over rooftops; the one used has a chimney pot in the moon's curve and no star. Of the first thirty-seven: the first fourteen were each agreed before they were made. Twenty-one are the rooms, one is the lane seen as a fight's backdrop, and one is the sheet of things for the country, made on 16 November 2026 after the owner approved spending on them ("I approve spending on the rooms and anything we need for the game, I want a polished good looking game"). Every one of those thirty-seven came out usable on the first attempt (one thing on the last sheet, a milestone, is not used). One has been touched up since, in code and for nothing: on the icon the pencil in her hair was painted lying on top of the bun, and `tools/ios-art.py` grows hair over its lower end so that it comes out of the bun instead. The archived original is as it was painted. Close up, the covered patch is a little softer than the hair round it; a repaint would be one more image.
+**Two hundred and fifteen images have been generated in all. One hundred and eighty-one are used in the game, two more (the Keepsakes) are painted and waiting, and thirty-two were set aside.** One hundred and ten of them are chapter two's, of 18 November 2026, and are accounted for under *Chapter two: the far bank*, below. What follows in this paragraph is the first hundred and five, of which seventy-nine are used. Thirty-seven are everything before the grown-up forms, and each of those is in the game. Sixty-six were made for the grown-up forms on 18 November 2026, after the owner said "yes you can start on the new forms": twenty-two to a first brief (the young one, with new things added), which came out as the young one in the same pose wearing something, and were set aside when the owner said "Make sure the change is obvious enough"; eight to try a bolder brief two ways, four with the young one's picture to work from and four from words alone (the four from words alone drifted from the Pawst Lives look and were set aside); and thirty-six more to the bolder brief with the picture. The forty in the game are those thirty-six and the four of the trial that were painted from the picture. Two are the keys, made the same day when the owner asked for "special looking keys": a sheet of eight, and one more of the rooftop key, because on the sheet its bow came out as a star set inside a crescent, which reads as an emblem and not as a moon over rooftops; the one used has a chimney pot in the moon's curve and no star. Of the first thirty-seven: the first fourteen were each agreed before they were made. Twenty-one are the rooms, one is the lane seen as a fight's backdrop, and one is the sheet of things for the country, made on 16 November 2026 after the owner approved spending on them ("I approve spending on the rooms and anything we need for the game, I want a polished good looking game"). Every one of those thirty-seven came out usable on the first attempt (one thing on the last sheet, a milestone, is not used). One has been touched up since, in code and for nothing: on the icon the pencil in her hair was painted lying on top of the bun, and `tools/ios-art.py` grows hair over its lower end so that it comes out of the bun instead. The archived original is as it was painted. Close up, the covered patch is a little softer than the hair round it; a repaint would be one more image.
 
 ### The world's two images
 
@@ -138,6 +138,79 @@ Every kind that can be a friend has one (ringleaders do not grow). Each was pain
 | Tanglecoil | Drumcoil | 16 | A gigantic snake made of thick braided black power cables with red, yellow and green wires woven through. |
 | Grimeshade | Shroudmote | 16 | A large, tall, drifting wraith of dark dust and cobwebs with glowing cyan eyes. |
 | Bumpabout | Rovabout | 16 | A big all-terrain robot vacuum cleaner raised high on four chunky off-road wheels with springs. |
+
+## Chapter two: the far bank
+
+Painted on 18 November 2026, after the owner asked to double the number of creatures and chose four new places to put half of them in ("Go with the four new places"), and asked for "a legendary or something similar type creature at the end of each chapter". One hundred and ten images were generated for it: four trials of the first new kinds, to see whether a brief of words alone would sit beside the Pawst Lives monsters (it does: the brief is the Pawst Lives monster brief word for word, with one sentence added, that the creature is nobody else's); forty young forms; forty grown forms, each painted from its young one's picture; four ringleaders; four paintings for a fight to be seen against; two Keepsakes; twelve for the four rooms (a sheet of twelve things, a back wall and a floor each); one sheet for the far bank (its four buildings, the gate on the bridge, a boat, reeds, lily pads, a beehive, a barrow, a pump and crates); one sheet of four keys; and two done again. The grown paint-brush fox first came out with three tails, too close to a well-known many-tailed fox, and was redone with one. The Deep End's floor first came out as a black and white checkerboard that nobody could be seen against, and was redone in two soft greens. I looked at every one.
+
+Each kind's rare Heirloom colours are made from its own picture by `tools/heirlooms.py`, as before: nothing generated.
+
+### The forty new kinds
+
+| Where it lives | Young | Grown up | Element | What it is (from its brief) |
+|---|---|---|---|---|
+| The Garden Gate | Tintrunk (`canphant`) | Raintusker | Suds | A small grumpy elephant made from a dented green tin watering can: the long spout is its trunk with the… |
+| The Garden Gate | Fumblethumb (`glovecrab`) | Secateer | Sprout | A single green-and-tan canvas gardening glove that scuttles on its five fingertips like a crab, the open cuff… |
+| Tin Can Alley | Brollyflap (`brollybat`) | Squallbrella | Fluff | A broken black umbrella that flies like a bat: bent silver ribs for wing bones, torn black cloth wings, the… |
+| Tin Can Alley | Wonkwheel (`trolleypup`) | Trundlebeast | Clank | A small dog-like creature made from a wire shopping basket on four little trolley wheels, one wheel bent… |
+| Tin Can Alley | Coneling (`conekin`) | Beaconspire | Spark | A small orange-and-white striped traffic cone with stubby legs and arms, a flashing amber road lamp on its… |
+| The Midnight Pantry | Steepling (`teabagjelly`) | Teapotentate | Suds | A floating jellyfish that is a plump wet brown pyramid teabag with a sleepy cross face, its string and square… |
+| The Midnight Pantry | Whisklet (`whiskbird`) | Whirlwhisk | Clank | A small wiry bird whose round body is a steel balloon whisk: the looped whisk wires form its cage of a chest,… |
+| The Midnight Pantry | Gherkroak (`picklefrog`) | Brinebelly | Crumb | A warty green frog shaped like a pickled gherkin, squatting half out of an open glass pickle jar full of… |
+| The Wash | Steamstoat (`ironweasel`) | Starchback | Spark | A small sleek weasel whose body is a little steam iron: the shiny flat soleplate is its belly, the handle… |
+| The Wash | Hamperling (`baskettortoise`) | Wickerback | Fluff | A small tortoise whose shell is a round wicker laundry basket with a lid, a striped sock and a shirt sleeve… |
+| The Wash | Zipnip (`zipcrawler`) | Zipperpede | Clank | A small centipede made of a brass zip: the two rows of zip teeth are its many little legs, the zip slider… |
+| The Dusty Stacks | Stampling (`stamphopper`) | Inkstomper | Clank | A small hopping creature that is a wooden-handled rubber date stamp: a round wooden knob for a head with a… |
+| The Dusty Stacks | Globlet (`globehog`) | Worldwhirl | Fluff | A small hedgehog-like creature curled round an old desk globe: the globe with blue seas and yellowed land is… |
+| Moonlit Rooftops | Statichare (`aerialhare`) | Dishleaper | Spark | A lean grey hare whose long ears are a bent pair of telescopic silver television aerial rods, with a little… |
+| Moonlit Rooftops | Snagkite (`kiteray`) | Stunthawk | Fluff | A diamond-shaped paper kite that swims through the air like a manta ray: red and yellow patched paper with a… |
+| The Tick-Tock Attic | Patchpaw (`teddybear`) | Darnbruin | Fluff | A small moth-eaten teddy bear that has come alive, tan fur worn thin, one button eye and one empty patch with… |
+| The Tick-Tock Attic | Flurryglobe (`snowglobe`) | Blizzardome | Suds | A small snow globe creature: a glass dome on a red wooden base with little feet, inside it a tiny frowning… |
+| The Roaring Dark | Burrowbeam (`torchmole`) | Dazzledig | Spark | A small velvet-black mole whose long snout is an old yellow rubber torch shining a bright beam of light, big… |
+| The Roaring Dark | Scuffpup (`bootpup`) | Hobnailhound | Fluff | A puppy made from an old brown leather walking boot: the open top of the boot is its mouth with the boot's… |
+| The Roaring Dark | Dustpincer (`dustpancrab`) | Sweepclaw | Clank | A crab whose shell is a red metal dustpan worn on its back, one big claw is a stiff-bristled hand brush and… |
+| The Glasshouse | Sproutlark (`seedfinch`) | Harvestwing | Sprout | A small plump bird folded from a paper seed packet with a faded picture of a sunflower on its chest, wings of… |
+| The Glasshouse | Terracub (`potcub`) | Kilnbear | Clank | A small bear cub wearing a terracotta flowerpot: its body is the upturned clay pot with a chip out of the… |
+| The Glasshouse | Mulchkin (`compostkin`) | Steamheap | Sprout | A small round creature made of dark crumbly compost with potato peelings, bits of eggshell and leaves stuck… |
+| The Glasshouse | Tomarin (`tomatomonkey`) | Tomatogre | Crumb | A small monkey whose head and body are two ripe red tomatoes with a green leafy stalk for a cap of hair, long… |
+| The Glasshouse | Trailbloom (`basketjelly`) | Hangarden | Suds | A floating jellyfish that is a hanging flower basket: a moss-lined wire basket dome with a hook and three… |
+| The Deep End | Squeakbill (`rubberduck`) | Squeakswan | Suds | A cross yellow rubber bath duck with a chipped orange beak, a squeaker hole in its side, a tuft of soap foam… |
+| The Deep End | Mintgrub (`pastegrub`) | Pastepillar | Suds | A fat caterpillar that is a half-squeezed tube of toothpaste: a white tube body with blue and red stripes,… |
+| The Deep End | Loofling (`loofahdillo`) | Scrubadillo | Sprout | A small armadillo whose armour is a tan natural loofah sponge with a rough fibrous net texture, a loop of… |
+| The Deep End | Clogtuft (`drainhair`) | Clogmane | Fluff | A small scruffy creature made of a wet tangled clump of dark hair like a tumbleweed with eight wispy hair… |
+| The Deep End | Showershade (`curtainghost`) | Curtaincall | Fluff | A ghost made of a white plastic shower curtain patterned with little blue fish and a few grey mildew spots, a… |
+| The Tinker's Shed | Tapetail (`tapelizard`) | Yardwhip | Clank | A small lizard whose body is a yellow retractable tape measure case, with the steel measuring tape pulled out… |
+| The Tinker's Shed | Peckhammer (`hammerpecker`) | Sledgebeak | Clank | A woodpecker whose head and beak are a steel claw hammer, the claw of the hammer standing up as its crest, on… |
+| The Tinker's Shed | Daubfox (`brushfox`) | Glossvixen | Suds | A small fox whose big bushy tail is a wide paintbrush loaded with bright blue paint, orange fur splashed with… |
+| The Tinker's Shed | Sawnose (`sawfish`) | Bandsawback | Clank | A small sawfish that swims through sawdust: its long flat nose is a toothed hand-saw blade, a red wooden saw… |
+| The Tinker's Shed | Filamoth (`bulbmoth`) | Lumenwing | Spark | A moth whose plump body is an old clear glass light bulb with a glowing orange filament inside and a brass… |
+| The Mending Room | Pinbobber (`pinpuffer`) | Needleglobe | Fluff | A round pufferfish that is a red tomato-shaped pincushion with green felt leaves on top, stuck all over with… |
+| The Mending Room | Thimblet (`thimblemouse`) | Thimbleguard | Clank | A tiny brave grey mouse wearing a silver thimble as a helmet, holding a sewing needle threaded with red… |
+| The Mending Room | Snipstork (`scissorstork`) | Shearcrane | Clank | A tall thin stork whose long beak is a pair of silver dressmaking scissors and whose legs are two long sewing… |
+| The Mending Room | Buttonhoot (`buttonowl`) | Haberhoot | Fluff | A round owl made entirely of mismatched buttons like feathers (pearl, brass and coloured ones), with two big… |
+| The Mending Room | Doilyspin (`lacespider`) | Lacewidow | Fluff | A neat little white spider sitting in the middle of a round lace doily it is still making, with a cotton reel… |
+
+### The four ringleaders
+
+| Place | Ringleader | Element | What it is |
+|---|---|---|---|
+| The Glasshouse | The Prize Marrow (`boss_marrow`) | Sprout | The Prize Marrow, an enormous green striped vegetable marrow monster the size of a sofa, with a wide scowling face, thick curling vine tendrils for… |
+| The Deep End | Old Clawfoot (`boss_bathtub`) | Suds | Old Clawfoot, a huge white cast-iron bathtub monster walking on four heavy lion-paw iron feet, brimming over with foamy water, two brass taps like… |
+| The Tinker's Shed | Captain Twostroke (`boss_mower`) | Clank | Captain Twostroke, a monstrous old red petrol lawnmower rearing up like a bull, with a snarling grille mouth full of spinning steel blades, two… |
+| The Mending Room | Madam Treadle (`boss_treadle`) | Fluff | Madam Treadle, a towering antique black sewing machine monster with gold scrollwork, standing on its cast-iron treadle table legs like a spider, a… |
+
+### The two Keepsakes (painted, and not in the game yet)
+
+| Chapter | Keepsake | Element | What it is |
+|---|---|---|---|
+| 1 | Lullawren (`keep_musicbox`) | Clank | A small, graceful nightingale made from an old music box: a body that is a little lacquered wooden music box with its lid open like wings showing the brass comb and… |
+| 2 | Farewhale (`keep_bottleship`) | Suds | A small gentle whale that is a clear glass bottle lying on its side, with a tiny three-masted sailing ship inside it riding a little blue sea, the cork in the bottle's… |
+
+### The rooms, the far bank and the keys
+
+The four places over the water are rooms you walk into, made as the lane's six are: `art/raw/<room>_sheet.webp`, `<room>_wall.webp` and `<room>_floor.webp` for `glasshouse`, `deepend`, `shed` and `mending`, cut and sized by `tools/process-art.py` into fourteen pictures a room. Each back wall is one painting right across. The far bank's sheet is `art/raw/world_far_sheet.webp` (the buildings are `b_<place>`, the rest `r_<thing>`, in `web/assets/world/`); the four keys are `art/raw/world_keys2.webp`, cut two by two in the order of the places.
+
+Drawn in code, not painted: the river, the moonlight moving on it, and the deck of the bridge. The gate on the bridge is the sheet's painting; when it is open only its two posts are shown.
 
 ## Making art
 

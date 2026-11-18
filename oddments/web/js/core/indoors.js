@@ -9,7 +9,7 @@
 //
 // Two sorts of inside. Home is somewhere to be: a bed, the telephone, the
 // scrapbook, and whoever of your friends is not out walking with you. A place
-// (the Midnight Pantry and the five after it) is somewhere to calm: whoever is restless there waits
+// (the Midnight Pantry and every place after it) is somewhere to calm: whoever is restless there waits
 // at its `posts`, one group to each stop of the room's path, its ringleader
 // last, exactly as in the garden.
 import { own } from './util.js';
@@ -169,6 +169,71 @@ export const INSIDES = {
     ],
     spots: [],
     posts: [{ x: 260, y: 1290 }, { x: 520, y: 1090 }, { x: 260, y: 880 }, { x: 520, y: 660 }, { x: 380, y: 380 }],
+  },
+  // The Glasshouse: warm, wet, and growing. Its back wall is the glass end of the house, with the
+  // moon behind it.
+  glasshouse: {
+    kind: 'place', view: 760, w: 760, h: 1640, wall: 381, people: 1,
+    door: { x: 380, y: 1610 }, start: { x: 380, y: 1500 },
+    blocks: [
+      { id: 'bench', x: 30, y: 1400, w: 78, h: 28 }, { id: 'can', x: 114, y: 1426, w: 46, h: 24 },
+      { id: 'crate', x: 668, y: 1440, w: 62, h: 28 }, { id: 'tomato', x: 682, y: 1080, w: 48, h: 28 },
+      { id: 'pots', x: 642, y: 1106, w: 34, h: 24 }, { id: 'seedtray', x: 30, y: 860, w: 62, h: 28 },
+      { id: 'compost', x: 98, y: 886, w: 48, h: 24 }, { id: 'palm', x: 672, y: 620, w: 58, h: 28 },
+      { id: 'cloche', x: 632, y: 646, w: 34, h: 24 }, { id: 'steps', x: 30, y: 520, w: 52, h: 28 },
+      { id: 'hose', x: 88, y: 546, w: 50, h: 24 }, { id: 'tomato2', x: 30, y: 396, w: 48, h: 28 },
+      { id: 'crate2', x: 668, y: 394, w: 62, h: 28 },
+    ],
+    spots: [],
+    posts: [{ x: 500, y: 1300 }, { x: 250, y: 1100 }, { x: 500, y: 880 }, { x: 250, y: 720 }, { x: 380, y: 490 }],
+  },
+  // The Deep End: the old bath house. Tiles, taps, and a floor that is never quite dry.
+  deepend: {
+    kind: 'place', view: 760, w: 760, h: 1640, wall: 381, people: 1,
+    door: { x: 380, y: 1610 }, start: { x: 380, y: 1500 },
+    blocks: [
+      { id: 'radiator', x: 664, y: 1400, w: 66, h: 28 }, { id: 'bucket', x: 616, y: 1426, w: 42, h: 24 },
+      { id: 'cabinet', x: 30, y: 1440, w: 46, h: 28 }, { id: 'rail', x: 30, y: 1080, w: 60, h: 28 },
+      { id: 'stool', x: 96, y: 1106, w: 44, h: 24 }, { id: 'basin', x: 682, y: 860, w: 48, h: 28 },
+      { id: 'scales', x: 636, y: 886, w: 40, h: 24 }, { id: 'mirror', x: 30, y: 620, w: 42, h: 28 },
+      { id: 'fern', x: 78, y: 646, w: 50, h: 24 }, { id: 'jug', x: 680, y: 520, w: 50, h: 28 },
+      { id: 'bottles', x: 626, y: 546, w: 48, h: 24 }, { id: 'fern2', x: 680, y: 396, w: 50, h: 28 },
+      { id: 'rail2', x: 30, y: 394, w: 60, h: 28 },
+    ],
+    spots: [],
+    posts: [{ x: 260, y: 1300 }, { x: 510, y: 1100 }, { x: 260, y: 880 }, { x: 510, y: 720 }, { x: 380, y: 490 }],
+  },
+  // The Tinker's Shed: every tool he ever borrowed, under one bare bulb.
+  shed: {
+    kind: 'place', view: 760, w: 760, h: 1640, wall: 381, people: 1,
+    door: { x: 380, y: 1610 }, start: { x: 380, y: 1500 },
+    blocks: [
+      { id: 'bench', x: 30, y: 1400, w: 80, h: 28 }, { id: 'paint', x: 116, y: 1426, w: 48, h: 24 },
+      { id: 'chest', x: 678, y: 1440, w: 52, h: 28 }, { id: 'sawhorse', x: 662, y: 1080, w: 68, h: 28 },
+      { id: 'bin', x: 612, y: 1106, w: 44, h: 24 }, { id: 'planks', x: 30, y: 860, w: 62, h: 28 },
+      { id: 'rope', x: 98, y: 886, w: 50, h: 24 }, { id: 'jars', x: 676, y: 620, w: 54, h: 28 },
+      { id: 'tools', x: 626, y: 646, w: 44, h: 24 }, { id: 'grindstone', x: 30, y: 520, w: 60, h: 28 },
+      { id: 'ladder', x: 96, y: 546, w: 50, h: 24 }, { id: 'paint2', x: 30, y: 396, w: 48, h: 28 },
+      { id: 'planks2', x: 668, y: 394, w: 62, h: 28 },
+    ],
+    spots: [],
+    posts: [{ x: 500, y: 1300 }, { x: 250, y: 1100 }, { x: 500, y: 880 }, { x: 250, y: 720 }, { x: 380, y: 490 }],
+  },
+  // The Mending Room: a sewing room where something has been stitching all night.
+  mending: {
+    kind: 'place', view: 760, w: 760, h: 1640, wall: 381, people: 1,
+    door: { x: 380, y: 1610 }, start: { x: 380, y: 1500 },
+    blocks: [
+      { id: 'drawers', x: 660, y: 1400, w: 70, h: 28 }, { id: 'wool', x: 602, y: 1426, w: 52, h: 24 },
+      { id: 'quilts', x: 30, y: 1440, w: 58, h: 28 }, { id: 'table', x: 30, y: 1080, w: 56, h: 28 },
+      { id: 'chair', x: 92, y: 1106, w: 44, h: 24 }, { id: 'reels', x: 678, y: 860, w: 52, h: 28 },
+      { id: 'buttons', x: 632, y: 886, w: 40, h: 24 }, { id: 'dummy', x: 30, y: 620, w: 40, h: 28 },
+      { id: 'fabric', x: 76, y: 646, w: 52, h: 24 }, { id: 'ribbons', x: 682, y: 520, w: 48, h: 28 },
+      { id: 'lamp', x: 640, y: 546, w: 36, h: 24 }, { id: 'fabric2', x: 678, y: 396, w: 52, h: 28 },
+      { id: 'wool2', x: 30, y: 394, w: 52, h: 28 },
+    ],
+    spots: [],
+    posts: [{ x: 260, y: 1300 }, { x: 510, y: 1100 }, { x: 260, y: 880 }, { x: 510, y: 720 }, { x: 380, y: 490 }],
   },
 };
 export const INSIDE_IDS = Object.keys(INSIDES);

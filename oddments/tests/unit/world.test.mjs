@@ -46,9 +46,9 @@ const wayTo = (from, to, can = canStand) => straighten(from, routeTo(from, to, r
 
 // ---------------------------------------------------------------- what stands where
 
-test('home and all eight places are in the world, each with a door or a gate you can stand at', () => {
+test('home and all twelve places are in the world, each with a door or a gate you can stand at', () => {
   assert.deepEqual(SPOT_IDS, ['home', ...ROOM_IDS]);
-  assert.equal(SPOTS.length, 9);
+  assert.equal(SPOTS.length, 13);
   for (const spot of SPOTS) {
     assert.ok(canStand(spot.door.x, spot.door.y), `${spot.id}: cannot stand at its door`);
     assert.equal(spotNear(spot.door), spot.id);
@@ -100,7 +100,7 @@ test('feet cannot go outside the world, into a building, through a hedge, a tree
 });
 
 test('trees are scattered the same way every time, off the streets, the doors and the green', () => {
-  assert.ok(TREES.length >= 140 && TREES.length <= 200, `${TREES.length} trees`);
+  assert.ok(TREES.length >= 180 && TREES.length <= 260, `${TREES.length} trees`);
   assert.ok(TREES.filter((tree) => tree.y < 2200).length >= 30 && TREES.filter((tree) => tree.y >= 2200).length >= 90, 'on the lane, and thicker out in the country');
   assert.equal(new Set(TREES.map((tree) => `${tree.x},${tree.y}`)).size, TREES.length);
   for (const tree of TREES) {

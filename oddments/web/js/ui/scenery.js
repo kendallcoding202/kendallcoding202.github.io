@@ -17,12 +17,16 @@ export const WORLD_ART = [
   'grass', 'earth', 'cobbles', 'p_tree', 'p_lamp', 'p_bush', 'b_home', 'b_garden', 'b_alley', 'b_pantry', 'b_wash', 'b_stacks', 'b_rooftops', 'b_attic', 'b_dark',
   'a_bin', 'a_bin2', 'a_crate', 'a_tyres', 'a_drum', 'a_boxes', 'a_pallets', 'a_bottles', 'a_cone', 'a_heap', 'a_fence', 'a_barricade',
   'r_bench', 'r_signpost', 'r_well', 'r_haystack', 'r_scarecrow', 'r_logs', 'r_rock', 'r_fence', 'r_wheelbarrow', 'r_mailbox', 'r_pond',
+  // The far bank: its four buildings, the gate on the bridge, and what stands about it and on the river.
+  'b_glasshouse', 'b_deepend', 'b_shed', 'b_mending', 'r_gate', 'r_boat', 'r_reeds', 'r_lilies', 'r_beehive', 'r_barrow', 'r_pump', 'r_crates',
 ];
 /** How wide each thing that stands about the country is painted, in the world's units. (Where each stands is in core/world.js.) */
-export const PROP_WIDE = { bench: 88, signpost: 66, well: 96, haystack: 104, scarecrow: 86, logs: 88, rock: 86, wheelbarrow: 92, mailbox: 38, pond: 170 };
+export const PROP_WIDE = { bench: 88, signpost: 66, well: 96, haystack: 104, scarecrow: 86, logs: 88, rock: 86, wheelbarrow: 92, mailbox: 38, pond: 170, boat: 112, reeds: 70, beehive: 62, barrow: 100, pump: 80, crates: 84 };
+/** How wide the gate on the bridge stands: post to post, a little wider than the bridge. */
+export const GATE_WIDE = 214;
 export const worldSrc = (name) => `assets/world/${name}.webp`;
 /** How wide each building stands, in the world's units. Its height follows from its painting. */
-export const BUILDING_WIDE = { home: 240, garden: 214, alley: 208, pantry: 214, wash: 190, stacks: 208, rooftops: 148, attic: 170, dark: 214 };
+export const BUILDING_WIDE = { home: 240, garden: 214, alley: 208, pantry: 214, wash: 190, stacks: 208, rooftops: 148, attic: 170, dark: 214, glasshouse: 236, deepend: 200, shed: 226, mending: 214 };
 
 const parts = (hexColour) => [1, 3, 5].map((i) => parseInt(hexColour.slice(i, i + 2), 16));
 /** Two colours (as #rrggbb) mixed: 0 is all the first, 1 all the second. */
@@ -304,9 +308,13 @@ export function paintGround(pen, world, art) {
     glow(pen, lawn.gate.x, lawn.gate.y + 30, 130, '255,200,61', 0.2);
   }
 
+  // The river, under everything that crosses it
+  if (world.river) water(pen, world.river, w);
   // The streets
   const tone = { wash: 'rgba(40,34,84,.42)', pebble: 'rgba(205,196,235,.36)', stone: '#857d9e' };
   wornWays(pen, world.roads, art.earth, tone);
+  // The bridge, over the river and under your feet
+  if (world.bridge) deck(pen, world.bridge);
   // A swept apron in front of every door
   for (const spot of world.spots) {
     oval(pen, spot.door.x, spot.door.y - 4, 64, 27); paint(pen, arrived(art.earth) ? pen.createPattern(art.earth, 'repeat') : '#6a5a5e');
@@ -315,6 +323,87 @@ export function paintGround(pen, world, art) {
   // Lamplight pooling on the ground
   for (const lamp of world.lamps) glow(pen, lamp.x, lamp.y + 4, 150, '255,200,61', 0.22);
   border(pen, art, w, h, world.lawns.filter((lawn) => lawn.floor === 'cobbles' && lawn.x + lawn.w >= w).map((lawn) => ({ y0: lawn.y, y1: lawn.y + lawn.h + 60 })));
+}
+
+// ---------------------------------------------------------------- the river and its bridge
+
+/** How far the bank wanders from a straight line at `x`: the same at every painting of it. */
+const bank = (x) => Math.sin(x / 96) * 7 + Math.sin(x / 37 + 1.3) * 3;
+
+/** The river: night water from one side of the world to the other, with a muddy bank either side. */
+function water(pen, river, w) {
+  const { y, h } = river;
+  const trace = (top, bottom) => {
+    pen.beginPath();
+    pen.moveTo(-700, top + bank(-700));
+    for (let x = -700; x <= w + 700; x += 24) pen.lineTo(x, top + bank(x));
+    for (let x = w + 700; x >= -700; x -= 24) pen.lineTo(x, bottom + bank(x + 400));
+    pen.closePath();
+  };
+  trace(y - 16, y + h + 16); paint(pen, '#2a2540');
+  trace(y - 7, y + h + 7); paint(pen, '#1c3f5c');
+  const deep = pen.createLinearGradient(0, y, 0, y + h);
+  deep.addColorStop(0, '#255f80'); deep.addColorStop(0.5, '#1d4c70'); deep.addColorStop(1, '#286585');
+  trace(y, y + h); paint(pen, deep);
+  // Moonlight on it: short pale strokes, the same every time.
+  const next = run(41);
+  pen.lineCap = 'round';
+  for (let i = 0; i < 150; i++) {
+    const x = -200 + next() * (w + 400);
+    const at = y + 16 + next() * (h - 32);
+    const long = 16 + next() * 34;
+    pen.strokeStyle = `rgba(190,225,255,${0.07 + next() * 0.13})`; pen.lineWidth = 2 + next() * 2;
+    pen.beginPath(); pen.moveTo(x, at); pen.lineTo(x + long, at); pen.stroke();
+  }
+}
+
+/** The bridge's deck, seen from above: planks across it, a stone kerb down each side. */
+function deck(pen, bridge) {
+  const { x, y, w, h } = bridge;
+  pen.fillStyle = 'rgba(8,6,20,.4)'; pen.fillRect(x - 8, y + 10, w + 16, h);
+  pen.fillStyle = '#6f5346'; pen.fillRect(x, y, w, h);
+  for (let at = y, i = 0; at < y + h; at += 26, i++) {
+    pen.fillStyle = i % 2 ? '#7c5f4d' : '#755847'; pen.fillRect(x + 12, at + 1, w - 24, Math.min(24, y + h - at - 1));
+    pen.fillStyle = 'rgba(13,10,28,.28)'; pen.fillRect(x + 12, at, w - 24, 2);
+  }
+  pen.fillStyle = 'rgba(40,34,84,.3)'; pen.fillRect(x, y, w, h); // the night lies on it as on the streets
+  for (const side of [x, x + w - 14]) {
+    rounded(pen, side, y - 6, 14, h + 12, 6); paint(pen, '#8a84a4'); outline(pen, 3.5);
+    pen.fillStyle = 'rgba(255,255,255,.16)'; pen.fillRect(side + 3, y, 3, h);
+  }
+}
+
+/** Light moving on the water, drawn every frame over what `water` painted once. `x0` to `x1` is what is in view; none of it falls on the bridge. */
+export function ripples(pen, river, clock, x0, x1, bridge) {
+  pen.lineCap = 'round';
+  for (let i = 0; i < 26; i++) {
+    const lane = river.y + 18 + ((i * 53) % (river.h - 36));
+    const drift = (i * 197 + clock * (9 + (i % 5) * 3)) % 900;
+    const bright = 0.5 + 0.5 * Math.sin(clock * 0.9 + i * 1.9);
+    for (let x = Math.floor(x0 / 900) * 900 + drift - 900; x < x1; x += 900) {
+      if (x + 44 < x0 || (bridge && x + 44 > bridge.x && x < bridge.x + bridge.w)) continue;
+      pen.strokeStyle = `rgba(205,235,255,${(0.05 + 0.15 * bright).toFixed(3)})`; pen.lineWidth = 2.5;
+      pen.beginPath(); pen.moveTo(x, lane); pen.lineTo(x + 22 + (i % 4) * 7, lane); pen.stroke();
+    }
+  }
+}
+
+/**
+ * The gate on the bridge, the middle of its foot at (0, 0). Shut, it is the whole painting: two stone
+ * posts with their lanterns and the iron gate between them, eight keyholes across it. Open, only the
+ * posts stand: the gate itself has swung back out of the way.
+ */
+export function paintBridgeGate(pen, image, wide, open) {
+  if (!arrived(image)) return;
+  const tall = wide * (image.naturalHeight / image.naturalWidth);
+  if (!open) { oval(pen, 0, 2, wide * 0.5, 9); paint(pen, 'rgba(8,6,20,.45)'); pen.drawImage(image, -wide / 2, -tall + 6, wide, tall); return; }
+  const post = 0.17; // how much of the painting each post takes, side to side
+  for (const side of [0, 1]) {
+    const sx = side ? image.naturalWidth * (1 - post) : 0;
+    const dx = side ? wide / 2 - wide * post : -wide / 2;
+    oval(pen, dx + (wide * post) / 2, 2, wide * post * 0.7, 7); paint(pen, 'rgba(8,6,20,.45)');
+    pen.drawImage(image, sx, 0, image.naturalWidth * post, image.naturalHeight, dx, -tall + 6, wide * post, tall);
+  }
 }
 
 // ---------------------------------------------------------------- things that stand on the ground

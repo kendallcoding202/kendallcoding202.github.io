@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { CAST, CAST_IDS, NEIGHBOURS, CALL, newStory, reviveStory, goalOf, aimOf, storySoFar, hasNews, talk, takeCall, placesCalm, nextPlace } from '../../web/js/core/story.js';
+import { CAST, CAST_IDS, NEIGHBOURS, CALL, LANE, FAR, newStory, reviveStory, goalOf, aimOf, storySoFar, hasNews, talk, takeCall, placesCalm, nextPlace } from '../../web/js/core/story.js';
 import { PEOPLE, TALK, WORLD, SPOTS, TREES, LAMPS, ROAD_POINTS, GREEN, canStand, standing, personNear, personAt, routeTo, straighten, roomy, stepWalk, spotNear, districtAt, DISTRICTS } from '../../web/js/core/world.js';
 import { Game } from '../../web/js/core/game.js';
 import { newState, reviveState } from '../../web/js/core/state.js';
@@ -181,7 +181,8 @@ test('Ines Tock sends you to the garden, nudges you while it is restless, hears 
   assert.match(game.talkTo('ines')[0].text, /^Tin Can Alley first/, 'asked again, she nudges you toward it');
 
   // And so on down the lane: each place calmed is news, she has her own word on it, names the next, and nudges you toward that.
-  ROOMS.slice(1).forEach((room, i) => {
+  // (The far bank, and what she says of it, is in tests/unit/farbank.test.mjs.)
+  LANE.slice(1).forEach((room, i) => {
     calmPlace(game, room.id);
     assert.equal(game.hasNews('ines'), true, room.id);
     game.standBy('ines');
@@ -191,7 +192,7 @@ test('Ines Tock sends you to the garden, nudges you while it is restless, hears 
     assert.equal(/is calm\. Good\./.test(lines[0].text), false, `${room.id}: her own word on it, not the plain line`);
     assert.equal(game.state.story.ines, i + 3);
     assert.equal(game.hasNews('ines'), false);
-    const next = ROOMS[i + 2];
+    const next = LANE[i + 2];
     if (next) {
       assert.ok(lines[1].text.includes(`${next.name} is next`) || lines[1].text.includes(`Only ${next.name.replace(/^The /, 'the ')} is left`), `${room.id}: she names ${next.name}`);
       assert.match(game.talkTo('ines')[0].text, new RegExp(`^${next.name} first`), 'asked again, she nudges you toward it');
@@ -260,8 +261,13 @@ test('Dov has a first thing to say and then a tip each time, round and round; Mr
   calmGarden(game);
   game.standBy('spick');
   assert.match(game.talkTo('spick')[0].text, /^1 quiet\. 7 for the van/);
-  for (const room of ROOMS) game.state.rooms[room.id].clears = 1;
-  assert.match(game.talkTo('spick')[0].text, /^Eight quiet\. Nothing for the van/, 'with every place calm he has nothing to collect');
+  for (const room of LANE) game.state.rooms[room.id].clears = 1;
+  assert.match(game.talkTo('spick')[0].text, /^Eight quiet\. Nothing for the van/, 'with every place on the lane calm he has nothing to collect');
+  // The far bank is not his: he says so once you know of it, and has a last word when that is quiet too.
+  game.state.story.call2 = true;
+  assert.match(game.talkTo('spick')[0].text, /^Far Bank\? Not on my sheet/);
+  for (const room of FAR) game.state.rooms[room.id].clears = 1;
+  assert.match(game.talkTo('spick')[0].text, /^Both banks quiet/);
 });
 
 // ---------------------------------------------------------------- the goal
@@ -299,8 +305,8 @@ test('the goal leads from the first call to a calm garden, back to Ines Tock, an
   game.state.rooms.alley.calmed = 0b111;
   assert.deepEqual(game.goal().count, [3, 5]);
 
-  // And on through every place: the goal is to calm it, then to tell Ines Tock, then the next.
-  ROOMS.slice(1).forEach((room, i) => {
+  // And on through every place on the lane: the goal is to calm it, then to tell Ines Tock, then the next.
+  LANE.slice(1).forEach((room, i) => {
     goal = game.goal();
     assert.deepEqual([goal.id, goal.who, goal.room], ['calm', null, room.id], room.id);
     assert.match(goal.title, /^Calm /);
@@ -312,10 +318,12 @@ test('the goal leads from the first call to a calm garden, back to Ines Tock, an
     assert.deepEqual(game.aim().count, [i + 2, 8]);
     game.standBy('ines'); game.talkTo('ines');
   });
+  // The lane is quiet and she knows: the telephone rings. (What it rings about is in tests/unit/farbank.test.mjs.)
   goal = game.goal();
-  assert.deepEqual([goal.id, goal.who, goal.room, goal.title, goal.count], ['more', null, null, 'The lane is quiet', [8, 8]]);
-  assert.match(goal.detail, /Mr\. Spick has nothing to collect/);
-  assert.equal(nextPlace(game.state), null);
+  assert.deepEqual([goal.id, goal.who, goal.room, goal.title, goal.count], ['call', null, null, 'Answer the telephone', null]);
+  assert.match(goal.detail, /Maribel/);
+  assert.deepEqual(game.aim(), { title: 'Calm all eight places before Monday', count: [8, 8] });
+  assert.equal(nextPlace(game.state), FAR[0]);
 });
 
 test('every goal says what to do in a line, and points somewhere when there is somewhere to point', () => {
@@ -325,12 +333,22 @@ test('every goal says what to do in a line, and points somewhere when there is s
   look();
   game.standBy('ines'); game.talkTo('ines'); look();
   game.state.stats.befriended = 2; look();
-  ROOMS.forEach((room, i) => {
+  LANE.forEach((room, i) => {
     if (i === 0) calmGarden(game); else calmPlace(game, room.id);
     look();
     game.standBy('ines'); game.talkTo('ines'); look();
   });
-  assert.deepEqual(seen, ['meet', 'friend', 'calm', ...ROOMS.flatMap((_, i) => ['report', i < ROOMS.length - 1 ? 'calm' : 'more'])]);
+  // Then both calls (this game never took the first), and the four over the water the same way.
+  assert.equal(game.takeCall(), CALL);
+  assert.equal(game.takeCall().length, 4);
+  assert.equal(game.takeCall(), null);
+  look();
+  FAR.forEach((room) => {
+    calmPlace(game, room.id);
+    look();
+    game.standBy('ines'); game.talkTo('ines'); look();
+  });
+  assert.deepEqual(seen, ['meet', 'friend', 'calm', ...LANE.flatMap((_, i) => ['report', i < LANE.length - 1 ? 'calm' : 'call']), 'calm', ...FAR.flatMap((_, i) => ['report', i < FAR.length - 1 ? 'calm' : 'more'])]);
 });
 
 test('the journal tells what has happened, in order, and grows as it happens', () => {
@@ -356,18 +374,19 @@ test('the story is saved, and comes back as it went in', () => {
   game.standBy('ines'); game.talkTo('ines');
   game.standBy('dov'); game.talkTo('dov'); game.talkTo('dov');
   const saved = JSON.parse(game.serialize(NOW));
-  assert.deepEqual(saved.story, { call: true, ines: 1, dov: 2, spick: 0 });
+  assert.deepEqual(saved.story, { call: true, call2: false, ines: 1, dov: 2, spick: 0 });
   const back = reviveState(JSON.parse(JSON.stringify(saved)), NOW);
   assert.deepEqual(back.story, saved.story);
   assert.equal(goalOf(back).id, 'friend');
 });
 
-test('a save cannot break the story: whatever is stored, it is four small whole numbers', () => {
-  assert.deepEqual(newStory(), { call: false, ines: 0, dov: 0, spick: 0 });
+test('a save cannot break the story: whatever is stored, it is two yes-or-noes and three small whole numbers', () => {
+  assert.deepEqual(newStory(), { call: false, call2: false, ines: 0, dov: 0, spick: 0 });
   for (const wrong of [null, undefined, 7, 'told', [], [1, 2], {}, { call: 'yes', ines: '2', dov: null, spick: {} }, { ines: NaN, dov: Infinity, spick: -Infinity }]) {
     assert.deepEqual(reviveStory(wrong), newStory(), JSON.stringify(wrong));
   }
-  assert.deepEqual(reviveStory({ call: true, ines: 1e308, dov: -5, spick: 2.9, extra: 'x', constructor: 1 }), { call: true, ines: 99, dov: 0, spick: 2 });
+  assert.deepEqual(reviveStory({ call: true, call2: 'yes', ines: 1e308, dov: -5, spick: 2.9, extra: 'x', constructor: 1 }), { call: true, call2: false, ines: 99, dov: 0, spick: 2 });
+  assert.equal(reviveStory({ call2: true }).call2, true);
   // A save that claims Ines has heard about a calm garden that is not calm: the goal still makes sense.
   const state = reviveState({ ...JSON.parse(JSON.stringify(newState(NOW, 3))), started: true, story: { call: true, ines: 2, dov: 50, spick: 50 } }, NOW);
   const goal = goalOf(state);
@@ -389,10 +408,16 @@ test('whatever the story says, in every state, it says it without breaking', () 
       assert.ok(Array.isArray(lines) && lines.length >= 1 && lines.every((line) => CAST[line.who] && typeof line.text === 'string' && line.text.length > 8 && !/undefined|NaN|\[object/.test(line.text)));
       assert.ok(game.goal().title);
       if (step === 10) calmGarden(game);
-      if (step === 20) for (const room of ROOMS) game.state.rooms[room.id].clears = 3;
+      if (step === 20) for (const room of LANE) game.state.rooms[room.id].clears = 3;
     }
-    assert.equal(game.goal().title, 'The lane is quiet');
+    assert.equal(game.goal().title, 'Answer the telephone');
     assert.deepEqual(game.aim().count, [8, 8]);
+    // And on, with both calls taken and the far bank calm as well.
+    game.takeCall(); game.takeCall();
+    for (const room of FAR) game.state.rooms[room.id].clears = 2;
+    for (const who of NEIGHBOURS) { game.standBy(who); for (let i = 0; i < 3; i++) assert.ok(game.talkTo(who).every((line) => line.text.length > 8 && !/undefined|NaN|\[object/.test(line.text))); }
+    assert.equal(game.goal().title, 'Both banks are quiet');
+    assert.deepEqual(game.aim(), { title: 'Calm the four places over the water', count: [4, 4] });
   }
 });
 

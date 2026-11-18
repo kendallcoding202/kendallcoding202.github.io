@@ -52,7 +52,7 @@ const comingArt = (id, room) => Object.fromEntries([['maribel', { complete: fals
 
 test('every room you can walk into is painted; every painting it needs is in the game, and nothing is in the folder that no room uses', () => {
   for (const id of INSIDE_IDS) assert.ok(painted(id), `${id} is painted`);
-  assert.equal(INSIDE_IDS.length, 7);
+  assert.equal(INSIDE_IDS.length, 11);
   assert.equal(painted('garden'), false, 'the garden is a corner of the lane, not a room');
   assert.equal(painted('constructor'), false);
   assert.equal(new Set(ROOM_ART).size, ROOM_ART.length);
@@ -67,7 +67,7 @@ test('every room you can walk into is painted; every painting it needs is in the
     for (const [, src] of needs) { assert.ok(ROOM_ART.includes(src), `${src} is fetched before the game shows`); used.add(src); }
   }
   // Each room's sheet was twelve things: with its wall and floor, fourteen pictures, and every one of them is used in its room.
-  assert.equal(ROOM_ART.length, 7 * 14);
+  assert.equal(ROOM_ART.length, 11 * 14);
   assert.deepEqual(ROOM_ART.filter((src) => !used.has(src)), [], 'no picture is fetched that its room does not show');
   const folder = readdirSync(`${WEB}assets/rooms`).map((file) => `assets/rooms/${file}`);
   assert.deepEqual(folder.filter((file) => !ROOM_ART.includes(file)), [], 'no picture ships that nothing shows');

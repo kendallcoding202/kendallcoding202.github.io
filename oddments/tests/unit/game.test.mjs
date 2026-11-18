@@ -7,7 +7,12 @@ import { playOut } from '../../web/js/core/auto.js';
 import { newFriend } from '../../web/js/core/progress.js';
 import { ROOMS, LOOK_IDS, NAME_LENGTH, BREATHER, SPECIES } from '../../web/js/core/balance.js';
 import { maxHpOf } from '../../web/js/core/rooms.js';
-import { WORLD, POST, BARRICADE, DISTRICTS, districtOf, districtAt, spotOf } from '../../web/js/core/world.js';
+import { WORLD, POST, BARRICADE, DISTRICTS, districtOf, districtAt, spotOf, BRIDGE } from '../../web/js/core/world.js';
+
+// The gate on Kettle Bridge holds its ground until the whole lane is calm (tests/unit/farbank.test.mjs).
+// These tests are about the places themselves, so they look at what is held apart from it.
+const land = (held) => held.filter((spot) => !(spot.x === BRIDGE.gate.x && spot.y === BRIDGE.gate.y));
+
 
 const NOW = 1_800_000_000_000;
 const fresh = (seed = 11) => new Game(newState(NOW, seed), { now: NOW });
@@ -104,9 +109,9 @@ test('walking in through the gate, rested, begins a visit; walking back out does
 
 test('from outside they are hidden but in the way; once you are in they hold their ground until calmed', () => {
   const game = fresh();
-  assert.deepEqual(game.held(), [...POSTS, SHUT, ...ALLEY.posts], 'rested and outside: a bush at every post, and the alley shut');
+  assert.deepEqual(land(game.held()), [...POSTS, SHUT, ...ALLEY.posts], 'rested and outside: a bush at every post, and the alley shut');
   game.travelTo('garden');
-  assert.deepEqual(game.held(), [...POSTS, SHUT, ...ALLEY.posts]);
+  assert.deepEqual(land(game.held()), [...POSTS, SHUT, ...ALLEY.posts]);
   const post = POSTS[0];
   // Walk straight at a group: you stop short of where it stands.
   for (let i = 0; i < 600; i++) game.walk(post, 1 / 60);
@@ -114,7 +119,7 @@ test('from outside they are hidden but in the way; once you are in they hold the
   assert.equal(game.meeting(), 0, 'and that is meeting it');
   playOut(game.startEncounter(game.meeting()), {});
   assert.equal(game.finishBattle().won, true);
-  assert.deepEqual(game.held(), [...POSTS.slice(1), SHUT, ...ALLEY.posts], 'calm, they hold nothing');
+  assert.deepEqual(land(game.held()), [...POSTS.slice(1), SHUT, ...ALLEY.posts], 'calm, they hold nothing');
   assert.equal(game.meeting(), -1);
   walkTo(game, post);
   assert.ok(Math.hypot(game.state.where.x - post.x, game.state.where.y - post.y) < 8, 'and you can stand where they stood');
@@ -188,7 +193,7 @@ test('every group in the alley can really be fought, in order, by a team that ha
   assert.deepEqual(cleared.stops, [0, 1, 2, 3, 4]);
   assert.equal(cleared.game.state.book.boss_baron.met, true);
   assert.equal(cleared.game.district(), 'alley');
-  assert.deepEqual(cleared.game.held(), [], 'calm, the alley holds nothing; and the garden, calm before it, has stayed calm');
+  assert.deepEqual(land(cleared.game.held()), [], 'calm, the alley holds nothing; and the garden, calm before it, has stayed calm');
 });
 
 test('one visit at a time: while you are calling on one place, the other keeps to its cover', () => {
@@ -385,12 +390,12 @@ test('a whole room can be played from the gate to the boss, and clearing it is r
   assert.equal(game.place(), 'lane');
   // You are still standing in the garden, rested, and nobody is about.
   assert.equal(game.district(), 'garden');
-  assert.deepEqual(game.held(), ALLEY.posts, 'nothing in the garden; and the alley\'s barricade is down');
+  assert.deepEqual(land(game.held()), ALLEY.posts, 'nothing in the garden; and the alley\'s barricade is down');
   for (const member of game.teamHealth()) assert.equal(member.hp, member.max);
   // Step out of the gate and it stays calm: nobody goes back into the bushes. Step in again and
   // it is a stroll: a few wanderers at some of its stops, and no ringleader.
   walkTo(game, spotOf('garden').door);
-  assert.deepEqual(game.held(), ALLEY.posts);
+  assert.deepEqual(land(game.held()), ALLEY.posts);
   assert.equal(game.place(), 'lane');
   walkTo(game, JUST_IN);
   assert.equal(game.place(), 'path');

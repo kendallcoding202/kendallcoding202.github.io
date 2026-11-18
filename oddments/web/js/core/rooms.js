@@ -7,7 +7,7 @@
 // ringleader. Calm the ringleader and the whole place is calm for good.
 import { SPECIES, ROOMS, HEIRLOOM, VISITORS, WANDERERS, BREATHER, TEAM_SIZE, roomOf, roomBuilt, statAt, grownOdds } from './balance.js';
 import { nextRandom, rollInt, rollPick, own } from './util.js';
-import { BARRICADE, districtOf, districtAt } from './world.js';
+import { BARRICADE, BRIDGE, districtOf, districtAt } from './world.js';
 
 /** A room is open once it is built and the room before it has been cleared. */
 export function roomOpen(state, roomId) {
@@ -15,6 +15,12 @@ export function roomOpen(state, roomId) {
   if (index < 0 || !roomBuilt(ROOMS[index])) return false;
   return index === 0 || state.rooms[ROOMS[index - 1].id].clears > 0;
 }
+
+// The gate on Kettle Bridge has eight locks, one for the key of each place on the lane. It stands
+// open once all eight are calm: which is exactly when the first place over the water opens.
+const FAR_FIRST = ROOMS.find((room) => room.chapter === 2) || null;
+/** Whether the way over the river is open. */
+export const bridgeOpen = (state) => !FAR_FIRST || roomOpen(state, FAR_FIRST.id);
 
 /** Whether a place has been calmed at least once. Calm places are where Heirlooms are looked for. */
 export const placeCalm = (state, roomId) => own(state.rooms, roomId) && state.rooms[roomId].clears > 0;
@@ -95,7 +101,7 @@ export function fairEncounter(room, stop, list) {
 
 /**
  * The ground being held just now, as points to keep off (see world.canStand): a barricade in the
- * gateway of any place that is still shut; on a visit, every group there not yet calmed; and in a
+ * gateway of any place that is still shut, and the gate on the bridge while that is; on a visit, every group there not yet calmed; and in a
  * place you are not visiting, the cover its restless ones keep to. A place you are standing in
  * with no visit on (you have just calmed it) holds nothing.
  */
@@ -113,6 +119,7 @@ export function heldBy(state, where = state.where) {
       held.push(...area.posts.filter((_, stop) => !staysCalm(state, room.id, stop)));
     }
   }
+  if (!bridgeOpen(state)) held.push({ ...BRIDGE.gate });
   return held;
 }
 

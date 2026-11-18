@@ -43,7 +43,7 @@ test('every kind that can be a friend grows up: later the further along it lives
   const starters = START_TEAM.map(([kind]) => kind);
   for (const id of KINDS) {
     const { grown } = SPECIES[id];
-    assert.ok(grown && Number.isInteger(grown.at) && grown.at >= 7 && grown.at <= 18 && grown.at < MAX_LEVEL, id);
+    assert.ok(grown && Number.isInteger(grown.at) && grown.at >= 7 && grown.at <= 22 && grown.at < MAX_LEVEL, id);
     if (starters.includes(id)) continue;
     assert.ok(grown.at > firstMet[id].top, `${id} grows at ${grown.at}, above the ${firstMet[id].top} it is met at: growing up is earned at your side`);
   }
@@ -70,8 +70,7 @@ test('every grown form is painted, in its own colours and its Heirloom colours, 
     assert.match(entry.prompt, /obviously different from the reference picture at a glance/);
     assert.match(entry.prompt, /not based on any existing game, film or cartoon character/);
   }
-  // (Forty more are painted and waiting, for the kinds of chapter two: in the manifest before they are in the game.)
-  assert.ok(ART.filter((art) => art.kind === 'grown').length >= KINDS.length);
+  assert.equal(ART.filter((art) => art.kind === 'grown').length, KINDS.length);
 });
 
 test('a friend grows up on gaining the level its kind grows at, once, and not before', () => {

@@ -11,10 +11,10 @@ import {
 
 const ASSETS = fileURLToPath(new URL('../../web/assets/', import.meta.url));
 
-test('there are sixty-eight Clutterkin: sixty who can be friends and eight bosses, one to a place', () => {
-  assert.equal(SPECIES_IDS.length, 68);
-  assert.equal(SPECIES_IDS.filter((id) => !SPECIES[id].boss).length, 60);
-  assert.deepEqual(SPECIES_IDS.filter((id) => SPECIES[id].boss), ['boss_hydra', 'boss_baron', 'boss_crumbwyrm', 'boss_spincycle', 'boss_tome', 'boss_warden', 'boss_clock', 'boss_vacuum']);
+test('there are ninety-two Clutterkin: eighty who can be friends and twelve bosses, one to a place', () => {
+  assert.equal(SPECIES_IDS.length, 92);
+  assert.equal(SPECIES_IDS.filter((id) => !SPECIES[id].boss).length, 80);
+  assert.deepEqual(SPECIES_IDS.filter((id) => SPECIES[id].boss), ['boss_hydra', 'boss_baron', 'boss_crumbwyrm', 'boss_spincycle', 'boss_tome', 'boss_warden', 'boss_clock', 'boss_vacuum', 'boss_marrow', 'boss_bathtub', 'boss_mower', 'boss_treadle']);
   assert.deepEqual(ROOMS.map((room) => room.path[room.path.length - 1].boss), SPECIES_IDS.filter((id) => SPECIES[id].boss), 'in the order their places come');
   // Every move in the tables is somebody's, and nobody has a move that is not in them.
   const used = new Set(SPECIES_IDS.flatMap((id) => SPECIES[id].moves.map(([move]) => move)));
@@ -123,14 +123,15 @@ test('you start with three friends of three different elements, each knowing two
   }
 });
 
-test('the lane has eight places; all eight are built and each ends in its boss', () => {
-  assert.equal(ROOMS.length, 8);
-  assert.equal(new Set(ROOMS.map((room) => room.id)).size, 8);
+test('there are twelve places, eight on the lane and four over the water; all are built and each ends in its boss', () => {
+  assert.equal(ROOMS.length, 12);
+  assert.equal(new Set(ROOMS.map((room) => room.id)).size, 12);
+  assert.deepEqual(ROOMS.map((room) => room.chapter || 1), [1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2], 'the far bank comes after the lane');
   for (const room of ROOMS) {
     assert.ok(room.name && room.blurb && ELEMENTS[room.element]);
     assert.ok(existsSync(`${ASSETS}bg/${room.bg}.webp`), `${room.id} background`);
   }
-  assert.deepEqual(ROOMS.filter(roomBuilt).map((room) => room.id), ['garden', 'alley', 'pantry', 'wash', 'stacks', 'rooftops', 'attic', 'dark']);
+  assert.deepEqual(ROOMS.filter(roomBuilt).map((room) => room.id), ['garden', 'alley', 'pantry', 'wash', 'stacks', 'rooftops', 'attic', 'dark', 'glasshouse', 'deepend', 'shed', 'mending']);
   const bosses = [];
   for (const { path } of ROOMS.filter(roomBuilt)) {
     assert.equal(path.length, 5);
@@ -145,8 +146,8 @@ test('the lane has eight places; all eight are built and each ends in its boss',
     for (let i = 1; i < path.length; i++) assert.ok(path[i].level[1] >= path[i - 1].level[1] || path[i].boss, 'the path gets harder');
   }
   assert.equal(new Set(bosses).size, bosses.length, 'each place has a boss of its own');
-  assert.equal(new Set(ROOMS.filter(roomBuilt).flatMap((room) => room.path.map((spot) => spot.name))).size, 40, 'and every stop a name of its own');
-  assert.equal(ROOMS.filter(roomBuilt).flatMap((room) => room.path).length, 40);
+  assert.equal(new Set(ROOMS.filter(roomBuilt).flatMap((room) => room.path.map((spot) => spot.name))).size, 60, 'and every stop a name of its own');
+  assert.equal(ROOMS.filter(roomBuilt).flatMap((room) => room.path).length, 60);
   // Each place starts about where the one before left off, and ends higher.
   const built = ROOMS.filter(roomBuilt);
   for (let i = 1; i < built.length; i++) {

@@ -2,9 +2,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { rollEncounter, fairEncounter, poolOf, placeCalm, staysCalm, calmedIn, wandering, wanderersMost, canMeet, nextGroup, roomOpen, enterRoom, leaveRoom, afterFight, heldBy, maxHpOf, teamOf, someone, stillAbout } from '../../web/js/core/rooms.js';
-import { BARRICADE, districtOf } from '../../web/js/core/world.js';
+import { BARRICADE, districtOf, BRIDGE } from '../../web/js/core/world.js';
 import { newState } from '../../web/js/core/state.js';
 import { ROOMS, SPECIES, BREATHER, TEAM_SIZE, VISITORS, WANDERERS, START_TEAM, statAt, roomOf } from '../../web/js/core/balance.js';
+
+// The gate on Kettle Bridge holds its ground until the whole lane is calm (tests/unit/farbank.test.mjs).
+// These tests are about the places themselves, so they look at what is held apart from it.
+const land = (held) => held.filter((spot) => !(spot.x === BRIDGE.gate.x && spot.y === BRIDGE.gate.y));
+
 
 const GARDEN = ROOMS[0];
 
@@ -65,32 +70,32 @@ test('ground is held by a barricade while a place is shut, by cover while you ar
   const shut = { x: alley.gate.x, y: alley.gate.y, r: BARRICADE };
   const state = newState(1e12, 1);
   // A new game: everyone in the garden is in the bushes; the alley is barricaded, and its bins are full.
-  assert.deepEqual(heldBy(state), [...garden.posts, shut, ...alley.posts]);
+  assert.deepEqual(land(heldBy(state)), [...garden.posts, shut, ...alley.posts]);
   assert.ok(BARRICADE * 2 > 140, 'a barricade fills the gateway from post to post');
   // Calling on the garden, its groups hold their ground until calmed.
   enterRoom(state, 'garden');
   state.visit.groups[1].done = true;
-  assert.deepEqual(heldBy(state), [...garden.posts.filter((_, i) => i !== 1), shut, ...alley.posts]);
+  assert.deepEqual(land(heldBy(state)), [...garden.posts.filter((_, i) => i !== 1), shut, ...alley.posts]);
   // Calm the garden: the barricade comes down. Standing in the garden with no visit on, nothing is held there.
   state.visit = null;
   state.rooms.garden.clears = 1;
-  assert.deepEqual(heldBy(state, garden.posts[0]), alley.posts);
+  assert.deepEqual(land(heldBy(state, garden.posts[0])), alley.posts);
   // A calm place stays calm: nobody is back in its bushes, from wherever you look.
-  assert.deepEqual(heldBy(state, { x: 1180, y: 1454 }), alley.posts);
+  assert.deepEqual(land(heldBy(state, { x: 1180, y: 1454 })), alley.posts);
   // One visit at a time: strolling in the calm garden, the alley keeps to its cover, even if you walk in.
   enterRoom(state, 'garden');
   const strolling = garden.posts.filter((_, i) => !state.visit.groups[i].done);
   assert.ok(strolling.length >= 1 && strolling.length <= 3);
-  assert.deepEqual(heldBy(state, alley.posts[2]), [...strolling, ...alley.posts]);
+  assert.deepEqual(land(heldBy(state, alley.posts[2])), [...strolling, ...alley.posts]);
   // Calling on the alley, its groups hold their ground, and the calm garden holds none.
   state.visit = null;
   enterRoom(state, 'alley');
-  assert.deepEqual(heldBy(state, garden.posts[0]), alley.posts);
+  assert.deepEqual(land(heldBy(state, garden.posts[0])), alley.posts);
   // And the answer is for wherever is asked about, which need not be where the save says you stand.
   state.visit = null;
   state.where = { ...alley.posts[2] };
-  assert.deepEqual(heldBy(state), [], 'standing in the alley with no visit on, nothing is held there; nor in the calm garden');
-  assert.deepEqual(heldBy(state, null), alley.posts);
+  assert.deepEqual(land(heldBy(state)), [], 'standing in the alley with no visit on, nothing is held there; nor in the calm garden');
+  assert.deepEqual(land(heldBy(state, null)), alley.posts);
 });
 
 test('once a place is calm, kinds like your first three come calling there: never before, never beside its ringleader', () => {
@@ -384,5 +389,5 @@ test('from outside, only the stops still restless have somebody keeping to cover
   const posts = districtOf('garden').posts;
   assert.equal(heldBy(state).filter((point) => posts.includes(point)).length, 5);
   state.rooms.garden.calmed = 0b01010;
-  assert.deepEqual(heldBy(state).filter((point) => posts.includes(point)), [posts[0], posts[2], posts[4]]);
+  assert.deepEqual(land(heldBy(state)).filter((point) => posts.includes(point)), [posts[0], posts[2], posts[4]]);
 });
