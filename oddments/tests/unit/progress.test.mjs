@@ -20,9 +20,9 @@ test('a tougher Clutterkin is worth more, and a boss four times as much', () => 
 
 test('experience fills the bar, carries the remainder over a level, and can cross several at once', () => {
   const friend = newFriend(1, 'dustbunny', 1);
-  assert.deepEqual(gainXp(friend, xpNeeded(1) - 1), { levels: 0, learned: [] });
+  assert.deepEqual(gainXp(friend, xpNeeded(1) - 1), { levels: 0, learned: [], grew: false });
   assert.deepEqual([friend.level, friend.xp], [1, xpNeeded(1) - 1]);
-  assert.deepEqual(gainXp(friend, 5), { levels: 1, learned: [] });
+  assert.deepEqual(gainXp(friend, 5), { levels: 1, learned: [], grew: false });
   assert.deepEqual([friend.level, friend.xp], [2, 4]);
   const jump = xpNeeded(2) + xpNeeded(3) + xpNeeded(4) + xpNeeded(5);
   const gained = gainXp(friend, jump);
@@ -33,7 +33,7 @@ test('experience fills the bar, carries the remainder over a level, and can cros
 
 test('nothing, a negative amount or nonsense teaches nothing', () => {
   const friend = newFriend(1, 'sockeel', 3);
-  for (const amount of [0, -50, NaN, undefined, 'lots']) assert.deepEqual(gainXp(friend, amount), { levels: 0, learned: [] });
+  for (const amount of [0, -50, NaN, undefined, 'lots']) assert.deepEqual(gainXp(friend, amount), { levels: 0, learned: [], grew: false });
   assert.deepEqual([friend.level, friend.xp], [3, 0]);
 });
 
@@ -41,7 +41,7 @@ test('levels stop at the cap and experience stops with them', () => {
   const friend = newFriend(1, 'sockeel', MAX_LEVEL - 1);
   assert.equal(gainXp(friend, 1e9).levels, 1);
   assert.deepEqual([friend.level, friend.xp], [MAX_LEVEL, 0]);
-  assert.deepEqual(gainXp(friend, 1e9), { levels: 0, learned: [] });
+  assert.deepEqual(gainXp(friend, 1e9), { levels: 0, learned: [], grew: false });
   assert.equal(friend.xp, 0);
 });
 

@@ -37,8 +37,8 @@ export function newState(now = Date.now(), seed = (now ^ 0x9e3779b9) | 0) {
     // Who is out on the lane this time: [{ at: which quiet spot, foes: [who], done }]. They have dice of their own.
     strays: [],
     strayRng: (seed ^ 0x5bd1e995) | 0,
-    // The scrapbook: which kinds have been met, and which as an Heirloom.
-    book: Object.fromEntries(SPECIES_IDS.map((id) => [id, { met: friends.some((friend) => friend.species === id), heirloom: false }])),
+    // The scrapbook: which kinds have been met, which as an Heirloom, and which you have seen grown up.
+    book: Object.fromEntries(SPECIES_IDS.map((id) => [id, { met: friends.some((friend) => friend.species === id), heirloom: false, grown: false }])),
     stats: { battles: 0, wins: 0, losses: 0, rounds: 0, knockouts: 0, befriended: 0, heirlooms: 0 },
     story: newStory(), // which conversations have been had; the rest of the story is read from everything else here
     settings: { fast: false, sound: true, music: true }, // fast fights; sound effects; the tunes
@@ -91,9 +91,14 @@ function reviveFriend(raw) {
     xp: level >= MAX_LEVEL ? 0 : int(raw.xp, 0, 0, xpNeeded(level) - 1),
     heirloom: raw.heirloom === true,
   };
+  // Grown up: only a kind that grows. (At any level: one that was grown when it came home is grown from the start.)
+  if (raw.grown === true && SPECIES[raw.species].grown) friend.grown = true;
   giveName(friend, raw.nick); // a name of your own, if it was given one: tidied again on the way in
   return friend;
 }
+
+/** One of the restless, as the save may keep it: what the game made, and nothing else. (Whether it is a fair one is checked before this.) */
+const keptFoe = (foe) => (foe.grown === true ? { species: foe.species, level: foe.level, heirloom: foe.heirloom, grown: true } : { species: foe.species, level: foe.level, heirloom: foe.heirloom });
 
 function reviveVisit(raw, state) {
   if (!isObj(raw) || typeof raw.room !== 'string' || !roomOpen(state, raw.room) || !Array.isArray(raw.groups)) return null;
@@ -106,7 +111,7 @@ function reviveVisit(raw, state) {
   }
   // Nobody on their feet is not a visit: they are at home.
   if (!Object.values(visit.hp).some((left) => left > 0)) return null;
-  const kept = (foes) => foes.map((foe) => ({ species: foe.species, level: foe.level, heirloom: foe.heirloom }));
+  const kept = (foes) => foes.map(keptFoe);
   // A calm place stays calm, whatever the save says of it: this is a stroll. Wanderers are kept
   // where they are a fair roll for their stop, as many as there can be and no more, and never at
   // its ringleader's. Nobody is rolled afresh: a stroll with nobody left is still a stroll.
@@ -202,7 +207,7 @@ export function reviveState(saved, now = Date.now()) {
   const kept = (Array.isArray(saved.strays) ? saved.strays.slice(0, 64) : []).filter((stray) => isObj(stray) && Number.isInteger(stray.at) && stray.at >= 0 && stray.at < WILDS.length
     && !taken.has(stray.at) && fairStrays(state, stray.foes) && taken.add(stray.at)).slice(0, STRAYS.groups[1]);
   if (Array.isArray(saved.strays) && (kept.length || saved.strays.length === 0)) {
-    state.strays = kept.map((stray) => ({ at: stray.at, foes: stray.foes.map((foe) => ({ species: foe.species, level: foe.level, heirloom: foe.heirloom })), done: stray.done === true }));
+    state.strays = kept.map((stray) => ({ at: stray.at, foes: stray.foes.map(keptFoe), done: stray.done === true }));
   } else rollStrays(state);
   const where = mapped && isObj(saved.where) ? saved.where : null;
   // (Wherever the save says you stand is checked against the ground held as it would be with you standing there.)
@@ -222,7 +227,7 @@ export function reviveState(saved, now = Date.now()) {
   for (const id of SPECIES_IDS) {
     const raw = isObj(book[id]) ? book[id] : {};
     const friend = state.friends.find((f) => f.species === id);
-    state.book[id] = { met: raw.met === true || !!friend, heirloom: raw.heirloom === true || !!(friend && friend.heirloom) };
+    state.book[id] = { met: raw.met === true || !!friend, heirloom: raw.heirloom === true || !!(friend && friend.heirloom), grown: !!SPECIES[id].grown && (raw.grown === true || !!(friend && friend.grown)) };
   }
 
   const stats = isObj(saved.stats) ? saved.stats : {};

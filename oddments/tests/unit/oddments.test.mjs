@@ -104,7 +104,7 @@ test('who can be calmed has a Huff; a boss has none and acts twice', () => {
   }
 });
 
-test('every friend has a grown form waiting for its art, with a name of its own', () => {
+test('every friend has a grown form, with a name of its own', () => {
   const names = new Set(SPECIES_IDS.map((id) => SPECIES[id].name));
   for (const id of SPECIES_IDS.filter((k) => !SPECIES[k].boss)) {
     const { grown } = SPECIES[id];

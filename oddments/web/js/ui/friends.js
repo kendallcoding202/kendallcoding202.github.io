@@ -1,7 +1,7 @@
 // The screens at home: your friends and team, the scrapbook, and settings.
 import { BUILD } from '../platform/build.js';
 import { SPECIES, SPECIES_IDS, ELEMENTS, ELEMENT_IDS, TEAM_SIZE, LOOKS, NAME_LENGTH, VERSION, TITLE, HEIRLOOM, ROOMS, roomBuilt, xpNeeded, MAX_LEVEL } from '../core/balance.js';
-import { nameOf } from '../core/names.js';
+import { nameOf, artOf, kindNameOf } from '../core/names.js';
 import { h, sprite } from './dom.js';
 import { modal, toast } from './modals.js';
 import { elementTag, heirloomTag, bar, oddmentCard } from './parts.js';
@@ -26,7 +26,7 @@ export function friendsScreen(ctx) {
     }
     // A name of your own for it. (The dialog opens once this one has closed.)
     actions.push({ id: 'name', label: friend.nick ? 'Change its name' : 'Give it a name', kind: 'plain', onClick: () => { setTimeout(() => nameDialog(ctx, friend, draw), 0); } });
-    oddmentCard({ species: friend.species, level: friend.level, heirloom: friend.heirloom, xp: friend.xp, name: nameOf(friend), actions });
+    oddmentCard({ species: friend.species, level: friend.level, heirloom: friend.heirloom, xp: friend.xp, name: nameOf(friend), grown: !!friend.grown, actions });
   }
 
   function change(ids) {
@@ -37,8 +37,8 @@ export function friendsScreen(ctx) {
 
   function tile(friend, onTeam) {
     const kind = SPECIES[friend.species];
-    return h('button', { class: `friend${onTeam ? ' on' : ''}${friend.heirloom ? ' rare' : ''}`, data: { friend: String(friend.id), species: friend.species }, onclick: () => open(friend) },
-      sprite(friend.species, friend.heirloom, 'flip'),
+    return h('button', { class: `friend${onTeam ? ' on' : ''}${friend.heirloom ? ' rare' : ''}${friend.grown ? ' grown' : ''}`, data: { friend: String(friend.id), species: friend.species }, onclick: () => open(friend) },
+      sprite(artOf(friend), friend.heirloom, 'flip'),
       h('b', null, nameOf(friend)),
       h('span', { class: 'tags' }, elementTag(kind.element), h('small', null, `Lv ${friend.level}`)),
       friend.level >= MAX_LEVEL ? null : bar('xp', friend.xp / xpNeeded(friend.level)),
@@ -72,15 +72,17 @@ export function bookScreen(ctx) {
     const friend = friends.find((f) => f.species === id);
     const met = book[id].met;
     return h('button', {
-      class: `page-tile${met ? '' : ' unmet'}${friend ? ' friend' : ''}${friend && friend.heirloom ? ' rare' : ''}`, data: { kind: id }, disabled: !met,
-      onclick: () => oddmentCard({ species: id, level: friend ? friend.level : 1, heirloom: !!(friend && friend.heirloom), xp: friend ? friend.xp : null }),
+      class: `page-tile${met ? '' : ' unmet'}${friend ? ' friend' : ''}${friend && friend.heirloom ? ' rare' : ''}${friend && friend.grown ? ' grown' : ''}`, data: { kind: id }, disabled: !met,
+      onclick: () => oddmentCard({ species: id, level: friend ? friend.level : 1, heirloom: !!(friend && friend.heirloom), xp: friend ? friend.xp : null, grown: !!(friend && friend.grown) }),
     },
-      sprite(id, !!(friend && friend.heirloom)),
-      h('b', null, met ? kind.name : '???'),
+      // (Yours, as it is now: its grown form once it has grown up.)
+      sprite(friend ? artOf(friend) : id, !!(friend && friend.heirloom)),
+      h('b', null, met ? (friend ? kindNameOf(friend) : kind.name) : '???'),
       met ? elementTag(kind.element) : h('small', null, 'Not met'),
       // A heart for a friend. For its Heirloom: a gold mark once yours wears the colours, a hollow one if
       // you have only seen it.
       h('span', { class: 'stamps' }, friend ? h('i', { class: 'stamp pal', title: 'A friend' }, '♥') : null,
+        book[id].grown ? h('i', { class: 'stamp grownup', title: 'Grown up' }, '▲') : null,
         friend && friend.heirloom ? h('i', { class: 'stamp gold', title: 'Heirloom kept' }, '❖')
           : book[id].heirloom ? h('i', { class: 'stamp seen', title: 'Heirloom seen, not kept' }, '◇') : null));
   });
@@ -99,7 +101,7 @@ export function bookScreen(ctx) {
       : h('small', { class: 'gold', data: { act: 'tofind' } }, 'You have every one of them.'));
   const el = h('section', { id: 'book', class: 'page' },
     h('header', { class: 'bar-top' }, h('h1', null, 'Scrapbook')),
-    h('p', { class: 'note' }, `Met ${kinds.filter((id) => book[id].met).length} of ${kinds.length} · Friends ${friends.length} of ${canJoin.length} · Heirlooms ${kept.length} of ${canJoin.length}`),
+    h('p', { class: 'note', data: { act: 'counts' } }, `Met ${kinds.filter((id) => book[id].met).length} of ${kinds.length} · Friends ${friends.length} of ${canJoin.length} · Grown up ${canJoin.filter((id) => book[id].grown).length} of ${canJoin.length} · Heirlooms ${kept.length} of ${canJoin.length}`),
     hunt,
     h('div', { class: 'grid book' }, tiles),
     h('h3', null, 'Elements'),
@@ -159,7 +161,7 @@ export function settingsScreen(ctx) {
  */
 export function nameDialog(ctx, friend, after) {
   const { game } = ctx;
-  const kind = SPECIES[friend.species];
+  const kind = { name: kindNameOf(friend) }; // what its kind is called as it stands now: its grown form's name, once grown
   // The keyboard's return key is Done.
   const input = h('input', { type: 'text', maxLength: NAME_LENGTH, value: friend.nick || '', placeholder: kind.name, autocomplete: 'off', spellcheck: false, enterKeyHint: 'done', 'aria-label': `What you call your ${kind.name}`, data: { field: 'nick' },
     onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); dialog.el.querySelector('[data-id="save"]').click(); } } });
@@ -174,7 +176,7 @@ export function nameDialog(ctx, friend, after) {
   const dialog = modal({
     title: 'What do you call it?', cls: 'naming',
     body: [
-      h('div', { class: 'namingtop' }, sprite(friend.species, friend.heirloom, 'flip'),
+      h('div', { class: 'namingtop' }, sprite(artOf(friend), friend.heirloom, 'flip'),
         h('p', null, `Its kind is ${kind.name}, and it answers to that. It will answer to a name of your own just as gladly.`)),
       h('label', null, h('small', null, `A name of your own (up to ${NAME_LENGTH} letters)`), input),
     ],

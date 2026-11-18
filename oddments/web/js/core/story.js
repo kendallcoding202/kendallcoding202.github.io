@@ -242,18 +242,21 @@ export const THREE = [
     about: 'Hopmote has lived under the spare bed for as long as anyone remembers, minding whatever rolls under there: buttons, a marble, one earring. It is shy of nearly everything and frightened of exactly one thing: a roaring it hears some nights, from somewhere down the lane. Last night it slept on your feet.',
     knack: 'Quick, and it hits hardest of the three. It does not take a knock well.',
     after: 'THE VACUUM is quiet. Hopmote walks right up to it, all on its own, and sneezes on it. Nothing happens. It sneezes again, to be sure.',
+    grew: 'It came out from under the spare bed this morning and did not fit back. The antlers are coat hangers from the wardrobe. It keeps catching them on door frames and pretending it meant to.',
   },
   {
     kind: 'sockeel', what: 'an odd sock', place: 'wash',
     about: 'Eelastic went into the wash as one of a pair and came out alone. That was years ago. It still looks behind every door on the lane, in case. It is the steady one: it takes a knock, wrings itself out and carries on.',
     knack: 'Steady. It has the most Health of the three, and no weak side.',
     after: 'Behind Machine Six there is a sock. One sock, blue stripes, a little shrunk. Eelastic looks at it for a long time. Then it stops looking behind doors.',
+    grew: 'It used to fit in one drawer. Now it loops twice round the banister and still has enough of itself left over to hold the door open for you.',
   },
   {
     kind: 'toastghost', what: 'a slice of burnt toast', place: 'pantry',
     about: 'Somebody put Crumbwisp in the toaster one morning and never came back for it. Great-aunt Maribel did, in the end. It has never quite forgiven the toaster, and it will give its last crumb to anyone who is hurt.',
     knack: 'Slow and tough. Before long it learns to mend its friends.',
     after: 'Crumbwisp floats over to the toaster and looks in. Nobody is in there now. It comes back and settles on your shoulder, warm as ever.',
+    grew: 'Somebody forgot it in the toaster once. Nobody could forget it now: it fills the kitchen doorway, and the butter has stopped sliding off.',
   },
 ];
 export const THREE_WORDS = {
@@ -263,6 +266,11 @@ export const THREE_WORDS = {
 };
 /** The story of one of the three, by its kind: { what, about, knack }, or null for anyone else. */
 export const aboutOf = (kind) => THREE.find((one) => one.kind === kind) || null;
+/**
+ * What is said when a friend grows up: for one of the three, a few words of its own; for anyone,
+ * null (the screen has plain words for that).
+ */
+export const grewWords = (kind) => { const one = aboutOf(kind); return one && one.grew ? one.grew : null; };
 /** What is put right for one of the three when a place is calmed: { kind, text }, or null. */
 export function putRight(state, roomId) {
   const one = THREE.find((each) => each.place === roomId && state.friends.some((friend) => friend.species === each.kind));

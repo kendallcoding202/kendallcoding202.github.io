@@ -19,6 +19,8 @@ export async function loadAssets(onProgress = () => {}) {
   for (const id of SPECIES_IDS) {
     sources.push(spriteSrc(id));
     if (!SPECIES[id].boss) sources.push(spriteSrc(id, true));
+    // A kind that grows up has a second picture, and that has its Heirloom colours too.
+    if (SPECIES[id].grown) sources.push(spriteSrc(`${id}_grown`), spriteSrc(`${id}_grown`, true));
   }
   // People: each look of the house-sitter from the side, the front and behind, and the cast.
   for (const look of LOOK_IDS) sources.push(spriteSrc(look), spriteSrc(`${look}_front`), spriteSrc(`${look}_back`));

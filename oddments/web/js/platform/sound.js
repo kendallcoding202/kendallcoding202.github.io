@@ -157,6 +157,8 @@ export const SOUNDS = {
   lose: (kit) => [392, 330, 262, 196].forEach((freq, i) => kit.tone({ freq, dur: 0.3, type: 'sine', vol: 0.09, delay: i * 0.16, attack: 0.03 })),
   calm: (kit) => { [523, 659, 784, 1047, 1319, 1568].forEach((freq, i) => kit.bell(freq, { delay: i * 0.1, vol: 0.085, dur: 0.9 })); [523, 784, 1047].forEach((freq) => kit.bell(freq, { delay: 0.72, vol: 0.07, dur: 1.6 })); },
   level: (kit) => [523, 659, 784, 1047].forEach((freq, i) => kit.tone({ freq, dur: 0.13, type: 'triangle', vol: 0.09, delay: i * 0.07 })),
+  // A friend grows up: a long climb, and a chord that rings on at the top of it.
+  grew: (kit) => { [392, 523, 659, 784, 1047].forEach((freq, i) => kit.tone({ freq, dur: 0.17, type: 'triangle', vol: 0.09, delay: i * 0.09 })); [1047, 1319, 1568].forEach((freq) => kit.bell(freq, { delay: 0.5, vol: 0.07, dur: 1.2 })); },
 };
 export const SOUND_NAMES = Object.keys(SOUNDS);
 

@@ -2,8 +2,8 @@
 import { Game } from './core/game.js';
 import { newState, reviveState } from './core/state.js';
 import { playable } from './core/trial.js';
-import { putRight } from './core/story.js';
-import { nameOf, calledOf } from './core/names.js';
+import { putRight, grewWords } from './core/story.js';
+import { nameOf, calledOf, artOf } from './core/names.js';
 import { SPECIES, ROOMS, MAX_LEVEL, roomOf, roomBuilt, moveOf, xpNeeded } from './core/balance.js';
 import { loadAssets } from './ui/assets.js';
 import { h, $, sprite } from './ui/dom.js';
@@ -12,7 +12,7 @@ import { laneScreen } from './ui/lane.js';
 import { insideScreen } from './ui/inside.js';
 import { fightScreen } from './ui/fight.js';
 import { friendsScreen, bookScreen, settingsScreen, lookDialog } from './ui/friends.js';
-import { heirloomTag, bar } from './ui/parts.js';
+import { heirloomTag, bar, aOrAn } from './ui/parts.js';
 import { loadSave, writeSave, clearSave, keepUnreadable } from './platform/storage.js';
 import { unlockSound, setSound, hushSound, play, setScene, sceneFor, soundState } from './platform/sound.js';
 
@@ -144,6 +144,7 @@ function resultDialog(ctx, summary, foes) {
   if (summary.joined.length) setTimeout(() => play('joined'), summary.cleared ? 1500 : 650);
   if (summary.heirlooms.length || summary.joined.some((joined) => joined.heirloom)) setTimeout(() => play('heirloom'), summary.cleared ? 2100 : 1250);
   if (summary.gains.some((gain) => gain.to > gain.from)) setTimeout(() => play('level'), summary.cleared ? 2700 : summary.joined.length ? 1850 : 800);
+  if (summary.gains.some((gain) => gain.grew)) setTimeout(() => play('grew'), summary.cleared ? 3300 : summary.joined.length ? 2450 : 1400);
 
   if (summary.cleared) {
     const next = ROOMS[ROOMS.indexOf(room) + 1];
@@ -153,7 +154,7 @@ function resultDialog(ctx, summary, foes) {
         : 'That is all eight. Every place on the lane is calm, and it is not Monday yet. Everyone is rested. Ines Tock will want to hear, and so will great-aunt Maribel: the telephone is at home.'));
     // For one of the three you set out with, this is where its story began; and here it is put right.
     const right = putRight(game.state, room.id);
-    if (right) lines.push(h('div', { class: 'putright', data: { kind: right.kind } }, sprite(right.kind, !!game.state.friends.find((friend) => friend.species === right.kind).heirloom, 'flip'), h('p', null, right.text)));
+    if (right) lines.push(h('div', { class: 'putright', data: { kind: right.kind } }, sprite(artOf(game.state.friends.find((friend) => friend.species === right.kind)), !!game.state.friends.find((friend) => friend.species === right.kind).heirloom, 'flip'), h('p', null, right.text)));
   }
   else if (summary.won) lines.push(h('p', null, summary.strays ? `${foes.length > 1 ? 'They are' : 'It is'} calm now, and off home. Everyone catches their breath.` : 'They are calm now. Everyone catches their breath.'));
   else {
@@ -163,11 +164,25 @@ function resultDialog(ctx, summary, foes) {
   }
 
   for (const joined of summary.joined) {
-    lines.push(h('div', { class: 'joined', data: { joined: joined.species } }, sprite(joined.species, joined.heirloom, 'flip'),
-      h('div', null, h('b', null, `${name(joined.species)} comes home with you!`), joined.heirloom ? heirloomTag() : null, h('small', null, 'It is resting at home. Put it on your team from Friends; you can give it a name of your own there too.'))));
+    lines.push(h('div', { class: `joined${joined.grown ? ' grownup' : ''}`, data: { joined: joined.species } }, sprite(artOf(joined), joined.heirloom, 'flip'),
+      h('div', null, h('b', null, `${joined.grown ? SPECIES[joined.species].grown.name : name(joined.species)} comes home with you!`), joined.grown ? h('span', { class: 'growntag' }, 'Grown up') : null, joined.heirloom ? heirloomTag() : null, h('small', null, 'It is resting at home. Put it on your team from Friends; you can give it a name of your own there too.'))));
   }
   for (const species of summary.visited) lines.push(h('p', { class: 'note' }, `The ${name(species)} goes off happy. ${mine(species, 'Your own')} learned from the visit.`));
   for (const species of summary.heirlooms) lines.push(h('p', { class: 'note gold' }, `It left ${mine(species, 'your')} its Heirloom colours.`));
+
+  // A friend has grown up: said first and said big, with what it was and what it is now side by side.
+  for (const gain of summary.gains.filter((each) => each.grew)) {
+    const friend = game.friend(gain.id);
+    if (!friend) continue;
+    const kind = SPECIES[gain.species];
+    const rare = !!friend.heirloom;
+    lines.push(h('div', { class: 'grew', data: { grew: gain.species } },
+      h('div', { class: 'grewpics' }, sprite(gain.species, rare, 'flip was'), h('i', { class: 'grewarrow' }, '➜'), sprite(`${gain.species}_grown`, rare, 'flip now')),
+      h('b', null, `${friend.nick || kind.name} has grown up!`),
+      h('p', null, friend.nick ? `${aOrAn(kind.grown.name) === 'an' ? 'An' : 'A'} ${kind.grown.name} now, and still ${friend.nick}.` : `It is ${aOrAn(kind.grown.name)} ${kind.grown.name} now.`),
+      grewWords(gain.species) ? h('p', { class: 'grewstory' }, grewWords(gain.species)) : null,
+      h('small', null, 'Bigger, and stronger in every way.')));
+  }
 
   if (summary.xp > 0) {
     lines.push(h('p', { class: 'xp' }, `+${summary.xp} experience each`));
@@ -177,7 +192,7 @@ function resultDialog(ctx, summary, foes) {
     lines.push(h('div', { class: 'gains' }, summary.gains.filter((gain) => gain.team || gain.to > gain.from).map((gain) => {
       const friend = game.friend(gain.id);
       const up = gain.to > gain.from;
-      return h('div', { class: `gain${up ? ' up' : ''}` }, sprite(gain.species, !!(friend && friend.heirloom), 'flip'),
+      return h('div', { class: `gain${up ? ' up' : ''}${gain.grew ? ' grownup' : ''}` }, sprite(friend ? artOf(friend) : gain.species, !!(friend && friend.heirloom), 'flip'),
         h('div', null,
           h('div', { class: 'line' }, h('b', null, friend ? nameOf(friend) : name(gain.species)),
             h('small', { class: up ? 'lvup' : '' }, up ? `Level ${gain.from} → ${gain.to}${gain.team ? '' : ' (at home)'}` : `Level ${gain.to}`)),

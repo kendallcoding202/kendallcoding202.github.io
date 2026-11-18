@@ -5,7 +5,7 @@
 // calmed (`calmed`, a bit for each stop), through resting and through being
 // carried home, so you never calm the same group twice to get at its
 // ringleader. Calm the ringleader and the whole place is calm for good.
-import { SPECIES, ROOMS, HEIRLOOM, VISITORS, WANDERERS, BREATHER, TEAM_SIZE, roomOf, roomBuilt, statAt } from './balance.js';
+import { SPECIES, ROOMS, HEIRLOOM, VISITORS, WANDERERS, BREATHER, TEAM_SIZE, roomOf, roomBuilt, statAt, grownOdds } from './balance.js';
 import { nextRandom, rollInt, rollPick, own } from './util.js';
 import { BARRICADE, districtOf, districtAt } from './world.js';
 
@@ -54,14 +54,17 @@ export function rollEncounter(dice, room, stop, calm = false) {
     const [species] = rollPick(dice, pool, ([, weight]) => weight);
     const level = rollInt(dice, spot.level[0], spot.level[1]);
     const heirloom = SPECIES[species].huff > 0 && nextRandom(dice) < odds;
-    company.push({ species, level, heirloom });
+    // Further along, some of them have grown up. (No roll is made where none can be, so the early
+    // places fall out exactly as they always did.)
+    const grown = grownOdds(room) > 0 && !!SPECIES[species].grown && nextRandom(dice) < grownOdds(room);
+    company.push(grown ? { species, level, heirloom, grown: true } : { species, level, heirloom });
   }
   if (!spot.boss) return company;
   const boss = { species: spot.boss, level: spot.bossLevel, heirloom: false };
   return company.length > 1 ? [company[0], boss, ...company.slice(1)] : [boss, ...company];
 }
 
-export const maxHpOf = (friend) => statAt(SPECIES[friend.species].hp, friend.level);
+export const maxHpOf = (friend) => statAt(SPECIES[friend.species].hp, friend.level, friend.grown);
 export const teamOf = (state) => state.team.map((id) => state.friends.find((friend) => friend.id === id)).filter(Boolean);
 
 /**
@@ -77,6 +80,8 @@ export function fairEncounter(room, stop, list) {
   let company = 0;
   for (const foe of list) {
     if (!foe || typeof foe !== 'object' || !own(SPECIES, foe.species) || !Number.isInteger(foe.level) || typeof foe.heirloom !== 'boolean') return false;
+    // Grown only where the grown are met, and only a kind that grows.
+    if (foe.grown !== undefined && !(foe.grown === true && !!SPECIES[foe.species].grown && grownOdds(room) > 0)) return false;
     if (SPECIES[foe.species].boss) {
       if (foe.species !== spot.boss || foe.level !== spot.bossLevel || foe.heirloom) return false;
       bosses++;

@@ -239,9 +239,10 @@ export class Game {
     for (const foe of stray.foes) {
       state.book[foe.species].met = true;
       if (foe.heirloom) state.book[foe.species].heirloom = true;
+      if (foe.grown) state.book[foe.species].grown = true;
     }
     const health = healthOf(state);
-    const allies = this.team().map((friend) => ({ species: friend.species, level: friend.level, hp: health[friend.id], friendId: friend.id, heirloom: friend.heirloom, name: nameOf(friend) }));
+    const allies = this.team().map((friend) => ({ species: friend.species, level: friend.level, hp: health[friend.id], friendId: friend.id, heirloom: friend.heirloom, name: nameOf(friend), grown: !!friend.grown }));
     if (!allies.some((ally) => ally.hp > 0)) return null;
     this.wild = index;
     this.facing = -1;
@@ -439,8 +440,9 @@ export class Game {
     for (const foe of group.foes) {
       state.book[foe.species].met = true;
       if (foe.heirloom) state.book[foe.species].heirloom = true;
+      if (foe.grown) state.book[foe.species].grown = true;
     }
-    const allies = this.team().map((friend) => ({ species: friend.species, level: friend.level, hp: visit.hp[friend.id] || 0, friendId: friend.id, heirloom: friend.heirloom, name: nameOf(friend) }));
+    const allies = this.team().map((friend) => ({ species: friend.species, level: friend.level, hp: visit.hp[friend.id] || 0, friendId: friend.id, heirloom: friend.heirloom, name: nameOf(friend), grown: !!friend.grown }));
     this.facing = index;
     this.battle = createBattle(state, { allies, foes: group.foes, fx: this.fx });
     return this.battle;

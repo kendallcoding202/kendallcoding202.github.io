@@ -448,7 +448,7 @@ check((await page.$$('.grid.team .friend')).length === 3, 'the team of three is 
   // A name of your own for one of the three: given, used everywhere, and taken away again.
   const kind = SPECIES.dustbunny.name;
   await page.click('.grid.team .friend[data-species="dustbunny"]');
-  check((await modalTitle(page))?.startsWith(kind) && !(await page.$('.modal [data-act="kind"]')) && !(await S(page, () => document.querySelector('.modal.oddment').textContent.includes('Grows up'))), 'one of the three goes by its kind\'s name to begin with, and its card promises nothing that is not in the game');
+  check((await modalTitle(page))?.startsWith(kind) && !(await page.$('.modal [data-act="kind"]')) && (await S(page, () => document.querySelector('.modal.oddment [data-act="grows"]').textContent)) === `Grows up into something new at level ${SPECIES.dustbunny.grown.at}.` && !(await S(page, () => document.querySelector('.modal.oddment').textContent.includes('slice'))), 'one of the three goes by its kind\'s name to begin with, and its card says at what level it will grow up');
   await page.click('.modal [data-id="name"]');
   await page.waitForSelector('.modal.naming input');
   check(await S(page, (name) => { const m = document.querySelector('.modal.naming'); const input = m.querySelector('input'); const box = m.getBoundingClientRect(); return input.value === '' && input.placeholder === name && input.maxLength === 12 && !m.querySelector('[data-id="own"]') && box.top >= 0 && box.bottom <= innerHeight; }, kind), 'Give it a name asks what you call it, with room for twelve letters');
@@ -971,7 +971,12 @@ for (let calls = 0; calls < 6 && !pantryCalm; calls++) {
 }
 s = await state(page);
 check(pantryCalm && s.rooms.pantry.calmed === 31 && s.book.boss_crumbwyrm.met, 'the pantry is calmed, and the Crumbwyrm is in the scrapbook');
-check(!!toasterWords && toasterWords.kind === 'toastghost' && toasterWords.text.includes('Crumbwisp floats over to the toaster') && toasterWords.art.includes('toastghost'), 'and with it calm, something is put right for Crumbwisp, who was forgotten in that toaster', JSON.stringify(toasterWords));
+{
+  // (By now it may have grown up: the story is told by whatever it is called.)
+  const toast = s.friends.find((friend) => friend.species === 'toastghost');
+  const called = toast.nick || (toast.grown ? SPECIES.toastghost.grown.name : SPECIES.toastghost.name);
+  check(!!toasterWords && toasterWords.kind === 'toastghost' && toasterWords.text.startsWith(`${called} floats over to the toaster`) && toasterWords.art.includes(toast.grown ? 'toastghost_grown' : 'toastghost.'), `and with it calm, something is put right for ${called}, who was forgotten in that toaster`, JSON.stringify(toasterWords));
+}
 check(['dumpling', 'pepperimp', 'eggknight', 'jellywobble'].filter((kind) => s.book[kind].met).length === 4, 'all four of its kinds have been met');
 check(s.indoors && s.indoors.id === 'pantry' && !!(await page.$('#inside[data-room="pantry"]')) && (await S(page, () => document.querySelector('#inside .where').textContent)) === 'calm', 'you are still standing in it, and it says it is calm');
 await page.waitForTimeout(400);
@@ -1455,6 +1460,143 @@ await fold.waitForTimeout(300);
 check(await S(fold, () => getComputedStyle(document.querySelector('.grid')).gridTemplateColumns.split(' ').length === 3), 'and three closed');
 await fold.context().close();
 
+// =============================================================== growing up
+section('Growing up');
+{
+  const grow = await newPage();
+  await grow.goto(`${base}?debug&fast&reset&seed=7`);
+  await ready(grow);
+  await begin(grow);
+  const kind = SPECIES.dustbunny;
+  const at = kind.grown.at;
+  // The three, one point of experience short of the level they grow up at. One has a name of your own.
+  await S(grow, async (level) => {
+    const { xpNeeded } = await import('./js/core/balance.js');
+    const o = window.oddments;
+    const s = o.game.state;
+    s.seen.strays = true;
+    for (const friend of s.friends) { friend.level = level - 1; friend.xp = xpNeeded(level - 1) - 1; }
+    s.friends.find((friend) => friend.species === 'sockeel').nick = 'Stripes';
+    o.ctx.show('lane');
+  }, at);
+  await tab(grow, 'friends');
+  await grow.click('.grid.team .friend[data-species="dustbunny"]');
+  check(await S(grow, (level) => { const m = document.querySelector('.modal.oddment'); return m.querySelector('header span').textContent.startsWith('Hopmote ·') && m.querySelector('[data-act="grows"]').textContent === `Grows up into something new at level ${level}.` && !m.querySelector('.growntag') && m.querySelector('.cardtop img').src.endsWith('/dustbunny.webp'); }, at), `before: a young one's card says it grows up at level ${at}, and not into what`);
+  await grow.click('.modal.oddment .x');
+  await tab(grow, 'lane');
+  // One fight with a stray is enough.
+  await S(grow, () => { const o = window.oddments; const stray = o.game.strays()[0]; o.game.approachStrays(stray.index); o.game.startStrays(); o.ctx.show('fight'); });
+  await grow.waitForSelector('#fight');
+  await idle(grow);
+  await grow.waitForTimeout(500); // (everyone has finished arriving: a picture measured on its way in is not its size)
+  const youngTall = await S(grow, () => document.querySelector('.unit.ally .sprite').getBoundingClientRect().height);
+  check(await S(grow, () => !document.querySelector('.unit.grown') && [...document.querySelectorAll('.unit.ally .sprite')].every((img) => !img.src.includes('_grown'))), 'nobody is grown yet');
+  await botFight(grow, {});
+  await grow.waitForTimeout(1900);
+  const moment = await S(grow, () => {
+    const m = document.querySelector('.modal.result');
+    const one = (id) => {
+      const el = m.querySelector(`.grew[data-grew="${id}"]`);
+      if (!el) return null;
+      const [was, now] = [el.querySelector('img.was'), el.querySelector('img.now')];
+      return { was: was.src.split('/').pop(), now: now.src.split('/').pop(), times: now.getBoundingClientRect().height / was.getBoundingClientRect().height, loaded: now.naturalWidth > 0 && was.naturalWidth > 0, head: el.querySelector('b').textContent, lines: [...el.querySelectorAll('p')].map((line) => line.textContent), small: el.querySelector('small').textContent };
+    };
+    const box = m.getBoundingClientRect();
+    return { count: m.querySelectorAll('.grew').length, hop: one('dustbunny'), eel: one('sockeel'), fits: box.top >= 0 && box.bottom <= innerHeight, first: m.querySelector('.body').firstElementChild.nextElementSibling.className, heard: window.oddments.sound().heard.grew };
+  });
+  check(moment.count === 3 && moment.fits, 'after the fight the news says all three have grown up, and it fits the screen', JSON.stringify(moment).slice(0, 200));
+  check(moment.hop && moment.hop.was === 'dustbunny.webp' && moment.hop.now === 'dustbunny_grown.webp' && moment.hop.loaded && moment.hop.times > 1.8, `with what it was and what it is now side by side, the new one drawn about twice as big (${moment.hop && moment.hop.times.toFixed(1)} times)`);
+  check(moment.hop.head === 'Hopmote has grown up!' && moment.hop.lines[0] === 'It is a Lintelope now.' && moment.hop.lines[1].includes('coat hangers') && moment.hop.small === 'Bigger, and stronger in every way.', 'Hopmote has grown up: it is a Lintelope now, with a few words of its own about it', JSON.stringify(moment.hop.lines));
+  check(moment.eel.head === 'Stripes has grown up!' && moment.eel.lines[0] === 'A Toeviathan now, and still Stripes.', 'one with a name of your own keeps it: "A Toeviathan now, and still Stripes."', JSON.stringify(moment.eel));
+  check(moment.first === 'grew' && moment.heard === 1, 'it is the first news after how the fight went, and it has a sound of its own', `${moment.first} ${moment.heard}`);
+  await snap(grow, 'e2e-grew');
+  await grow.click('.modal.result [data-id="next"]');
+  await grow.waitForSelector('#lane');
+  let g = await state(grow);
+  check(g.friends.every((friend) => friend.grown === true && friend.level >= at) && ['dustbunny', 'sockeel', 'toastghost'].every((id) => g.book[id].grown === true) && g.book.dandepuff.grown === false, 'all three are grown in the game, and the scrapbook has it');
+  check(await S(grow, () => JSON.parse(localStorage.getItem('oddments.save')).friends.every((friend) => friend.grown === true)), 'and in the save');
+  await grow.waitForTimeout(500);
+  await snap(grow, 'e2e-grown-lane');
+  // Friends: the grown form's picture and name; the card says so.
+  await tab(grow, 'friends');
+  check(await S(grow, () => { const tile = (id) => document.querySelector(`.grid.team .friend[data-species="${id}"]`); const hop = tile('dustbunny'); return hop.classList.contains('grown') && hop.querySelector('img').src.endsWith('/dustbunny_grown.webp') && hop.querySelector('b').textContent === 'Lintelope' && tile('sockeel').querySelector('b').textContent === 'Stripes' && tile('sockeel').querySelector('img').src.endsWith('/sockeel_grown.webp'); }), 'on Friends each has its grown form\'s picture; Hopmote is Lintelope now, and Stripes is still Stripes');
+  await grow.click('.grid.team .friend[data-species="dustbunny"]');
+  check(await S(grow, () => { const m = document.querySelector('.modal.oddment'); return m.querySelector('header span').textContent.startsWith('Lintelope ·') && !!m.querySelector('.growntag') && m.querySelector('.cardtop img').src.endsWith('/dustbunny_grown.webp') && m.querySelector('[data-act="grows"]').textContent === 'Grown up: bigger, and stronger in every way. It was a Hopmote when it was small.' && m.querySelector('[data-act="about"]').textContent.startsWith('Lintelope has lived under the spare bed'); }), 'its card is headed Lintelope and tagged "Grown up", says what it was when it was small, and tells its story by its new name');
+  await snap(grow, 'e2e-grown-card');
+  await grow.click('.modal.oddment .x');
+  await grow.click('.grid.team .friend[data-species="sockeel"]');
+  check(await S(grow, () => { const m = document.querySelector('.modal.oddment'); return m.querySelector('header span').textContent.startsWith('Stripes ·') && m.querySelector('[data-act="kind"]').textContent === 'Toeviathan'; }), 'Stripes\'s card says its kind is Toeviathan now');
+  await grow.click('.modal.oddment .x');
+  await tab(grow, 'book');
+  check(await S(grow, () => { const tile = document.querySelector('.page-tile[data-kind="dustbunny"]'); return document.querySelector('[data-act="counts"]').textContent.includes('Grown up 3 of 40') && tile.classList.contains('grown') && !!tile.querySelector('.stamp.grownup') && tile.querySelector('b').textContent === 'Lintelope' && tile.querySelector('img').src.endsWith('/dustbunny_grown.webp') && !document.querySelector('.page-tile[data-kind="dandepuff"] .stamp.grownup'); }), 'the scrapbook counts three grown up of forty, and marks each');
+  await snap(grow, 'e2e-grown-book');
+  // The next fight: grown friends stand plainly bigger than they did, and than whoever they face.
+  await tab(grow, 'lane');
+  await S(grow, () => { const o = window.oddments; o.game.rest(); const stray = o.game.strays()[0]; o.game.approachStrays(stray.index); o.game.startStrays(); o.ctx.show('fight'); });
+  await grow.waitForSelector('#fight');
+  await idle(grow);
+  await grow.waitForTimeout(500);
+  const stand = await S(grow, () => {
+    const tall = (el) => el.getBoundingClientRect().height;
+    const allies = [...document.querySelectorAll('.unit.ally')];
+    return { grown: allies.every((unit) => unit.classList.contains('grown') && unit.querySelector('.sprite').src.includes('_grown')), ally: tall(allies[0].querySelector('.sprite')), foe: tall(document.querySelector('.unit.foe .sprite')), foes: [...document.querySelectorAll('.unit.foe')].every((unit) => !unit.classList.contains('grown') && !unit.querySelector('.sprite').src.includes('_grown')), who: document.querySelector('#fight .who b').textContent, inside: allies.every((unit) => { const box = unit.querySelector('.sprite').getBoundingClientRect(); return box.left >= -1 && box.top >= 0; }) };
+  });
+  check(stand.grown && stand.foes, 'in the next fight all three stand in their grown forms; the stray is as it always was');
+  check(stand.ally > youngTall * 1.2 && stand.ally > stand.foe * 1.2 && stand.inside, `and they are drawn plainly bigger: ${Math.round(stand.ally)} points tall, where a young one is ${Math.round(youngTall)}`, JSON.stringify({ ...stand, youngTall }));
+  check(['Lintelope', 'Stripes', SPECIES.toastghost.grown.name].includes(stand.who), 'the fight calls each by what it is called now', stand.who);
+  await snap(grow, 'e2e-grown-fight');
+  await botFight(grow, {});
+  await grow.click('.modal.result [data-id="next"]');
+  await grow.waitForSelector('#lane');
+
+  // Further along, some of whoever is restless has grown up too. The first four places calm, so the Dusty
+  // Stacks is the furthest open; then a pair of strays, one grown and one young, neither a kind you have.
+  await S(grow, async () => {
+    const { xpNeeded } = await import('./js/core/balance.js');
+    const o = window.oddments;
+    const s = o.game.state;
+    for (const id of ['garden', 'alley', 'pantry', 'wash']) { s.rooms[id].clears = 1; s.rooms[id].calmed = 31; }
+    for (const friend of s.friends) { friend.level = 10; friend.xp = Math.min(friend.xp, xpNeeded(10) - 400); }
+    o.game.rest();
+    s.strays[0].foes = [{ species: 'gnome', level: 8, heirloom: false, grown: true }, { species: 'ratscal', level: 8, heirloom: false }];
+    s.strays[0].done = false;
+    o.ctx.show('lane');
+    o.game.approachStrays(0);
+    o.ctx.show('lane');
+  });
+  await grow.waitForTimeout(700);
+  await snap(grow, 'e2e-grown-stray');
+  await S(grow, () => { const o = window.oddments; o.game.startStrays(); o.ctx.show('fight'); });
+  await grow.waitForSelector('#fight');
+  await idle(grow);
+  await grow.waitForTimeout(500);
+  const mix = await S(grow, () => {
+    const tall = (el) => el.getBoundingClientRect().height;
+    const foes = [...document.querySelectorAll('.unit.foe')];
+    const big = foes.find((unit) => unit.classList.contains('grown'));
+    const small = foes.find((unit) => !unit.classList.contains('grown'));
+    return { count: foes.length, big: big && { src: big.querySelector('.sprite').src.split('/').pop(), tall: tall(big.querySelector('.sprite')), name: big.getAttribute('aria-label'), right: big.querySelector('.sprite').getBoundingClientRect().right <= innerWidth + 1 }, small: small && { src: small.querySelector('.sprite').src.split('/').pop(), tall: tall(small.querySelector('.sprite')) }, book: window.oddments.game.state.book.gnome.grown };
+  });
+  check(mix.count === 2 && mix.big && mix.small && mix.big.src === 'gnome_grown.webp' && mix.small.src === 'ratscal.webp', 'further along, a fight is a mix: here a grown Gnomarch beside a young Snaffle', JSON.stringify(mix));
+  check(mix.big.tall > mix.small.tall * 1.2 && mix.big.right && mix.big.name.startsWith(`${SPECIES.gnome.grown.name}, level 8`) && mix.book === true, `the grown one stands plainly bigger (${Math.round(mix.big.tall)} points to ${Math.round(mix.small.tall)}), goes by its grown name, and the scrapbook has it as seen grown`);
+  await grow.click('.unit.foe.grown');
+  await grow.waitForSelector('.modal.oddment');
+  check(await S(grow, () => { const m = document.querySelector('.modal.oddment'); return m.querySelector('header span').textContent.startsWith('Gnomarch ·') && !!m.querySelector('.growntag') && m.querySelector('.cardtop img').src.endsWith('/gnome_grown.webp') && !m.querySelector('[data-act="grows"]'); }), 'tapping it shows its card: Gnomarch, grown up');
+  await grow.click('.modal.oddment .x');
+  const before = (await state(grow)).friends.length;
+  await botFight(grow, { befriend: true });
+  const joinedNow = await S(grow, () => [...document.querySelectorAll('.modal.result .joined')].map((el) => ({ kind: el.dataset.joined, grown: el.classList.contains('grownup'), src: el.querySelector('img').src.split('/').pop(), words: el.querySelector('b').textContent })));
+  g = await state(grow);
+  const cameHome = g.friends.find((friend) => friend.species === 'gnome');
+  if (cameHome) {
+    check(cameHome.grown === true && joinedNow.some((one) => one.kind === 'gnome' && one.grown && one.src === 'gnome_grown.webp' && one.words === 'Gnomarch comes home with you!'), 'reached out to and won round, the grown one comes home grown: "Gnomarch comes home with you!"', JSON.stringify(joinedNow));
+  } else {
+    check(g.friends.length >= before, 'the stand-in did not win the grown one round this time (it comes home grown when it does: the rule is tested on its own)', JSON.stringify(joinedNow));
+  }
+  await snap(grow, 'e2e-grown-joined');
+  await grow.context().close();
+}
+
 // =============================================================== the page keeps to itself
 section('Nothing leaves the device');
 const foreign = requests.filter((url) => !url.startsWith(base));
@@ -1462,6 +1604,8 @@ check(foreign.length === 0, 'every request the game made was for one of its own 
 check(requests.length > 40, `(${requests.length} requests watched)`);
 const roomPaintings = readdirSync(new URL('../../web/assets/rooms/', import.meta.url));
 check(roomPaintings.length === 98 && roomPaintings.every((file) => requests.some((url) => url.endsWith(`assets/rooms/${file}`))), `every painting of every room was fetched (${roomPaintings.length} of them)`);
+const grownKinds = Object.keys(SPECIES).filter((id) => SPECIES[id].grown);
+check(grownKinds.length === 40 && grownKinds.every((id) => requests.some((url) => url.endsWith(`assets/sprites/${id}_grown.webp`)) && requests.some((url) => url.endsWith(`assets/sprites/${id}_grown_heirloom.webp`))), 'every grown form\'s picture was fetched, and its Heirloom colours');
 check(errors.length === 0, 'no errors, and nothing refused by the content security policy', errors.slice(0, 5).join(' | '));
 
 await browser.close();

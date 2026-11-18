@@ -141,7 +141,7 @@ test('meeting one is written in the scrapbook even if it gets away', () => {
   const battle = game.startEncounter();
   const rare = battle.units.find((unit) => unit.side === 'foe' && unit.heirloom);
   assert.ok(rare);
-  assert.deepEqual(game.state.book[rare.species], { met: true, heirloom: true });
+  assert.deepEqual(game.state.book[rare.species], { met: true, heirloom: true, grown: false });
   game.concede();
   game.finishBattle();
   assert.equal(game.state.book[rare.species].heirloom, true);

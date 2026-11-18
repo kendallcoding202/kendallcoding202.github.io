@@ -47,7 +47,24 @@ export const STATS = {
 };
 export const STAT_IDS = Object.keys(STATS);
 export const GROWTH = 0.1; // each level adds this share of the base stat
-export const statAt = (base, level) => Math.max(1, Math.round(base * (1 + GROWTH * (level - 1))));
+// Growing up: a friend that reaches its kind's level grows into its new form, for good: a new
+// look, a new name for its kind, and every stat this much stronger. And as the game advances,
+// more of whoever is restless has grown up too (GROWN_ODDS, below): as much stronger, worth more,
+// and grown already if it comes home with you.
+// (The boost is small on purpose. The whole team grows about half-way through, and the simulator
+// showed how much that tips every fight after it: at 15% nobody could lose anywhere past the alley;
+// at 5% the later places are calmed in one go about 85 times in 100 where it was 55 to 65, and the
+// last of them about half the time where it was one in five. What makes growing up plain to see
+// is the new form and its size, not this number.)
+export const GROWN_BOOST = 1.05;
+// The share of the restless that are grown, place by place: none on the lane itself, a few from
+// the Wash, more than half by the Roaring Dark. So the further you go the more of a mix you meet.
+// Strays go by the furthest place open to you. Ringleaders are as they are.
+export const GROWN_ODDS = { garden: 0, alley: 0, pantry: 0, wash: 0.2, stacks: 0.3, rooftops: 0.4, attic: 0.5, dark: 0.6 };
+export const grownOdds = (room) => (room && GROWN_ODDS[room.id]) || 0;
+// A grown one teaches this much more than a young one of its level.
+export const GROWN_WORTH = 1.25;
+export const statAt = (base, level, grown = false) => Math.max(1, Math.round(base * (1 + GROWTH * (level - 1)) * (grown ? GROWN_BOOST : 1)));
 
 export const WOBBLE = 0.1; // damage varies by this much either way
 export const MAX_ROUNDS = 40; // a fight that long is a draw, and a draw is a loss
@@ -273,8 +290,9 @@ export const moveOf = (id) => (id === BRACE.id ? BRACE : MOVES[id]);
 // The first twelve. `moves` pairs each move with the level it is learned at.
 // `huff` is how worked up one is when it is not yet a friend: the pips Reach
 // out has to clear. A boss has none and cannot be reached. `turns` is how
-// many times it acts in a round. `grown` is the form it will grow into: the
-// data is here for the art list, but nothing grows up until that art exists.
+// many times it acts in a round. `grown` is the form a friend of this kind grows
+// up into, and the level it does so at (see GROWN_BOOST): the three you set out
+// with at 8, and every other kind a few levels above where it is first met.
 // `notYet` is what it does when you Reach out and it is not ready to come.
 export const SPECIES = {
   dustbunny: {
@@ -282,14 +300,14 @@ export const SPECIES = {
     moves: [['lintflurry', 1], ['underbed', 3], ['kickupdust', 6]],
     blurb: 'Lives under the bed. Has always lived under the bed.',
     notYet: 'scoots back under something',
-    grown: { at: 12, name: 'Lintelope' },
+    grown: { at: 8, name: 'Lintelope' },
   },
   sockeel: {
     name: 'Eelastic', element: 'suds', hp: 52, oomph: 12, grit: 11, pep: 10, huff: 4,
     moves: [['wringout', 1], ['oddsocksnap', 3], ['soakthrough', 6]],
     blurb: 'Went into the wash as one of a pair.',
     notYet: 'ties itself in a knot',
-    grown: { at: 12, name: 'Toeviathan' },
+    grown: { at: 8, name: 'Toeviathan' },
   },
   toastghost: {
     name: 'Crumbwisp', element: 'crumb', hp: 50, oomph: 10, grit: 12, pep: 8, huff: 4,
@@ -297,21 +315,21 @@ export const SPECIES = {
     fly: true,
     blurb: 'Somebody forgot it in the toaster. It has not forgotten.',
     notYet: 'pops back down out of sight',
-    grown: { at: 12, name: 'Crustwraith' },
+    grown: { at: 8, name: 'Crustwraith' },
   },
   dandepuff: {
     name: 'Wishclock', element: 'sprout', hp: 36, oomph: 10, grit: 8, pep: 12, huff: 3,
     moves: [['puffscatter', 1], ['takeroot', 3], ['seedstorm', 6]],
     blurb: 'One good sneeze from being a hundred of itself.',
     notYet: 'puffs up and turns its back',
-    grown: { at: 12, name: 'Wishmane' },
+    grown: { at: 9, name: 'Wishmane' },
   },
   thornhog: {
     name: 'Pricklebud', element: 'sprout', hp: 56, oomph: 10, grit: 13, pep: 6, huff: 5,
     moves: [['brambleshove', 1], ['bristleup', 3], ['rosebudjab', 6]],
     blurb: 'Grew out of the rose bush nobody prunes.',
     notYet: 'bristles',
-    grown: { at: 12, name: 'Briartusk' },
+    grown: { at: 9, name: 'Briartusk' },
   },
   grumblebee: {
     name: 'Grumbuzz', element: 'sprout', hp: 38, oomph: 13, grit: 8, pep: 16, huff: 4,
@@ -319,91 +337,91 @@ export const SPECIES = {
     fly: true,
     blurb: 'Furious about something. Will not say what.',
     notYet: 'buzzes a tight, cross circle',
-    grown: { at: 12, name: 'Rumblepatch' },
+    grown: { at: 9, name: 'Rumblepatch' },
   },
   snailor: {
     name: 'Shellfarer', element: 'suds', hp: 58, oomph: 9, grit: 14, pep: 4, huff: 5,
     moves: [['saltspray', 1], ['battendown', 3], ['slowtide', 6]],
     blurb: 'Sailed here from the water butt. It took a year.',
     notYet: 'pulls its head in',
-    grown: { at: 12, name: 'Seawhorl' },
+    grown: { at: 9, name: 'Seawhorl' },
   },
   gnome: {
     name: 'Gnomudgeon', element: 'clank', hp: 50, oomph: 12, grit: 11, pep: 9, huff: 5,
     moves: [['rodwhack', 1], ['hookandyank', 3], ['lawnorder', 6]],
     blurb: 'Chipped in 1987 and still not over it.',
     notYet: 'folds its arms',
-    grown: { at: 12, name: 'Gnomarch' },
+    grown: { at: 9, name: 'Gnomarch' },
   },
   capbeetle: {
     name: 'Crimpet', element: 'clank', hp: 46, oomph: 11, grit: 13, pep: 8, huff: 4,
     moves: [['pincerpop', 1], ['capclamp', 3], ['shakenfizz', 6]],
     blurb: 'Wandered in from the alley wearing somebody\'s lemonade.',
     notYet: 'clacks its pincers at you',
-    grown: { at: 12, name: 'Corkhorn' },
+    grown: { at: 9, name: 'Corkhorn' },
   },
   sparkplug: {
     name: 'Strayglow', element: 'spark', hp: 40, oomph: 13, grit: 9, pep: 14, huff: 4,
     moves: [['staticsnap', 1], ['shortcircuit', 3], ['tripthefuse', 6]],
     blurb: 'Fell off the garden lights and kept the charge.',
     notYet: 'crackles and backs off',
-    grown: { at: 12, name: 'Floodglow' },
+    grown: { at: 9, name: 'Floodglow' },
   },
   ratscal: {
     name: 'Snaffle', element: 'crumb', hp: 42, oomph: 12, grit: 9, pep: 13, huff: 3,
     moves: [['forkjab', 1], ['binraid', 3], ['scrapsforall', 6]],
     blurb: 'Knows what is in every bin on the street.',
     notYet: 'hides its fork behind it',
-    grown: { at: 12, name: 'Snafflemore' },
+    grown: { at: 9, name: 'Snafflemore' },
   },
   cancrab: {
     name: 'Hermitin', element: 'clank', hp: 54, oomph: 11, grit: 15, pep: 6, huff: 5,
     moves: [['tinnip', 1], ['liddown', 3], ['canopener', 6]],
     blurb: 'Moved into a tin of tomatoes one winter and has not been out since.',
     notYet: 'pulls its lid down',
-    grown: { at: 12, name: 'Clangster' },
+    grown: { at: 10, name: 'Clangster' },
   },
   sockgoblin: {
     name: 'Frayling', element: 'fluff', hp: 44, oomph: 14, grit: 9, pep: 14, huff: 4,
     moves: [['buttonflick', 1], ['pullathread', 3], ['darnit', 6]],
     blurb: 'The other sock. It has been looking for you.',
     notYet: 'sticks out a woolly tongue',
-    grown: { at: 12, name: 'Woolligan' },
+    grown: { at: 10, name: 'Woolligan' },
   },
   coothug: {
     name: 'Preenager', element: 'crumb', hp: 46, oomph: 13, grit: 10, pep: 12, huff: 4,
     moves: [['peckingorder', 1], ['shakedown', 3], ['flocktogether', 6]],
     blurb: 'A feather duster that fell in with a bad crowd.',
     notYet: 'ruffles up and struts off',
-    grown: { at: 12, name: 'Kingpinion' },
+    grown: { at: 10, name: 'Kingpinion' },
   },
   dumpling: {
     name: 'Scrumpling', element: 'crumb', hp: 50, oomph: 13, grit: 11, pep: 11, huff: 4,
     moves: [['steampuff', 1], ['doughythump', 3], ['stickyfold', 6]],
     blurb: 'Steamed on Sunday. Still steaming about it.',
     notYet: 'lets off steam',
-    grown: { at: 12, name: 'Scrumplord' },
+    grown: { at: 11, name: 'Scrumplord' },
   },
   pepperimp: {
     name: 'Embernip', element: 'spark', hp: 40, oomph: 14, grit: 8, pep: 15, huff: 4,
     moves: [['chilliflick', 1], ['hotstreak', 3], ['fivealarm', 6]],
     blurb: 'The last chilli in the jar, and the reason it is the last.',
     notYet: 'blows a smoke ring at you',
-    grown: { at: 12, name: 'Scorchfoot' },
+    grown: { at: 11, name: 'Scorchfoot' },
   },
   eggknight: {
     name: 'Eggallant', element: 'clank', hp: 58, oomph: 10, grit: 15, pep: 6, huff: 5,
     moves: [['spoonrap', 1], ['shellup', 3], ['softboiledcharge', 6]],
     blurb: 'Sworn to defend the egg cup. Nobody asked it to.',
     notYet: 'salutes, and stays put',
-    grown: { at: 12, name: 'Eggalahad' },
+    grown: { at: 11, name: 'Eggalahad' },
   },
   jellywobble: {
     name: 'Wibblet', element: 'suds', hp: 54, oomph: 11, grit: 12, pep: 9, huff: 4,
     moves: [['wobbleslap', 1], ['cherryontop', 3], ['jellyquake', 6]],
     blurb: 'Set at midnight. Has not stopped shaking since.',
     notYet: 'wobbles the other way',
-    grown: { at: 12, name: 'Blancmangler' },
+    grown: { at: 11, name: 'Blancmangler' },
   },
   bubblejelly: {
     name: 'Shimmerbell', element: 'suds', hp: 40, oomph: 13, grit: 8, pep: 15, huff: 4,
@@ -439,28 +457,28 @@ export const SPECIES = {
     moves: [['pageturner', 1], ['wellread', 3], ['hardback', 6]],
     blurb: 'Has read everything in here, and has notes.',
     notYet: 'goes back to its page',
-    grown: { at: 12, name: 'Appendix' },
+    grown: { at: 13, name: 'Appendix' },
   },
   candlecreep: {
     name: 'Dribblewax', element: 'spark', hp: 42, oomph: 14, grit: 9, pep: 12, huff: 4,
     moves: [['hotdrip', 1], ['snuffout', 3], ['flareup', 6]],
     blurb: 'Lit for a power cut in 1994 and never blown out.',
     notYet: 'gutters, and turns away',
-    grown: { at: 12, name: 'Candelabrute' },
+    grown: { at: 13, name: 'Candelabrute' },
   },
   inkblot: {
     name: 'Blottle', element: 'suds', hp: 46, oomph: 13, grit: 10, pep: 12, huff: 4,
     moves: [['inkflick', 1], ['blotout', 3], ['spillage', 6]],
     blurb: 'Somebody knocked the bottle over. It got up.',
     notYet: 'sinks back into its bottle',
-    grown: { at: 12, name: 'Wellspill' },
+    grown: { at: 13, name: 'Wellspill' },
   },
   quillhog: {
     name: 'Inkspine', element: 'fluff', hp: 56, oomph: 11, grit: 14, pep: 6, huff: 5,
     moves: [['nibjab', 1], ['rollup', 3], ['lastword', 6]],
     blurb: 'Writes angry letters. Signs every one.',
     notYet: 'peers over its glasses',
-    grown: { at: 12, name: 'Scrivenspine' },
+    grown: { at: 13, name: 'Scrivenspine' },
   },
   papercrane: {
     name: 'Foldwing', element: 'fluff', hp: 38, oomph: 13, grit: 8, pep: 16, huff: 3,
@@ -468,7 +486,7 @@ export const SPECIES = {
     fly: true,
     blurb: 'Yesterday\'s paper, folded by somebody patient.',
     notYet: 'flaps up to a high shelf',
-    grown: { at: 12, name: 'Broadsheet' },
+    grown: { at: 13, name: 'Broadsheet' },
   },
   gutterbat: {
     name: 'Gutterflit', element: 'sprout', hp: 40, oomph: 13, grit: 8, pep: 16, huff: 4,
@@ -476,28 +494,28 @@ export const SPECIES = {
     fly: true,
     blurb: 'Sleeps in the guttering and keeps the leaf for rain.',
     notYet: 'hides under its leaf',
-    grown: { at: 12, name: 'Eaveswoop' },
+    grown: { at: 14, name: 'Eaveswoop' },
   },
   slategecko: {
     name: 'Shingleskink', element: 'clank', hp: 48, oomph: 12, grit: 12, pep: 11, huff: 4,
     moves: [['slateslap', 1], ['looseslate', 3], ['bask', 6]],
     blurb: 'One slate on every roof is warm. This is why.',
     notYet: 'scuttles up the chimney',
-    grown: { at: 12, name: 'Slatedrake' },
+    grown: { at: 14, name: 'Slatedrake' },
   },
   weathercock: {
     name: 'Vanecrow', element: 'clank', hp: 46, oomph: 14, grit: 10, pep: 13, huff: 4,
     moves: [['northpeck', 1], ['changeofwind', 3], ['cockcrow', 6]],
     blurb: 'Has pointed north-east since the storm of 1987.',
     notYet: 'turns to face the wind',
-    grown: { at: 12, name: 'Galecomb' },
+    grown: { at: 14, name: 'Galecomb' },
   },
   gargoylet: {
     name: 'Spoutling', element: 'suds', hp: 58, oomph: 10, grit: 15, pep: 5, huff: 5,
     moves: [['spout', 1], ['stonestill', 3], ['downpipe', 6]],
     blurb: 'Carved to frighten the rain. The rain was not frightened.',
     notYet: 'sticks its tongue out',
-    grown: { at: 12, name: 'Grotesque' },
+    grown: { at: 14, name: 'Grotesque' },
   },
   chimneywisp: {
     name: 'Emberdrift', element: 'spark', hp: 42, oomph: 13, grit: 9, pep: 12, huff: 4,
@@ -505,28 +523,28 @@ export const SPECIES = {
     fly: true,
     blurb: 'What is left of a fire somebody enjoyed.',
     notYet: 'curls back into its pot',
-    grown: { at: 12, name: 'Smokecrown' },
+    grown: { at: 14, name: 'Smokecrown' },
   },
   gearbeetle: {
     name: 'Cogscuttle', element: 'clank', hp: 56, oomph: 10, grit: 15, pep: 6, huff: 5,
     moves: [['cogbite', 1], ['windup', 3], ['sprungcoil', 6]],
     blurb: 'Fell out of a clock and kept time anyway.',
     notYet: 'ticks at you, crossly',
-    grown: { at: 12, name: 'Cogmarshal' },
+    grown: { at: 15, name: 'Cogmarshal' },
   },
   tintrooper: {
     name: 'Stalwind', element: 'clank', hp: 50, oomph: 13, grit: 11, pep: 10, huff: 4,
     moves: [['paradejab', 1], ['drumroll', 3], ['quickmarch', 6]],
     blurb: 'The last of a box of twelve. Still on parade.',
     notYet: 'about-turns, smartly',
-    grown: { at: 12, name: 'Marchwind' },
+    grown: { at: 15, name: 'Marchwind' },
   },
   cuckoo: {
     name: 'Tocktalon', element: 'sprout', hp: 40, oomph: 14, grit: 8, pep: 16, huff: 4,
     moves: [['onthehour', 1], ['nestrobber', 3], ['twelveoclock', 6]],
     blurb: 'Comes out on the hour. Any hour it likes.',
     notYet: 'pops back behind its door',
-    grown: { at: 12, name: 'Midnightjar' },
+    grown: { at: 15, name: 'Midnightjar' },
   },
   mothphantom: {
     name: 'Lampmourn', element: 'fluff', hp: 42, oomph: 12, grit: 9, pep: 13, huff: 4,
@@ -534,21 +552,21 @@ export const SPECIES = {
     fly: true,
     blurb: 'Still circling a lamp that was thrown out years ago.',
     notYet: 'flutters off to the rafters',
-    grown: { at: 12, name: 'Lanternlorn' },
+    grown: { at: 15, name: 'Lanternlorn' },
   },
   jackbox: {
     name: 'Crankjaw', element: 'clank', hp: 48, oomph: 14, grit: 10, pep: 12, huff: 4,
     moves: [['popgoes', 1], ['liddown2', 3], ['lastlaugh', 6]],
     blurb: 'Nobody has turned the handle since 1962. It is ready.',
     notYet: 'ducks back into its box',
-    grown: { at: 12, name: 'Jackanapes' },
+    grown: { at: 15, name: 'Jackanapes' },
   },
   cordserpent: {
     name: 'Tanglecoil', element: 'spark', hp: 48, oomph: 13, grit: 10, pep: 13, huff: 4,
     moves: [['plugbite', 1], ['tangle', 3], ['livewire', 6]],
     blurb: 'Every lead in the drawer, tied in one knot.',
     notYet: 'coils up tighter',
-    grown: { at: 12, name: 'Anacorda' },
+    grown: { at: 16, name: 'Anacorda' },
   },
   dustwraith: {
     name: 'Grimeshade', element: 'fluff', hp: 44, oomph: 13, grit: 9, pep: 15, huff: 5,
@@ -556,14 +574,14 @@ export const SPECIES = {
     fly: true,
     blurb: 'What a Hopmote becomes if nobody ever looks.',
     notYet: 'melts into the shadows',
-    grown: { at: 12, name: 'Gloomdrift' },
+    grown: { at: 16, name: 'Gloomdrift' },
   },
   robodisc: {
     name: 'Bumpabout', element: 'clank', hp: 60, oomph: 11, grit: 15, pep: 7, huff: 5,
     moves: [['bumper', 1], ['dock', 3], ['edgeclean', 6]],
     blurb: 'Has cleaned the same square of carpet since Tuesday.',
     notYet: 'reverses, beeping',
-    grown: { at: 12, name: 'Rovabout' },
+    grown: { at: 16, name: 'Rovabout' },
   },
   boss_hydra: {
     name: 'Old Summerlong', element: 'suds', hp: 118, oomph: 11, grit: 12, pep: 9, huff: 0, boss: true, turns: 2,
@@ -680,7 +698,7 @@ export const xpNeeded = (level) => Math.round(24 * Math.pow(level, 1.5));
 // (XP_RATE: since whoever you calm stays calm, nobody is fought twice on the way to a ringleader, so
 // each fight has to teach more for the team to keep pace with the lane. At 1 the last places were a wall.)
 export const XP_RATE = 1.3;
-export const xpFor = (species, level) => Math.round((6 + 5 * level) * XP_RATE) * (SPECIES[species].boss ? 4 : 1);
+export const xpFor = (species, level, grown = false) => Math.round(Math.round((6 + 5 * level) * XP_RATE) * (SPECIES[species].boss ? 4 : 1) * (grown && SPECIES[species].grown ? GROWN_WORTH : 1));
 export const BENCH_SHARE = 0.5; // friends left at home learn half as much
 // A fight teaches by its size: something for each of them, so two teach twice what one does and
 // three, three times. And one on its own against your team is hardly a fight, so it teaches only

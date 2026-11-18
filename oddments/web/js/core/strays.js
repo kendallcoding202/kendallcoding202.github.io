@@ -15,7 +15,7 @@
 // Out on the lane with no visit on, how worn the team is has to be kept
 // somewhere: `state.worn` (friend id to Health), null when rested. Stepping
 // into a place carries it in; resting at home clears it. See rooms.js.
-import { SPECIES, ROOMS, HEIRLOOM, STRAYS, BREATHER, TEAM_SIZE, roomBuilt } from './balance.js';
+import { SPECIES, ROOMS, HEIRLOOM, STRAYS, BREATHER, TEAM_SIZE, roomBuilt, grownOdds } from './balance.js';
 import { nextRandom, rollInt, rollPick, own } from './util.js';
 import { WILDS } from './world.js';
 import { roomOpen, maxHpOf, teamOf } from './rooms.js';
@@ -54,6 +54,7 @@ export function rollStrays(state) {
   const dice = diceOf(state);
   const pool = strayPool(state);
   const [low, high] = strayLevels(state);
+  const grownShare = grownOdds(frontier(state)); // as many of them grown as in the furthest place open
   const spots = WILDS.map((_, index) => index);
   const count = Math.min(spots.length, rollInt(dice, STRAYS.groups[0], STRAYS.groups[1]));
   const strays = [];
@@ -64,7 +65,9 @@ export function rollStrays(state) {
     for (let n = 0; n < size; n++) {
       const [species] = rollPick(dice, pool, ([, weight]) => weight);
       const level = rollInt(dice, low, high);
-      foes.push({ species, level, heirloom: SPECIES[species].huff > 0 && nextRandom(dice) < HEIRLOOM.odds });
+      const heirloom = SPECIES[species].huff > 0 && nextRandom(dice) < HEIRLOOM.odds;
+      const grown = grownShare > 0 && !!SPECIES[species].grown && nextRandom(dice) < grownShare;
+      foes.push(grown ? { species, level, heirloom, grown: true } : { species, level, heirloom });
     }
     strays.push({ at, foes, done: false });
   }
@@ -83,7 +86,8 @@ export function fairStrays(state, foes) {
   const kinds = new Set(strayPool(state).map(([kind]) => kind));
   const high = strayLevels(state)[1];
   return foes.every((foe) => !!foe && typeof foe === 'object' && own(SPECIES, foe.species) && kinds.has(foe.species) && !SPECIES[foe.species].boss
-    && Number.isInteger(foe.level) && foe.level >= 1 && foe.level <= high && typeof foe.heirloom === 'boolean');
+    && Number.isInteger(foe.level) && foe.level >= 1 && foe.level <= high && typeof foe.heirloom === 'boolean'
+    && (foe.grown === undefined || (foe.grown === true && !!SPECIES[foe.species].grown && grownOdds(frontier(state)) > 0)));
 }
 
 /** Whoever is still out on the lane: [{ index, x, y, foes }], for the screen and for finding the way round them. */

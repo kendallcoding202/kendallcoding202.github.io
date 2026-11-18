@@ -6,7 +6,7 @@ import { SPECIES, roomOf } from '../core/balance.js';
 import { POST } from '../core/world.js';
 import { insideOf } from '../core/indoors.js';
 import { CAST, THREE } from '../core/story.js';
-import { nameOf, calledOf } from '../core/names.js';
+import { nameOf, calledOf, artOf } from '../core/names.js';
 import { h, sprite, spriteSrc } from './dom.js';
 import { bar } from './parts.js';
 import { howItGoes } from './text.js';
@@ -173,7 +173,7 @@ export function insideScreen(ctx) {
       const x = post.x + (i - (foes.length - 1) / 2) * gap * size;
       const y = post.y + (kind.boss ? -14 : boss ? 20 : 0);
       if (foe.heirloom) glow(pen, x, y - 22, 54, '255,200,61', 0.42 + 0.2 * Math.sin(clock * 5));
-      stand(spriteSrc(foe.species, foe.heirloom), x, y - (kind.fly ? 9 + Math.sin(clock * 3 + i) * 4 : 0) * size, (kind.boss ? 140 : 58) * size, false, false, kind.fly ? 0 : Math.max(0, Math.sin(clock * 3.2 + i * 1.7)) * 3 * size);
+      stand(spriteSrc(artOf(foe), foe.heirloom), x, y - (kind.fly ? 9 + Math.sin(clock * 3 + i) * 4 : 0) * size, (kind.boss ? 140 : foe.grown ? 74 : 58) * size, false, false, kind.fly ? 0 : Math.max(0, Math.sin(clock * 3.2 + i * 1.7)) * 3 * size);
     });
     if (size < 1) return;
     const top = post.y - (boss ? 182 : 92);
@@ -210,13 +210,13 @@ export function insideScreen(ctx) {
     room.posts.forEach((post, index) => row.push({ y: post.y + 22, draw: () => waiting(index) }));
     for (const body of stayers) {
       const fly = SPECIES[body.friend.species].fly;
-      row.push({ y: body.y, draw: () => stand(spriteSrc(body.friend.species, body.friend.heirloom), body.x, body.y, 54, body.f > 0, false, fly ? 9 + Math.sin(clock * 3 + body.step) * 4 : Math.abs(Math.sin(body.step / (15 * big))) * 5) });
+      row.push({ y: body.y, draw: () => stand(spriteSrc(artOf(body.friend), body.friend.heirloom), body.x, body.y, body.friend.grown ? 70 : 54, body.f > 0, false, fly ? 9 + Math.sin(clock * 3 + body.step) * 4 : Math.abs(Math.sin(body.step / (15 * big))) * 5) });
     }
     const { x, y } = here();
     for (const pal of pals) {
       const fly = SPECIES[pal.friend.species].fly;
       const lift = fly ? 9 + Math.sin(clock * 3 + pal.step) * 4 : Math.abs(Math.sin(pal.step / (15 * big))) * 5 * spring;
-      row.push({ y: pal.y - 0.01, draw: () => stand(spriteSrc(pal.friend.species, pal.friend.heirloom), pal.x, pal.y, 54, pal.f > 0, false, lift) });
+      row.push({ y: pal.y - 0.01, draw: () => stand(spriteSrc(artOf(pal.friend), pal.friend.heirloom), pal.x, pal.y, pal.friend.grown ? 70 : 54, pal.f > 0, false, lift) });
     }
     const hop = Math.abs(Math.sin(stride / (17 * big))) * 7 * spring;
     const view = aspect === 'side' ? state.player.look : `${state.player.look}_${aspect}`;
@@ -248,7 +248,7 @@ export function insideScreen(ctx) {
   const teamList = () => {
     const health = game.teamHealth();
     return h('div', { class: 'teamlist' }, game.team().map((friend, i) => h('div', { class: `teamcard${health[i].hp <= 0 ? ' down' : ''}` },
-      sprite(friend.species, friend.heirloom, 'flip'),
+      sprite(artOf(friend), friend.heirloom, 'flip'),
       h('div', null, h('b', null, nameOf(friend)), bar(`hp${health[i].hp / health[i].max < 0.3 ? ' low' : ''}`, health[i].hp / health[i].max, `${health[i].hp} / ${health[i].max}`)))));
   };
 

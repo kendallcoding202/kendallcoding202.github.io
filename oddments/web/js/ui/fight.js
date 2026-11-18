@@ -12,6 +12,7 @@ import { elementTag, moveLine, oddmentCard } from './parts.js';
 import { lineFor, toGo, howItGoes } from './text.js';
 import { howToFight, EDGE_WORDS } from './howto.js';
 import { play as sound } from '../platform/sound.js'; // (this screen has a `play` of its own: playing back the fight)
+import { artOf } from '../core/names.js';
 
 export function fightScreen(ctx) {
   const { game } = ctx;
@@ -41,12 +42,12 @@ export function fightScreen(ctx) {
     const pips = h('div', { class: 'pips' });
     const chips = h('div', { class: 'chips' });
     const edge = h('span', { class: 'edge', hidden: true });
-    const body = h('div', { class: 'body' }, sprite(unit.species, unit.heirloom, 'sprite'));
+    const body = h('div', { class: 'body' }, sprite(artOf(unit), unit.heirloom, 'sprite'));
     // In a boss fight the boss's company stands either side of it, whichever slots they hold.
     const company = battle.units.filter((u) => u.side === 'foe' && !u.boss);
     const corner = unit.side === 'foe' && !unit.boss && company.length < battle.units.filter((u) => u.side === 'foe').length ? ` side${company.indexOf(unit)}` : '';
     const el = h('button', {
-      class: `unit ${unit.side}${unit.boss ? ' boss' : ''}${unit.heirloom ? ' rare' : ''} s${unit.slot}${corner}${SPECIES[unit.species].fly ? ' fly' : ''}`,
+      class: `unit ${unit.side}${unit.boss ? ' boss' : ''}${unit.heirloom ? ' rare' : ''}${unit.grown ? ' grown' : ''} s${unit.slot}${corner}${SPECIES[unit.species].fly ? ' fly' : ''}`,
       data: { unit: unit.key }, 'aria-label': `${unit.name}, level ${unit.level}`, onclick: () => tapUnit(unit.key),
     }, body, h('i', { class: 'shadow' }), h('div', { class: 'foot' }, h('div', { class: 'hpbar' }, fill), pips, chips), edge);
     view[unit.key] = { unit, el, body, fill, pips, chips, edge, hp: unit.maxHp, huff: unit.maxHuff, gone: false };
@@ -104,7 +105,7 @@ export function fightScreen(ctx) {
     orderAt = 0;
     orderEl.replaceChildren(h('small', null, 'Turns'), ...order.map((key, i) => {
       const unit = view[key].unit;
-      return h('span', { class: `chip ${unit.side}`, data: { i: String(i), key } }, sprite(unit.species, unit.heirloom));
+      return h('span', { class: `chip ${unit.side}`, data: { i: String(i), key } }, sprite(artOf(unit), unit.heirloom));
     }));
   }
 
@@ -313,7 +314,7 @@ export function fightScreen(ctx) {
         h('b', null, call.name), why ? h('small', null, why) : null);
     });
     panel.replaceChildren(
-      h('div', { class: 'who' }, sprite(unit.species, unit.heirloom), h('div', null, h('b', null, unit.name), elementTag(unit.element)),
+      h('div', { class: 'who' }, sprite(artOf(unit), unit.heirloom), h('div', null, h('b', null, unit.name), elementTag(unit.element)),
         armed ? h('button', { class: 'btn plain small', data: { act: 'cancel' }, onclick: () => { disarm(); drawPanel(); } }, 'Cancel') : null),
       h('div', { class: 'moves' }, moves),
       h('div', { class: 'calls' }, caller, h('div', { class: 'set' }, h('small', null, `${game.state.player.name}'s Call · one a round`), h('div', null, calls))));
@@ -366,7 +367,7 @@ export function fightScreen(ctx) {
       return;
     }
     const unit = unitOf(battle, key);
-    oddmentCard({ species: unit.species, level: unit.level, heirloom: unit.heirloom, huff: unit.side === 'foe' ? unit.huff : null });
+    oddmentCard({ species: unit.species, level: unit.level, heirloom: unit.heirloom, grown: unit.grown, name: unit.side === 'ally' ? unit.name : '', huff: unit.side === 'foe' ? unit.huff : null });
   }
 
   function commit(action) {

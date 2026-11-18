@@ -98,5 +98,5 @@ test('the scrapbook never forgets a friend: whoever is at home has been met', ()
   saved.friends.push({ id: 9, species: 'gnome', level: 2, xp: 0, heirloom: true });
   saved.book.gnome = { met: false, heirloom: false };
   const back = reviveState(saved, NOW);
-  assert.deepEqual(back.book.gnome, { met: true, heirloom: true });
+  assert.deepEqual(back.book.gnome, { met: true, heirloom: true, grown: false });
 });

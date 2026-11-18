@@ -16,15 +16,16 @@ import { nextRandom, rollPick, clamp } from './util.js';
 // ---------------------------------------------------------------- fighters
 
 /** One Clutterkin as it stands in a fight. `side` is 'ally' or 'foe'. */
-export function makeFighter(side, slot, { species, level, hp, friendId = 0, heirloom = false, name = '' }) {
+export function makeFighter(side, slot, { species, level, hp, friendId = 0, heirloom = false, name = '', grown = false }) {
   const kind = SPECIES[species];
-  const maxHp = statAt(kind.hp, level);
+  const big = !!grown && !!kind.grown; // a friend that has grown up: stronger, and under its grown form's name
+  const maxHp = statAt(kind.hp, level, big);
   const huff = side === 'foe' && kind.huff > 0 ? kind.huff + (heirloom ? HEIRLOOM.huff : 0) : 0;
   return {
-    key: `${side === 'ally' ? 'a' : 'f'}${slot}`, side, slot, species, friendId, heirloom: !!heirloom,
-    name: name || kind.name, element: kind.element, level, boss: !!kind.boss, turns: kind.turns || 1,
+    key: `${side === 'ally' ? 'a' : 'f'}${slot}`, side, slot, species, friendId, heirloom: !!heirloom, grown: big,
+    name: name || (big ? kind.grown.name : kind.name), element: kind.element, level, boss: !!kind.boss, turns: kind.turns || 1,
     maxHp, hp: hp === undefined ? maxHp : clamp(Math.round(hp), 0, maxHp),
-    oomph: statAt(kind.oomph, level), grit: statAt(kind.grit, level), pep: statAt(kind.pep, level),
+    oomph: statAt(kind.oomph, level, big), grit: statAt(kind.grit, level, big), pep: statAt(kind.pep, level, big),
     moves: movesAt(species, level).map((id) => ({ id, wait: 0 })),
     mods: [], // temporary changes to a stat: { stat, by, turns, fresh }
     huff, maxHuff: huff, // pips of temper left; 0 of 0 means it cannot be reached

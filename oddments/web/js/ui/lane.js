@@ -9,7 +9,7 @@
 import { ROOMS, SPECIES, ELEMENTS, STRAYS, roomOf, roomBuilt } from '../core/balance.js';
 import { WORLD, POST, SPOTS, TREES, LAMPS, HEDGES, ROAD_POINTS, GREEN, DISTRICTS, PEOPLE, PROPS, BENCHES, MAILBOXES, spotOf, personAt, districtAt, regionAt } from '../core/world.js';
 import { CAST } from '../core/story.js';
-import { nameOf } from '../core/names.js';
+import { nameOf, artOf } from '../core/names.js';
 import { h, sprite, spriteSrc } from './dom.js';
 import { howItGoes } from './text.js';
 import { elementTag, bar } from './parts.js';
@@ -317,7 +317,7 @@ export function laneScreen(ctx) {
       const x = post.x + (i - (foes.length - 1) / 2) * gap * size;
       const y = post.y + (kind.boss ? -14 : boss ? (area.narrow ? 36 : 20) : 0);
       if (foe.heirloom) glow(pen, x, y - 22, 54, '255,200,61', 0.42 + 0.2 * Math.sin(clock * 5));
-      stand(spriteSrc(foe.species, foe.heirloom), x, y - (kind.fly ? 9 + Math.sin(clock * 3 + i) * 4 : 0) * size, (kind.boss ? 140 : 58) * size, false, false, kind.fly ? 0 : Math.max(0, Math.sin(clock * 3.2 + i * 1.7)) * 3 * size);
+      stand(spriteSrc(artOf(foe), foe.heirloom), x, y - (kind.fly ? 9 + Math.sin(clock * 3 + i) * 4 : 0) * size, (kind.boss ? 140 : foe.grown ? 74 : 58) * size, false, false, kind.fly ? 0 : Math.max(0, Math.sin(clock * 3.2 + i * 1.7)) * 3 * size);
     });
     if (size < 1) return;
     const top = post.y - (boss ? 182 : 92);
@@ -345,7 +345,7 @@ export function laneScreen(ctx) {
       const y = stray.y + Math.cos(clock * 0.4 + stray.index + i * 1.7) * 6;
       if (foe.heirloom) glow(pen, x, y - 22, 54, '255,200,61', 0.42 + 0.2 * Math.sin(clock * 5));
       const turned = near ? you.x > x : Math.cos(clock * 0.55 + stray.index * 2.1 + i * 3.3) > 0;
-      stand(spriteSrc(foe.species, foe.heirloom), x, y - (kind.fly ? 9 + Math.sin(clock * 3 + i) * 4 : 0) * size, 58 * size, turned, false, kind.fly ? 0 : Math.max(0, Math.sin(clock * 3.2 + i * 1.7 + stray.index)) * 3 * size);
+      stand(spriteSrc(artOf(foe), foe.heirloom), x, y - (kind.fly ? 9 + Math.sin(clock * 3 + i) * 4 : 0) * size, (foe.grown ? 74 : 58) * size, turned, false, kind.fly ? 0 : Math.max(0, Math.sin(clock * 3.2 + i * 1.7 + stray.index)) * 3 * size);
     });
     if (near && size >= 1) label(pen, ['a stray', 'two strays', 'three strays'][stray.foes.length - 1] || 'strays', stray.x, stray.y - 92, '#cdeed6', 'rgba(205,238,214,.3)', 21);
   }
@@ -454,13 +454,13 @@ export function laneScreen(ctx) {
     for (const body of homebodies) {
       if (!seen(body.x, body.y)) continue;
       const fly = SPECIES[body.friend.species].fly;
-      things.push({ y: body.y, draw: () => stand(spriteSrc(body.friend.species, body.friend.heirloom), body.x, body.y, 54, body.f > 0, false, fly ? 9 + Math.sin(clock * 3 + body.step) * 4 : Math.abs(Math.sin(body.step / 15)) * 5) });
+      things.push({ y: body.y, draw: () => stand(spriteSrc(artOf(body.friend), body.friend.heirloom), body.x, body.y, body.friend.grown ? 70 : 54, body.f > 0, false, fly ? 9 + Math.sin(clock * 3 + body.step) * 4 : Math.abs(Math.sin(body.step / 15)) * 5) });
     }
     const { x, y } = here();
     for (const pal of pals) {
       const fly = SPECIES[pal.friend.species].fly;
       const lift = fly ? 9 + Math.sin(clock * 3 + pal.step) * 4 : Math.abs(Math.sin(pal.step / 15)) * 5 * spring;
-      things.push({ y: pal.y - 0.01, draw: () => stand(spriteSrc(pal.friend.species, pal.friend.heirloom), pal.x, pal.y, 54, pal.f > 0, false, lift) });
+      things.push({ y: pal.y - 0.01, draw: () => stand(spriteSrc(artOf(pal.friend), pal.friend.heirloom), pal.x, pal.y, pal.friend.grown ? 70 : 54, pal.f > 0, false, lift) });
     }
     const hop = Math.abs(Math.sin(stride / 17)) * 7 * spring;
     const view = aspect === 'side' ? state.player.look : `${state.player.look}_${aspect}`;
@@ -483,7 +483,7 @@ export function laneScreen(ctx) {
   const teamList = () => {
     const health = game.teamHealth();
     return h('div', { class: 'teamlist' }, game.team().map((friend, i) => h('div', { class: `teamcard${health[i].hp <= 0 ? ' down' : ''}` },
-      sprite(friend.species, friend.heirloom, 'flip'),
+      sprite(artOf(friend), friend.heirloom, 'flip'),
       h('div', null, h('b', null, nameOf(friend)), bar(`hp${health[i].hp / health[i].max < 0.3 ? ' low' : ''}`, health[i].hp / health[i].max, `${health[i].hp} / ${health[i].max}`)))));
   };
 
