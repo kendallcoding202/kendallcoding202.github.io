@@ -1220,22 +1220,39 @@ await read.waitForSelector('.modal.howto');
 check((await S(read, () => document.querySelector('#fight').dataset.busy)) === '1' && (await state(read)).seen.fights === true, 'before your very first fight, how a fight works is explained, and the fight waits');
 check(await S(read, () => {
   const m = document.querySelector('.modal.howto');
-  return m.dataset.page === '1/3' && m.querySelectorAll('.elring .ringchip').length === 7 && m.querySelector('.edge.strong').textContent === 'Hurts more' && m.querySelector('.edge.weak').textContent === 'Hurts less'
+  return m.dataset.page === '1/4' && m.querySelectorAll('.elring .ringchip').length === 7 && m.querySelector('.edge.strong').textContent === 'Hurts more' && m.querySelector('.edge.weak').textContent === 'Hurts less'
     && m.textContent.includes('50% more damage') && m.textContent.includes('30% less damage');
 }), 'first the ring of elements, and what the two tags over a target mean, in numbers');
 const pageFits = () => S(read, () => { const m = document.querySelector('.modal.howto'); const r = m.getBoundingClientRect(); const b = m.querySelector('.body'); return r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth && b.scrollHeight <= b.clientHeight + 1; });
 let pagesFit = await pageFits();
 await snap(read, 'e2e-howto');
 await read.click('.modal.howto [data-id="next"]');
-check(await S(read, () => { const m = document.querySelector('.modal.howto'); return m.dataset.page === '2/3' && m.textContent.includes('Huff') && m.textContent.includes('Reach out takes 2 pips off (3 ') && m.querySelectorAll('.howkin .pips i').length === 3; }), 'then making friends: the pips, and what Reach out does to them');
+check(await S(read, () => { const m = document.querySelector('.modal.howto'); const rows = [...m.querySelectorAll('.howrow[data-stat]')]; return m.dataset.page === '2/4' && rows.map((row) => row.dataset.stat).join() === 'hp,oomph,grit,pep' && rows[1].textContent.startsWith('OomphHow hard it hits.') && rows[2].textContent.startsWith('GritHow well it shrugs hits off.') && rows[3].textContent.includes('quickest moves first'); }), 'then the four numbers, each in plain words: Oomph is how hard it hits, Grit how well it shrugs hits off');
+pagesFit = pagesFit && await pageFits();
+await snap(read, 'e2e-howto-numbers');
+await read.click('.modal.howto [data-id="next"]');
+check(await S(read, () => { const m = document.querySelector('.modal.howto'); return m.dataset.page === '3/4' && m.textContent.includes('Huff') && m.textContent.includes('Reach out takes 2 pips off (3 ') && m.querySelectorAll('.howkin .pips i').length === 3; }), 'then making friends: the pips, and what Reach out does to them');
 pagesFit = pagesFit && await pageFits();
 await read.click('.modal.howto [data-id="next"]');
-check(await S(read, () => { const m = document.querySelector('.modal.howto'); return m.dataset.page === '3/3' && m.querySelectorAll('.howcall').length === 3 && m.querySelector('[data-id="next"]').textContent === 'Got it'; }), 'then your own part: the three Calls');
+check(await S(read, () => { const m = document.querySelector('.modal.howto'); return m.dataset.page === '4/4' && m.querySelectorAll('.howcall').length === 3 && m.querySelector('[data-id="next"]').textContent === 'Got it'; }), 'then your own part: the three Calls');
 pagesFit = pagesFit && await pageFits();
 check(pagesFit, 'every page fits the screen without scrolling');
 await read.click('.modal.howto [data-id="next"]');
 await read.waitForSelector('#fight[data-busy="0"]', { timeout: 30000 });
 check(!(await read.$('.modal.howto')), 'and with that read, the fight begins');
+{
+  // Types are written down: under every fighter its element, in that element's colour, with nothing to tap.
+  const typed = await S(read, () => {
+    const b = window.oddments.game.battle;
+    return [...document.querySelectorAll('.unit')].map((unit) => { const tag = unit.querySelector('.foot .el.under'); const box = tag.getBoundingClientRect(); const whole = unit.getBoundingClientRect(); const fighter = b.units.find((each) => each.key === unit.dataset.unit); return { said: tag.textContent, is: fighter.element, cls: tag.classList.contains(`el-${fighter.element}`), wide: box.width, fits: box.width <= whole.width + 1 && box.height >= 10, shown: getComputedStyle(tag).display !== 'none' }; });
+  });
+  const names = { spark: 'Spark', fluff: 'Fluff', suds: 'Suds', crumb: 'Crumb', clank: 'Clank', sprout: 'Sprout' };
+  check(typed.length >= 4 && typed.every((one) => one.said === names[one.is] && one.cls && one.fits && one.shown), 'in a fight every fighter has its element written under it, in that element\'s colour', JSON.stringify(typed.map((one) => one.said)));
+  await read.click('.unit.foe');
+  await read.waitForSelector('.modal.oddment');
+  check(await S(read, () => { const stats = [...document.querySelectorAll('.modal.oddment .stat')]; return stats.length === 4 && stats[1].dataset.stat === 'oomph' && stats[1].querySelector('i').textContent === 'How hard it hits.' && stats[2].querySelector('i').textContent === 'How well it shrugs hits off.' && stats.every((stat) => stat.querySelector('i').getBoundingClientRect().height > 8); }), 'and on anyone\'s card each of the four numbers says what it is');
+  await read.click('.modal.oddment .x');
+}
 
 // The tags over targets: what the move will do to them, in words that cannot be read the other way round.
 const mover = await S(read, () => window.oddments.game.choices().unit.species);

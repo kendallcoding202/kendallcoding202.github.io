@@ -1,7 +1,7 @@
-// How a fight works, in three small pages. Shown once, before your first
+// How a fight works, in four small pages. Shown once, before your first
 // fight, and again whenever it is asked for from the fight's menu. Every
 // number on it is read from the rules, so it cannot fall out of step.
-import { ELEMENTS, ELEMENT_IDS, STRONG, WEAK, REACH, CALLS, CALL_IDS } from '../core/balance.js';
+import { ELEMENTS, ELEMENT_IDS, STATS, STAT_IDS, STRONG, WEAK, REACH, CALLS, CALL_IDS } from '../core/balance.js';
 import { h, sprite } from './dom.js';
 import { modal } from './modals.js';
 
@@ -20,12 +20,18 @@ function ring() {
 const PAGES = [
   () => [
     h('h3', null, 'Every move has an element'),
-    h('p', null, 'So has every Clutterkin. Each element beats the next one along:'),
+    h('p', null, 'So has every Clutterkin: in a fight it is written under each of them. Each element beats the next one along:'),
     ring(),
     h('p', null, 'When you choose who to hit, a tag over them says what your move will do to them:'),
     h('div', { class: 'howrow' }, h('span', { class: 'edge strong' }, EDGE_WORDS.strong), h('small', null, `Your move beats their element: ${share(STRONG)}% more damage.`)),
     h('div', { class: 'howrow' }, h('span', { class: 'edge weak' }, EDGE_WORDS.weak), h('small', null, `Their element beats your move: ${share(WEAK)}% less damage.`)),
     h('p', { class: 'note' }, 'No tag means the usual amount. The tag is about your move, not about how tough they are.'),
+  ],
+  () => [
+    h('h3', null, 'Four numbers'),
+    h('p', null, 'Every Clutterkin has four. Tap one, in a fight or on Friends, to see its own.'),
+    STAT_IDS.map((id) => h('div', { class: 'howrow', data: { stat: id } }, h('b', { class: 'howstat' }, STATS[id].name), h('small', null, `${STATS[id].hint} ${STATS[id].more}`))),
+    h('p', { class: 'note' }, 'All four go up a little with every level.'),
   ],
   () => [
     h('h3', null, 'Making friends'),

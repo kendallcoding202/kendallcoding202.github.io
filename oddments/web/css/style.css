@@ -212,6 +212,8 @@ small { color: var(--muted); font-size: 12px; }
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .stat { padding: 6px 4px; border-radius: 10px; background: var(--card); text-align: center; }
 .stat small { display: block; } .stat b { font-size: 18px; }
+.stat i { display: block; font-style: normal; font-size: 9.5px; line-height: 1.15; color: var(--muted); margin-top: 1px; }
+.howstat { flex: none; width: 58px; color: var(--gold); }
 .movelist { display: flex; flex-direction: column; gap: 6px; }
 .moverow { padding: 8px 10px; border-radius: 10px; background: var(--card); }
 .moverow small { display: block; margin-top: 2px; }
@@ -424,7 +426,9 @@ small { color: var(--muted); font-size: 12px; }
 .unit.fly .body { animation-name: hover; margin-bottom: 7px; }
 .unit.fly .shadow { width: 54%; opacity: .75; }
 /* A fixed height, so the feet of both sides are on one line whether or not there are pips underneath. */
-.foot { width: 80%; height: 26px; margin-top: 1px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.foot { width: 80%; height: 40px; margin-top: 1px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+/* Which element it is, written under it: nobody should have to tap to find out. */
+.foot .el.under { padding: 0 6px; font-size: 9.5px; line-height: 13px; border: 1px solid rgba(13,10,28,.85); white-space: nowrap; }
 .hpbar { width: 100%; height: 7px; border-radius: 4px; background: rgba(8,6,20,.74); border: 1px solid rgba(255,255,255,.3); overflow: hidden; }
 .hpbar i { display: block; height: 100%; width: 100%; border-radius: 3px; background: linear-gradient(#8ff0a6, var(--good)); transition: width .4s cubic-bezier(.2,.8,.3,1); }
 .hpbar i.low { background: linear-gradient(#ff8a96, var(--bad)); }

@@ -49,7 +49,7 @@ export function oddmentCard({ species, level, heirloom = false, xp = null, huff 
   const kindName = big ? kind.grown.name : kind.name;
   const called = name || kindName;
   const known = movesAt(species, level);
-  const stats = ['hp', 'oomph', 'grit', 'pep'].map((key) => h('div', { class: 'stat' }, h('small', null, STATS[key].name), h('b', null, String(statAt(kind[key], level, big)))));
+  const stats = ['hp', 'oomph', 'grit', 'pep'].map((key) => h('div', { class: 'stat', data: { stat: key } }, h('small', null, STATS[key].name), h('b', null, String(statAt(kind[key], level, big))), h('i', null, STATS[key].hint)));
   const moves = kind.moves.map(([id, at]) => {
     const move = moveOf(id);
     const learned = known.includes(id);

@@ -66,11 +66,12 @@ for (const [name, url] of targets) {
       await page.touchscreen.tap(aim.x, aim.y);
       await page.waitForTimeout(450);
     }
-    // A new game's first fight opens on how a fight works: three pages, read past as a new player would.
+    // A new game's first fight opens on how a fight works: four pages, read past as a new player would.
+    // (A copy published before the page about the four numbers was added has three.)
     await page.waitForSelector('.modal.howto', { timeout: 30000 });
     let pages = 0;
     for (; pages < 6 && await page.$('.modal.howto'); pages++) { await page.click('.modal.howto [data-id="next"]'); await page.waitForTimeout(60); }
-    if (pages !== 3) throw new Error(`how a fight works had ${pages} pages`);
+    if (pages !== 4 && pages !== 3) throw new Error(`how a fight works had ${pages} pages`);
     await page.waitForSelector('#fight[data-busy="0"]', { timeout: 30000 });
     await page.screenshot({ path: `${OUT}preview-${targets.length > 1 ? name.split(' ')[1] : 'published'}.png` });
     for (let i = 0; i < 200; i++) {

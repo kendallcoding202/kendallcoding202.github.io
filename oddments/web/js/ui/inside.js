@@ -2,7 +2,7 @@
 // go, what there is to do) are in core/indoors.js and what a room looks like
 // is in roomart.js; this keeps the view on you, takes your taps, and puts it
 // on screen every frame, as lane.js does for the world outside.
-import { SPECIES, roomOf } from '../core/balance.js';
+import { SPECIES, ELEMENTS, roomOf } from '../core/balance.js';
 import { POST } from '../core/world.js';
 import { insideOf } from '../core/indoors.js';
 import { CAST, THREE } from '../core/story.js';
@@ -14,7 +14,7 @@ import { toast, modalOpen } from './modals.js';
 import { converse } from './talk.js';
 import { play } from '../platform/sound.js';
 import { dustShift, throughDoor } from './shift.js';
-import { FONT, oval, paint, glow, label } from './scenery.js';
+import { FONT, oval, paint, glow, label, elementMark } from './scenery.js';
 import { paintRoom, roomArt, standingIn } from './roomart.js';
 
 const HOME_NAME = 'Home';
@@ -174,6 +174,7 @@ export function insideScreen(ctx) {
       const y = post.y + (kind.boss ? -14 : boss ? 20 : 0);
       if (foe.heirloom) glow(pen, x, y - 22, 54, '255,200,61', 0.42 + 0.2 * Math.sin(clock * 5));
       stand(spriteSrc(artOf(foe), foe.heirloom), x, y - (kind.fly ? 9 + Math.sin(clock * 3 + i) * 4 : 0) * size, (kind.boss ? 140 : foe.grown ? 74 : 58) * size, false, false, kind.fly ? 0 : Math.max(0, Math.sin(clock * 3.2 + i * 1.7)) * 3 * size);
+      if (size >= 1) elementMark(pen, ELEMENTS[kind.element].name, ELEMENTS[kind.element].color, x, y + 16, kind.boss ? 18 : foes.length > 2 ? 14 : 16);
     });
     if (size < 1) return;
     const top = post.y - (boss ? 182 : 92);

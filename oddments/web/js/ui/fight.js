@@ -49,7 +49,7 @@ export function fightScreen(ctx) {
     const el = h('button', {
       class: `unit ${unit.side}${unit.boss ? ' boss' : ''}${unit.heirloom ? ' rare' : ''}${unit.grown ? ' grown' : ''} s${unit.slot}${corner}${SPECIES[unit.species].fly ? ' fly' : ''}`,
       data: { unit: unit.key }, 'aria-label': `${unit.name}, level ${unit.level}`, onclick: () => tapUnit(unit.key),
-    }, body, h('i', { class: 'shadow' }), h('div', { class: 'foot' }, h('div', { class: 'hpbar' }, fill), pips, chips), edge);
+    }, body, h('i', { class: 'shadow' }), h('div', { class: 'foot' }, h('span', { class: `el el-${unit.element} under`, data: { element: unit.element } }, ELEMENTS[unit.element].name), h('div', { class: 'hpbar' }, fill), pips, chips), edge);
     view[unit.key] = { unit, el, body, fill, pips, chips, edge, hp: unit.maxHp, huff: unit.maxHuff, gone: false };
     return el;
   }

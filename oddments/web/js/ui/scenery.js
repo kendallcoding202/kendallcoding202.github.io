@@ -65,6 +65,17 @@ export function label(pen, text, x, y, colour = '#fff7e8', edge = 'rgba(255,255,
   pen.fillText(text, x, y + 1);
 }
 
+/** A small tag saying an element, in that element's colour: under whoever is waiting, so nobody has to guess. */
+export function elementMark(pen, name, colour, x, y, size = 15) {
+  pen.font = `700 ${size}px ${FONT}`;
+  const tw = pen.measureText(name).width;
+  const tall = size * 1.45;
+  rounded(pen, x - tw / 2 - size * 0.5, y - tall / 2, tw + size, tall, tall / 2); paint(pen, colour);
+  pen.lineWidth = 1.5; pen.strokeStyle = 'rgba(13,10,28,.9)'; pen.stroke();
+  pen.textBaseline = 'middle'; pen.textAlign = 'center'; pen.fillStyle = '#1a1333';
+  pen.fillText(name, x, y + 1);
+}
+
 /** A painting standing with the middle of its foot at (x, y), `wide` across. Returns how tall it stands. */
 export function stood(pen, image, x, y, wide) {
   if (!arrived(image)) return 0;

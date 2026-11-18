@@ -40,10 +40,11 @@ export const softSpotOf = (element) => ELEMENTS[element].beats;
 // ---------------------------------------------------------------- stats
 
 export const STATS = {
-  hp: { name: 'Health', hint: 'How much it can take.' },
-  oomph: { name: 'Oomph', hint: 'How hard it hits.' },
-  grit: { name: 'Grit', hint: 'How well it shrugs hits off.' },
-  pep: { name: 'Pep', hint: 'Who goes first.' },
+  // (`hint` is said wherever the number is shown; `more` is the second half of it, where there is room.)
+  hp: { name: 'Health', hint: 'How much it can take.', more: 'At none, it sits the rest of the fight out.' },
+  oomph: { name: 'Oomph', hint: 'How hard it hits.', more: 'More Oomph, more damage from every move.' },
+  grit: { name: 'Grit', hint: 'How well it shrugs hits off.', more: 'More Grit, less damage from every hit it takes.' },
+  pep: { name: 'Pep', hint: 'How quick it is.', more: 'The quickest moves first each round.' },
 };
 export const STAT_IDS = Object.keys(STATS);
 export const GROWTH = 0.1; // each level adds this share of the base stat

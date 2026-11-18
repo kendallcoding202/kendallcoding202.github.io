@@ -21,7 +21,7 @@ import { keyRing } from './keys.js';
 import { play } from '../platform/sound.js';
 import { dustShift, throughDoor } from './shift.js';
 import { insideOf } from '../core/indoors.js';
-import { FONT, PROP_WIDE, oval, paint, glow, label, worldSrc, paintGround, paintBuilding, paintProp, paintFlat, paintLamp, paintGate, wallOf } from './scenery.js';
+import { FONT, PROP_WIDE, oval, paint, glow, label, elementMark, worldSrc, paintGround, paintBuilding, paintProp, paintFlat, paintLamp, paintGate, wallOf } from './scenery.js';
 
 // How much of the world fits across the screen. People and Clutterkin are small in a big place.
 // On a wider screen (a folding phone, open) you see more of the world, not the same view blown up:
@@ -319,6 +319,7 @@ export function laneScreen(ctx) {
       const y = post.y + (kind.boss ? -14 : boss ? (area.narrow ? 36 : 20) : 0);
       if (foe.heirloom) glow(pen, x, y - 22, 54, '255,200,61', 0.42 + 0.2 * Math.sin(clock * 5));
       stand(spriteSrc(artOf(foe), foe.heirloom), x, y - (kind.fly ? 9 + Math.sin(clock * 3 + i) * 4 : 0) * size, (kind.boss ? 140 : foe.grown ? 74 : 58) * size, false, false, kind.fly ? 0 : Math.max(0, Math.sin(clock * 3.2 + i * 1.7)) * 3 * size);
+      if (size >= 1) elementMark(pen, ELEMENTS[kind.element].name, ELEMENTS[kind.element].color, x, y + 16, kind.boss ? 18 : foes.length > 2 ? 14 : 16);
     });
     if (size < 1) return;
     const top = post.y - (boss ? 182 : 92);
@@ -347,6 +348,7 @@ export function laneScreen(ctx) {
       if (foe.heirloom) glow(pen, x, y - 22, 54, '255,200,61', 0.42 + 0.2 * Math.sin(clock * 5));
       const turned = near ? you.x > x : Math.cos(clock * 0.55 + stray.index * 2.1 + i * 3.3) > 0;
       stand(spriteSrc(artOf(foe), foe.heirloom), x, y - (kind.fly ? 9 + Math.sin(clock * 3 + i) * 4 : 0) * size, (foe.grown ? 74 : 58) * size, turned, false, kind.fly ? 0 : Math.max(0, Math.sin(clock * 3.2 + i * 1.7 + stray.index)) * 3 * size);
+      if (near && size >= 1) elementMark(pen, ELEMENTS[kind.element].name, ELEMENTS[kind.element].color, stray.x + (i - (stray.foes.length - 1) / 2) * 62, stray.y + 16, stray.foes.length > 2 ? 14 : 16);
     });
     if (near && size >= 1) label(pen, ['a stray', 'two strays', 'three strays'][stray.foes.length - 1] || 'strays', stray.x, stray.y - 92, '#cdeed6', 'rgba(205,238,214,.3)', 21);
   }
