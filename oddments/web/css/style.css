@@ -526,6 +526,7 @@ small { color: var(--muted); font-size: 12px; }
 .gain > div { flex: 1; min-width: 0; }
 .gain .line { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
 .gain .line small { white-space: nowrap; }
+.gain .line b { min-width: 0; overflow-wrap: anywhere; }
 .gain .bar { margin: 3px 0 0; height: 8px; overflow: hidden; }
 .gain .bar i { animation: fill .7s cubic-bezier(.2,.8,.3,1) both; transform-origin: 0 50%; }
 @keyframes fill { from { transform: scaleX(0); } }
@@ -543,6 +544,8 @@ small { color: var(--muted); font-size: 12px; }
 .friend, .page-tile { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 6px; border-radius: var(--radius); background: var(--card); border: 2px solid transparent; min-width: 0; }
 .friend img, .page-tile img { height: 64px; width: 100%; object-fit: contain; }
 .friend b, .page-tile b { font-size: 13px; text-align: center; line-height: 1.1; }
+/* A name of your own can be twelve wide letters: it breaks onto a second line rather than spill out of the tile. */
+.friend b { max-width: 100%; overflow-wrap: anywhere; }
 .friend .tags { display: flex; align-items: center; gap: 4px; }
 .friend .bar { width: 100%; margin: 0; }
 .friend.on { border-color: var(--blue); background: var(--card-hi); }
