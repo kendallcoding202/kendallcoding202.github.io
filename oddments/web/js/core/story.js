@@ -277,6 +277,28 @@ export function putRight(state, roomId) {
   return one ? { kind: one.kind, text: toldOf(state, one.kind, one.after) } : null;
 }
 
+// ---------------------------------------------------------------- the keys
+
+// A key for each place. Its ringleader hands it over when the place is calm, and it is yours to
+// keep: a house-sitter is somebody trusted with the keys. Nothing is spent to get one and nothing
+// needs one; they are what you have to show for a place, and there is one more hook on the ring
+// for each place still to calm. You hold a place's key for exactly as long as the place is calm,
+// which is for good, so the save keeps nothing more for them.
+export const KEYS = {
+  garden: { name: 'The Gate Key', line: 'Green iron, with a leaf for a handle. Old Summerlong kept it safe in the long grass all summer.' },
+  alley: { name: 'The Tin Key', line: 'Cut from a can, with a bottle cap for a handle. Baron Pilfer wore it on a string, and takes it off himself.' },
+  pantry: { name: 'The Pantry Key', line: 'Copper, with a slice of toast for a handle. The Crumbwyrm had been asleep on it.' },
+  wash: { name: 'The Wash Key', line: 'Blue enamel, with a ring of bubbles for a handle. The Spin Cycle lets it out with the last rinse.' },
+  stacks: { name: 'The Stacks Key', line: 'Old brass, with an open book for a handle. It was keeping a place in the Overdue Tome.' },
+  rooftops: { name: 'The Rooftop Key', line: 'Silver, with a moon for a handle. The Night Warden has turned it in the same lock every night for years.' },
+  attic: { name: 'The Attic Key', line: 'A clock key, with a gear set in it. It is what Grandfather Golem is wound with, and he lets you hold it.' },
+  dark: { name: 'The Dark Key', line: 'Black iron, with one small red light. THE VACUUM swallowed it years ago, and gives it back.' },
+};
+/** The whole ring, in the order of the places: [{ room, place, name, line, held }]. */
+export const keysOf = (state) => ROOMS.map((room) => ({ room: room.id, place: room.name, ...KEYS[room.id], held: calm(state, room.id) }));
+/** The key a place gives: { room, name, line }. */
+export const keyOf = (roomId) => (KEYS[roomId] ? { room: roomId, ...KEYS[roomId] } : null);
+
 // ---------------------------------------------------------------- what you are trying to do
 
 // How the goal of calming each place is put. (A place not listed here gets a plain line.)

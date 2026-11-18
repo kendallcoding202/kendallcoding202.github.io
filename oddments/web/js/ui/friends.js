@@ -6,6 +6,7 @@ import { h, sprite } from './dom.js';
 import { modal, toast } from './modals.js';
 import { elementTag, heirloomTag, bar, oddmentCard } from './parts.js';
 import { setSound, unlockSound } from '../platform/sound.js';
+import { keyRing } from './keys.js';
 
 /** Everyone who has come home, and the three who walk with you. */
 export function friendsScreen(ctx) {
@@ -102,6 +103,7 @@ export function bookScreen(ctx) {
   const el = h('section', { id: 'book', class: 'page' },
     h('header', { class: 'bar-top' }, h('h1', null, 'Scrapbook')),
     h('p', { class: 'note', data: { act: 'counts' } }, `Met ${kinds.filter((id) => book[id].met).length} of ${kinds.length} · Friends ${friends.length} of ${canJoin.length} · Grown up ${canJoin.filter((id) => book[id].grown).length} of ${canJoin.length} · Heirlooms ${kept.length} of ${canJoin.length}`),
+    keyRing(game.state),
     hunt,
     h('div', { class: 'grid book' }, tiles),
     h('h3', null, 'Elements'),

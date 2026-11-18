@@ -2,7 +2,7 @@
 import { Game } from './core/game.js';
 import { newState, reviveState } from './core/state.js';
 import { playable } from './core/trial.js';
-import { putRight, grewWords } from './core/story.js';
+import { putRight, grewWords, keyOf } from './core/story.js';
 import { nameOf, calledOf, artOf } from './core/names.js';
 import { SPECIES, ROOMS, MAX_LEVEL, roomOf, roomBuilt, moveOf, xpNeeded } from './core/balance.js';
 import { loadAssets } from './ui/assets.js';
@@ -13,6 +13,7 @@ import { insideScreen } from './ui/inside.js';
 import { fightScreen } from './ui/fight.js';
 import { friendsScreen, bookScreen, settingsScreen, lookDialog } from './ui/friends.js';
 import { heirloomTag, bar, aOrAn } from './ui/parts.js';
+import { keyPicture } from './ui/keys.js';
 import { loadSave, writeSave, clearSave, keepUnreadable } from './platform/storage.js';
 import { unlockSound, setSound, hushSound, play, setScene, sceneFor, soundState } from './platform/sound.js';
 
@@ -152,6 +153,9 @@ function resultDialog(ctx, summary, foes) {
       ? `Everyone is rested, and the way on is open: ${next.name} is next. Ines Tock will want to hear. (${room.name} will stay calm now. A few will always be wandering about in it: go back for the friends still to make.)`
       : next ? `Everyone is rested. That is as far as the lane is built: ${next.name} comes next, and is not there yet. (${room.name} will stay calm now. A few will always be wandering about in it: go back for the friends still to make.)`
         : 'That is all eight. Every place on the lane is calm, and it is not Monday yet. Everyone is rested. Ines Tock will want to hear, and so will great-aunt Maribel: the telephone is at home.'));
+    // Its ringleader hands over the key to the place: yours to keep.
+    const key = keyOf(room.id);
+    if (key) lines.push(h('div', { class: 'keywon', data: { key: key.room } }, keyPicture(key.room), h('div', null, h('b', null, key.name), h('small', null, key.line))));
     // For one of the three you set out with, this is where its story began; and here it is put right.
     const right = putRight(game.state, room.id);
     if (right) lines.push(h('div', { class: 'putright', data: { kind: right.kind } }, sprite(artOf(game.state.friends.find((friend) => friend.species === right.kind)), !!game.state.friends.find((friend) => friend.species === right.kind).heirloom, 'flip'), h('p', null, right.text)));

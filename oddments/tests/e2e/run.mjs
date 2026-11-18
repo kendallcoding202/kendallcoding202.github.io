@@ -574,7 +574,12 @@ while (!cleared && visits < 6) {
     }
     await botFight(page, { befriend: index < 4 });
     cleared = (await modalTitle(page)) === 'All calm';
-    if (cleared) await snap(page, 'e2e-cleared');
+    if (cleared) {
+      await page.waitForTimeout(900);
+      const handed = await S(page, () => { const el = document.querySelector('.modal.result .keywon'); const img = el && el.querySelector('img'); return el && { key: el.dataset.key, name: el.querySelector('b').textContent, line: el.querySelector('small').textContent, art: img.src.split('/').slice(-2).join('/'), loaded: img.naturalWidth > 0, tall: Math.round(img.getBoundingClientRect().height) }; });
+      check(!!handed && handed.key === 'garden' && handed.name === 'The Gate Key' && handed.line.includes('Old Summerlong') && handed.art === 'keys/garden.webp' && handed.loaded && handed.tall >= 60, 'with the garden calm, Old Summerlong hands over its key: the Gate Key, with its picture', JSON.stringify(handed));
+      await snap(page, 'e2e-cleared');
+    }
     await page.click('[data-id="next"]');
     await page.waitForTimeout(80);
   }
@@ -590,6 +595,21 @@ check((await where(page)).district === 'garden' && (await game(page, () => windo
 check(await S(page, () => document.querySelector('.placecard').hidden), 'with nothing to report');
 await page.waitForTimeout(400);
 await snap(page, 'e2e-garden-calm');
+{
+  // The key ring, in "What to do": one key held of eight, the rest dark outlines; a tap says what each is.
+  await page.click('.goalchip');
+  await page.waitForSelector('.modal.journal .keyring');
+  await page.waitForFunction(() => [...document.querySelectorAll('.modal.journal .keyslot img')].every((img) => img.complete && img.naturalWidth > 0), null, { timeout: 10000 });
+  const ring = async () => S(page, () => { const el = document.querySelector('.modal.journal .keyring'); return { held: el.dataset.held, keys: el.dataset.keys, slots: el.querySelectorAll('.keyslot').length, heldSlots: [...el.querySelectorAll('.keyslot.held')].map((slot) => slot.dataset.key).join(','), count: el.querySelector('.keyhead small').textContent, about: el.querySelector('.keyabout').textContent, on: (el.querySelector('.keyslot.on') || { dataset: {} }).dataset.key, dark: getComputedStyle(el.querySelector('.keyslot:not(.held) img')).filter.includes('brightness(0)'), fits: [...el.querySelectorAll('.keyslot img')].every((img) => img.naturalWidth > 0 && img.getBoundingClientRect().width >= 20) }; });
+  let hung = await ring();
+  check(hung.held === '1' && hung.keys === 'garden' && hung.slots === 8 && hung.heldSlots === 'garden' && hung.count === '1 of 8' && hung.dark && hung.fits, '"What to do" has the key ring: one key held of eight, the other seven as dark outlines', JSON.stringify(hung));
+  check(hung.on === 'garden' && hung.about.startsWith('The Gate Key. Green iron'), 'it shows the newest key and what is said of it');
+  await page.click('.modal.journal .keyslot[data-key="dark"]');
+  hung = await ring();
+  check(hung.on === 'dark' && hung.about === 'Calm the Roaring Dark and its key is yours.', 'tap one not yet earned and it says where it is to be had');
+  await snap(page, 'e2e-keys');
+  await page.click('.modal.journal [data-id="ok"]');
+}
 check(await walkTo(page, 'garden'), 'you can walk back out through the gate');
 check((await game(page, () => window.oddments.game.held().filter((point) => point.x < 1000).length)) === 0, 'and from outside it is still calm: nobody has gone back into the bushes');
 await page.waitForSelector('.placecard[data-spot="garden"]');
@@ -1058,6 +1078,10 @@ for (const [room, name, boss, bg, goalAfter] of LATER) {
 s = await state(page);
 check(Object.values(s.rooms).every((record) => record.clears === 1) && await S(page, () => document.querySelector('.goalchip').dataset.goal === 'more'), 'all eight places are calm: the lane is quiet');
 check(['boss_spincycle', 'boss_tome', 'boss_warden', 'boss_clock', 'boss_vacuum'].every((id) => s.book[id].met), 'and every ringleader is in the scrapbook');
+await tab(page, 'book');
+check(await S(page, () => { const el = document.querySelector('#book .keyring'); return el.dataset.held === '8' && el.querySelectorAll('.keyslot.held').length === 8 && el.querySelector('.keyhead small').textContent === '8 of 8' && el.querySelector('.keyabout').textContent.startsWith('The Dark Key.'); }), 'and all eight keys are on the ring, in the scrapbook too');
+await snap(page, 'e2e-keys-all');
+await tab(page, 'lane');
 // Home, and the telephone: great-aunt Maribel hears the end of it.
 await page.evaluate(async () => { const { INSIDES } = await import('./js/core/indoors.js'); const g = window.oddments.game; const phone = INSIDES.home.spots.find((spot) => spot.does === 'ring'); g.standAt('home'); g.enter('home'); g.state.indoors.x = phone.x; g.state.indoors.y = phone.y; window.oddments.ctx.show('lane'); });
 await page.waitForSelector('#inside[data-room="home"] [data-act="ring"]');
@@ -1604,6 +1628,7 @@ check(foreign.length === 0, 'every request the game made was for one of its own 
 check(requests.length > 40, `(${requests.length} requests watched)`);
 const roomPaintings = readdirSync(new URL('../../web/assets/rooms/', import.meta.url));
 check(roomPaintings.length === 98 && roomPaintings.every((file) => requests.some((url) => url.endsWith(`assets/rooms/${file}`))), `every painting of every room was fetched (${roomPaintings.length} of them)`);
+check(['garden', 'alley', 'pantry', 'wash', 'stacks', 'rooftops', 'attic', 'dark'].every((id) => requests.some((url) => url.endsWith(`assets/keys/${id}.webp`))), 'every key\'s picture was fetched');
 const grownKinds = Object.keys(SPECIES).filter((id) => SPECIES[id].grown);
 check(grownKinds.length === 40 && grownKinds.every((id) => requests.some((url) => url.endsWith(`assets/sprites/${id}_grown.webp`)) && requests.some((url) => url.endsWith(`assets/sprites/${id}_grown_heirloom.webp`))), 'every grown form\'s picture was fetched, and its Heirloom colours');
 check(errors.length === 0, 'no errors, and nothing refused by the content security policy', errors.slice(0, 5).join(' | '));

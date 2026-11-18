@@ -307,6 +307,22 @@ small { color: var(--muted); font-size: 12px; }
 .putright img { height: 60px; width: 68px; object-fit: contain; flex: none; }
 .putright p { margin: 0; font-size: 14px; line-height: 1.32; }
 .cardtop + p.about, p.about { margin: 0; font-size: 13.5px; line-height: 1.34; color: var(--muted); }
+/* The key ring: eight keys in a row, the ones not yet earned as dark outlines of themselves. */
+.keyring { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 14px; background: var(--card); }
+.keyhead { display: flex; justify-content: space-between; align-items: baseline; } .keyhead b { color: var(--gold); } .keyhead small { color: var(--muted); font-weight: 600; }
+.keyrow { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; }
+.keyslot { padding: 2px 0; border-radius: 10px; border: 1.5px solid transparent; display: flex; justify-content: center; }
+.keyslot img { width: 100%; max-width: 44px; aspect-ratio: 1; object-fit: contain; filter: brightness(0) opacity(.34); }
+.keyslot.held img { filter: drop-shadow(0 2px 3px rgba(0,0,0,.5)); }
+.keyslot.on { border-color: var(--gold); background: rgba(255,200,61,.1); }
+.keyabout { color: var(--ink); opacity: .92; font-size: 12.5px; line-height: 1.3; min-height: 2.6em; } .keyabout b { color: var(--gold); }
+/* A key handed over, in the news that a place is calm. */
+.keywon { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: radial-gradient(120% 120% at 0 50%, rgba(255,200,61,.22), rgba(255,200,61,.04) 70%), var(--card); border: 1.5px solid var(--gold); }
+.keywon img { height: 74px; width: 74px; object-fit: contain; flex: none; filter: drop-shadow(0 0 8px rgba(255,200,61,.55)); animation: keyin .7s cubic-bezier(.2,1.4,.4,1) both; }
+.keywon b { display: block; color: var(--gold); font-size: 17px; } .keywon small { display: block; font-size: 13.5px; line-height: 1.3; }
+@keyframes keyin { from { transform: rotate(-50deg) scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .keywon img { animation: none; } }
+
 /* Grown up. A grown friend is drawn bigger wherever it stands, so the change is plain at a glance. */
 .unit.grown .sprite { width: 118%; margin: 0 -9%; height: clamp(60px, 21.5vw, 110px); }
 /* (The one at the back stands at the edge of the screen: it takes its extra room toward the middle.) */

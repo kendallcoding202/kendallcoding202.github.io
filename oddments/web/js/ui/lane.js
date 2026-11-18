@@ -17,6 +17,7 @@ import { modal, toast, modalOpen } from './modals.js';
 import { converse } from './talk.js';
 import { meetTheThree } from './three.js';
 import { mapDialog } from './map.js';
+import { keyRing } from './keys.js';
 import { play } from '../platform/sound.js';
 import { dustShift, throughDoor } from './shift.js';
 import { insideOf } from '../core/indoors.js';
@@ -621,6 +622,7 @@ export function laneScreen(ctx) {
       title: 'What to do', cls: 'journal',
       body: [
         h('div', { class: 'aim' }, h('b', null, aim.title), bar('xp', aim.count[0] / aim.count[1], `${aim.count[0]} of ${aim.count[1]} calm`)),
+        keyRing(state),
         h('div', { class: 'now' }, h('small', null, 'Now'), h('b', null, goal.count ? `${goal.title} (${goal.count[0]} of ${goal.count[1]})` : goal.title), h('p', null, goal.detail)),
         told.length ? h('div', { class: 'sofar' }, h('small', null, 'So far'), h('ul', null, told.map((line) => h('li', null, line)))) : null,
       ],

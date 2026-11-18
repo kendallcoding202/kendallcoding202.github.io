@@ -4,6 +4,7 @@ import { CAST, CAST_IDS } from '../core/story.js';
 import { spriteSrc } from './dom.js';
 import { WORLD_ART, worldSrc } from './scenery.js';
 import { ROOM_ART } from './roomart.js';
+import { KEY_ART } from './keys.js';
 
 function load(src) {
   return new Promise((resolve) => {
@@ -29,6 +30,7 @@ export async function loadAssets(onProgress = () => {}) {
   sources.push('assets/bg/bg_lane.webp'); // what a fight with strays, out on the lane, is seen against
   for (const name of WORLD_ART) sources.push(worldSrc(name));
   sources.push(...ROOM_ART); // the insides of buildings: their walls, floors and furniture
+  sources.push(...KEY_ART); // the eight keys
   let done = 0;
   await Promise.all(sources.map((src) => load(src).then(() => onProgress(++done / sources.length))));
   try { await document.fonts.load('700 16px Fredoka'); } catch { /* the system font will do */ }
