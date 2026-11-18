@@ -6,6 +6,7 @@
 // story keeps only what nothing else records: which conversations were had.
 import { ROOMS, ROOM_IDS, roomOf, roomBuilt } from './balance.js';
 import { calmedIn } from './rooms.js';
+import { toldOf } from './names.js';
 
 export const CAST = {
   maribel: { name: 'Great-aunt Maribel', role: 'on the phone', art: 'cast_maribel' },
@@ -265,7 +266,7 @@ export const aboutOf = (kind) => THREE.find((one) => one.kind === kind) || null;
 /** What is put right for one of the three when a place is calmed: { kind, text }, or null. */
 export function putRight(state, roomId) {
   const one = THREE.find((each) => each.place === roomId && state.friends.some((friend) => friend.species === each.kind));
-  return one ? { kind: one.kind, text: one.after } : null;
+  return one ? { kind: one.kind, text: toldOf(state, one.kind, one.after) } : null;
 }
 
 // ---------------------------------------------------------------- what you are trying to do

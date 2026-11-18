@@ -9,6 +9,7 @@
 import { ROOMS, SPECIES, ELEMENTS, STRAYS, roomOf, roomBuilt } from '../core/balance.js';
 import { WORLD, POST, SPOTS, TREES, LAMPS, HEDGES, ROAD_POINTS, GREEN, DISTRICTS, PEOPLE, PROPS, BENCHES, MAILBOXES, spotOf, personAt, districtAt, regionAt } from '../core/world.js';
 import { CAST } from '../core/story.js';
+import { nameOf } from '../core/names.js';
 import { h, sprite, spriteSrc } from './dom.js';
 import { howItGoes } from './text.js';
 import { elementTag, bar } from './parts.js';
@@ -481,7 +482,7 @@ export function laneScreen(ctx) {
     const health = game.teamHealth();
     return h('div', { class: 'teamlist' }, game.team().map((friend, i) => h('div', { class: `teamcard${health[i].hp <= 0 ? ' down' : ''}` },
       sprite(friend.species, friend.heirloom, 'flip'),
-      h('div', null, h('b', null, SPECIES[friend.species].name), bar(`hp${health[i].hp / health[i].max < 0.3 ? ' low' : ''}`, health[i].hp / health[i].max, `${health[i].hp} / ${health[i].max}`)))));
+      h('div', null, h('b', null, nameOf(friend)), bar(`hp${health[i].hp / health[i].max < 0.3 ? ' low' : ''}`, health[i].hp / health[i].max, `${health[i].hp} / ${health[i].max}`)))));
   };
 
   /** In through the door you are standing at: the screen dips to dark, and you are indoors. */

@@ -16,13 +16,13 @@ import { nextRandom, rollPick, clamp } from './util.js';
 // ---------------------------------------------------------------- fighters
 
 /** One Clutterkin as it stands in a fight. `side` is 'ally' or 'foe'. */
-export function makeFighter(side, slot, { species, level, hp, friendId = 0, heirloom = false }) {
+export function makeFighter(side, slot, { species, level, hp, friendId = 0, heirloom = false, name = '' }) {
   const kind = SPECIES[species];
   const maxHp = statAt(kind.hp, level);
   const huff = side === 'foe' && kind.huff > 0 ? kind.huff + (heirloom ? HEIRLOOM.huff : 0) : 0;
   return {
     key: `${side === 'ally' ? 'a' : 'f'}${slot}`, side, slot, species, friendId, heirloom: !!heirloom,
-    name: kind.name, element: kind.element, level, boss: !!kind.boss, turns: kind.turns || 1,
+    name: name || kind.name, element: kind.element, level, boss: !!kind.boss, turns: kind.turns || 1,
     maxHp, hp: hp === undefined ? maxHp : clamp(Math.round(hp), 0, maxHp),
     oomph: statAt(kind.oomph, level), grit: statAt(kind.grit, level), pep: statAt(kind.pep, level),
     moves: movesAt(species, level).map((id) => ({ id, wait: 0 })),

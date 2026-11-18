@@ -10,6 +10,7 @@ import { STRAYS } from './balance.js';
 import { insideOf, stepIn, routeIn, spotIn, onMat, besidePost } from './indoors.js';
 import { WORLD, POST, BENCHES, SIT, MAILBOXES, POST_REACH, stepWalk, routeTo, straighten, roomy, standing, canStand, spotNear, spotOf, districtOf, districtAt, postNear, personNear, personAt, benchNear, mailNear, TALK } from './world.js';
 import { goalOf, aimOf, storySoFar, hasNews, talk, takeCall } from './story.js';
+import { nameOf, giveName } from './names.js';
 
 export class Game {
   /**
@@ -240,7 +241,7 @@ export class Game {
       if (foe.heirloom) state.book[foe.species].heirloom = true;
     }
     const health = healthOf(state);
-    const allies = this.team().map((friend) => ({ species: friend.species, level: friend.level, hp: health[friend.id], friendId: friend.id, heirloom: friend.heirloom }));
+    const allies = this.team().map((friend) => ({ species: friend.species, level: friend.level, hp: health[friend.id], friendId: friend.id, heirloom: friend.heirloom, name: nameOf(friend) }));
     if (!allies.some((ally) => ally.hp > 0)) return null;
     this.wild = index;
     this.facing = -1;
@@ -350,6 +351,15 @@ export class Game {
   // ------------------------------------------------------------ friends
 
   friend(id) { return this.state.friends.find((friend) => friend.id === id) || null; }
+
+  /**
+   * Gives a friend a name of your own ('' takes it away again, and it goes by its kind's).
+   * Not in the middle of a fight. Returns what it is called now, or null if there is no such friend.
+   */
+  nameFriend(id, text) {
+    const friend = this.friend(id);
+    return !friend || this.place() === 'fight' ? null : giveName(friend, text);
+  }
   team() { return teamOf(this.state); }
 
   /**
@@ -430,7 +440,7 @@ export class Game {
       state.book[foe.species].met = true;
       if (foe.heirloom) state.book[foe.species].heirloom = true;
     }
-    const allies = this.team().map((friend) => ({ species: friend.species, level: friend.level, hp: visit.hp[friend.id] || 0, friendId: friend.id, heirloom: friend.heirloom }));
+    const allies = this.team().map((friend) => ({ species: friend.species, level: friend.level, hp: visit.hp[friend.id] || 0, friendId: friend.id, heirloom: friend.heirloom, name: nameOf(friend) }));
     this.facing = index;
     this.battle = createBattle(state, { allies, foes: group.foes, fx: this.fx });
     return this.battle;

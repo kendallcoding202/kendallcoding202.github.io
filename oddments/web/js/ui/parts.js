@@ -37,9 +37,11 @@ export function ringLine(element) {
 /**
  * A card about one Clutterkin: a friend (with its experience and all its
  * moves) or a restless one met in a fight (with its Huff and soft spot).
+ * `name` is what a friend is called, if you have given it a name of your own.
  */
-export function oddmentCard({ species, level, heirloom = false, xp = null, huff = null, actions = [] }) {
+export function oddmentCard({ species, level, heirloom = false, xp = null, huff = null, name = '', actions = [] }) {
   const kind = SPECIES[species];
+  const called = name || kind.name;
   const known = movesAt(species, level);
   const stats = ['hp', 'oomph', 'grit', 'pep'].map((key) => h('div', { class: 'stat' }, h('small', null, STATS[key].name), h('b', null, String(statAt(kind[key], level)))));
   const moves = kind.moves.map(([id, at]) => {
@@ -53,18 +55,17 @@ export function oddmentCard({ species, level, heirloom = false, xp = null, huff 
     h('div', { class: 'cardtop' },
       sprite(species, heirloom, kind.boss ? 'big' : ''),
       h('div', null,
-        h('div', { class: 'tags' }, elementTag(kind.element), heirloom ? heirloomTag() : null, kind.boss ? h('span', { class: 'bosstag' }, 'Boss') : null),
+        h('div', { class: 'tags' }, called === kind.name ? null : h('b', { class: 'kindname', data: { act: 'kind' } }, kind.name), elementTag(kind.element), heirloom ? heirloomTag() : null, kind.boss ? h('span', { class: 'bosstag' }, 'Boss') : null),
         h('p', { class: 'blurb' }, kind.blurb),
         h('small', null, ringLine(kind.element)))),
     // One of the three you set out with has its story here too.
-    aboutOf(species) ? h('p', { class: 'about', data: { act: 'about' } }, aboutOf(species).about) : null,
+    aboutOf(species) ? h('p', { class: 'about', data: { act: 'about' } }, aboutOf(species).about.split(kind.name).join(called)) : null,
     xp === null ? null : (level >= MAX_LEVEL ? h('small', null, 'As strong as it gets.') : bar('xp', xp / xpNeeded(level), `${xp} / ${xpNeeded(level)} to level ${level + 1}`)),
     h('div', { class: 'stats' }, stats),
     huff === null ? null : h('p', { class: 'note' }, kind.boss
       ? 'Too proud to reach. It will not come home, however kindly you ask.'
       : `In a Huff: ${huff} pip${huff === 1 ? '' : 's'}. Has a soft spot for ${ELEMENTS[softSpotOf(kind.element)].name}: a friend of that element at your side makes reaching out work better.`),
     h('div', { class: 'movelist' }, moves),
-    xp !== null && kind.grown ? h('small', { class: 'note' }, `Grows up at level ${kind.grown.at}. (Not in this slice.)`) : null,
   ];
-  return modal({ title: `${kind.name} · Lv ${level}`, cls: 'oddment', body, actions });
+  return modal({ title: `${called} · Lv ${level}`, cls: 'oddment', body, actions });
 }

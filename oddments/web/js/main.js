@@ -3,6 +3,7 @@ import { Game } from './core/game.js';
 import { newState, reviveState } from './core/state.js';
 import { playable } from './core/trial.js';
 import { putRight } from './core/story.js';
+import { nameOf, calledOf } from './core/names.js';
 import { SPECIES, ROOMS, MAX_LEVEL, roomOf, roomBuilt, moveOf, xpNeeded } from './core/balance.js';
 import { loadAssets } from './ui/assets.js';
 import { h, $, sprite } from './ui/dom.js';
@@ -135,6 +136,8 @@ function resultDialog(ctx, summary, foes) {
   const room = roomOf(summary.room);
   const lines = [];
   const name = (species) => SPECIES[species].name;
+  // Your own friend of a kind, by the name you gave it if you gave it one.
+  const mine = (species, before) => (calledOf(game.state, species) === name(species) ? `${before} ${name(species)}` : calledOf(game.state, species));
 
   // How it went, to the ear: the place calm, a fight won, or the walk home; then anyone new, and anyone grown.
   play(summary.cleared ? 'calm' : summary.won ? 'win' : 'lose');
@@ -157,10 +160,10 @@ function resultDialog(ctx, summary, foes) {
 
   for (const joined of summary.joined) {
     lines.push(h('div', { class: 'joined', data: { joined: joined.species } }, sprite(joined.species, joined.heirloom, 'flip'),
-      h('div', null, h('b', null, `${name(joined.species)} comes home with you!`), joined.heirloom ? heirloomTag() : null, h('small', null, 'It is resting at home. Put it on your team from Friends.'))));
+      h('div', null, h('b', null, `${name(joined.species)} comes home with you!`), joined.heirloom ? heirloomTag() : null, h('small', null, 'It is resting at home. Put it on your team from Friends; you can give it a name of your own there too.'))));
   }
-  for (const species of summary.visited) lines.push(h('p', { class: 'note' }, `The ${name(species)} goes off happy. Your own ${name(species)} learned from the visit.`));
-  for (const species of summary.heirlooms) lines.push(h('p', { class: 'note gold' }, `It left your ${name(species)} its Heirloom colours.`));
+  for (const species of summary.visited) lines.push(h('p', { class: 'note' }, `The ${name(species)} goes off happy. ${mine(species, 'Your own')} learned from the visit.`));
+  for (const species of summary.heirlooms) lines.push(h('p', { class: 'note gold' }, `It left ${mine(species, 'your')} its Heirloom colours.`));
 
   if (summary.xp > 0) {
     lines.push(h('p', { class: 'xp' }, `+${summary.xp} experience each`));
@@ -170,7 +173,7 @@ function resultDialog(ctx, summary, foes) {
       const up = gain.to > gain.from;
       return h('div', { class: `gain${up ? ' up' : ''}` }, sprite(gain.species, !!(friend && friend.heirloom), 'flip'),
         h('div', null,
-          h('div', { class: 'line' }, h('b', null, name(gain.species)),
+          h('div', { class: 'line' }, h('b', null, friend ? nameOf(friend) : name(gain.species)),
             h('small', { class: up ? 'lvup' : '' }, up ? `Level ${gain.from} → ${gain.to}${gain.team ? '' : ' (at home)'}` : `Level ${gain.to}`)),
           friend && friend.level < MAX_LEVEL ? bar('xp', friend.xp / xpNeeded(friend.level)) : null,
           gain.learned.map((id) => h('small', { class: 'learned' }, `Learned ${moveOf(id).name}`))));

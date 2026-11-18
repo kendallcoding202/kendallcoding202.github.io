@@ -6,6 +6,7 @@ import { SPECIES, roomOf } from '../core/balance.js';
 import { POST } from '../core/world.js';
 import { insideOf } from '../core/indoors.js';
 import { CAST, THREE } from '../core/story.js';
+import { nameOf, calledOf } from '../core/names.js';
 import { h, sprite, spriteSrc } from './dom.js';
 import { bar } from './parts.js';
 import { howItGoes } from './text.js';
@@ -248,12 +249,12 @@ export function insideScreen(ctx) {
     const health = game.teamHealth();
     return h('div', { class: 'teamlist' }, game.team().map((friend, i) => h('div', { class: `teamcard${health[i].hp <= 0 ? ' down' : ''}` },
       sprite(friend.species, friend.heirloom, 'flip'),
-      h('div', null, h('b', null, SPECIES[friend.species].name), bar(`hp${health[i].hp / health[i].max < 0.3 ? ' low' : ''}`, health[i].hp / health[i].max, `${health[i].hp} / ${health[i].max}`)))));
+      h('div', null, h('b', null, nameOf(friend)), bar(`hp${health[i].hp / health[i].max < 0.3 ? ' low' : ''}`, health[i].hp / health[i].max, `${health[i].hp} / ${health[i].max}`)))));
   };
 
   function act(spot) {
     if (spot.does === 'rest') {
-      if (game.rest()) { ctx.save(); play('rest'); toast(state.friends.some((friend) => friend.species === THREE[0].kind) ? `Everyone is rested. ${SPECIES[THREE[0].kind].name} slept on your feet.` : 'Everyone is rested.', { kind: 'good' }); } else toast('Everyone is rested already.');
+      if (game.rest()) { ctx.save(); play('rest'); toast(state.friends.some((friend) => friend.species === THREE[0].kind) ? `Everyone is rested. ${calledOf(state, THREE[0].kind)} slept on your feet.` : 'Everyone is rested.', { kind: 'good' }); } else toast('Everyone is rested already.');
       cardFor = undefined;
     } else if (spot.does === 'ring') {
       const goal = game.goal();

@@ -111,14 +111,18 @@ test('friends are rebuilt field by field, keeping nothing the game did not make'
   assert.ok(state.team.every((id) => state.friends.some((f) => f.id === id)));
 });
 
-test('the only text taken from a save is the house-sitter\'s name, cut to length', () => {
-  const state = load({ ...REAL, player: { name: `  <b>${'x'.repeat(5000)}`, look: '<script>' } });
+test('the only text taken from a save is the house-sitter\'s name and the names given to friends, each cut to length', () => {
+  const friends = REAL.friends.map((friend, i) => ({ ...friend, nick: [`<script>${'y'.repeat(5000)}`, 7, '  \n  ', ['Biscuit'], 'Biscuit'][i % 5] }));
+  const state = load({ ...REAL, friends, player: { name: `  <b>${'x'.repeat(5000)}`, look: '<script>' } });
   assert.equal(state.player.name.length, NAME_LENGTH);
+  assert.ok(REAL.friends.length >= 5, 'enough friends to try every kind of wrong name');
+  assert.deepEqual(state.friends.slice(0, 5).map((friend) => friend.nick), ['<script>yyyy', undefined, undefined, undefined, 'Biscuit'], 'a name is text, one line, cut to length; anything else is no name');
+  assert.ok(state.friends.every((friend) => friend.nick === undefined || (typeof friend.nick === 'string' && Array.from(friend.nick).length <= NAME_LENGTH)));
   assert.equal(state.player.look, LOOK_IDS[0], 'a look is one of the game\'s own or the first');
   assert.equal(load({ ...REAL, player: { name: '   ', look: 5 } }).player.name, 'Sitter');
   const strings = [];
   JSON.stringify(state, (key, value) => { if (typeof value === 'string') strings.push(value); return value; });
-  const known = new Set([...Object.keys(SPECIES), ...ROOMS.map((r) => r.id), ...LOOK_IDS, state.player.name]);
+  const known = new Set([...Object.keys(SPECIES), ...ROOMS.map((r) => r.id), ...LOOK_IDS, state.player.name, ...state.friends.map((friend) => friend.nick)]);
   assert.deepEqual(strings.filter((s) => !known.has(s)), []);
 });
 

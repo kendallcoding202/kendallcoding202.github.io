@@ -1,6 +1,7 @@
 // The screens at home: your friends and team, the scrapbook, and settings.
 import { BUILD } from '../platform/build.js';
 import { SPECIES, SPECIES_IDS, ELEMENTS, ELEMENT_IDS, TEAM_SIZE, LOOKS, NAME_LENGTH, VERSION, TITLE, HEIRLOOM, ROOMS, roomBuilt, xpNeeded, MAX_LEVEL } from '../core/balance.js';
+import { nameOf } from '../core/names.js';
 import { h, sprite } from './dom.js';
 import { modal, toast } from './modals.js';
 import { elementTag, heirloomTag, bar, oddmentCard } from './parts.js';
@@ -20,10 +21,12 @@ export function friendsScreen(ctx) {
     if (!on && team.length >= TEAM_SIZE) {
       for (const id of team) {
         const other = game.friend(id);
-        actions.push({ id: `swap-${id}`, label: `Swap with ${SPECIES[other.species].name}`, kind: 'plain', onClick: () => change(team.map((x) => (x === id ? friend.id : x))) });
+        actions.push({ id: `swap-${id}`, label: `Swap with ${nameOf(other)}`, kind: 'plain', onClick: () => change(team.map((x) => (x === id ? friend.id : x))) });
       }
     }
-    oddmentCard({ species: friend.species, level: friend.level, heirloom: friend.heirloom, xp: friend.xp, actions });
+    // A name of your own for it. (The dialog opens once this one has closed.)
+    actions.push({ id: 'name', label: friend.nick ? 'Change its name' : 'Give it a name', kind: 'plain', onClick: () => { setTimeout(() => nameDialog(ctx, friend, draw), 0); } });
+    oddmentCard({ species: friend.species, level: friend.level, heirloom: friend.heirloom, xp: friend.xp, name: nameOf(friend), actions });
   }
 
   function change(ids) {
@@ -36,7 +39,7 @@ export function friendsScreen(ctx) {
     const kind = SPECIES[friend.species];
     return h('button', { class: `friend${onTeam ? ' on' : ''}${friend.heirloom ? ' rare' : ''}`, data: { friend: String(friend.id), species: friend.species }, onclick: () => open(friend) },
       sprite(friend.species, friend.heirloom, 'flip'),
-      h('b', null, kind.name),
+      h('b', null, nameOf(friend)),
       h('span', { class: 'tags' }, elementTag(kind.element), h('small', null, `Lv ${friend.level}`)),
       friend.level >= MAX_LEVEL ? null : bar('xp', friend.xp / xpNeeded(friend.level)),
       friend.heirloom ? heirloomTag() : null);
@@ -139,7 +142,7 @@ export function settingsScreen(ctx) {
       h('small', null, `Fights ${stats.battles} · won ${stats.wins} · friends made ${stats.befriended} · Heirlooms ${stats.heirlooms}`)),
     h('div', { class: 'card' },
       h('p', null, 'No ads, no tracking, no accounts, no purchases. This game never uses the network: your save lives on this device only.'),
-      h('small', { data: { build: BUILD } }, `${TITLE} ${VERSION}${BUILD === 'dev' ? '' : `, build ${BUILD}`}. A playable slice: ${ROOMS.filter(roomBuilt).length} places of ${ROOMS.length}.`)),
+      h('small', { data: { build: BUILD } }, `${TITLE} ${VERSION}${BUILD === 'dev' ? '' : `, build ${BUILD}`}. ${ROOMS.filter(roomBuilt).length} places to calm, ${SPECIES_IDS.filter((id) => !SPECIES[id].boss).length} friends to make.`)),
     h('button', {
       class: 'btn danger', data: { act: 'reset' },
       onclick: () => modal({
@@ -148,6 +151,33 @@ export function settingsScreen(ctx) {
       }),
     }, 'Start over'));
   return { el };
+}
+
+/**
+ * What you call a friend. It answers to its kind's name; a name of your own is used everywhere
+ * instead, until you take it away again. `after` runs once it has changed.
+ */
+export function nameDialog(ctx, friend, after) {
+  const { game } = ctx;
+  const kind = SPECIES[friend.species];
+  const input = h('input', { type: 'text', maxLength: NAME_LENGTH, value: friend.nick || '', placeholder: kind.name, autocomplete: 'off', spellcheck: false, 'aria-label': `What you call your ${kind.name}`, data: { field: 'nick' } });
+  const set = (text) => {
+    const was = nameOf(friend);
+    const now = game.nameFriend(friend.id, text);
+    if (now === null) return;
+    ctx.save();
+    if (now !== was) toast(now === kind.name ? `${kind.name} again.` : `${now} it is.`, { kind: 'good' });
+    after();
+  };
+  return modal({
+    title: 'What do you call it?', cls: 'naming',
+    body: [
+      h('div', { class: 'namingtop' }, sprite(friend.species, friend.heirloom, 'flip'),
+        h('p', null, `Its kind is ${kind.name}, and it answers to that. It will answer to a name of your own just as gladly.`)),
+      h('label', null, h('small', null, `A name of your own (up to ${NAME_LENGTH} letters)`), input),
+    ],
+    actions: [...(friend.nick ? [{ id: 'own', label: `Just ${kind.name}`, kind: 'plain', onClick: () => set('') }] : []), { id: 'save', label: 'Done', onClick: () => set(input.value) }],
+  });
 }
 
 /** Name and look. `first` is the intro: no way out but Begin. */

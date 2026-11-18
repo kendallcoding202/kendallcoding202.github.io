@@ -10,6 +10,7 @@ import { settleWhere, spotNear } from './world.js';
 import { insideOf, settleIn } from './indoors.js';
 import { newStory, reviveStory } from './story.js';
 import { rollStrays, fairStrays } from './strays.js';
+import { giveName } from './names.js';
 import { WILDS } from './world.js';
 
 export function newState(now = Date.now(), seed = (now ^ 0x9e3779b9) | 0) {
@@ -83,13 +84,15 @@ function numberUniquely(records) {
 function reviveFriend(raw) {
   if (!isObj(raw) || !own(SPECIES, raw.species) || SPECIES[raw.species].boss) return null;
   const level = int(raw.level, 1, 1, MAX_LEVEL);
-  return {
+  const friend = {
     id: int(raw.id, 0, 0),
     species: raw.species,
     level,
     xp: level >= MAX_LEVEL ? 0 : int(raw.xp, 0, 0, xpNeeded(level) - 1),
     heirloom: raw.heirloom === true,
   };
+  giveName(friend, raw.nick); // a name of your own, if it was given one: tidied again on the way in
+  return friend;
 }
 
 function reviveVisit(raw, state) {

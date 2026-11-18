@@ -442,6 +442,31 @@ check(s.friends.length === 3 + joined.length, 'with every friend you had');
 section('Friends');
 await tab(page, 'friends');
 check((await page.$$('.grid.team .friend')).length === 3, 'the team of three is shown');
+{
+  // A name of your own for one of the three: given, used everywhere, and taken away again.
+  const kind = SPECIES.dustbunny.name;
+  await page.click('.grid.team .friend[data-species="dustbunny"]');
+  check((await modalTitle(page))?.startsWith(kind) && !(await page.$('.modal [data-act="kind"]')) && !(await S(page, () => document.querySelector('.modal.oddment').textContent.includes('Grows up'))), 'one of the three goes by its kind\'s name to begin with, and its card promises nothing that is not in the game');
+  await page.click('.modal [data-id="name"]');
+  await page.waitForSelector('.modal.naming input');
+  check(await S(page, (name) => { const m = document.querySelector('.modal.naming'); const input = m.querySelector('input'); const box = m.getBoundingClientRect(); return input.value === '' && input.placeholder === name && input.maxLength === 12 && !m.querySelector('[data-id="own"]') && box.top >= 0 && box.bottom <= innerHeight; }, kind), 'Give it a name asks what you call it, with room for twelve letters');
+  await page.fill('.modal.naming input', '  Biscuit ');
+  await snap(page, 'e2e-naming');
+  await page.click('.modal.naming [data-id="save"]');
+  await page.waitForSelector('.modal', { state: 'detached' });
+  check(await S(page, () => document.querySelector('.grid.team .friend[data-species="dustbunny"] b').textContent) === 'Biscuit', 'and it is Biscuit on the team from then on', await S(page, () => document.querySelector('.grid.team .friend[data-species="dustbunny"] b').textContent));
+  check((await state(page)).friends.find((f) => f.species === 'dustbunny').nick === 'Biscuit' && (await S(page, () => JSON.parse(localStorage.getItem('oddments.save')).friends.find((f) => f.species === 'dustbunny').nick)) === 'Biscuit', 'in the game and in the save');
+  await page.click('.grid.team .friend[data-species="dustbunny"]');
+  check((await modalTitle(page))?.startsWith('Biscuit ·') && (await S(page, () => document.querySelector('.modal [data-act="kind"]').textContent)) === kind, 'its card is headed Biscuit, and still says what kind it is');
+  check(await S(page, (name) => { const about = document.querySelector('.modal [data-act="about"]').textContent; return about.startsWith('Biscuit has lived under the spare bed') && !about.includes(name); }, kind), 'and its story is told with that name');
+  await snap(page, 'e2e-named');
+  await page.click('.modal [data-id="name"]');
+  await page.waitForSelector('.modal.naming [data-id="own"]');
+  check(await S(page, () => document.querySelector('.modal.naming input').value) === 'Biscuit', 'Change its name starts from the one it has');
+  await page.click('.modal.naming [data-id="own"]');
+  await page.waitForSelector('.modal', { state: 'detached' });
+  check(await S(page, () => document.querySelector('.grid.team .friend[data-species="dustbunny"] b').textContent) === kind && !('nick' in (await state(page)).friends.find((f) => f.species === 'dustbunny')), `and "Just ${kind}" takes it away again`);
+}
 check((await page.$$('.grid:not(.team) .friend')).length === joined.length, 'the new friend is resting at home');
 await page.click(`.grid:not(.team) .friend[data-species="${joined[0]}"]`);
 check((await modalTitle(page))?.startsWith(SPECIES[joined[0]].name), 'tapping a friend opens its card');

@@ -70,7 +70,7 @@ The four candidates used the Pawst Lives sprite style prompt word for word (`too
 | Count | What | Notes |
 | --- | --- | --- |
 | 1 | The house-sitter, final sprite | One of the four candidates, or a repaint at Pawst Lives proportions. A repaint would want its front and back views repainted to match. |
-| 40 | Grown-up forms | One per kind. Eighteen are named (below); twenty-two still to design. Bosses do not grow. |
+| 40 | Grown-up forms | Only if growing up is ever added: it is not in this version, on purpose (see `DESIGN.md`). One per kind. All forty have a name in the table of kinds; eighteen have a line for the painter (below). Bosses do not grow. |
 | 1 | Things for the world | One sheet of painted gateways. Every place is built and painted now, and the country between has its own sheet of things. It shares the lane's grass: a ground of its own (a meadow, a ploughed field) would be one more image each. |
 | 17 | Icons | Six elements, three Calls, three stats (Health exists), four tabs, the Heirloom mark. |
 | 1 | Title art | The app icon is painted. |
