@@ -1210,6 +1210,17 @@ export const RIVAL = {
   ],
 };
 
+// ---------------------------------------------------------------- ringleaders as friends
+//
+// A ringleader whose wish you have granted comes home (see core/wishes.js). As a friend it is one of
+// the team: it acts once a round, like anyone, and has this share (`hp`) of the Health it had when it
+// held a whole place against three. That leaves it sturdier than any ordinary kind (about 66 before
+// levels, where the sturdiest of those has 60) and less so than a Keepsake; its moves hit no harder
+// than anyone's. Being sturdier, only so many walk with you at once (`team`).
+export const CHIEF = { hp: 0.55, team: 1 };
+/** A kind's Health before levels, as a friend has it: a ringleader's is cut down to size. */
+export const friendHp = (species) => (SPECIES[species].boss ? Math.round(SPECIES[species].hp * CHIEF.hp) : SPECIES[species].hp);
+
 // ---------------------------------------------------------------- the house-sitter
 //
 // The human makes one Call a round. `every`: 1 = any round, 2 = every other.

@@ -7,7 +7,9 @@ import { settleUp } from './progress.js';
 import { rollEncounter, fairEncounter, enterRoom, leaveRoom, afterFight, canMeet, nextGroup, heldBy, heldIn, roomOpen, bridgeOpen, livelyPlace, placeCalm, staysCalm, calmedIn, teamOf, maxHpOf, rested, healthOf } from './rooms.js';
 import { rollStrays, fairStrays, fairGroup, keepsakeOut, straysAbout, strayNear, afterStrays, afterOpen } from './strays.js';
 import { TANSY, rivalAbout, rivalTeam, rivalSays, rivalAfter, rivalAside } from './rival.js';
-import { RIVAL } from './balance.js';
+import { RIVAL, SPECIES, ROSTER_MAX } from './balance.js';
+import { newFriend } from './progress.js';
+import { isChief, wishOf, chiefsOut, chiefLevel, chiefSeen, chiefJoins, chiefWon, chiefAsides, teamKeepsTo } from './wishes.js';
 import { STRAYS } from './balance.js';
 import { insideOf, stepIn, routeIn, spotIn, onMat, besidePost } from './indoors.js';
 import { WORLD, POST, BENCHES, SIT, MAILBOXES, POST_REACH, stepWalk, routeTo, straighten, roomy, standing, canStand, spotNear, spotOf, districtOf, districtAt, postNear, personNear, personAt, benchNear, mailNear, TALK } from './world.js';
@@ -27,7 +29,7 @@ export class Game {
     this.battle = null; // the fight in progress; never saved
     this.facing = -1; // which group that fight is with
     this.wild = -1; // or, if it is with strays out on the lane, which of them
-    this.bout = null; // or, if it is a bout with somebody who was waiting by the road, who and which: { who, meeting }
+    this.bout = null; // or, if it is a bout with somebody who was waiting out in the open, who: { who, meeting } for Tansy Brisk, { who, chief: true, level } for a ringleader
     this.parting = null; // whoever has just lost a bout and not yet said so: still standing there, though the save has them gone. Never saved
   }
 
@@ -264,13 +266,28 @@ export class Game {
 
   /**
    * Whoever is standing out in the open to be walked up to just now: [{ id, x, y, due }]. `due` is
-   * the bout they want (for Tansy Brisk, which of her meetings), or -1 if they only have a word for you.
+   * the bout they want (for Tansy Brisk, which of her meetings; for a ringleader, 0 once its wish is
+   * granted), or -1 if there is none to be had yet. A ringleader (`chief`) is taking the air outside
+   * its own place (`room`), which is calm.
    */
   waiting() {
-    const tansy = rivalAbout(this.state);
-    if (tansy) return [{ id: TANSY, ...tansy }];
+    const { state } = this;
+    const list = chiefsOut(state).map((one) => ({ id: one.species, chief: true, room: one.room, x: one.x, y: one.y, due: one.granted ? 0 : -1 }));
+    const tansy = rivalAbout(state);
+    if (tansy) list.push({ id: TANSY, ...tansy });
     // Having just lost, she stands where she was until she has had her say (`leaving`: there is nothing more to hear).
-    return this.parting ? [{ ...this.parting, due: -1, leaving: true }] : [];
+    else if (this.parting) list.push({ ...this.parting, due: -1, leaving: true });
+    return list;
+  }
+
+  /**
+   * A ringleader's wish and how it stands: { wish, how, have, need, granted, seen, level }, `seen` what
+   * is seen of it outside its place just now and `level` how strong it would be in its friendly bout.
+   * Null for anybody else.
+   */
+  wish(species) {
+    const wish = wishOf(this.state, species);
+    return wish ? { ...wish, seen: chiefSeen(this.state, species), level: chiefLevel(this.state, species) } : null;
   }
 
   /** Whoever was standing there to say they had lost has said it, and gone. */
@@ -285,7 +302,7 @@ export class Game {
   }
 
   /** What the one you are standing by has to say: lines of { who, text }. Hearing it changes nothing. Null from anywhere else. */
-  hail(id = this.waitingNear()) { return id && this.waitingNear() === id ? rivalSays(this.state) : null; }
+  hail(id = this.waitingNear()) { return id === TANSY && this.waitingNear() === id ? rivalSays(this.state) : null; }
 
   /** Whether the one you are standing by wants a bout: `startBout` would begin one. */
   boutDue(id = this.waitingNear()) {
@@ -301,8 +318,10 @@ export class Game {
     if (!this.boutDue(id)) return null;
     const { state } = this;
     this.parting = null;
+    const chief = isChief(id);
     const meeting = this.waiting().find((each) => each.id === id).due;
-    const foes = rivalTeam(meeting);
+    // A ringleader's friendly bout is it alone, as it ever was in its own place, at the strength it has kept up to.
+    const foes = chief ? [{ species: id, level: chiefLevel(state, id), heirloom: false }] : rivalTeam(meeting);
     const health = healthOf(state);
     const allies = this.team().map((friend) => ({ species: friend.species, level: friend.level, hp: health[friend.id], friendId: friend.id, heirloom: friend.heirloom, name: nameOf(friend), grown: !!friend.grown }));
     if (!allies.some((ally) => ally.hp > 0)) return null;
@@ -310,7 +329,7 @@ export class Game {
       state.book[foe.species].met = true;
       if (foe.grown) state.book[foe.species].grown = true;
     }
-    this.bout = { who: id, meeting };
+    this.bout = chief ? { who: id, chief: true, level: foes[0].level } : { who: id, meeting };
     this.wild = -1;
     this.facing = -1;
     this.battle = createBattle(state, { allies, foes, fx: this.fx });
@@ -330,8 +349,8 @@ export class Game {
     return false;
   }
 
-  /** Other things worth doing beside the goal and the Keepsake: [{ id, title, detail, art }]. (Tansy Brisk is waiting.) */
-  also() { return [rivalAside(this.state)].filter(Boolean); }
+  /** Other things worth doing beside the goal and the Keepsake: [{ id, title, detail, art }]. (Tansy Brisk is waiting; a ringleader has its wish.) */
+  also() { return [rivalAside(this.state), ...chiefAsides(this.state)].filter(Boolean); }
 
   /** Whether everyone is rested: not out on a visit, and not worn from meeting strays. */
   rested() { return rested(this.state); }
@@ -474,11 +493,21 @@ export class Game {
    * rested: nobody is swapped half way through a visit.
    */
   setTeam(ids) {
-    if (this.place() !== 'lane' || this.state.worn || !Array.isArray(ids)) return false;
-    const team = ids.filter((id, i) => this.friend(id) && ids.indexOf(id) === i);
-    if (team.length !== ids.length || team.length < 1 || team.length > TEAM_SIZE) return false;
-    this.state.team = team;
+    if (this.mayTeam(ids) !== true) return false;
+    this.state.team = [...ids];
     return true;
+  }
+
+  /**
+   * Whether these may be the team, and if not why: 'worn' (not rested), 'wrong' (not one to three
+   * friends, each once), or 'chiefs' (more ringleaders than walk with you at once). True if they may.
+   */
+  mayTeam(ids) {
+    if (this.place() !== 'lane' || this.state.worn) return 'worn';
+    if (!Array.isArray(ids)) return 'wrong';
+    const team = ids.filter((id, i) => this.friend(id) && ids.indexOf(id) === i);
+    if (team.length !== ids.length || team.length < 1 || team.length > TEAM_SIZE) return 'wrong';
+    return teamKeepsTo(this.state, team) ? true : 'chiefs';
   }
 
   // ------------------------------------------------------------ rooms
@@ -570,6 +599,25 @@ export class Game {
     const summary = settleUp(state, battle);
     const left = {};
     for (const unit of battle.units) if (unit.side === 'ally') left[unit.friendId] = unit.hp;
+    if (this.bout && this.bout.chief) {
+      // A ringleader's friendly bout: won, it comes home with you, at the strength it fought at;
+      // lost, you are carried home, and it will be there (a wish granted stays granted).
+      const { who, level } = this.bout;
+      const moved = afterOpen(state, summary.won, left);
+      let joined = false;
+      if (summary.won && !state.friends.some((friend) => friend.species === who) && state.friends.length < ROSTER_MAX) {
+        const friend = newFriend(state.nextFriendId++, who, level, false);
+        state.friends.push(friend);
+        summary.joined.push({ id: friend.id, species: who, level, heirloom: false, grown: false });
+        state.stats.befriended++;
+        joined = true;
+      }
+      if (moved.home) { state.where = { ...spotOf('home').door }; state.indoors = null; rollStrays(state); }
+      for (const friend of state.friends) if (friend.heirloom) state.book[friend.species].heirloom = true;
+      this.battle = null;
+      this.bout = null;
+      return { ...summary, room: null, stop: -1, cleared: false, home: moved.home, chief: { species: who, joined, text: summary.won ? chiefJoins(who) : chiefWon(who) } };
+    }
     if (this.bout) {
       // A bout with somebody who was waiting by the road: won, that meeting is done with, and everyone
       // takes a breather where they stand; lost, you are carried home, and they will be waiting still.

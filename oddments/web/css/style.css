@@ -342,6 +342,20 @@ small { color: var(--muted); font-size: 12px; }
 .friend.grown img, .page-tile.grown img { height: 78px; margin-top: -8px; }
 .cardtop img.grown { height: 124px; width: 128px; }
 .teamcard img { transition: none; }
+/* A ringleader that has come home stands with the team, bigger than anyone, in the room a grown friend takes. */
+.unit.chief .sprite { width: 124%; margin: 0 -12%; height: clamp(64px, 23vw, 118px); }
+.unit.ally.s2.chief .sprite { margin: 0 -24% 0 0; }
+.friend.chief img, .page-tile.friend[data-kind^="boss_"] img { height: 82px; margin-top: -10px; }
+.joined[data-joined^="boss_"] img { height: 74px; width: 84px; }
+/* A ringleader's wish: on its card outside its place, and on its page of the scrapbook. */
+.wish { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 12px; background: var(--card); border: 1.5px solid rgba(255,200,61,.4); }
+.wish b { font-size: 14.5px; color: #ffe9a8; } .wish small { font-size: 12.5px; line-height: 1.3; }
+/* (Its count is written on the bar itself, so the bar is tall enough to hold it.) */
+.wish .bar.xp { height: 14px; margin: 3px 0 0; overflow: hidden; } .wish .bar.xp span { position: absolute; inset: 0; margin: 0; line-height: 14px; color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,.7); }
+.wish.granted { border-color: var(--gold); background: radial-gradient(120% 140% at 0 50%, rgba(255,200,61,.2), rgba(255,200,61,.03) 70%), var(--card); }
+.placecard .seen { margin: 0; font-size: 13.5px; line-height: 1.32; font-style: italic; opacity: .95; }
+.personhead.chief img { height: 66px; width: 70px; }
+.stamp.wishing { color: #ffe9a8; font-weight: 700; } .stamp.wishing.granted { color: var(--gold); }
 .growntag { padding: 1px 8px; border-radius: 10px; background: linear-gradient(#ffe7a0, var(--gold)); color: #17132e; font-size: 11px; font-weight: 700; }
 .stamp.grownup { color: #7ee0a2; font-size: 11px; }
 /* The moment it happens: what it was, an arrow, and what it is now, with the news under them. */

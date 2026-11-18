@@ -14,7 +14,7 @@ import { toast, modalOpen } from './modals.js';
 import { converse } from './talk.js';
 import { play } from '../platform/sound.js';
 import { dustShift, throughDoor } from './shift.js';
-import { FONT, oval, paint, glow, label, elementMark, hoverOn, hoverLift } from './scenery.js';
+import { FONT, oval, paint, glow, label, elementMark, hoverOn, hoverLift, walkTall } from './scenery.js';
 import { paintRoom, roomArt, standingIn } from './roomart.js';
 
 const HOME_NAME = 'Home';
@@ -211,13 +211,13 @@ export function insideScreen(ctx) {
     room.posts.forEach((post, index) => row.push({ y: post.y + 22, draw: () => waiting(index) }));
     for (const body of stayers) {
       const fly = SPECIES[body.friend.species].fly;
-      row.push({ y: body.y, draw: () => stand(spriteSrc(artOf(body.friend), body.friend.heirloom), body.x, body.y, body.friend.grown ? 70 : 54, body.f > 0, false, fly ? hoverLift(body.hover) : Math.abs(Math.sin(body.step / (15 * big))) * 5) });
+      row.push({ y: body.y, draw: () => stand(spriteSrc(artOf(body.friend), body.friend.heirloom), body.x, body.y, walkTall(body.friend, SPECIES[body.friend.species].boss), body.f > 0, false, fly ? hoverLift(body.hover) : Math.abs(Math.sin(body.step / (15 * big))) * 5) });
     }
     const { x, y } = here();
     for (const pal of pals) {
       const fly = SPECIES[pal.friend.species].fly;
       const lift = fly ? hoverLift(pal.hover) : Math.abs(Math.sin(pal.step / (15 * big))) * 5 * spring;
-      row.push({ y: pal.y - 0.01, draw: () => stand(spriteSrc(artOf(pal.friend), pal.friend.heirloom), pal.x, pal.y, pal.friend.grown ? 70 : 54, pal.f > 0, false, lift) });
+      row.push({ y: pal.y - 0.01, draw: () => stand(spriteSrc(artOf(pal.friend), pal.friend.heirloom), pal.x, pal.y, walkTall(pal.friend, SPECIES[pal.friend.species].boss), pal.f > 0, false, lift) });
     }
     const hop = Math.abs(Math.sin(stride / (17 * big))) * 7 * spring;
     const view = aspect === 'side' ? state.player.look : `${state.player.look}_${aspect}`;

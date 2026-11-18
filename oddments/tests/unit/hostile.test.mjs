@@ -90,7 +90,7 @@ test('friends are rebuilt field by field, keeping nothing the game did not make'
       { id: 5, species: 'gnome', level: 4.9, xp: 12.7, heirloom: 'yes', name: '<img src=x onerror=alert(1)>', evil: { deep: true }, moves: ['lawnorder'] },
       { id: 5, species: 'sockeel', level: '9', xp: -4 }, // the same id again, a level that is text
       { id: 6, species: 'gnome', level: 30 }, // a second Gnome
-      { id: 7, species: 'boss_hydra', level: 5 }, // nobody's friend
+      { id: 7, species: 'boss_treadle', level: 5 }, // nobody's friend: a ringleader comes home only from a place that is calm (see wishes.test.mjs)
       { id: 8, species: 'toString', level: 5 },
       { id: 2.5, species: 'ratscal', level: 2, xp: 1e12, heirloom: true },
       null, 7, 'dustbunny',

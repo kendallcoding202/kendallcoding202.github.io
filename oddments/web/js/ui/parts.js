@@ -1,5 +1,5 @@
 // Small pieces of screen used in more than one place.
-import { ELEMENTS, SPECIES, STATS, MAX_LEVEL, moveOf, softSpotOf, statAt, xpNeeded, movesAt } from '../core/balance.js';
+import { ELEMENTS, SPECIES, STATS, MAX_LEVEL, moveOf, softSpotOf, statAt, xpNeeded, movesAt, friendHp } from '../core/balance.js';
 import { aboutOf } from '../core/story.js';
 import { h, sprite } from './dom.js';
 import { modal } from './modals.js';
@@ -43,14 +43,17 @@ export function ringLine(element) {
  * `name` is what a friend is called, if you have given it a name of your own.
  * `grown` is true for a friend that has grown up: its grown form's picture, name and strength.
  * `owner` is whose it is, for one met in a bout that is somebody's own: it cannot be reached.
+ * `extra` is anything more to say about it, put before its moves.
  */
-export function oddmentCard({ species, level, heirloom = false, xp = null, huff = null, name = '', grown = false, owner = '', actions = [] }) {
+export function oddmentCard({ species, level, heirloom = false, xp = null, huff = null, name = '', grown = false, owner = '', extra = [], actions = [] }) {
   const kind = SPECIES[species];
   const big = !!grown && !!kind.grown;
   const kindName = big ? kind.grown.name : kind.name;
   const called = name || kindName;
   const known = movesAt(species, level);
-  const stats = ['hp', 'oomph', 'grit', 'pep'].map((key) => h('div', { class: 'stat', data: { stat: key } }, h('small', null, STATS[key].name), h('b', null, String(statAt(kind[key], level, big))), h('i', null, STATS[key].hint)));
+  // (A ringleader that is your friend has a friend's Health, not what it had holding a whole place.)
+  const home = xp !== null && !!kind.boss;
+  const stats = ['hp', 'oomph', 'grit', 'pep'].map((key) => h('div', { class: 'stat', data: { stat: key } }, h('small', null, STATS[key].name), h('b', null, String(statAt(key === 'hp' && home ? friendHp(species) : kind[key], level, big))), h('i', null, STATS[key].hint)));
   const moves = kind.moves.map(([id, at]) => {
     const move = moveOf(id);
     const learned = known.includes(id);
@@ -62,7 +65,7 @@ export function oddmentCard({ species, level, heirloom = false, xp = null, huff 
     h('div', { class: 'cardtop' },
       sprite(big ? `${species}_grown` : species, heirloom, kind.boss ? 'big' : big ? 'grown' : ''),
       h('div', null,
-        h('div', { class: 'tags' }, called === kindName ? null : h('b', { class: 'kindname', data: { act: 'kind' } }, kindName), elementTag(kind.element), big ? h('span', { class: 'growntag' }, 'Grown up') : null, heirloom ? heirloomTag() : null, kind.boss ? h('span', { class: 'bosstag' }, 'Boss') : null),
+        h('div', { class: 'tags' }, called === kindName ? null : h('b', { class: 'kindname', data: { act: 'kind' } }, kindName), elementTag(kind.element), big ? h('span', { class: 'growntag' }, 'Grown up') : null, heirloom ? heirloomTag() : null, kind.boss ? h('span', { class: 'bosstag' }, home ? 'Ringleader' : 'Boss') : null),
         h('p', { class: 'blurb' }, kind.blurb),
         h('small', null, ringLine(kind.element)))),
     // One of the three you set out with has its story here too.
@@ -72,6 +75,9 @@ export function oddmentCard({ species, level, heirloom = false, xp = null, huff 
     huff === null ? null : h('p', { class: 'note', data: owner ? { act: 'owned' } : {} }, owner ? `${owner}'s own. It is not lost and in no Huff, so there is nobody here to Reach out to.` : kind.boss
       ? 'Too proud to reach. It will not come home, however kindly you ask.'
       : `In a Huff: ${huff} pip${huff === 1 ? '' : 's'}. Has a soft spot for ${ELEMENTS[softSpotOf(kind.element)].name}: a friend of that element at your side makes reaching out work better.`),
+    // A ringleader that has come home: what that means.
+    home ? h('p', { class: 'note', data: { act: 'chief' } }, 'A ringleader, come home: one turn a round now, like anyone, and sturdier than most. So only one ringleader walks with you at a time. Ringleaders do not grow up.') : null,
+    ...extra,
     h('div', { class: 'movelist' }, moves),
     // A Keepsake: there is one of it, and it stays as it is.
     kind.keepsake ? h('small', { class: 'note', data: { act: 'keepsake' } }, 'A Keepsake: there is only one, anywhere. It does not grow up. It is what it is.') : null,

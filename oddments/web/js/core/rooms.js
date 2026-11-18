@@ -5,7 +5,7 @@
 // calmed (`calmed`, a bit for each stop), through resting and through being
 // carried home, so you never calm the same group twice to get at its
 // ringleader. Calm the ringleader and the whole place is calm for good.
-import { SPECIES, ROOMS, HEIRLOOM, VISITORS, WANDERERS, LIVELY, BREATHER, TEAM_SIZE, roomOf, roomBuilt, statAt, grownOdds } from './balance.js';
+import { SPECIES, ROOMS, HEIRLOOM, VISITORS, WANDERERS, LIVELY, BREATHER, TEAM_SIZE, roomOf, roomBuilt, statAt, grownOdds, friendHp } from './balance.js';
 import { nextRandom, rollInt, rollPick, own } from './util.js';
 import { BARRICADE, BRIDGE, districtOf, districtAt } from './world.js';
 
@@ -71,7 +71,7 @@ export function rollEncounter(dice, room, stop, calm = false, lively = false) {
   return company.length > 1 ? [company[0], boss, ...company.slice(1)] : [boss, ...company];
 }
 
-export const maxHpOf = (friend) => statAt(SPECIES[friend.species].hp, friend.level, friend.grown);
+export const maxHpOf = (friend) => statAt(friendHp(friend.species), friend.level, friend.grown);
 export const teamOf = (state) => state.team.map((id) => state.friends.find((friend) => friend.id === id)).filter(Boolean);
 
 /**

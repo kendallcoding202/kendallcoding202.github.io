@@ -1,7 +1,7 @@
 // The save file: its shape, a fresh one, and repair of old or damaged ones.
 import {
   SAVE_VERSION, SPECIES, SPECIES_IDS, START_TEAM, ROOM_IDS, TEAM_SIZE, ROSTER_MAX, MAX_LEVEL, NAME_LENGTH, DEFAULT_NAME,
-  LOOK_IDS, lookOf, xpNeeded, roomOf, roomBuilt, WANDERERS, STRAYS,
+  LOOK_IDS, lookOf, xpNeeded, roomOf, roomBuilt, WANDERERS, STRAYS, CHIEF,
 } from './balance.js';
 import { newFriend } from './progress.js';
 import { roomOpen, bridgeOpen, maxHpOf, rollEncounter, fairEncounter, heldBy, heldIn, placeCalm, someone, staysCalm, calmedIn, wanderersMost } from './rooms.js';
@@ -12,6 +12,7 @@ import { newStory, reviveStory } from './story.js';
 import { rollStrays, fairStrays, fairKeepsake, KEEPSAKES } from './strays.js';
 import { giveName, tidyName } from './names.js';
 import { rivalMost } from './rival.js';
+import { isChief, chiefMayJoin, chiefsIn } from './wishes.js';
 import { WILDS } from './world.js';
 
 export function newState(now = Date.now(), seed = (now ^ 0x9e3779b9) | 0) {
@@ -81,16 +82,21 @@ function numberUniquely(records) {
   return highest + 1;
 }
 
-/** One friend rebuilt from a saved one, or null if it is not one. Bosses are nobody's friend. */
-function reviveFriend(raw) {
-  if (!isObj(raw) || !own(SPECIES, raw.species) || SPECIES[raw.species].boss) return null;
+/**
+ * One friend rebuilt from a saved one, or null if it is not one. A ringleader is a friend only if its
+ * own place is calm: it came home from there, after its wish (see wishes.js). It keeps no rare colours.
+ */
+function reviveFriend(raw, state) {
+  if (!isObj(raw) || !own(SPECIES, raw.species)) return null;
+  const chief = isChief(raw.species);
+  if (chief && !chiefMayJoin(state, raw.species)) return null;
   const level = int(raw.level, 1, 1, MAX_LEVEL);
   const friend = {
     id: int(raw.id, 0, 0),
     species: raw.species,
     level,
     xp: level >= MAX_LEVEL ? 0 : int(raw.xp, 0, 0, xpNeeded(level) - 1),
-    heirloom: raw.heirloom === true,
+    heirloom: raw.heirloom === true && !chief,
   };
   // Grown up: only a kind that grows. (At any level: one that was grown when it came home is grown from the start.)
   if (raw.grown === true && SPECIES[raw.species].grown) friend.grown = true;
@@ -163,23 +169,7 @@ export function reviveState(saved, now = Date.now()) {
   const player = isObj(saved.player) ? saved.player : {};
   state.player = { name: tidyName(player.name) || DEFAULT_NAME, look: lookOf(player.look) };
 
-  // Friends: one of each kind, the first kept. A save with none starts with the usual three.
-  const kinds = new Set();
-  const friends = saved.friends.slice(0, 1000).map(reviveFriend)
-    .filter((friend) => friend && !kinds.has(friend.species) && kinds.add(friend.species))
-    .slice(0, ROSTER_MAX);
-  if (friends.length) state.friends = friends;
-  state.nextFriendId = Math.max(int(saved.nextFriendId, 1, 1), numberUniquely(state.friends));
-
-  // The team: friends that exist, each once, topped up from the rest so nobody sets out short-handed.
-  const ids = state.friends.map((friend) => friend.id);
-  const team = [];
-  for (const id of Array.isArray(saved.team) ? saved.team.slice(0, 16) : []) {
-    if (ids.includes(id) && !team.includes(id) && team.length < TEAM_SIZE) team.push(id);
-  }
-  for (const id of ids) if (team.length < TEAM_SIZE && !team.includes(id)) team.push(id);
-  state.team = team;
-
+  // (The places first: whether a ringleader can be a friend depends on whether its place is calm.)
   const rooms = isObj(saved.rooms) ? saved.rooms : {};
   for (const id of ROOM_IDS) {
     const raw = isObj(rooms[id]) ? rooms[id] : {};
@@ -192,6 +182,25 @@ export function reviveState(saved, now = Date.now()) {
     const calmed = clears > 0 ? (others << 1) | 1 : Number.isInteger(raw.calmed) ? raw.calmed & others : (1 << int(raw.best, 0, 0, Math.max(0, stops - 1))) - 1;
     state.rooms[id] = { visits: int(raw.visits, 0), clears, losses: int(raw.losses, 0), calmed };
   }
+  // Friends: one of each kind, the first kept. A save with none starts with the usual three.
+  const kinds = new Set();
+  const friends = saved.friends.slice(0, 1000).map((raw) => reviveFriend(raw, state))
+    .filter((friend) => friend && !kinds.has(friend.species) && kinds.add(friend.species))
+    .slice(0, ROSTER_MAX);
+  if (friends.length) state.friends = friends;
+  state.nextFriendId = Math.max(int(saved.nextFriendId, 1, 1), numberUniquely(state.friends));
+
+  // The team: friends that exist, each once, topped up from the rest so nobody sets out short-handed.
+  const ids = state.friends.map((friend) => friend.id);
+  const team = [];
+  // (Only so many ringleaders walk with you at once: one more than that is left at home.)
+  const fits = (id) => chiefsIn(state, [...team, id]) <= CHIEF.team;
+  for (const id of Array.isArray(saved.team) ? saved.team.slice(0, 16) : []) {
+    if (ids.includes(id) && !team.includes(id) && team.length < TEAM_SIZE && fits(id)) team.push(id);
+  }
+  for (const id of ids) if (team.length < TEAM_SIZE && !team.includes(id) && fits(id)) team.push(id);
+  state.team = team;
+
   // The world was laid out afresh in version 2: a save from before it wakes up rested, at home.
   const mapped = saved.v >= 2;
   state.visit = mapped ? reviveVisit(saved.visit, state) : null;

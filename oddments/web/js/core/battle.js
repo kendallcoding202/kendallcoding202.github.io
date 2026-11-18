@@ -9,7 +9,7 @@
 // make one Call, during any friend's turn, without using that turn up.
 import {
   SPECIES, CALLS, CALL_IDS, REACH, HEIRLOOM, BRACE, WOBBLE, MAX_ROUNDS, TEAM_SIZE,
-  statAt, movesAt, moveOf, elementEdge, elementMult, softSpotOf,
+  statAt, movesAt, moveOf, elementEdge, elementMult, softSpotOf, friendHp,
 } from './balance.js';
 import { nextRandom, rollPick, clamp } from './util.js';
 
@@ -19,13 +19,15 @@ import { nextRandom, rollPick, clamp } from './util.js';
 export function makeFighter(side, slot, { species, level, hp, friendId = 0, heirloom = false, name = '', grown = false, owned = false }) {
   const kind = SPECIES[species];
   const big = !!grown && !!kind.grown; // a friend that has grown up: stronger, and under its grown form's name
-  const maxHp = statAt(kind.hp, level, big);
+  // On your side a ringleader is one of the team: a friend's Health, one turn a round, and no more room than anyone (`chief`).
+  const mine = side === 'ally';
+  const maxHp = statAt(mine ? friendHp(species) : kind.hp, level, big);
   // One that is somebody's own (`owned`: the rival's three) is not lost and in no Huff: there is nobody to reach.
   const theirs = side === 'foe' && !!owned;
   const huff = side === 'foe' && kind.huff > 0 && !theirs ? kind.huff + (heirloom ? HEIRLOOM.huff : 0) : 0;
   return {
     key: `${side === 'ally' ? 'a' : 'f'}${slot}`, side, slot, species, friendId, heirloom: !!heirloom, grown: big, owned: theirs,
-    name: name || (big ? kind.grown.name : kind.name), element: kind.element, level, boss: !!kind.boss, turns: kind.turns || 1,
+    name: name || (big ? kind.grown.name : kind.name), element: kind.element, level, boss: !mine && !!kind.boss, chief: mine && !!kind.boss, turns: mine ? 1 : kind.turns || 1,
     maxHp, hp: hp === undefined ? maxHp : clamp(Math.round(hp), 0, maxHp),
     oomph: statAt(kind.oomph, level, big), grit: statAt(kind.grit, level, big), pep: statAt(kind.pep, level, big),
     moves: movesAt(species, level).map((id) => ({ id, wait: 0 })),

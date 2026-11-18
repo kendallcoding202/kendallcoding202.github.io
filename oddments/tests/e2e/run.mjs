@@ -581,6 +581,7 @@ while (!cleared && visits < 6) {
       await page.waitForTimeout(900);
       const handed = await S(page, () => { const el = document.querySelector('.modal.result .keywon'); const img = el && el.querySelector('img'); return el && { key: el.dataset.key, name: el.querySelector('b').textContent, line: el.querySelector('small').textContent, art: img.src.split('/').slice(-2).join('/'), loaded: img.naturalWidth > 0, tall: Math.round(img.getBoundingClientRect().height) }; });
       check(!!handed && handed.key === 'garden' && handed.name === 'The Gate Key' && handed.line.includes('Old Summerlong') && handed.art === 'keys/garden.webp' && handed.loaded && handed.tall >= 60, 'with the garden calm, Old Summerlong hands over its key: the Gate Key, with its picture', JSON.stringify(handed));
+      check(await S(page, () => { const el = document.querySelector('.modal.result [data-act="wish"]'); return !!el && el.textContent.includes('Old Summerlong is calm now') && el.textContent.includes('with a wish'); }), 'and the news says it will be outside from now on, with a wish');
       await snap(page, 'e2e-cleared');
     }
     await page.click('[data-id="next"]');
@@ -1755,7 +1756,7 @@ section('The rival');
     s.seen.strays = true; s.seen.howto = true; s.story.ines = 2; s.strays = [];
     s.rooms.garden.clears = 1; s.rooms.garden.calmed = 31;
     for (const friend of s.friends) { friend.level = 8; friend.grown = true; }
-    const one = o.game.waiting()[0];
+    const one = o.game.waiting().find((each) => each.id === 'tansy'); // (the garden's ringleader is out of doors too: see the next section)
     s.where = { x: one.x - 200, y: one.y + 130 }; o.ctx.show('lane');
     return one;
   });
@@ -1824,7 +1825,7 @@ section('The rival');
   check(await R(() => document.querySelector('.modal.talk .talkwords').textContent.includes('Unit Two, stop wagging') && window.oddments.game.waiting().some((one) => one.id === 'tansy' && one.leaving)), 'back in the lane she has something to say about it, still standing where she was');
   check((await hearOut(rival)) === 2, 'two lines');
   let rs = await state(rival);
-  check(rs.story.rival === 1 && rs.friends.length === friends && await R(() => window.oddments.game.waiting().length === 0 && window.oddments.game.also().length === 0), 'and then she is gone down the road: one to you, nobody of hers came home with you');
+  check(rs.story.rival === 1 && rs.friends.length === friends && await R(() => !window.oddments.game.waiting().some((one) => one.id === 'tansy') && !window.oddments.game.also().some((one) => one.id === 'rival')), 'and then she is gone down the road: one to you, nobody of hers came home with you');
   check(rs.book.coothug.met && rs.book.soapslug.met && rs.book.ironweasel.met, 'her three are in the scrapbook as met');
   check(await R(() => window.oddments.game.journal().some((line) => line.includes('got the better of her once'))), 'the story so far says so');
   // It is kept.
@@ -1841,7 +1842,7 @@ section('The rival');
     o.game.standByWaiting('tansy'); o.ctx.show('lane');
   });
   await rival.waitForSelector('.placecard[data-person="tansy"]:not([hidden])');
-  check(await R(() => window.oddments.game.waiting()[0].due === 1 && window.oddments.game.also()[0].title === 'Tansy Brisk is waiting'), 'with the pantry calm she is waiting again, on Bramble Way');
+  check(await R(() => window.oddments.game.waiting().find((one) => one.id === 'tansy').due === 1 && window.oddments.game.also().find((one) => one.id === 'rival').title === 'Tansy Brisk is waiting'), 'with the pantry calm she is waiting again, on Bramble Way');
   await rival.click('.placecard [data-act="talk"]');
   await hearOut(rival);
   await rival.click('.modal.askbout [data-id="bout"]');
@@ -1854,7 +1855,7 @@ section('The rival');
   await rival.click('[data-id="next"]');
   await rival.waitForTimeout(300);
   rs = await state(rival);
-  check((await screen(rival)) === 'lane' && rs.story.rival === 1 && !(await rival.$('.modal.talk')) && await R(() => window.oddments.game.near() === 'home' && window.oddments.game.waiting()[0].due === 1), 'you are carried home, and she is waiting where she was');
+  check((await screen(rival)) === 'lane' && rs.story.rival === 1 && !(await rival.$('.modal.talk')) && await R(() => window.oddments.game.near() === 'home' && window.oddments.game.waiting().find((one) => one.id === 'tansy').due === 1), 'you are carried home, and she is waiting where she was');
   // When all five are won she stays on Bobbin Row, and only has a word for you.
   await R(() => {
     const o = window.oddments; const s = o.game.state;
@@ -1869,6 +1870,132 @@ section('The rival');
   check((await hearOut(rival)) === 1 && !(await rival.$('.modal.askbout')) && (await screen(rival)) === 'lane', 'only a word');
   await snap(rival, 'e2e-rival-after');
   await rival.close();
+}
+
+section('Ringleaders with wishes');
+{
+  const wishes = await newPage();
+  await wishes.goto(`${base}?debug&fast&reset&seed=7`);
+  await ready(wishes);
+  await begin(wishes);
+  const W = (fn, arg) => S(wishes, fn, arg);
+  check(await W(() => window.oddments.game.waiting().length === 0), 'no ringleader is out of doors while its place is restless');
+  // The garden calm: Old Summerlong is outside it, with a wish and no bout to be had yet.
+  const out = await W(() => {
+    const o = window.oddments; const s = o.game.state;
+    s.seen.strays = true; s.seen.howto = true; s.seen.waiting = true; s.story.ines = 2; s.strays = [];
+    s.rooms.garden.clears = 1; s.rooms.garden.calmed = 31; s.book.boss_hydra.met = true;
+    for (const friend of s.friends) friend.level = 9;
+    const one = o.game.waiting().find((each) => each.chief);
+    s.where = { x: one.x + 170, y: one.y + 140 }; o.ctx.show('lane');
+    return one;
+  });
+  check(!!out && out.id === 'boss_hydra' && out.due === -1 && out.room === 'garden', 'with the garden calm, Old Summerlong is taking the air outside it');
+  await wishes.waitForTimeout(600);
+  await snap(wishes, 'e2e-wish-out');
+  const there = await W(() => window.oddments.lane.screenOf('waiting:boss_hydra'));
+  await wishes.touchscreen.tap(there.x, there.y - 14);
+  await wishes.waitForSelector('.placecard[data-person="boss_hydra"]:not([hidden])', { timeout: 15000 });
+  await wishes.waitForTimeout(300);
+  const kinds = await W(() => window.oddments.game.wish('boss_hydra').need);
+  check(await W((need) => {
+    const card = document.querySelector('.placecard');
+    return card.textContent.includes('Old Summerlong') && card.textContent.includes('ringleader of The Garden Gate, calm now') && card.querySelector('[data-act="seen"]').textContent.includes('watering the verge')
+      && card.querySelector('[data-act="wish"]').textContent.includes('Wish: Company in the garden') && card.querySelector('[data-act="wish"]').textContent.includes(`0 of ${need}`) && !card.querySelector('[data-act="bout"]') && !card.textContent.includes('null');
+  }, kinds), 'walk up to it: its card says what is seen of it, what it wishes for and how far along that is, and offers no bout yet');
+  check((await screen(wishes)) === 'lane' && await W(() => window.oddments.game.battle === null), 'and nothing starts');
+  await snap(wishes, 'e2e-wish-card');
+  // Its page of the scrapbook says the same.
+  await tab(wishes, 'book');
+  check(await W(() => { const tile = document.querySelector('.page-tile[data-kind="boss_hydra"]'); return !!tile && tile.querySelector('.stamp.wishing').textContent === '?' && document.querySelector('[data-act="counts"]').textContent.includes('Ringleaders home 0 of 12'); }), 'the scrapbook marks it as having a wish, and counts the ringleaders who have come home: none of twelve');
+  await wishes.click('.page-tile[data-kind="boss_hydra"]');
+  await wishes.waitForSelector('.modal.oddment');
+  check(await W(() => { const wish = document.querySelector('.modal.oddment [data-act="wish"]'); return !!wish && wish.textContent.includes('Company in the garden') && wish.textContent.includes('Make a friend of every kind that lives in the garden') && wish.textContent.includes('a ringleader for a friend'); }), 'and its page says what would grant it, and what follows');
+  await wishes.click('.modal.oddment .x');
+  await tab(wishes, 'lane');
+  // Grant it: a friend of every kind that lives in the garden.
+  await W(async () => {
+    const { ROOMS } = await import('./js/core/balance.js');
+    const { newFriend } = await import('./js/core/progress.js');
+    const o = window.oddments; const s = o.game.state;
+    for (const stop of ROOMS[0].path) for (const [kind] of stop.pool) if (!s.friends.some((f) => f.species === kind)) { s.friends.push(newFriend(s.nextFriendId++, kind, 5)); s.book[kind].met = true; }
+  });
+  await wishes.waitForSelector('.placecard [data-act="bout"]');
+  check(await W(() => { const card = document.querySelector('.placecard'); return card.querySelector('[data-act="wish"]').textContent === 'Wish granted: Company in the garden' && card.querySelector('[data-act="seen"]').textContent.includes('counts your friends from the garden') && card.querySelector('[data-act="bout"]').textContent === 'A friendly bout'; }), 'wish granted: its card says so, and offers a friendly bout');
+  await wishes.click('.goalchip');
+  await wishes.waitForSelector('.modal.journal');
+  check(await W(() => { const el = document.querySelector('.modal.journal .now.aside[data-also="chief:boss_hydra"]'); return !!el && el.textContent.includes('Old Summerlong\'s wish is granted') && el.textContent.includes('outside The Garden Gate') && el.querySelector('img').src.includes('boss_hydra'); }), 'the journal says so too, under "Also"');
+  await wishes.click('.modal.journal [data-id="map"]');
+  await wishes.waitForSelector('.modal.map canvas');
+  check(await W(() => document.querySelector('.modal.map').dataset.waiting.split(',').includes('boss_hydra')), 'and the map marks it');
+  await wishes.click('.modal.map [data-id="ok"]');
+  await wishes.click('.placecard [data-act="bout"]');
+  await wishes.waitForSelector('.modal.askbout');
+  check(await W(() => { const m = document.querySelector('.modal.askbout'); return m.textContent.includes('A friendly bout with Old Summerlong?') && m.textContent.includes('Too proud to reach') && m.textContent.includes('Old Summerlong comes home with you') && m.querySelector('[data-id="bout"]').textContent === 'A friendly bout'; }), 'asked first: it alone against your three, and what winning means');
+  const friendsBefore = (await state(wishes)).friends.length;
+  await wishes.click('.modal.askbout [data-id="bout"]');
+  await wishes.waitForSelector('#fight', { timeout: 15000 });
+  await idle(wishes);
+  check(await W(() => document.querySelector('.roundpill').textContent.includes('a friendly bout') && document.querySelectorAll('.unit.foe').length === 1 && !!document.querySelector('.unit.foe.boss') && !document.querySelector('.calls .caller.theirs')), 'the bout: Old Summerlong alone, as it ever was, and nobody standing behind it');
+  check(await W(() => { const reach = document.querySelector('[data-call="reach"]'); return reach.disabled && reach.textContent.includes('Nobody to reach'); }), 'still too proud to reach');
+  await snap(wishes, 'e2e-wish-bout');
+  await botFight(wishes, {});
+  const news = await W(() => document.querySelector('.modal.result .body').textContent);
+  check((await modalTitle(wishes)) === 'Won' && news.includes('Old Summerlong has had a wish granted, and a good bout') && news.includes('coils its hose') && news.includes('Old Summerlong comes home with you!') && news.includes('only one ringleader walks with you at a time'), 'won: it comes home with you, and the news says how it is with ringleaders', news.slice(0, 140));
+  await snap(wishes, 'e2e-wish-won');
+  await wishes.click('[data-id="next"]');
+  await wishes.waitForSelector('#lane');
+  let ws = await state(wishes);
+  const hydra = ws.friends.find((friend) => friend.species === 'boss_hydra');
+  check(!!hydra && ws.friends.length === friendsBefore + 1 && !ws.team.includes(hydra.id) && await W(() => !window.oddments.game.waiting().some((one) => one.id === 'boss_hydra')), 'it is among your friends, at home, and not outside the garden any more');
+  // Rested, it can walk with you: from Friends.
+  await W(() => { const o = window.oddments; o.game.goHome(); });
+  await tab(wishes, 'friends');
+  await wishes.click('.friend.chief[data-species="boss_hydra"]');
+  await wishes.waitForSelector('.modal.oddment');
+  check(await W(() => { const m = document.querySelector('.modal.oddment'); return m.querySelector('.bosstag').textContent === 'Ringleader' && m.querySelector('[data-act="chief"]').textContent.includes('only one ringleader walks with you at a time') && !m.querySelector('[data-act="onechief"]') && m.querySelectorAll('[data-id^="swap-"]').length === 3; }), 'its card says it is a ringleader come home, and offers it a place on the team');
+  const health = await W(async () => { const { statAt, friendHp, SPECIES } = await import('./js/core/balance.js'); const f = window.oddments.game.state.friends.find((one) => one.species === 'boss_hydra'); return { shown: document.querySelector('.modal.oddment [data-stat="hp"] b').textContent, friend: String(statAt(friendHp('boss_hydra'), f.level)), boss: String(statAt(SPECIES.boss_hydra.hp, f.level)) }; });
+  check(health.shown === health.friend && health.shown !== health.boss, `with a friend's Health, not what it had holding the garden (${health.shown}, where it had ${health.boss})`);
+  await wishes.click('.modal.oddment [data-id^="swap-"]');
+  await wishes.waitForTimeout(200);
+  ws = await state(wishes);
+  check(ws.team.includes(hydra.id) && ws.team.length === 3 && await W(() => !!document.querySelector('.grid.team .friend.chief[data-species="boss_hydra"]')), 'and it walks with you');
+  await snap(wishes, 'e2e-wish-team');
+  // A second ringleader at home: only one walks with you at a time.
+  await W(async () => {
+    const { newFriend } = await import('./js/core/progress.js');
+    const o = window.oddments; const s = o.game.state;
+    s.rooms.alley.clears = 1; s.rooms.alley.calmed = 31; s.book.boss_baron.met = true;
+    s.friends.push(newFriend(s.nextFriendId++, 'boss_baron', 9));
+    o.ctx.show('friends');
+  });
+  await wishes.click('.friend.chief[data-species="boss_baron"]');
+  await wishes.waitForSelector('.modal.oddment');
+  check(await W((id) => { const m = document.querySelector('.modal.oddment'); const swaps = [...m.querySelectorAll('[data-id^="swap-"]')]; return m.querySelector('[data-act="onechief"]').textContent.includes('Old Summerlong is walking with you already') && swaps.length === 1 && swaps[0].dataset.id === `swap-${id}` && !m.querySelector('[data-id="join"]'); }, hydra.id), 'a second ringleader\'s card says why it cannot come as well, and offers only to change places with the first');
+  await wishes.waitForTimeout(350);
+  await snap(wishes, 'e2e-wish-second');
+  check(await W(() => { const o = window.oddments; const s = o.game.state; const baron = s.friends.find((f) => f.species === 'boss_baron'); const hydra = s.friends.find((f) => f.species === 'boss_hydra'); const others = s.team.filter((id) => id !== hydra.id); return o.game.setTeam([hydra.id, baron.id, others[0]]) === false && o.game.mayTeam([hydra.id, baron.id]) === 'chiefs'; }), 'and the game itself refuses a team with two');
+  await wishes.click('.modal.oddment [data-id^="swap-"]');
+  await wishes.waitForTimeout(200);
+  ws = await state(wishes);
+  const baron = ws.friends.find((friend) => friend.species === 'boss_baron');
+  check(ws.team.includes(baron.id) && !ws.team.includes(hydra.id), 'they change places');
+  // At your side in a fight it takes its turn like anyone, and stands with the team.
+  await W(() => { const o = window.oddments; o.game.travelTo('garden'); const stop = o.game.state.visit.groups.findIndex((group) => !group.done); o.game.approach(stop); o.game.startEncounter(stop); o.ctx.show('fight'); });
+  await wishes.waitForSelector('#fight');
+  await idle(wishes);
+  const mine = (await battle(wishes)).units.find((unit) => unit.species === 'boss_baron');
+  check(!!mine && mine.side === 'ally' && mine.turns === 1 && mine.chief === true && mine.boss === false && await W(() => { const el = document.querySelector('.unit.ally.chief'); const box = el && el.getBoundingClientRect(); return !!el && !el.classList.contains('boss') && box.left >= -1 && box.right <= window.innerWidth + 1 && !document.querySelector('.arena.bossfight'); }), 'in a fight it stands with the team and takes one turn a round');
+  await snap(wishes, 'e2e-wish-atyourside');
+  await botFight(wishes, {});
+  await wishes.click('[data-id="next"]');
+  // And it is kept.
+  await W(() => window.oddments.ctx.save());
+  await wishes.goto(`${base}?debug&fast&seed=7`);
+  await ready(wishes);
+  ws = await state(wishes);
+  check(ws.friends.some((friend) => friend.species === 'boss_hydra') && ws.friends.some((friend) => friend.species === 'boss_baron') && ws.team.includes(baron.id) && !ws.team.includes(hydra.id), 'a reload keeps both ringleaders, and which of them walks with you');
+  await wishes.close();
 }
 
 section('Locked down');

@@ -11,6 +11,7 @@ import { modal, toast } from './ui/modals.js';
 import { laneScreen } from './ui/lane.js';
 import { converse } from './ui/talk.js';
 import { CAST } from './core/story.js';
+import { wishOf } from './core/wishes.js';
 import { insideScreen } from './ui/inside.js';
 import { fightScreen } from './ui/fight.js';
 import { friendsScreen, bookScreen, settingsScreen, lookDialog } from './ui/friends.js';
@@ -189,6 +190,10 @@ function resultDialog(ctx, summary, foes) {
     if (key) lines.push(h('div', { class: 'keywon', data: { key: key.room } }, keyPicture(key.room), h('div', null, h('b', null, key.name), h('small', null, key.line))));
     // For one of the three you set out with, this is where its story began; and here it is put right.
     const right = putRight(game.state, room.id);
+    // Its ringleader is calm now, and has a wish: from here on it takes the air outside.
+    const chief = room.path[room.path.length - 1].boss;
+    const wish = wishOf(game.state, chief);
+    if (wish) lines.push(h('p', { class: 'note', data: { act: 'wish' } }, `${name(chief)} is calm now, and will be taking the air outside from here on, with a wish. Walk up some time and see.`));
     if (right) lines.push(h('div', { class: 'putright', data: { kind: right.kind } }, sprite(artOf(game.state.friends.find((friend) => friend.species === right.kind)), !!game.state.friends.find((friend) => friend.species === right.kind).heirloom, 'flip'), h('p', null, right.text)));
   }
   else if (summary.won && summary.keepsake) {
@@ -199,10 +204,13 @@ function resultDialog(ctx, summary, foes) {
       : `${name(summary.keepsake)} has slipped away, quite unhurt. A Keepsake cannot be made to stay: Reach out to it, and keep Reaching out. It will be here again after a rest.`));
   }
   // A bout with somebody who was waiting by the road: nobody is calmed; it is won, or it is not.
+  // A ringleader's friendly bout: won, it comes home with you.
+  else if (summary.won && summary.chief) lines.push(h('p', { class: 'big', data: { act: 'chief' } }, `${name(summary.chief.species)} has had a wish granted, and a good bout.`), h('p', null, summary.chief.text));
   else if (summary.won && summary.rival) lines.push(h('p', { data: { act: 'bout' } }, `${CAST.tansy.name} calls her three back to her. Everyone catches their breath.`));
   else if (summary.won) lines.push(h('p', null, summary.strays ? `${foes.length > 1 ? 'They are' : 'It is'} calm now, and off home. Everyone catches their breath.` : 'They are calm now. Everyone catches their breath.'));
   else {
     if (summary.rival) lines.push(h('p', { data: { act: 'bout' } }, summary.rival.text));
+    if (summary.chief) lines.push(h('p', { data: { act: 'chief' } }, summary.chief.text));
     lines.push(h('p', null, 'Your friends are worn out. You carry them home for a rest. Whoever you calmed stays calm, and you keep everything they learned.'));
     // Nobody is ever stuck: there is always more practice to be had, and this is where.
     lines.push(h('p', { class: 'note', data: { act: 'practice' } }, 'Want them stronger first? After a rest there are always strays out on the roads, and a few wandering wherever is calm. The more of them together, the more they teach.'));
@@ -210,7 +218,9 @@ function resultDialog(ctx, summary, foes) {
 
   for (const joined of summary.joined) {
     lines.push(h('div', { class: `joined${joined.grown ? ' grownup' : ''}`, data: { joined: joined.species } }, sprite(artOf(joined), joined.heirloom, 'flip'),
-      h('div', null, h('b', null, `${joined.grown ? SPECIES[joined.species].grown.name : name(joined.species)} comes home with you!`), joined.grown ? h('span', { class: 'growntag' }, 'Grown up') : null, joined.heirloom ? heirloomTag() : null, h('small', null, 'It is resting at home. Put it on your team from Friends; you can give it a name of your own there too.'))));
+      h('div', null, h('b', null, `${joined.grown ? SPECIES[joined.species].grown.name : name(joined.species)} comes home with you!`), joined.grown ? h('span', { class: 'growntag' }, 'Grown up') : null, joined.heirloom ? heirloomTag() : null, h('small', null, SPECIES[joined.species].boss
+        ? 'Resting at home. Friends is where a place on your team is given: one turn a round now, like anyone, and only one ringleader walks with you at a time.'
+        : 'It is resting at home. Put it on your team from Friends; you can give it a name of your own there too.'))));
   }
   for (const species of summary.visited) lines.push(h('p', { class: 'note' }, `The ${name(species)} goes off happy. ${mine(species, 'Your own')} learned from the visit.`));
   for (const species of summary.heirlooms) lines.push(h('p', { class: 'note gold' }, `It left ${mine(species, 'your')} its Heirloom colours.`));

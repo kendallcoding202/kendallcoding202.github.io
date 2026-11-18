@@ -17,28 +17,39 @@ export function friendsScreen(ctx) {
     const team = game.state.team;
     const on = team.includes(friend.id);
     const actions = [];
+    // Only one ringleader walks with you at a time: a way onto the team that would make two is not offered, and the card says why.
+    const fits = (ids) => game.mayTeam(ids) !== 'chiefs';
+    let barred = false;
     if (on && team.length > 1) actions.push({ id: 'rest', label: 'Rest at home', kind: 'plain', onClick: () => change(team.filter((id) => id !== friend.id)) });
-    if (!on && team.length < TEAM_SIZE) actions.push({ id: 'join', label: 'Join the team', onClick: () => change([...team, friend.id]) });
+    if (!on && team.length < TEAM_SIZE) {
+      if (fits([...team, friend.id])) actions.push({ id: 'join', label: 'Join the team', onClick: () => change([...team, friend.id]) });
+      else barred = true;
+    }
     if (!on && team.length >= TEAM_SIZE) {
       for (const id of team) {
         const other = game.friend(id);
-        actions.push({ id: `swap-${id}`, label: `Swap with ${nameOf(other)}`, kind: 'plain', onClick: () => change(team.map((x) => (x === id ? friend.id : x))) });
+        const swapped = team.map((x) => (x === id ? friend.id : x));
+        if (!fits(swapped)) { barred = true; continue; }
+        actions.push({ id: `swap-${id}`, label: `Swap with ${nameOf(other)}`, kind: 'plain', onClick: () => change(swapped) });
       }
     }
+    const walking = team.map((id) => game.friend(id)).find((other) => other && SPECIES[other.species].boss);
+    const extra = barred && walking ? [h('p', { class: 'note gold', data: { act: 'onechief' } }, `${nameOf(walking)} is walking with you already, and only one ringleader does at a time. Swap the two of them, or send ${nameOf(walking)} home to rest first.`)] : [];
     // A name of your own for it. (The dialog opens once this one has closed.)
     actions.push({ id: 'name', label: friend.nick ? 'Change its name' : 'Give it a name', kind: 'plain', onClick: () => { setTimeout(() => nameDialog(ctx, friend, draw), 0); } });
-    oddmentCard({ species: friend.species, level: friend.level, heirloom: friend.heirloom, xp: friend.xp, name: nameOf(friend), grown: !!friend.grown, actions });
+    oddmentCard({ species: friend.species, level: friend.level, heirloom: friend.heirloom, xp: friend.xp, name: nameOf(friend), grown: !!friend.grown, extra, actions });
   }
 
   function change(ids) {
-    if (!game.setTeam(ids)) { toast('Rest at home first: the team only changes when everyone is rested.', { kind: 'bad' }); return; }
+    const may = game.mayTeam(ids);
+    if (may !== true || !game.setTeam(ids)) { toast(may === 'chiefs' ? 'Only one ringleader walks with you at a time.' : 'Rest at home first: the team only changes when everyone is rested.', { kind: 'bad' }); return; }
     ctx.save();
     draw();
   }
 
   function tile(friend, onTeam) {
     const kind = SPECIES[friend.species];
-    return h('button', { class: `friend${onTeam ? ' on' : ''}${friend.heirloom ? ' rare' : ''}${friend.grown ? ' grown' : ''}`, data: { friend: String(friend.id), species: friend.species }, onclick: () => open(friend) },
+    return h('button', { class: `friend${onTeam ? ' on' : ''}${friend.heirloom ? ' rare' : ''}${friend.grown ? ' grown' : ''}${kind.boss ? ' chief' : ''}`, data: { friend: String(friend.id), species: friend.species }, onclick: () => open(friend) },
       sprite(artOf(friend), friend.heirloom, 'flip'),
       h('b', null, nameOf(friend)),
       h('span', { class: 'tags' }, elementTag(kind.element), h('small', null, `Lv ${friend.level}`)),
@@ -68,13 +79,23 @@ export function bookScreen(ctx) {
   const { book, friends } = game.state;
   const kinds = SPECIES_IDS;
   const canJoin = kinds.filter((id) => !SPECIES[id].boss);
+  const chiefs = kinds.filter((id) => SPECIES[id].boss);
+  // A ringleader whose place is calm has a wish: its page says what, and how far along it is.
+  const wishNote = (id, yours) => {
+    const wish = game.wish(id);
+    if (!wish || yours || !game.waiting().some((one) => one.id === id)) return [];
+    return [h('div', { class: `wish${wish.granted ? ' granted' : ''}`, data: { act: 'wish' } },
+      h('b', null, wish.granted ? `Wish granted: ${wish.wish}` : `Wish: ${wish.wish}`),
+      h('small', null, wish.granted ? 'Waiting out of doors, for one more bout: a friendly one. Win it, and you have a ringleader for a friend.' : `${wish.how} After that, one more bout, a friendly one: win it, and you have a ringleader for a friend.`),
+      wish.granted ? null : bar('xp', wish.have / wish.need, `${wish.have} of ${wish.need}`))];
+  };
   const tiles = kinds.map((id) => {
     const kind = SPECIES[id];
     const friend = friends.find((f) => f.species === id);
     const met = book[id].met;
     return h('button', {
       class: `page-tile${met ? '' : ' unmet'}${friend ? ' friend' : ''}${friend && friend.heirloom ? ' rare' : ''}${friend && friend.grown ? ' grown' : ''}`, data: { kind: id }, disabled: !met,
-      onclick: () => oddmentCard({ species: id, level: friend ? friend.level : 1, heirloom: !!(friend && friend.heirloom), xp: friend ? friend.xp : null, grown: !!(friend && friend.grown) }),
+      onclick: () => oddmentCard({ species: id, level: friend ? friend.level : 1, heirloom: !!(friend && friend.heirloom), xp: friend ? friend.xp : null, grown: !!(friend && friend.grown), extra: wishNote(id, !!friend) }),
     },
       // (Yours, as it is now: its grown form once it has grown up.)
       sprite(friend ? artOf(friend) : id, !!(friend && friend.heirloom)),
@@ -83,6 +104,8 @@ export function bookScreen(ctx) {
       // A heart for a friend. For its Heirloom: a gold mark once yours wears the colours, a hollow one if
       // you have only seen it.
       h('span', { class: 'stamps' }, friend ? h('i', { class: 'stamp pal', title: 'A friend' }, '♥') : null,
+        // A ringleader with a wish still to grant; or one whose wish is granted, waiting.
+        !friend && kind.boss && game.wish(id) && game.waiting().some((one) => one.id === id) ? h('i', { class: `stamp wishing${game.wish(id).granted ? ' granted' : ''}`, title: game.wish(id).granted ? 'Wish granted: waiting out of doors' : 'Has a wish' }, game.wish(id).granted ? '!' : '?') : null,
         book[id].grown ? h('i', { class: 'stamp grownup', title: 'Grown up' }, '▲') : null,
         SPECIES[id].keepsake && book[id].met ? h('i', { class: 'stamp keep', title: 'A Keepsake: one of a kind' }, '★') : null,
         friend && friend.heirloom ? h('i', { class: 'stamp gold', title: 'Heirloom kept' }, '❖')
@@ -103,7 +126,7 @@ export function bookScreen(ctx) {
       : h('small', { class: 'gold', data: { act: 'tofind' } }, 'You have every one of them.'));
   const el = h('section', { id: 'book', class: 'page' },
     h('header', { class: 'bar-top' }, h('h1', null, 'Scrapbook')),
-    h('p', { class: 'note', data: { act: 'counts' } }, `Met ${kinds.filter((id) => book[id].met).length} of ${kinds.length} · Friends ${friends.length} of ${canJoin.length} · Grown up ${canJoin.filter((id) => book[id].grown).length} of ${canJoin.length} · Heirlooms ${kept.length} of ${canJoin.length}`),
+    h('p', { class: 'note', data: { act: 'counts' } }, `Met ${kinds.filter((id) => book[id].met).length} of ${kinds.length} · Friends ${friends.filter((friend) => !SPECIES[friend.species].boss).length} of ${canJoin.length} · Ringleaders home ${friends.filter((friend) => SPECIES[friend.species].boss).length} of ${chiefs.length} · Grown up ${canJoin.filter((id) => book[id].grown).length} of ${canJoin.length} · Heirlooms ${kept.length} of ${canJoin.length}`),
     keyRing(game.state),
     hunt,
     h('div', { class: 'grid book' }, tiles),

@@ -210,6 +210,13 @@ export const FLUFF_BESIDE = { x: -66, y: 12 };
 
 // Where Tansy Brisk waits, at each of her five meetings (see core/rival.js): beside the way to wherever
 // is next, on open ground, never in a doorway or on a spot strays keep to. She holds no ground.
+// Where each ringleader takes the air once its place is calm (see core/wishes.js): to one side of its own
+// building or gate, on the grass: in sight as you come out, never in the doorway and never in the road. They hold no ground.
+export const WAITS = {
+  boss_hydra: { x: 530, y: 1172 }, boss_baron: { x: 2190, y: 1822 }, boss_crumbwyrm: { x: 1490, y: 504 }, boss_spincycle: { x: 920, y: 3484 },
+  boss_tome: { x: 1370, y: 3284 }, boss_warden: { x: 1660, y: 4994 }, boss_clock: { x: 560, y: 4804 }, boss_vacuum: { x: 510, y: 5344 },
+  boss_marrow: { x: 450, y: 6054 }, boss_bathtub: { x: 1950, y: 6034 }, boss_mower: { x: 1260, y: 7234 }, boss_treadle: { x: 370, y: 7364 },
+};
 export const RIVAL_AT = [{ x: 1650, y: 1630 }, { x: 1090, y: 2629 }, { x: 1771, y: 3786 }, { x: 1059, y: 5257 }, { x: 1210, y: 6900 }];
 
 // The quiet spots where strays turn up (core/strays.js): beside a street but off it, well clear of

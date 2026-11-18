@@ -8,6 +8,7 @@ import { ROOMS, ROOM_IDS, RIVAL, roomBuilt } from './balance.js';
 import { calmedIn } from './rooms.js';
 import { toldOf } from './names.js';
 import { rivalSoFar } from './rival.js';
+import { chiefsSoFar } from './wishes.js';
 
 export const CAST = {
   maribel: { name: 'Great-aunt Maribel', role: 'on the phone', art: 'cast_maribel' },
@@ -479,5 +480,6 @@ export function storySoFar(state) {
   if (story.call2) told.push('Great-aunt Maribel rang again: the far bank is awake too. Your eight keys opened the gate on Kettle Bridge.');
   for (const room of FAR) if (calm(state, room.id)) told.push(`${room.name} is calm.`);
   told.push(...rivalSoFar(state));
+  told.push(...chiefsSoFar(state));
   return told;
 }

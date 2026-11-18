@@ -77,6 +77,8 @@ export const HOVER = { rate: 3, perStep: 1 / 70, base: 9, swing: 4 };
 /** The phase of a hover, `dt` seconds on, having travelled `moved` units in that time. */
 export const hoverOn = (phase, dt, moved = 0) => phase + Math.max(0, dt) * HOVER.rate + Math.max(0, moved) * HOVER.perStep;
 /** How far off the ground a flyer is at this point of its hover. */
+/** How tall a friend is drawn walking about: a grown one bigger, a ringleader bigger still. */
+export const walkTall = (friend, boss) => (boss ? 88 : friend.grown ? 70 : 54);
 export const hoverLift = (phase) => HOVER.base + Math.sin(phase) * HOVER.swing;
 
 /** A small tag saying an element, in that element's colour: under whoever is waiting, so nobody has to guess. */

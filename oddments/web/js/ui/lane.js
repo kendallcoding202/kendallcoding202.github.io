@@ -21,7 +21,7 @@ import { keyRing } from './keys.js';
 import { play } from '../platform/sound.js';
 import { dustShift, throughDoor } from './shift.js';
 import { insideOf } from '../core/indoors.js';
-import { FONT, PROP_WIDE, GATE_WIDE, oval, paint, glow, label, elementMark, hoverOn, hoverLift, worldSrc, paintGround, paintBuilding, paintProp, paintFlat, paintLamp, paintGate, paintBridgeGate, ripples, wallOf } from './scenery.js';
+import { FONT, PROP_WIDE, GATE_WIDE, oval, paint, glow, label, elementMark, hoverOn, hoverLift, walkTall, worldSrc, paintGround, paintBuilding, paintProp, paintFlat, paintLamp, paintGate, paintBridgeGate, ripples, wallOf } from './scenery.js';
 
 // How much of the world fits across the screen. People and Clutterkin are small in a big place.
 // On a wider screen (a folding phone, open) you see more of the world, not the same view blown up:
@@ -392,15 +392,35 @@ export function laneScreen(ctx) {
     const you = here();
     stand(spriteSrc(cast.art), person.x, person.y, tall, you.x >= person.x, true, 0, Math.sin(clock * 1.6 + person.x) * 0.012);
     const near = Math.hypot(you.x - person.x, you.y - person.y) < 230;
-    if (news) {
-      const bob = Math.sin(clock * 4) * 3;
-      const top = person.y - tall - (near ? 52 : 22) + bob;
-      pen.beginPath(); pen.arc(person.x, top, 15, 0, Math.PI * 2); paint(pen, '#ffc83d');
-      pen.lineWidth = 3; pen.strokeStyle = 'rgba(13,10,28,.9)'; pen.stroke();
-      pen.font = `700 22px ${FONT}`; pen.textAlign = 'center'; pen.textBaseline = 'middle'; pen.fillStyle = '#17132e';
-      pen.fillText('!', person.x, top + 1);
-    }
+    if (news) newsMark(person.x, person.y - tall - (near ? 52 : 22));
     if (near) label(pen, cast.name, person.x, person.y - tall - 20, '#fff7e8', 'rgba(255,255,255,.28)', 19);
+  }
+
+  /** The gold mark over somebody who has something for you: news, or a bout. */
+  function newsMark(x, y) {
+    const top = y + Math.sin(clock * 4) * 3;
+    pen.beginPath(); pen.arc(x, top, 15, 0, Math.PI * 2); paint(pen, '#ffc83d');
+    pen.lineWidth = 3; pen.strokeStyle = 'rgba(13,10,28,.9)'; pen.stroke();
+    pen.font = `700 22px ${FONT}`; pen.textAlign = 'center'; pen.textBaseline = 'middle'; pen.fillStyle = '#17132e';
+    pen.fillText('!', x, top + 1);
+  }
+
+  /**
+   * A ringleader taking the air outside its own place, calm now. It turns to look at you as you come
+   * near, and its name is over it then. Once its wish is granted it stands in a gold light, with the mark over it.
+   */
+  function chiefOut(one) {
+    const kind = SPECIES[one.id];
+    const you = here();
+    const near = Math.hypot(you.x - one.x, you.y - one.y) < 250;
+    const tall = 116;
+    const ready = one.due >= 0;
+    if (ready) glow(pen, one.x, one.y - 50, 118, '255,200,61', 0.26 + 0.1 * Math.sin(clock * 2.2));
+    stand(spriteSrc(one.id), one.x, one.y - (kind.fly ? 8 + Math.sin(clock * 1.6) * 4 : 0), tall, near ? you.x > one.x : false, false, kind.fly ? 0 : Math.max(0, Math.sin(clock * 1.5 + one.x)) * 2.5);
+    if (ready) newsMark(one.x, one.y - tall - (near ? 60 : 26));
+    if (!near) return;
+    elementMark(pen, ELEMENTS[kind.element].name, ELEMENTS[kind.element].color, one.x, one.y + 18, 17);
+    label(pen, kind.name, one.x, one.y - tall - 24, ready ? '#ffe9a8' : '#fff7e8', ready ? 'rgba(255,200,61,.5)' : 'rgba(255,255,255,.28)', 20);
   }
 
   /** Where the goal is, if it is somewhere: a person to see, or the gate of a place you are not yet in. */
@@ -474,7 +494,8 @@ export function laneScreen(ctx) {
     }
     for (const stray of game.strays()) if (seen(stray.x, stray.y)) things.push({ y: stray.y + 8, draw: () => strays(stray) });
     // Whoever is waiting by the road (Tansy Brisk, when she is about): drawn as a neighbour is, with the mark over her while she wants a bout.
-    for (const one of game.waiting()) if (seen(one.x, one.y)) things.push({ y: one.y, draw: () => neighbour(one, one.due >= 0) });
+    // And the ringleader of any place that is calm, taking the air outside it.
+    for (const one of game.waiting()) if (seen(one.x, one.y, 200)) things.push({ y: one.y, draw: () => (one.chief ? chiefOut(one) : neighbour(one, one.due >= 0)) });
     // The gate on the bridge: shut, with its eight locks, until the whole lane is calm; then only its posts.
     if (seen(BRIDGE.gate.x, BRIDGE.gate.y, 260)) {
       const open = game.bridgeOpen();
@@ -509,13 +530,13 @@ export function laneScreen(ctx) {
     for (const body of homebodies) {
       if (!seen(body.x, body.y)) continue;
       const fly = SPECIES[body.friend.species].fly;
-      things.push({ y: body.y, draw: () => stand(spriteSrc(artOf(body.friend), body.friend.heirloom), body.x, body.y, body.friend.grown ? 70 : 54, body.f > 0, false, fly ? hoverLift(body.hover) : Math.abs(Math.sin(body.step / 15)) * 5) });
+      things.push({ y: body.y, draw: () => stand(spriteSrc(artOf(body.friend), body.friend.heirloom), body.x, body.y, walkTall(body.friend, SPECIES[body.friend.species].boss), body.f > 0, false, fly ? hoverLift(body.hover) : Math.abs(Math.sin(body.step / 15)) * 5) });
     }
     const { x, y } = here();
     for (const pal of pals) {
       const fly = SPECIES[pal.friend.species].fly;
       const lift = fly ? hoverLift(pal.hover) : Math.abs(Math.sin(pal.step / 15)) * 5 * spring;
-      things.push({ y: pal.y - 0.01, draw: () => stand(spriteSrc(artOf(pal.friend), pal.friend.heirloom), pal.x, pal.y, pal.friend.grown ? 70 : 54, pal.f > 0, false, lift) });
+      things.push({ y: pal.y - 0.01, draw: () => stand(spriteSrc(artOf(pal.friend), pal.friend.heirloom), pal.x, pal.y, walkTall(pal.friend, SPECIES[pal.friend.species].boss), pal.f > 0, false, lift) });
     }
     const hop = Math.abs(Math.sin(stride / 17)) * 7 * spring;
     const view = aspect === 'side' ? state.player.look : `${state.player.look}_${aspect}`;
@@ -565,7 +586,8 @@ export function laneScreen(ctx) {
     // (A mailbox is worth a card only when there is something to post: by a door, the door's card comes first.)
     const mail = !who && !caller && !bench && game.mailNear() >= 0 && (!id || goal.id === 'report') && state.story.ines > 0;
     const region = regionAt(here());
-    const key = `${who}:${who ? game.hasNews(who) : ''}|${caller}:${bout}|${id}|${visit ? `${visit.room}:${visit.stop}` : ''}|${inside}|${goal.id}:${goal.count || ''}|${game.rested()}|${bench}|${whereabouts(here())}|${mail}`;
+    const wish = caller ? game.wish(caller) : null; // (a ringleader's: null for anybody else)
+    const key = `${who}:${who ? game.hasNews(who) : ''}|${caller}:${bout}:${wish ? wish.have : ''}|${id}|${visit ? `${visit.room}:${visit.stop}` : ''}|${inside}|${goal.id}:${goal.count || ''}|${game.rested()}|${bench}|${whereabouts(here())}|${mail}`;
     if (key === cardFor) return;
     cardFor = key;
     goalText.textContent = goal.count ? `${goal.title} (${goal.count[0]} of ${goal.count[1]})` : goal.title;
@@ -594,6 +616,24 @@ export function laneScreen(ctx) {
           ctx.save();
           converse(lines, () => { cardFor = undefined; });
         } }, 'Talk'));
+      return;
+    }
+
+    // A ringleader, taking the air outside its place: what is seen of it, its wish and how far along that is;
+    // and once the wish is granted, the bout it would like.
+    if (caller && wish) {
+      const kind = SPECIES[caller];
+      const place = roomOf(game.waiting().find((one) => one.id === caller).room);
+      card.className = 'placecard';
+      card.replaceChildren(...[
+        h('div', { class: 'personhead chief' }, sprite(caller), h('div', null, h('h2', null, kind.name, ' ', elementTag(kind.element)), h('small', null, `ringleader of ${place.name}, calm now`))),
+        h('p', { class: 'seen', data: { act: 'seen' } }, wish.seen),
+        h('div', { class: `wish${wish.granted ? ' granted' : ''}`, data: { act: 'wish' } },
+          h('b', null, wish.granted ? `Wish granted: ${wish.wish}` : `Wish: ${wish.wish}`),
+          wish.granted ? null : h('small', null, wish.how),
+          wish.granted ? null : bar('xp', wish.have / wish.need, `${wish.have} of ${wish.need}`)),
+        wish.granted ? h('button', { class: 'btn gold', data: { act: 'bout' }, onclick: () => askBout(caller) }, 'A friendly bout') : null,
+      ].filter(Boolean));
       return;
     }
 
@@ -690,18 +730,23 @@ export function laneScreen(ctx) {
    * any fight; no, and nothing has happened, and they will be here.
    */
   function askBout(who) {
-    const cast = CAST[who];
     const worn = !game.rested();
+    // A ringleader's is a friendly one: it alone, as it ever was, and it comes home if you win.
+    const wish = game.wish(who);
+    const name = wish ? SPECIES[who].name : CAST[who].name;
     modal({
-      title: `A bout with ${cast.name}?`, cls: 'askbout',
+      title: wish ? `A friendly bout with ${name}?` : `A bout with ${name}?`, cls: 'askbout',
       body: [
-        h('p', null, 'Her three against yours. They are hers, not lost: there is nobody to Reach out to, so this one is won by standing up for yourselves.'),
-        h('p', { class: 'note' }, worn ? 'Your friends are not rested. She will wait while you sit down somewhere first, if you like.' : 'Win, and she moves on down the road. Lose, and you are carried home, and she will be waiting here still.'),
+        h('p', null, wish ? `${name} alone against your three, at level ${wish.level}, and every bit a ringleader still. Too proud to reach, even now: this one is won by standing up for yourselves.`
+          : 'Her three against yours. They are hers, not lost: there is nobody to Reach out to, so this one is won by standing up for yourselves.'),
+        h('p', { class: 'note' }, wish
+          ? (worn ? 'Your friends are not rested. There is time to sit down somewhere first, if you like: a wish granted stays granted.' : `Win, and ${name} comes home with you. Lose, and you are carried home: a wish granted stays granted.`)
+          : (worn ? 'Your friends are not rested. She will wait while you sit down somewhere first, if you like.' : 'Win, and she moves on down the road. Lose, and you are carried home, and she will be waiting here still.')),
         teamList(),
       ],
       actions: [
         { id: 'later', label: 'Not just now', kind: 'plain' },
-        { id: 'bout', label: 'Have it out', onClick: () => { setTimeout(() => beginBout(who), 0); } },
+        { id: 'bout', label: wish ? 'A friendly bout' : 'Have it out', onClick: () => { setTimeout(() => beginBout(who), 0); } },
       ],
     });
   }
@@ -711,13 +756,14 @@ export function laneScreen(ctx) {
     met = true;
     way = [];
     const begin = () => { if (game.startBout(who)) ctx.show('fight'); else met = false; };
-    play('meet', { boss: false });
+    const boss = !!at.chief;
+    play('meet', { boss });
     wrap.classList.add('meeting');
     if (ctx.fast) setTimeout(begin, 60);
     else {
       const box = canvas.getBoundingClientRect();
       play('scuffle');
-      dustShift({ from: { x: box.left + (at.x - cam.x) * cam.k, y: box.top + (at.y - 30 - cam.y) * cam.k }, boss: false, covered: () => { begin(); play('poof'); } });
+      dustShift({ from: { x: box.left + (at.x - cam.x) * cam.k, y: box.top + (at.y - 30 - cam.y) * cam.k }, boss, covered: () => { begin(); play('poof'); } });
     }
   }
 
@@ -910,9 +956,14 @@ export function laneScreen(ctx) {
       toast('A stray, lost out on the lane. Walk up to it to meet it, or walk on by: it is up to you.');
     }
     // And the first time somebody waiting by the road does.
-    if (!state.seen.waiting && !met && game.waiting().some((one) => one.due >= 0 && Math.hypot(one.x - now.x, one.y - now.y) < 330)) {
+    if (!state.seen.waiting && !met && game.waiting().some((one) => !one.chief && one.due >= 0 && Math.hypot(one.x - now.x, one.y - now.y) < 330)) {
       state.seen.waiting = true;
       toast('Somebody is waiting by the road, with boxes on her back. Walk up if you want to hear what she has to say.');
+    }
+    // And the first time a ringleader is seen out of doors.
+    if (!state.seen.wishes && !met && !modalOpen() && game.waiting().some((one) => one.chief && Math.hypot(one.x - now.x, one.y - now.y) < 330)) {
+      state.seen.wishes = true;
+      toast('A ringleader, calm now, taking the air out of doors. Walk up: every ringleader has a wish.');
     }
     if (group >= 0) {
       met = true;

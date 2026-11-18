@@ -78,7 +78,7 @@ test('she is not about until the garden is calm; then she is, and the journal sa
   assert.equal(rivalSays(game.state), null);
   calmTo(game, 'garden');
   assert.deepEqual(rivalAbout(game.state), { ...RIVAL_AT[0], due: 0 });
-  assert.deepEqual(game.waiting(), [{ id: 'tansy', ...RIVAL_AT[0], due: 0 }]);
+  assert.deepEqual(game.waiting().filter((one) => !one.chief), [{ id: 'tansy', ...RIVAL_AT[0], due: 0 }]);
   const [aside] = game.also();
   assert.equal(aside.id, 'rival');
   assert.match(aside.title, /Spick & Span/);
@@ -152,16 +152,16 @@ test('win, and she is gone until the next place she has in mind is calm; then sh
   const game = strong(calmTo(fresh(), 'garden'), 9);
   game.standByWaiting('tansy');
   playOut(game.startBout(), {});
-  const stood = game.waiting()[0];
+  const stood = game.waiting().find((one) => one.id === 'tansy');
   assert.equal(game.finishBattle().won, true);
   assert.equal(rivalAbout(game.state), null, 'the alley is not what she is waiting for');
   // She stands where she was until she has said so, with nothing more to hear and no bout to be had; and that is never saved.
-  assert.deepEqual(game.waiting(), [{ id: 'tansy', x: stood.x, y: stood.y, due: -1, leaving: true }]);
+  assert.deepEqual(game.waiting().filter((one) => !one.chief), [{ id: 'tansy', x: stood.x, y: stood.y, due: -1, leaving: true }]);
   assert.equal(game.waitingNear(), null);
   assert.equal(game.hail('tansy'), null);
   assert.equal(JSON.parse(game.serialize(NOW)).parting, undefined);
   game.seenOff();
-  assert.deepEqual(game.waiting(), []);
+  assert.deepEqual(game.waiting().filter((one) => !one.chief), []);
   calmTo(game, 'alley');
   assert.equal(rivalAbout(game.state), null);
   assert.deepEqual(game.also(), []);
@@ -205,7 +205,7 @@ test('five wins and it is over: she has handed in her boxes, and stays on Bobbin
   assert.equal(rivalDone(game.state), true);
   assert.equal(rivalDue(game.state), -1);
   assert.deepEqual(rivalAbout(game.state), { ...RIVAL_AT[4], due: -1 });
-  assert.deepEqual(game.also(), []);
+  assert.deepEqual(game.also().filter((one) => one.id === 'rival'), []);
   game.standByWaiting('tansy');
   assert.equal(game.boutDue(), false);
   assert.equal(game.startBout(), null);

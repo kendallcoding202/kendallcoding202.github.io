@@ -49,7 +49,7 @@ export function fightScreen(ctx) {
     const company = battle.units.filter((u) => u.side === 'foe' && !u.boss);
     const corner = unit.side === 'foe' && !unit.boss && company.length < battle.units.filter((u) => u.side === 'foe').length ? ` side${company.indexOf(unit)}` : '';
     const el = h('button', {
-      class: `unit ${unit.side}${unit.boss ? ' boss' : ''}${unit.heirloom ? ' rare' : ''}${unit.grown ? ' grown' : ''} s${unit.slot}${corner}${SPECIES[unit.species].fly ? ' fly' : ''}`,
+      class: `unit ${unit.side}${unit.boss ? ' boss' : ''}${unit.chief ? ' chief' : ''}${unit.heirloom ? ' rare' : ''}${unit.grown ? ' grown' : ''} s${unit.slot}${corner}${SPECIES[unit.species].fly ? ' fly' : ''}`,
       data: { unit: unit.key }, 'aria-label': `${unit.name}, level ${unit.level}`, onclick: () => tapUnit(unit.key),
     }, body, h('i', { class: 'shadow' }), h('div', { class: 'foot' }, h('span', { class: `el el-${unit.element} under`, data: { element: unit.element } }, ELEMENTS[unit.element].name), h('div', { class: 'hpbar' }, fill), pips, chips), edge);
     view[unit.key] = { unit, el, body, fill, pips, chips, edge, hp: unit.maxHp, huff: unit.maxHuff, gone: false };
@@ -64,12 +64,13 @@ export function fightScreen(ctx) {
   const caller = h('div', { class: 'caller' }, sprite(game.state.player.look));
   // In a bout, whoever the other three belong to is not on the field either: they stand at the other
   // end of the same strip, facing you across it. (The owner asked for this: "at the bottom like where you see my character".)
-  const backer = bout ? h('div', { class: 'caller theirs', data: { who: bout.who }, title: CAST[bout.who].name }, sprite(CAST[bout.who].art)) : null;
+  // (A ringleader's friendly bout is with the ringleader itself: nobody stands behind it.)
+  const backer = bout && !bout.chief ? h('div', { class: 'caller theirs', data: { who: bout.who }, title: CAST[bout.who].name }, sprite(CAST[bout.who].art)) : null;
   const units = [...allies, ...foes].map(buildUnit);
   const arena = h('div', { class: `arena${foes.some((unit) => unit.boss) ? ' bossfight' : ''}` },
     h('img', { class: 'bg', src: `assets/bg/${wild ? 'bg_lane' : room.bg}.webp`, alt: '' }),
     h('div', { class: 'topline' },
-      h('div', { class: 'roundpill' }, roundEl, h('span', null, bout ? `Out on the lane · a bout with ${CAST[bout.who].name}` : wild ? (SPECIES[foes[0].species].keepsake ? 'Out in the open · a Keepsake' : `Out on the lane · ${['a stray', 'two strays', 'three strays'][foes.length - 1] || 'strays'}`) : visit.stroll ? `${spot.name} · calm` : `${spot.name} · ${howItGoes(visit, room)}`)),
+      h('div', { class: 'roundpill' }, roundEl, h('span', null, bout && bout.chief ? `Outside its own place · a friendly bout` : bout ? `Out on the lane · a bout with ${CAST[bout.who].name}` : wild ? (SPECIES[foes[0].species].keepsake ? 'Out in the open · a Keepsake' : `Out on the lane · ${['a stray', 'two strays', 'three strays'][foes.length - 1] || 'strays'}`) : visit.stroll ? `${spot.name} · calm` : `${spot.name} · ${howItGoes(visit, room)}`)),
       h('button', { class: 'iconbtn menu', 'aria-label': 'Menu', data: { act: 'menu' }, onclick: openMenu }, '⋯')),
     units, floaters);
   const orderEl = h('div', { class: 'order' });
@@ -314,7 +315,7 @@ export function fightScreen(ctx) {
     const calls = options.calls.map((option) => {
       const call = CALLS[option.id];
       const on = armed && armed.type === 'call' && armed.id === option.id;
-      const why = options.idle ? '' : option.used ? 'Used this round' : option.wait > 0 ? 'Next round' : option.targets.length ? '' : option.id === 'reach' ? (bout ? 'Not lost' : 'Nobody to reach') : 'Nobody is hurt';
+      const why = options.idle ? '' : option.used ? 'Used this round' : option.wait > 0 ? 'Next round' : option.targets.length ? '' : option.id === 'reach' ? (bout && !bout.chief ? 'Not lost' : 'Nobody to reach') : 'Nobody is hurt';
       return h('button', { class: `call${on ? ' armed' : ''}`, disabled: !option.ready, data: { call: option.id }, title: call.desc, onclick: () => choose('call', option) },
         h('b', null, call.name), why ? h('small', null, why) : null);
     });
@@ -372,7 +373,7 @@ export function fightScreen(ctx) {
       return;
     }
     const unit = unitOf(battle, key);
-    oddmentCard({ species: unit.species, level: unit.level, heirloom: unit.heirloom, grown: unit.grown, name: unit.side === 'ally' || unit.owned ? unit.name : '', huff: unit.side === 'foe' ? unit.huff : null, owner: unit.owned && bout ? CAST[bout.who].name : '' });
+    oddmentCard({ species: unit.species, level: unit.level, heirloom: unit.heirloom, grown: unit.grown, name: unit.side === 'ally' || unit.owned ? unit.name : '', huff: unit.side === 'foe' ? unit.huff : null, owner: unit.owned && bout && !bout.chief ? CAST[bout.who].name : '', xp: unit.chief ? (game.friend(unit.friendId) || { xp: 0 }).xp : null });
   }
 
   function commit(action) {
