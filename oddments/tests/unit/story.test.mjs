@@ -419,6 +419,10 @@ test('each of the three you set out with has a story, a word on what it is like,
   assert.equal(new Set(THREE.map((one) => one.place)).size, 3, 'a place each');
   assert.equal(aboutOf('gnome'), null);
   for (const words of Object.values(THREE_WORDS)) assert.ok(words.length > 60 && words.length <= 260);
+  // They are companions and friends: the owner did not like being told they "are not yours".
+  assert.match(THREE_WORDS.close, /your companions/);
+  assert.match(THREE_WORDS.close, /your friends/);
+  assert.doesNotMatch(Object.values(THREE_WORDS).join(' '), /not yours|not pets/);
   // What it says each is like is true of the numbers.
   const at = (kind, stat) => statAt(SPECIES[kind][stat], 3);
   const [quick, steady, kind] = THREE.map((one) => one.kind);

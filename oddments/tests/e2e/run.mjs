@@ -139,7 +139,7 @@ for (const [kind, name, element, word] of [['dustbunny', 'Hopmote', 'Fluff', 'un
 }
 check(told.every(Boolean), 'each has a page of its own: its picture, its name and element, and where it came from, all fitting the screen', told.join(','));
 await page.click('.modal.three [data-id="next"]');
-check(await S(page, () => { const m = document.querySelector('.modal.three'); return m.dataset.page === '5/5' && m.textContent.includes('Look after them') && m.querySelector('[data-id="next"]').textContent === 'Off we go'; }), 'and a last word: look after them');
+check(await S(page, () => { const m = document.querySelector('.modal.three'); return m.dataset.page === '5/5' && m.textContent.includes('Look after them') && m.textContent.includes('they are your companions') && m.textContent.includes('your friends') && m.querySelector('header span').textContent === 'Your three companions' && m.querySelector('[data-id="next"]').textContent === 'Off we go'; }), 'and a last word: look after them');
 await page.click('.modal.three [data-id="next"]');
 s = await state(page);
 check(!(await page.$('.modal')) && s.seen.three === true, 'read once, and remembered as read');

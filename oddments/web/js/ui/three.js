@@ -30,7 +30,7 @@ export function meetTheThree(fresh, onDone) {
   const page = h('div', { class: 'threepage' });
   const dots = h('div', { class: 'howdots' }, pages.map(() => h('i')));
   const dialog = modal({
-    title: 'Three of hers', cls: 'three', body: [page, dots], onClose: onDone, fixed: true,
+    title: 'Your three companions', cls: 'three', body: [page, dots], onClose: onDone, fixed: true,
     actions: [{ id: 'next', label: 'Next', onClick: () => {
       if (at < pages.length - 1) { at++; show(); return false; }
       return true;

@@ -259,7 +259,7 @@ export const THREE = [
 export const THREE_WORDS = {
   open: 'Great-aunt Maribel\'s three are waiting in the hall. They have lived in this house longer than you have been alive, and between them they have decided to keep an eye on you.',
   again: 'A word about the three who set out with you. They have lived in great-aunt Maribel\'s house longer than you have been alive, and between them they decided to keep an eye on you.',
-  close: 'They are not pets, and they are not yours. They walk with you because Maribel asked them to, and because nobody else will stand up for things like them before Monday. Look after them. They mean to look after you.',
+  close: 'From tonight they are your companions, and they would like to be your friends. They walk with you because Maribel asked them to, and because nobody else will stand up for things like them before Monday. Look after them. They mean to look after you.',
 };
 /** The story of one of the three, by its kind: { what, about, knack }, or null for anyone else. */
 export const aboutOf = (kind) => THREE.find((one) => one.kind === kind) || null;
