@@ -90,11 +90,13 @@ export function laneScreen(ctx) {
   // What to do next, always in sight; a tap opens the story so far.
   const goalText = h('span');
   const goalChip = h('button', { class: 'goalchip', data: { act: 'goal' }, onclick: () => journal() }, h('i', null, 'Goal'), goalText);
+  // The map, one tap away: beside the goal, always in sight.
+  const mapChip = h('button', { class: 'mapchip', data: { act: 'map' }, 'aria-label': 'Open the map', onclick: () => mapDialog(game) }, h('i'), 'Map');
   const title = h('h1', null, regionAt(state.where).name);
   const sub = h('small', { class: 'where' });
   const wrap = h('div', { class: 'lanewrap' }, canvas,
     h('header', { class: 'bar-top over' }, h('div', null, title, sub), h('span', { class: 'who' }, sprite(state.player.look), h('b', null, state.player.name))),
-    goalChip, hint, card);
+    goalChip, mapChip, hint, card);
   const el = h('section', { id: 'lane' }, wrap);
   const pen = canvas.getContext('2d');
 

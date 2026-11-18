@@ -254,9 +254,12 @@ small { color: var(--muted); font-size: 12px; }
 .personhead h2 { font-size: 19px; }
 .personhead small { color: var(--muted); font-weight: 600; }
 /* What to do next: one line under the heading, always there. */
-.goalchip { position: absolute; left: 10px; top: calc(var(--safe-top) + 58px); z-index: 2; max-width: calc(100% - 20px); display: flex; align-items: center; gap: 7px; padding: 5px 12px 5px 6px; border-radius: 16px; background: rgba(13,10,28,.86); border: 1.5px solid rgba(255,200,61,.55); font-size: 13.5px; font-weight: 600; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+.goalchip { position: absolute; left: 10px; top: calc(var(--safe-top) + 58px); z-index: 2; max-width: calc(100% - 104px); display: flex; align-items: center; gap: 7px; padding: 5px 12px 5px 6px; border-radius: 16px; background: rgba(13,10,28,.86); border: 1.5px solid rgba(255,200,61,.55); font-size: 13.5px; font-weight: 600; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
 .goalchip i { flex: none; padding: 1px 8px; border-radius: 10px; background: var(--gold); color: #17132e; font-style: normal; font-weight: 700; font-size: 11.5px; }
 .goalchip span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The map, beside the goal: a button that looks like one. The little picture on it is a folded map. */
+.mapchip { position: absolute; right: 10px; top: calc(var(--safe-top) + 58px); z-index: 2; display: flex; align-items: center; gap: 6px; padding: 5px 12px 5px 8px; border-radius: 16px; background: var(--blue); color: #0d0a1c; border: 1.5px solid #0d0a1c; font-size: 13.5px; font-weight: 700; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+.mapchip i { width: 17px; height: 14px; border-radius: 2px; border: 1.5px solid #0d0a1c; background: linear-gradient(90deg, #fff7e8 0 33%, #d8ecc8 33% 66%, #fff7e8 66%); transform: skewY(-6deg); }
 /* Someone talking: low on the screen, the world still in view above. */
 .scrim.low { align-items: flex-end; padding-bottom: calc(var(--safe-bottom) + 76px); background: rgba(8,6,20,.38); }
 .modal.talk header { padding-bottom: 4px; }

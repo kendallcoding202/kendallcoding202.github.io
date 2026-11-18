@@ -783,7 +783,13 @@ section('The country beyond the lane');
   s = await state(page);
   check(s.visit === null && s.worn === null && await game(page, () => window.oddments.game.teamHealth().every((member) => member.hp === member.max)), 'sit down, and everyone has their breath back, a long way from home');
   check(roomPictures('assets/world/r_bench.webp') && roomPictures('assets/world/r_signpost.webp') && roomPictures('assets/world/r_pond.webp'), 'the bench, the signposts and the ponds are paintings, fetched with the rest');
-  // The map: opened from "What to do". Every place is on it, with how it stands.
+  // The map has a button of its own beside the goal, always in sight.
+  check(await S(page, () => { const chip = document.querySelector('.mapchip').getBoundingClientRect(); const goal = document.querySelector('.goalchip').getBoundingClientRect(); return chip.width >= 60 && chip.height >= 26 && chip.right <= innerWidth && chip.left >= goal.right && Math.abs(chip.top - goal.top) < 4 && document.querySelector('.mapchip').textContent === 'Map'; }), 'there is a Map button on the lane, beside the goal and clear of it');
+  await page.click('.mapchip');
+  await page.waitForSelector('.modal.map canvas');
+  check((await S(page, () => document.querySelector('.modal.map').dataset.places)).startsWith('home:home,garden:calm'), 'one tap on it opens the map');
+  await page.click('.modal.map [data-id="ok"]');
+  // And it can still be opened from "What to do". Every place is on it, with how it stands.
   await page.click('.goalchip');
   await page.waitForSelector('.modal.journal [data-id="map"]');
   await page.click('.modal.journal [data-id="map"]');
