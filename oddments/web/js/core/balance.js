@@ -300,7 +300,7 @@ export const SPECIES = {
     moves: [['lintflurry', 1], ['underbed', 3], ['kickupdust', 6]],
     blurb: 'Lives under the bed. Has always lived under the bed.',
     notYet: 'scoots back under something',
-    grown: { at: 8, name: 'Lintelope' },
+    grown: { at: 8, name: 'Hartmote' },
   },
   sockeel: {
     name: 'Eelastic', element: 'suds', hp: 52, oomph: 12, grit: 11, pep: 10, huff: 4,
@@ -450,21 +450,21 @@ export const SPECIES = {
     moves: [['snapshut', 1], ['clampdown', 3], ['linedance', 6]],
     blurb: 'Held up the washing for years. Now it holds grudges.',
     notYet: 'snaps at the air',
-    grown: { at: 12, name: 'Clampodile' },
+    grown: { at: 12, name: 'Clipgator' },
   },
   bookworm: {
     name: 'Footnote', element: 'fluff', hp: 50, oomph: 12, grit: 11, pep: 9, huff: 4,
     moves: [['pageturner', 1], ['wellread', 3], ['hardback', 6]],
     blurb: 'Has read everything in here, and has notes.',
     notYet: 'goes back to its page',
-    grown: { at: 13, name: 'Appendix' },
+    grown: { at: 13, name: 'Marginalia' },
   },
   candlecreep: {
     name: 'Dribblewax', element: 'spark', hp: 42, oomph: 14, grit: 9, pep: 12, huff: 4,
     moves: [['hotdrip', 1], ['snuffout', 3], ['flareup', 6]],
     blurb: 'Lit for a power cut in 1994 and never blown out.',
     notYet: 'gutters, and turns away',
-    grown: { at: 13, name: 'Candelabrute' },
+    grown: { at: 13, name: 'Everwick' },
   },
   inkblot: {
     name: 'Blottle', element: 'suds', hp: 46, oomph: 13, grit: 10, pep: 12, huff: 4,
@@ -501,7 +501,7 @@ export const SPECIES = {
     moves: [['slateslap', 1], ['looseslate', 3], ['bask', 6]],
     blurb: 'One slate on every roof is warm. This is why.',
     notYet: 'scuttles up the chimney',
-    grown: { at: 14, name: 'Slatedrake' },
+    grown: { at: 14, name: 'Slateridge' },
   },
   weathercock: {
     name: 'Vanecrow', element: 'clank', hp: 46, oomph: 14, grit: 10, pep: 13, huff: 4,
@@ -515,7 +515,7 @@ export const SPECIES = {
     moves: [['spout', 1], ['stonestill', 3], ['downpipe', 6]],
     blurb: 'Carved to frighten the rain. The rain was not frightened.',
     notYet: 'sticks its tongue out',
-    grown: { at: 14, name: 'Grotesque' },
+    grown: { at: 14, name: 'Grimspout' },
   },
   chimneywisp: {
     name: 'Emberdrift', element: 'spark', hp: 42, oomph: 13, grit: 9, pep: 12, huff: 4,
@@ -559,14 +559,14 @@ export const SPECIES = {
     moves: [['popgoes', 1], ['liddown2', 3], ['lastlaugh', 6]],
     blurb: 'Nobody has turned the handle since 1962. It is ready.',
     notYet: 'ducks back into its box',
-    grown: { at: 15, name: 'Jackanapes' },
+    grown: { at: 15, name: 'Harlecrank' },
   },
   cordserpent: {
     name: 'Tanglecoil', element: 'spark', hp: 48, oomph: 13, grit: 10, pep: 13, huff: 4,
     moves: [['plugbite', 1], ['tangle', 3], ['livewire', 6]],
     blurb: 'Every lead in the drawer, tied in one knot.',
     notYet: 'coils up tighter',
-    grown: { at: 16, name: 'Anacorda' },
+    grown: { at: 16, name: 'Drumcoil' },
   },
   dustwraith: {
     name: 'Grimeshade', element: 'fluff', hp: 44, oomph: 13, grit: 9, pep: 15, huff: 5,
@@ -574,7 +574,7 @@ export const SPECIES = {
     fly: true,
     blurb: 'What a Hopmote becomes if nobody ever looks.',
     notYet: 'melts into the shadows',
-    grown: { at: 16, name: 'Gloomdrift' },
+    grown: { at: 16, name: 'Shroudmote' },
   },
   robodisc: {
     name: 'Bumpabout', element: 'clank', hp: 60, oomph: 11, grit: 15, pep: 7, huff: 5,

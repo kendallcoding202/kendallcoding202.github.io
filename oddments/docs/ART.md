@@ -98,7 +98,7 @@ Every kind that can be a friend has one (ringleaders do not grow). Each was pain
 
 | Kind | Grows up into | At level | The brief begins |
 | --- | --- | --- | --- |
-| Hopmote | Lintelope | 8 | A tall, proud stag-like beast made entirely of grey dust and lint. |
+| Hopmote | Hartmote | 8 | A tall, proud stag-like beast made entirely of grey dust and lint. |
 | Eelastic | Toeviathan | 8 | A huge sea serpent made of one very long blue-and-yellow striped stocking. |
 | Crumbwisp | Crustwraith | 8 | A towering hooded wraith made of burnt toast. |
 | Wishclock | Wishmane | 9 | A proud lion made from a dandelion plant. |
@@ -119,24 +119,24 @@ Every kind that can be a friend has one (ringleaders do not grow). Each was pain
 | Shimmerbell | Glistenveil | 12 | A tall, queenly jellyfish made of soap bubbles. |
 | Slipsud | Latherback | 12 | A massive pink soap slug reared up like a walrus, three times as big, shaped like a great new bar of soap. |
 | Fluffolith | Linthenge | 12 | A towering giant made of blue-grey dryer lint with button eyes, built like a ring of standing stones. |
-| Pegadile | Clampodile | 12 | A long, heavy crocodile built from dozens of wooden clothes pegs, rearing its head up with jaws wide open. |
-| Footnote | Appendix | 13 | A long, thick green bookworm reared up tall in an S shape out of a towering. |
-| Dribblewax | Candelabrute | 13 | A wax giant: a very tall. |
+| Pegadile | Clipgator | 12 | A long, heavy crocodile built from dozens of wooden clothes pegs, rearing its head up with jaws wide open. |
+| Footnote | Marginalia | 13 | A long, thick green bookworm reared up tall in an S shape out of a towering. |
+| Dribblewax | Everwick | 13 | A wax giant: a very tall. |
 | Blottle | Wellspill | 13 | A great wave of dark-blue ink towering up and curling over like a breaking wave out of a large tipped-over glass inkwell, with two big dripping arms spread wide, long splashes and drops flying, white glowing eyes high in the crest of the wave, a gold fountain-pen nib on its head like a crow. |
 | Inkspine | Scrivenspine | 13 | A big porcupine standing upright on its hind legs like a stern clerk, with round glasses on its nose. |
 | Foldwing | Broadsheet | 13 | A tall, elegant origami heron folded from many sheets of newspaper. |
 | Gutterflit | Eaveswoop | 14 | A big purple bat swooping with enormous wings spread wide, each wing covered in overlapping orange. |
-| Shingleskink | Slatedrake | 14 | A big, heavy, broad gecko climbing upward with its body curved in an S, three times as bulky as before. |
+| Shingleskink | Slateridge | 14 | A big, heavy, broad gecko climbing upward with its body curved in an S, three times as bulky as before. |
 | Vanecrow | Galecomb | 14 | A large, proud green-copper weathercock rooster with wings spread wide and beak open, crowing into a gale. |
-| Spoutling | Grotesque | 14 | A massive hunched stone grotesque crouching on a carved stone ledge, twice as big and broad as before. |
+| Spoutling | Grimspout | 14 | A massive hunched stone grotesque crouching on a carved stone ledge, twice as big and broad as before. |
 | Emberdrift | Smokecrown | 14 | A tall towering spirit of purple smoke rising in a great twisting column out of a brick chimney stack with two terracotta pots, with broad smoky shoulders, two long arms of smoke, glowing ember eyes and a wide ember grin, wearing a tall crown made of rings of smoke set with glowing embers like jewels, sparks drifting u. |
 | Cogscuttle | Cogmarshal | 15 | A big brass clockwork beetle standing upright on its hind legs like a general on parade. |
 | Stalwind | Marchwind | 15 | A tall tin toy drum major marching with one knee raised high. |
 | Tocktalon | Midnightjar | 15 | A large night bird bursting out of the top of a tall wooden cuckoo-clock tower with its wings spread wide. |
 | Lampmourn | Lanternlorn | 15 | A large ghostly moth with four great tattered wings spread wide, each with a softly glowing eye spot. |
-| Crankjaw | Jackanapes | 15 | A tall, gangly jester sprung high out of a big fancy striped box on a long coiled spring. |
-| Tanglecoil | Anacorda | 16 | A gigantic snake made of thick braided black power cables with red, yellow and green wires woven through. |
-| Grimeshade | Gloomdrift | 16 | A large, tall, drifting wraith of dark dust and cobwebs with glowing cyan eyes. |
+| Crankjaw | Harlecrank | 15 | A tall, gangly jester sprung high out of a big fancy striped box on a long coiled spring. |
+| Tanglecoil | Drumcoil | 16 | A gigantic snake made of thick braided black power cables with red, yellow and green wires woven through. |
+| Grimeshade | Shroudmote | 16 | A large, tall, drifting wraith of dark dust and cobwebs with glowing cyan eyes. |
 | Bumpabout | Rovabout | 16 | A big all-terrain robot vacuum cleaner raised high on four chunky off-road wheels with springs. |
 
 ## Making art

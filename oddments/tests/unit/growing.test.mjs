@@ -114,13 +114,13 @@ test('grown up, it is stronger in every way, under its grown form\'s name and pi
   assert.deepEqual([big.grown, small.grown, big.name, small.name], [true, false, SPECIES.dustbunny.grown.name, SPECIES.dustbunny.name]);
   assert.deepEqual(big.moves, small.moves, 'the same moves');
   // Names and pictures.
-  assert.deepEqual([kindNameOf(friend), nameOf(friend), artOf(friend)], ['Lintelope', 'Lintelope', 'dustbunny_grown']);
+  assert.deepEqual([kindNameOf(friend), nameOf(friend), artOf(friend)], ['Hartmote', 'Hartmote', 'dustbunny_grown']);
   assert.deepEqual([kindNameOf(young), nameOf(young), artOf(young)], ['Hopmote', 'Hopmote', 'dustbunny']);
   assert.equal(artOf(big), 'dustbunny_grown', 'a fighter has its picture the same way');
   // A name of your own is kept through growing up; its grown kind's own name is not a name of your own; its old one can be.
   friend.nick = 'Biscuit';
   assert.equal(nameOf(friend), 'Biscuit');
-  assert.equal(giveName(friend, 'Lintelope'), 'Lintelope');
+  assert.equal(giveName(friend, 'Hartmote'), 'Hartmote');
   assert.equal('nick' in friend, false);
   assert.equal(giveName(friend, 'Hopmote'), 'Hopmote');
   assert.equal(friend.nick, 'Hopmote', 'still Hopmote to you, if you like');

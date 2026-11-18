@@ -5,7 +5,7 @@
 // with. The kind's name is never lost: clear yours and it is back.
 //
 // A friend that has grown up goes by its grown form's name (a Hopmote grows
-// into a Lintelope), unless you gave it a name of your own, which it keeps.
+// into a Hartmote), unless you gave it a name of your own, which it keeps.
 import { SPECIES, NAME_LENGTH } from './balance.js';
 
 // Characters that draw nothing, or change how the line around them is drawn:
