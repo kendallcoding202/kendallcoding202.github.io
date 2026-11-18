@@ -29,7 +29,9 @@ export function mapMarks(game) {
   const person = goal.who ? personAt(goal.who) : null;
   return { w: WORLD.w, h: WORLD.h, places, benches: BENCHES.map(({ x, y }) => ({ x, y })), you: { x: state.where.x, y: state.where.y }, goal: person ? { x: person.x, y: person.y } : null, bridge: game.bridgeOpen() ? 'open' : 'shut',
     // A Keepsake that is out: a star where it is to be found.
-    keepsake: game.keepsake() ? { x: HAUNTS[game.keepsake().keep].x, y: HAUNTS[game.keepsake().keep].y } : null };
+    keepsake: game.keepsake() ? { x: HAUNTS[game.keepsake().keep].x, y: HAUNTS[game.keepsake().keep].y } : null,
+    // Whoever is waiting by the road for a bout.
+    waiting: game.waiting().filter((one) => one.due >= 0).map(({ id, x, y }) => ({ id, x, y })) };
 }
 
 /**
@@ -100,6 +102,11 @@ export function paintMap(pen, marks, { k, left, wide }) {
     pen.lineWidth = 3; pen.strokeStyle = INK; pen.strokeText('★', X(marks.keepsake.x), Y(marks.keepsake.y));
     pen.fillStyle = '#ffc83d'; pen.fillText('★', X(marks.keepsake.x), Y(marks.keepsake.y));
   }
+  // Whoever is waiting by the road: a gold mark, as over their head.
+  for (const one of marks.waiting || []) {
+    pen.beginPath(); pen.arc(X(one.x), Y(one.y), 5.5, 0, Math.PI * 2); pen.fillStyle = '#ffc83d'; pen.fill(); pen.lineWidth = 1.6; pen.strokeStyle = INK; pen.stroke();
+    pen.font = `700 9px ${FONT}`; pen.textAlign = 'center'; pen.textBaseline = 'middle'; pen.fillStyle = INK; pen.fillText('!', X(one.x), Y(one.y) + 0.5);
+  }
   // Where the goal is, if it is a person; and you.
   if (marks.goal) { pen.beginPath(); pen.arc(X(marks.goal.x), Y(marks.goal.y), 4, 0, Math.PI * 2); pen.fillStyle = '#ffc83d'; pen.fill(); pen.lineWidth = 1.5; pen.strokeStyle = INK; pen.stroke(); }
   const yx = X(marks.you.x);
@@ -132,5 +139,6 @@ export function mapDialog(game) {
   });
   dialog.el.dataset.places = marks.places.map((place) => `${place.id}:${place.state}${place.goal ? ':goal' : ''}`).join(',');
   dialog.el.dataset.size = `${wide}x${tall}`;
+  dialog.el.dataset.waiting = marks.waiting.map((one) => one.id).join(',');
   return dialog;
 }

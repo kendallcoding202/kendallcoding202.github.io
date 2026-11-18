@@ -384,7 +384,7 @@ export function laneScreen(ctx) {
   }
 
   /** One of the people of the lane: turned toward you, their name over them when you are near, a mark if they have news. */
-  function neighbour(person) {
+  function neighbour(person, news = game.hasNews(person.id)) {
     const cast = CAST[person.id];
     const image = picture(spriteSrc(cast.art));
     // People were painted to one scale, so a child stands shorter than the grown-ups.
@@ -392,7 +392,7 @@ export function laneScreen(ctx) {
     const you = here();
     stand(spriteSrc(cast.art), person.x, person.y, tall, you.x >= person.x, true, 0, Math.sin(clock * 1.6 + person.x) * 0.012);
     const near = Math.hypot(you.x - person.x, you.y - person.y) < 230;
-    if (game.hasNews(person.id)) {
+    if (news) {
       const bob = Math.sin(clock * 4) * 3;
       const top = person.y - tall - (near ? 52 : 22) + bob;
       pen.beginPath(); pen.arc(person.x, top, 15, 0, Math.PI * 2); paint(pen, '#ffc83d');
@@ -473,6 +473,8 @@ export function laneScreen(ctx) {
       things.push({ y: person.y, draw: () => neighbour(person) });
     }
     for (const stray of game.strays()) if (seen(stray.x, stray.y)) things.push({ y: stray.y + 8, draw: () => strays(stray) });
+    // Whoever is waiting by the road (Tansy Brisk, when she is about): drawn as a neighbour is, with the mark over her while she wants a bout.
+    for (const one of game.waiting()) if (seen(one.x, one.y)) things.push({ y: one.y, draw: () => neighbour(one, one.due >= 0) });
     // The gate on the bridge: shut, with its eight locks, until the whole lane is calm; then only its posts.
     if (seen(BRIDGE.gate.x, BRIDGE.gate.y, 260)) {
       const open = game.bridgeOpen();
@@ -553,14 +555,17 @@ export function laneScreen(ctx) {
   function drawCard() {
     const visit = state.visit;
     const who = game.personNear();
-    const id = who ? null : game.near();
+    // Somebody waiting by the road, and whether what they want is a bout.
+    const caller = who ? null : game.waitingNear();
+    const bout = caller ? game.boutDue(caller) : false;
+    const id = who || caller ? null : game.near();
     const inside = game.district();
     const goal = game.goal();
-    const bench = who || id ? null : game.benchNear();
+    const bench = who || caller || id ? null : game.benchNear();
     // (A mailbox is worth a card only when there is something to post: by a door, the door's card comes first.)
-    const mail = !who && !bench && game.mailNear() >= 0 && (!id || goal.id === 'report') && state.story.ines > 0;
+    const mail = !who && !caller && !bench && game.mailNear() >= 0 && (!id || goal.id === 'report') && state.story.ines > 0;
     const region = regionAt(here());
-    const key = `${who}:${who ? game.hasNews(who) : ''}|${id}|${visit ? `${visit.room}:${visit.stop}` : ''}|${inside}|${goal.id}:${goal.count || ''}|${game.rested()}|${bench}|${whereabouts(here())}|${mail}`;
+    const key = `${who}:${who ? game.hasNews(who) : ''}|${caller}:${bout}|${id}|${visit ? `${visit.room}:${visit.stop}` : ''}|${inside}|${goal.id}:${goal.count || ''}|${game.rested()}|${bench}|${whereabouts(here())}|${mail}`;
     if (key === cardFor) return;
     cardFor = key;
     goalText.textContent = goal.count ? `${goal.title} (${goal.count[0]} of ${goal.count[1]})` : goal.title;
@@ -570,9 +575,9 @@ export function laneScreen(ctx) {
     // The heading says where you are, and how a visit is going.
     title.textContent = inside ? roomOf(inside).name : whereabouts(here());
     sub.textContent = visit ? howItGoes(visit, roomOf(visit.room)) : '';
-    card.hidden = !who && !id && !visit && !bench && !mail;
+    card.hidden = !who && !caller && !id && !visit && !bench && !mail;
     card.dataset.spot = mail ? 'mailbox' : id || (bench ? 'bench' : '');
-    card.dataset.person = who || '';
+    card.dataset.person = who || caller || '';
     card.dataset.visit = visit ? visit.room : '';
     card.dataset.calmed = visit ? String(visit.stop) : '';
     card.className = `placecard${!who && !id && visit ? ' slim' : ''}`;
@@ -589,6 +594,21 @@ export function laneScreen(ctx) {
           ctx.save();
           converse(lines, () => { cardFor = undefined; });
         } }, 'Talk'));
+      return;
+    }
+
+    // Somebody waiting by the road. They say their piece; then, if it is a bout they want, it is yours to say yes or no.
+    if (caller) {
+      const cast = CAST[caller];
+      card.className = 'placecard';
+      card.replaceChildren(...[
+        h('div', { class: 'personhead' }, sprite(cast.art), h('div', null, h('h2', null, cast.name), h('small', null, cast.role))),
+        bout ? h('small', { data: { act: 'boutnote' } }, 'She wants a bout: her three against yours. Nobody has to stop for her.') : null,
+        h('button', { class: `btn ${bout ? 'gold' : 'plain'}`, data: { act: 'talk' }, onclick: () => {
+          const lines = game.hail(caller);
+          if (!lines) return;
+          converse(lines, () => { cardFor = undefined; if (game.boutDue(caller)) askBout(caller); });
+        } }, bout ? 'Hear her out' : 'Talk')].filter(Boolean));
       return;
     }
 
@@ -665,12 +685,49 @@ export function laneScreen(ctx) {
       teamList());
   }
 
+  /**
+   * A bout, or not: asked once they have said their piece. Yes, and the dust goes up as it does for
+   * any fight; no, and nothing has happened, and they will be here.
+   */
+  function askBout(who) {
+    const cast = CAST[who];
+    const worn = !game.rested();
+    modal({
+      title: `A bout with ${cast.name}?`, cls: 'askbout',
+      body: [
+        h('p', null, 'Her three against yours. They are hers, not lost: there is nobody to Reach out to, so this one is won by standing up for yourselves.'),
+        h('p', { class: 'note' }, worn ? 'Your friends are not rested. She will wait while you sit down somewhere first, if you like.' : 'Win, and she moves on down the road. Lose, and you are carried home, and she will be waiting here still.'),
+        teamList(),
+      ],
+      actions: [
+        { id: 'later', label: 'Not just now', kind: 'plain' },
+        { id: 'bout', label: 'Have it out', onClick: () => { setTimeout(() => beginBout(who), 0); } },
+      ],
+    });
+  }
+  function beginBout(who) {
+    const at = game.waiting().find((one) => one.id === who);
+    if (met || !at || !game.boutDue(who)) return;
+    met = true;
+    way = [];
+    const begin = () => { if (game.startBout(who)) ctx.show('fight'); else met = false; };
+    play('meet', { boss: false });
+    wrap.classList.add('meeting');
+    if (ctx.fast) setTimeout(begin, 60);
+    else {
+      const box = canvas.getBoundingClientRect();
+      play('scuffle');
+      dustShift({ from: { x: box.left + (at.x - cam.x) * cam.k, y: box.top + (at.y - 30 - cam.y) * cam.k }, boss: false, covered: () => { begin(); play('poof'); } });
+    }
+  }
+
   /** The story so far, the aim of it all, and what to do next. */
   function journal() {
     const goal = game.goal();
     const aim = game.aim();
     const told = game.journal();
     const aside = game.aside();
+    const also = game.also();
     const tonight = game.tonight();
     modal({
       title: 'What to do', cls: 'journal',
@@ -682,6 +739,8 @@ export function laneScreen(ctx) {
         tonight ? h('div', { class: 'now tonight', data: { room: tonight.room } }, h('small', null, 'Tonight'), h('b', null, tonight.title), h('p', null, tonight.detail)) : null,
         // Something else worth doing: a Keepsake is out, and Fluff knows where.
         aside ? h('div', { class: 'now aside', data: { keep: String(aside.keep) } }, sprite(FLUFF.art), h('div', null, h('small', null, 'Also'), h('b', null, aside.title), h('p', null, aside.detail))) : null,
+        // And whoever is waiting by the road for you.
+        also.map((one) => h('div', { class: 'now aside', data: { also: one.id } }, sprite(one.art), h('div', null, h('small', null, 'Also'), h('b', null, one.title), h('p', null, one.detail)))),
         told.length ? h('div', { class: 'sofar' }, h('small', null, 'So far'), h('ul', null, told.map((line) => h('li', null, line)))) : null,
       ],
       actions: [{ id: 'map', label: 'Map', kind: 'plain', onClick: () => { setTimeout(() => mapDialog(game), 0); } }, { id: 'ok', label: 'OK', kind: 'plain' }],
@@ -850,6 +909,11 @@ export function laneScreen(ctx) {
       state.seen.strays = true;
       toast('A stray, lost out on the lane. Walk up to it to meet it, or walk on by: it is up to you.');
     }
+    // And the first time somebody waiting by the road does.
+    if (!state.seen.waiting && !met && game.waiting().some((one) => one.due >= 0 && Math.hypot(one.x - now.x, one.y - now.y) < 330)) {
+      state.seen.waiting = true;
+      toast('Somebody is waiting by the road, with boxes on her back. Walk up if you want to hear what she has to say.');
+    }
     if (group >= 0) {
       met = true;
       way = [];
@@ -893,6 +957,7 @@ export function laneScreen(ctx) {
       else if (id.startsWith('in:')) point = { x: area(id.slice(3)).gate.x, y: area(id.slice(3)).gate.y - 96 };
       else if (id.startsWith('person:')) point = personAt(id.slice(7));
       else if (id.startsWith('stray:')) point = game.strays().find((one) => one.index === Number(id.slice(6))) || null;
+      else if (id.startsWith('waiting:')) point = game.waiting().find((one) => one.id === id.slice(8)) || null;
       else if (id.startsWith('bench:')) point = BENCHES.find((bench) => bench.id === id.slice(6)) || null;
       else if (id.startsWith('mail:')) point = MAILBOXES[Number(id.slice(5))] || null;
       else if (id === 'me') point = here();

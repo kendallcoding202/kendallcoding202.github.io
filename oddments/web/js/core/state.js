@@ -11,6 +11,7 @@ import { insideOf, settleIn } from './indoors.js';
 import { newStory, reviveStory } from './story.js';
 import { rollStrays, fairStrays, fairKeepsake, KEEPSAKES } from './strays.js';
 import { giveName, tidyName } from './names.js';
+import { rivalMost } from './rival.js';
 import { WILDS } from './world.js';
 
 export function newState(now = Date.now(), seed = (now ^ 0x9e3779b9) | 0) {
@@ -245,6 +246,8 @@ export function reviveState(saved, now = Date.now()) {
   state.story = reviveStory(saved.story);
   // The second call cannot have been taken before the lane was quiet.
   if (state.story.call2 && !bridgeOpen(state)) state.story.call2 = false;
+  // Nor can Tansy Brisk have lost a meeting whose place is not calm yet.
+  state.story.rival = Math.min(state.story.rival, rivalMost(state));
   const settings = isObj(saved.settings) ? saved.settings : {};
   // A switch an older save has never heard of keeps its usual setting: sound is on unless turned off.
   for (const key of Object.keys(state.settings)) if (typeof settings[key] === 'boolean') state.settings[key] = settings[key];

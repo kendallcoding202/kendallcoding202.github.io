@@ -16,13 +16,15 @@ import { nextRandom, rollPick, clamp } from './util.js';
 // ---------------------------------------------------------------- fighters
 
 /** One Clutterkin as it stands in a fight. `side` is 'ally' or 'foe'. */
-export function makeFighter(side, slot, { species, level, hp, friendId = 0, heirloom = false, name = '', grown = false }) {
+export function makeFighter(side, slot, { species, level, hp, friendId = 0, heirloom = false, name = '', grown = false, owned = false }) {
   const kind = SPECIES[species];
   const big = !!grown && !!kind.grown; // a friend that has grown up: stronger, and under its grown form's name
   const maxHp = statAt(kind.hp, level, big);
-  const huff = side === 'foe' && kind.huff > 0 ? kind.huff + (heirloom ? HEIRLOOM.huff : 0) : 0;
+  // One that is somebody's own (`owned`: the rival's three) is not lost and in no Huff: there is nobody to reach.
+  const theirs = side === 'foe' && !!owned;
+  const huff = side === 'foe' && kind.huff > 0 && !theirs ? kind.huff + (heirloom ? HEIRLOOM.huff : 0) : 0;
   return {
-    key: `${side === 'ally' ? 'a' : 'f'}${slot}`, side, slot, species, friendId, heirloom: !!heirloom, grown: big,
+    key: `${side === 'ally' ? 'a' : 'f'}${slot}`, side, slot, species, friendId, heirloom: !!heirloom, grown: big, owned: theirs,
     name: name || (big ? kind.grown.name : kind.name), element: kind.element, level, boss: !!kind.boss, turns: kind.turns || 1,
     maxHp, hp: hp === undefined ? maxHp : clamp(Math.round(hp), 0, maxHp),
     oomph: statAt(kind.oomph, level, big), grit: statAt(kind.grit, level, big), pep: statAt(kind.pep, level, big),

@@ -208,6 +208,10 @@ export const GREEN = { x: 930, y: 1570, w: 460, h: 200 };
 export const HAUNTS = { 1: { x: 1800, y: 520 }, 2: { x: 540, y: 5760 } };
 export const FLUFF_BESIDE = { x: -66, y: 12 };
 
+// Where Tansy Brisk waits, at each of her five meetings (see core/rival.js): beside the way to wherever
+// is next, on open ground, never in a doorway or on a spot strays keep to. She holds no ground.
+export const RIVAL_AT = [{ x: 1650, y: 1630 }, { x: 1090, y: 2629 }, { x: 1771, y: 3786 }, { x: 1059, y: 5257 }, { x: 1210, y: 6900 }];
+
 // The quiet spots where strays turn up (core/strays.js): beside a street but off it, well clear of
 // every door and gate, of the neighbours, the benches, the green and each other. Most are out in the
 // country between the rows of houses; a few are in the corners of the lane. Picked once, by a tool

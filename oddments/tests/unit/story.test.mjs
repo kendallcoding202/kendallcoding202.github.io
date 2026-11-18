@@ -57,13 +57,14 @@ function calmPantry(game) {
 
 // ---------------------------------------------------------------- who is who
 
-test('the cast is four people, each with a name, a part to play and a painting', () => {
-  assert.deepEqual(CAST_IDS, ['maribel', 'ines', 'dov', 'spick']);
+test('the cast is five people, each with a name, a part to play and a painting', () => {
+  assert.deepEqual(CAST_IDS, ['maribel', 'ines', 'dov', 'spick', 'tansy']);
+  assert.deepEqual(NEIGHBOURS, ['ines', 'dov', 'spick'], 'three of them live on the lane (the rival comes and goes: see rival.test.mjs)');
   for (const id of CAST_IDS) {
     assert.ok(CAST[id].name && CAST[id].role, id);
     assert.ok(existsSync(`${SPRITES}${CAST[id].art}.webp`), `${id} has a painting`);
   }
-  assert.equal(new Set(CAST_IDS.map((id) => CAST[id].name)).size, 4);
+  assert.equal(new Set(CAST_IDS.map((id) => CAST[id].name)).size, 5);
 });
 
 test('the house-sitter can be seen from the side, the front and behind, in every look', () => {
@@ -243,9 +244,10 @@ test('Dov has a first thing to say and then a tip each time, round and round; Mr
   assert.equal(game.talkTo('dov').length, 3);
   assert.equal(game.hasNews('dov'), false);
   const tips = [];
-  for (let i = 0; i < 31; i++) { const said = game.talkTo('dov'); assert.equal(said.length, 1); tips.push(said[0].text); }
-  assert.equal(new Set(tips).size, 15, 'fifteen tips');
-  assert.equal(tips[15], tips[0], 'and then round again');
+  for (let i = 0; i < 33; i++) { const said = game.talkTo('dov'); assert.equal(said.length, 1); tips.push(said[0].text); }
+  assert.equal(new Set(tips).size, 16, 'sixteen tips');
+  assert.equal(tips[16], tips[0], 'and then round again');
+  assert.ok(tips.some((tip) => /Spick and Span/.test(tip) && /do not have to stop/.test(tip)), 'one of them about the new one with the boxes: nobody has to stop for her');
   assert.ok(tips.some((tip) => /mailbox/.test(tip)), 'one of them says a note can be posted to Ines Tock');
   assert.ok(tips.some((tip) => /bench/.test(tip)), 'one of them says where the benches are');
   assert.ok(tips.some((tip) => /strays/.test(tip) && /walk past/.test(tip)), 'one of them says nobody has to meet a stray');
@@ -374,18 +376,20 @@ test('the story is saved, and comes back as it went in', () => {
   game.standBy('ines'); game.talkTo('ines');
   game.standBy('dov'); game.talkTo('dov'); game.talkTo('dov');
   const saved = JSON.parse(game.serialize(NOW));
-  assert.deepEqual(saved.story, { call: true, call2: false, ines: 1, dov: 2, spick: 0 });
+  assert.deepEqual(saved.story, { call: true, call2: false, ines: 1, dov: 2, spick: 0, rival: 0 });
   const back = reviveState(JSON.parse(JSON.stringify(saved)), NOW);
   assert.deepEqual(back.story, saved.story);
   assert.equal(goalOf(back).id, 'friend');
 });
 
-test('a save cannot break the story: whatever is stored, it is two yes-or-noes and three small whole numbers', () => {
-  assert.deepEqual(newStory(), { call: false, call2: false, ines: 0, dov: 0, spick: 0 });
+test('a save cannot break the story: whatever is stored, it is two yes-or-noes and four small whole numbers', () => {
+  assert.deepEqual(newStory(), { call: false, call2: false, ines: 0, dov: 0, spick: 0, rival: 0 });
   for (const wrong of [null, undefined, 7, 'told', [], [1, 2], {}, { call: 'yes', ines: '2', dov: null, spick: {} }, { ines: NaN, dov: Infinity, spick: -Infinity }]) {
     assert.deepEqual(reviveStory(wrong), newStory(), JSON.stringify(wrong));
   }
-  assert.deepEqual(reviveStory({ call: true, call2: 'yes', ines: 1e308, dov: -5, spick: 2.9, extra: 'x', constructor: 1 }), { call: true, call2: false, ines: 99, dov: 0, spick: 2 });
+  assert.deepEqual(reviveStory({ call: true, call2: 'yes', ines: 1e308, dov: -5, spick: 2.9, extra: 'x', constructor: 1 }), { call: true, call2: false, ines: 99, dov: 0, spick: 2, rival: 0 });
+  assert.equal(reviveStory({ rival: 3 }).rival, 3);
+  for (const wrong of [1e308, -5, 2.9, '2', null, {}, NaN]) assert.ok([0, 5].includes(reviveStory({ rival: wrong }).rival), String(wrong));
   assert.equal(reviveStory({ call2: true }).call2, true);
   // A save that claims Ines has heard about a calm garden that is not calm: the goal still makes sense.
   const state = reviveState({ ...JSON.parse(JSON.stringify(newState(NOW, 3))), started: true, story: { call: true, ines: 2, dov: 50, spick: 50 } }, NOW);

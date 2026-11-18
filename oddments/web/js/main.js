@@ -9,6 +9,8 @@ import { loadAssets } from './ui/assets.js';
 import { h, $, sprite } from './ui/dom.js';
 import { modal, toast } from './ui/modals.js';
 import { laneScreen } from './ui/lane.js';
+import { converse } from './ui/talk.js';
+import { CAST } from './core/story.js';
 import { insideScreen } from './ui/inside.js';
 import { fightScreen } from './ui/fight.js';
 import { friendsScreen, bookScreen, settingsScreen, lookDialog } from './ui/friends.js';
@@ -196,8 +198,11 @@ function resultDialog(ctx, summary, foes) {
       ? `${name(summary.keepsake)} is a Keepsake: there is only one, anywhere. And it has chosen to come home with you.`
       : `${name(summary.keepsake)} has slipped away, quite unhurt. A Keepsake cannot be made to stay: Reach out to it, and keep Reaching out. It will be here again after a rest.`));
   }
+  // A bout with somebody who was waiting by the road: nobody is calmed; it is won, or it is not.
+  else if (summary.won && summary.rival) lines.push(h('p', { data: { act: 'bout' } }, `${CAST.tansy.name} calls her three back to her. Everyone catches their breath.`));
   else if (summary.won) lines.push(h('p', null, summary.strays ? `${foes.length > 1 ? 'They are' : 'It is'} calm now, and off home. Everyone catches their breath.` : 'They are calm now. Everyone catches their breath.'));
   else {
+    if (summary.rival) lines.push(h('p', { data: { act: 'bout' } }, summary.rival.text));
     lines.push(h('p', null, 'Your friends are worn out. You carry them home for a rest. Whoever you calmed stays calm, and you keep everything they learned.'));
     // Nobody is ever stuck: there is always more practice to be had, and this is where.
     lines.push(h('p', { class: 'note', data: { act: 'practice' } }, 'Want them stronger first? After a rest there are always strays out on the roads, and a few wandering wherever is calm. The more of them together, the more they teach.'));
@@ -244,7 +249,12 @@ function resultDialog(ctx, summary, foes) {
 
   modal({
     title: summary.cleared ? 'All calm' : summary.won ? 'Won' : 'Home again', cls: `result ${summary.won ? 'won' : 'lost'}`, fixed: true, body: lines,
-    actions: [{ id: 'next', label: summary.home ? 'Home' : 'Onward', onClick: () => ctx.show('lane') }],
+    // (After a bout that was won, whoever lost it has something to say, once you are back in the lane.)
+    actions: [{ id: 'next', label: summary.home ? 'Home' : 'Onward', onClick: () => {
+      ctx.show('lane');
+      if (summary.rival && summary.rival.lines.length) setTimeout(() => converse(summary.rival.lines, () => { game.seenOff(); ctx.save(); }), 0);
+      else game.seenOff();
+    } }],
   });
   if (summary.joined.length) toast(`${summary.joined.length === 1 ? 'A new friend' : `${summary.joined.length} new friends`}!`, { kind: 'good' });
 }

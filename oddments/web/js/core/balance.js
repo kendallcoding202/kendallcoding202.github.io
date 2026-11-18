@@ -1192,6 +1192,24 @@ export const LIVELY = { groups: [3, 4], heirloom: 3 / 20 };
 // stray. `berth` is how wide the way found for you goes round one you are not heading for.
 export const STRAYS = { groups: [4, 7], farGroups: [6, 9], size: [1, 3], meet: 58, berth: 104 }; // (`farGroups`: once the far bank is open too)
 
+// ---------------------------------------------------------------- the rival
+//
+// Tansy Brisk, junior clearance officer, and her three: a feather duster, a bar of soap and a travel
+// iron, issued to her by the depot (see core/rival.js). She waits by the road at five points along
+// the way, each once the place named here is calm. Her three are as strong as `levels` says, and
+// grown up once they are big enough. The levels were set with the simulator, against a rested team
+// that has come straight there: it wins about nine bouts in ten, and the first a little oftener.
+export const RIVAL = {
+  kinds: ['coothug', 'soapslug', 'ironweasel'],
+  meetings: [
+    { after: 'garden', levels: [6, 5, 5] },
+    { after: 'pantry', levels: [10, 9, 9] },
+    { after: 'stacks', levels: [12, 13, 13] },
+    { after: 'dark', levels: [16, 16, 16] },
+    { after: 'shed', levels: [20, 20, 20] },
+  ],
+};
+
 // ---------------------------------------------------------------- the house-sitter
 //
 // The human makes one Call a round. `every`: 1 = any round, 2 = every other.

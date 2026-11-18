@@ -42,8 +42,9 @@ export function ringLine(element) {
  * moves) or a restless one met in a fight (with its Huff and soft spot).
  * `name` is what a friend is called, if you have given it a name of your own.
  * `grown` is true for a friend that has grown up: its grown form's picture, name and strength.
+ * `owner` is whose it is, for one met in a bout that is somebody's own: it cannot be reached.
  */
-export function oddmentCard({ species, level, heirloom = false, xp = null, huff = null, name = '', grown = false, actions = [] }) {
+export function oddmentCard({ species, level, heirloom = false, xp = null, huff = null, name = '', grown = false, owner = '', actions = [] }) {
   const kind = SPECIES[species];
   const big = !!grown && !!kind.grown;
   const kindName = big ? kind.grown.name : kind.name;
@@ -68,7 +69,7 @@ export function oddmentCard({ species, level, heirloom = false, xp = null, huff 
     aboutOf(species) ? h('p', { class: 'about', data: { act: 'about' } }, aboutOf(species).about.split(kind.name).join(called)) : null,
     xp === null ? null : (level >= MAX_LEVEL ? h('small', null, 'As strong as it gets.') : bar('xp', xp / xpNeeded(level), `${xp} / ${xpNeeded(level)} to level ${level + 1}`)),
     h('div', { class: 'stats' }, stats),
-    huff === null ? null : h('p', { class: 'note' }, kind.boss
+    huff === null ? null : h('p', { class: 'note', data: owner ? { act: 'owned' } : {} }, owner ? `${owner}'s own. It is not lost and in no Huff, so there is nobody here to Reach out to.` : kind.boss
       ? 'Too proud to reach. It will not come home, however kindly you ask.'
       : `In a Huff: ${huff} pip${huff === 1 ? '' : 's'}. Has a soft spot for ${ELEMENTS[softSpotOf(kind.element)].name}: a friend of that element at your side makes reaching out work better.`),
     h('div', { class: 'movelist' }, moves),

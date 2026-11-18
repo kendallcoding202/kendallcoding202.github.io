@@ -5,7 +5,9 @@ import { TEAM_SIZE, NAME_LENGTH, lookOf, roomOf, roomBuilt } from './balance.js'
 import { createBattle, choices, act, concede } from './battle.js';
 import { settleUp } from './progress.js';
 import { rollEncounter, fairEncounter, enterRoom, leaveRoom, afterFight, canMeet, nextGroup, heldBy, heldIn, roomOpen, bridgeOpen, livelyPlace, placeCalm, staysCalm, calmedIn, teamOf, maxHpOf, rested, healthOf } from './rooms.js';
-import { rollStrays, fairStrays, fairGroup, keepsakeOut, straysAbout, strayNear, afterStrays } from './strays.js';
+import { rollStrays, fairStrays, fairGroup, keepsakeOut, straysAbout, strayNear, afterStrays, afterOpen } from './strays.js';
+import { TANSY, rivalAbout, rivalTeam, rivalSays, rivalAfter, rivalAside } from './rival.js';
+import { RIVAL } from './balance.js';
 import { STRAYS } from './balance.js';
 import { insideOf, stepIn, routeIn, spotIn, onMat, besidePost } from './indoors.js';
 import { WORLD, POST, BENCHES, SIT, MAILBOXES, POST_REACH, stepWalk, routeTo, straighten, roomy, standing, canStand, spotNear, spotOf, districtOf, districtAt, postNear, personNear, personAt, benchNear, mailNear, TALK } from './world.js';
@@ -25,6 +27,8 @@ export class Game {
     this.battle = null; // the fight in progress; never saved
     this.facing = -1; // which group that fight is with
     this.wild = -1; // or, if it is with strays out on the lane, which of them
+    this.bout = null; // or, if it is a bout with somebody who was waiting by the road, who and which: { who, meeting }
+    this.parting = null; // whoever has just lost a bout and not yet said so: still standing there, though the save has them gone. Never saved
   }
 
   /**
@@ -255,6 +259,79 @@ export class Game {
     this.battle = createBattle(state, { allies, foes: stray.foes, fx: this.fx });
     return this.battle;
   }
+
+  // ------------------------------------------------------------ whoever waits by the road
+
+  /**
+   * Whoever is standing out in the open to be walked up to just now: [{ id, x, y, due }]. `due` is
+   * the bout they want (for Tansy Brisk, which of her meetings), or -1 if they only have a word for you.
+   */
+  waiting() {
+    const tansy = rivalAbout(this.state);
+    if (tansy) return [{ id: TANSY, ...tansy }];
+    // Having just lost, she stands where she was until she has had her say (`leaving`: there is nothing more to hear).
+    return this.parting ? [{ ...this.parting, due: -1, leaving: true }] : [];
+  }
+
+  /** Whoever was standing there to say they had lost has said it, and gone. */
+  seenOff() { this.parting = null; }
+
+  /** The one of them you are standing near enough to talk to (their id), or null. Nobody during a fight, or from indoors. */
+  waitingNear() {
+    if (this.place() === 'fight' || this.state.indoors) return null;
+    const { x, y } = this.state.where;
+    const near = this.waiting().find((one) => !one.leaving && Math.hypot(one.x - x, one.y - y) <= TALK);
+    return near ? near.id : null;
+  }
+
+  /** What the one you are standing by has to say: lines of { who, text }. Hearing it changes nothing. Null from anywhere else. */
+  hail(id = this.waitingNear()) { return id && this.waitingNear() === id ? rivalSays(this.state) : null; }
+
+  /** Whether the one you are standing by wants a bout: `startBout` would begin one. */
+  boutDue(id = this.waitingNear()) {
+    const one = id && this.waitingNear() === id ? this.waiting().find((each) => each.id === id) : null;
+    return !!one && one.due >= 0;
+  }
+
+  /**
+   * Has it out with whoever you are standing by: their three against yours, as worn as yours are.
+   * Nobody of theirs can be reached. Returns the fight, or null.
+   */
+  startBout(id = this.waitingNear()) {
+    if (!this.boutDue(id)) return null;
+    const { state } = this;
+    this.parting = null;
+    const meeting = this.waiting().find((each) => each.id === id).due;
+    const foes = rivalTeam(meeting);
+    const health = healthOf(state);
+    const allies = this.team().map((friend) => ({ species: friend.species, level: friend.level, hp: health[friend.id], friendId: friend.id, heirloom: friend.heirloom, name: nameOf(friend), grown: !!friend.grown }));
+    if (!allies.some((ally) => ally.hp > 0)) return null;
+    for (const foe of foes) {
+      state.book[foe.species].met = true;
+      if (foe.grown) state.book[foe.species].grown = true;
+    }
+    this.bout = { who: id, meeting };
+    this.wild = -1;
+    this.facing = -1;
+    this.battle = createBattle(state, { allies, foes, fx: this.fx });
+    return this.battle;
+  }
+
+  /** Goes straight up to whoever is waiting. For the simulator and tests; a player walks. */
+  standByWaiting(id) {
+    const one = this.waiting().find((each) => each.id === id);
+    if (this.place() === 'fight' || !one) return false;
+    const held = this.held();
+    for (const [dx, dy] of [[0, 1], [-1, 0], [1, 0], [0, -1]]) {
+      const x = one.x + dx * (TALK - 20);
+      const y = one.y + dy * (TALK - 20);
+      if (canStand(x, y, held)) { this.state.where = { x, y }; this.state.indoors = null; return true; }
+    }
+    return false;
+  }
+
+  /** Other things worth doing beside the goal and the Keepsake: [{ id, title, detail, art }]. (Tansy Brisk is waiting.) */
+  also() { return [rivalAside(this.state)].filter(Boolean); }
 
   /** Whether everyone is rested: not out on a visit, and not worn from meeting strays. */
   rested() { return rested(this.state); }
@@ -493,6 +570,20 @@ export class Game {
     const summary = settleUp(state, battle);
     const left = {};
     for (const unit of battle.units) if (unit.side === 'ally') left[unit.friendId] = unit.hp;
+    if (this.bout) {
+      // A bout with somebody who was waiting by the road: won, that meeting is done with, and everyone
+      // takes a breather where they stand; lost, you are carried home, and they will be waiting still.
+      const { meeting, who } = this.bout;
+      const stood = this.waiting().find((one) => one.id === who);
+      const moved = afterOpen(state, summary.won, left);
+      if (summary.won) state.story.rival = Math.min(RIVAL.meetings.length, Math.max(state.story.rival, meeting + 1));
+      if (moved.home) { state.where = { ...spotOf('home').door }; state.indoors = null; rollStrays(state); }
+      for (const friend of state.friends) if (friend.heirloom) state.book[friend.species].heirloom = true;
+      this.battle = null;
+      this.bout = null;
+      this.parting = summary.won && stood ? { id: who, x: stood.x, y: stood.y } : null;
+      return { ...summary, room: null, stop: -1, cleared: false, home: moved.home, rival: { meeting, ...rivalAfter(meeting, summary.won) } };
+    }
     if (this.wild >= 0) {
       // Strays, out on the lane: calm, they are gone until you next rest; worn out, you are carried home.
       const keepsake = state.strays[this.wild].keep ? state.strays[this.wild].foes[0].species : null;

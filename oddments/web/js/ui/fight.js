@@ -13,12 +13,14 @@ import { lineFor, toGo, howItGoes } from './text.js';
 import { howToFight, EDGE_WORDS } from './howto.js';
 import { play as sound } from '../platform/sound.js'; // (this screen has a `play` of its own: playing back the fight)
 import { artOf } from '../core/names.js';
+import { CAST } from '../core/story.js';
 
 export function fightScreen(ctx) {
   const { game } = ctx;
   const battle = game.battle;
   const visit = game.state.visit;
-  const wild = game.wild >= 0; // strays, met out on the lane: no place, and no stop of one
+  const bout = game.bout; // a bout with somebody who was waiting by the road: { who, meeting }, or null
+  const wild = game.wild >= 0 || !!bout; // out on the lane (strays, or a bout): no place, and no stop of one
   const room = wild ? null : roomOf(visit.room);
   const spot = wild ? null : room.path[game.facing];
   const pace = () => (game.state.settings.fast || ctx.fast ? 0.2 : 1);
@@ -60,11 +62,14 @@ export function fightScreen(ctx) {
   const floaters = h('div', { class: 'floaters' });
   const roundEl = h('b', null, 'Round 1');
   const caller = h('div', { class: 'caller' }, sprite(game.state.player.look));
+  // In a bout, whoever the other three belong to is not on the field either: they stand at the other
+  // end of the same strip, facing you across it. (The owner asked for this: "at the bottom like where you see my character".)
+  const backer = bout ? h('div', { class: 'caller theirs', data: { who: bout.who }, title: CAST[bout.who].name }, sprite(CAST[bout.who].art)) : null;
   const units = [...allies, ...foes].map(buildUnit);
   const arena = h('div', { class: `arena${foes.some((unit) => unit.boss) ? ' bossfight' : ''}` },
     h('img', { class: 'bg', src: `assets/bg/${wild ? 'bg_lane' : room.bg}.webp`, alt: '' }),
     h('div', { class: 'topline' },
-      h('div', { class: 'roundpill' }, roundEl, h('span', null, wild ? (SPECIES[foes[0].species].keepsake ? 'Out in the open · a Keepsake' : `Out on the lane · ${['a stray', 'two strays', 'three strays'][foes.length - 1] || 'strays'}`) : visit.stroll ? `${spot.name} · calm` : `${spot.name} · ${howItGoes(visit, room)}`)),
+      h('div', { class: 'roundpill' }, roundEl, h('span', null, bout ? `Out on the lane · a bout with ${CAST[bout.who].name}` : wild ? (SPECIES[foes[0].species].keepsake ? 'Out in the open · a Keepsake' : `Out on the lane · ${['a stray', 'two strays', 'three strays'][foes.length - 1] || 'strays'}`) : visit.stroll ? `${spot.name} · calm` : `${spot.name} · ${howItGoes(visit, room)}`)),
       h('button', { class: 'iconbtn menu', 'aria-label': 'Menu', data: { act: 'menu' }, onclick: openMenu }, '⋯')),
     units, floaters);
   const orderEl = h('div', { class: 'order' });
@@ -309,7 +314,7 @@ export function fightScreen(ctx) {
     const calls = options.calls.map((option) => {
       const call = CALLS[option.id];
       const on = armed && armed.type === 'call' && armed.id === option.id;
-      const why = options.idle ? '' : option.used ? 'Used this round' : option.wait > 0 ? 'Next round' : option.targets.length ? '' : option.id === 'reach' ? 'Nobody to reach' : 'Nobody is hurt';
+      const why = options.idle ? '' : option.used ? 'Used this round' : option.wait > 0 ? 'Next round' : option.targets.length ? '' : option.id === 'reach' ? (bout ? 'Not lost' : 'Nobody to reach') : 'Nobody is hurt';
       return h('button', { class: `call${on ? ' armed' : ''}`, disabled: !option.ready, data: { call: option.id }, title: call.desc, onclick: () => choose('call', option) },
         h('b', null, call.name), why ? h('small', null, why) : null);
     });
@@ -317,7 +322,7 @@ export function fightScreen(ctx) {
       h('div', { class: 'who' }, sprite(artOf(unit), unit.heirloom), h('div', null, h('b', null, unit.name), elementTag(unit.element)),
         armed ? h('button', { class: 'btn plain small', data: { act: 'cancel' }, onclick: () => { disarm(); drawPanel(); } }, 'Cancel') : null),
       h('div', { class: 'moves' }, moves),
-      h('div', { class: 'calls' }, caller, h('div', { class: 'set' }, h('small', null, `${game.state.player.name}'s Call · one a round`), h('div', null, calls))));
+      h('div', { class: 'calls' }, caller, h('div', { class: 'set' }, h('small', null, `${game.state.player.name}'s Call · one a round`), h('div', null, calls)), backer));
   }
 
   const shortLine = (move) => {
@@ -367,7 +372,7 @@ export function fightScreen(ctx) {
       return;
     }
     const unit = unitOf(battle, key);
-    oddmentCard({ species: unit.species, level: unit.level, heirloom: unit.heirloom, grown: unit.grown, name: unit.side === 'ally' ? unit.name : '', huff: unit.side === 'foe' ? unit.huff : null });
+    oddmentCard({ species: unit.species, level: unit.level, heirloom: unit.heirloom, grown: unit.grown, name: unit.side === 'ally' || unit.owned ? unit.name : '', huff: unit.side === 'foe' ? unit.huff : null, owner: unit.owned && bout ? CAST[bout.who].name : '' });
   }
 
   function commit(action) {

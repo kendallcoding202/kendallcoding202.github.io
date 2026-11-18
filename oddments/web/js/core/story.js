@@ -4,22 +4,27 @@
 // What has happened is worked out from the save itself wherever it can be (a
 // place is calm because its boss was calmed, not because a flag says so). The
 // story keeps only what nothing else records: which conversations were had.
-import { ROOMS, ROOM_IDS, roomBuilt } from './balance.js';
+import { ROOMS, ROOM_IDS, RIVAL, roomBuilt } from './balance.js';
 import { calmedIn } from './rooms.js';
 import { toldOf } from './names.js';
+import { rivalSoFar } from './rival.js';
 
 export const CAST = {
   maribel: { name: 'Great-aunt Maribel', role: 'on the phone', art: 'cast_maribel' },
   ines: { name: 'Ines Tock', role: 'clock-mender', art: 'cast_ines' },
   dov: { name: 'Dov', role: 'bottle-cap collector', art: 'cast_dov' },
   spick: { name: 'Mr. Spick', role: 'Spick & Span Clearances', art: 'cast_spick' },
+  tansy: { name: 'Tansy Brisk', role: 'junior clearance officer', art: 'cast_tansy' },
 };
 export const CAST_IDS = Object.keys(CAST);
 /** Whoever stands in the lane to be talked to. (Great-aunt Maribel is away, and rings.) */
 export const NEIGHBOURS = ['ines', 'dov', 'spick'];
 
-/** What the story remembers: whether each of the two calls was taken, and how often each neighbour has been heard out. */
-export const newStory = () => ({ call: false, call2: false, ines: 0, dov: 0, spick: 0 });
+/**
+ * What the story remembers: whether each of the two calls was taken, how often each neighbour has been
+ * heard out, and how many of her meetings Tansy Brisk has lost (see rival.js).
+ */
+export const newStory = () => ({ call: false, call2: false, ines: 0, dov: 0, spick: 0, rival: 0 });
 const MOST = 99;
 
 /** A story from a save, made safe: every part a whole number in range, whatever was stored. */
@@ -32,6 +37,8 @@ export function reviveStory(raw) {
     const told = raw[who];
     if (typeof told === 'number' && Number.isFinite(told)) story[who] = Math.min(MOST, Math.max(0, Math.floor(told)));
   }
+  // (How many she can have lost depends on which places are calm: whoever reads the rest of the save holds it to that.)
+  if (Number.isInteger(raw.rival)) story.rival = Math.min(RIVAL.meetings.length, Math.max(0, raw.rival));
   return story;
 }
 
@@ -183,6 +190,7 @@ const DOV = {
     'Strays get everyone out of puff, same as anywhere. Go home and rest, and there will be different ones out when you set off again.',
     'There is a bench on Lampwick Row and another on Chimney Hill. Sit down and everyone gets their breath back. I timed it. It is the same as going home.',
     'You do not have to walk all the way back to tell Ines things. Post her a note. There is a mailbox by every house out there. She writes back before you have let go of the flap.',
+    'There is a new one from Spick and Span, with boxes on her back. She called my bottle caps "unattended". You do not have to stop for her. I would, though. I want to see her lose.',
   ],
 };
 
@@ -470,5 +478,6 @@ export function storySoFar(state) {
   for (const room of LANE) if (calm(state, room.id)) told.push(`${room.name} is calm.`);
   if (story.call2) told.push('Great-aunt Maribel rang again: the far bank is awake too. Your eight keys opened the gate on Kettle Bridge.');
   for (const room of FAR) if (calm(state, room.id)) told.push(`${room.name} is calm.`);
+  told.push(...rivalSoFar(state));
   return told;
 }

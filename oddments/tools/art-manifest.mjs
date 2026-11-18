@@ -524,4 +524,17 @@ export const ART = [
       'a rose-gold sewing key whose bow is the two finger loops of a pair of scissors, with a length of red thread wound round it and a tiny silver thimble charm. ' +
       `${WORLD_STYLE}`,
   },
+  // ---- the rival: one more person, painted to stand beside the four of the cast sheet ----
+  // Asked for on 18 November 2026: "a villain to the game that's our counterpart ... to add more depth".
+  // She is our own: a junior clearance officer who thinks a mess is to be filed, not befriended.
+  {
+    id: 'cast_tansy', kind: 'human', size: '1024x1024', quality: 'medium', transparent: true,
+    prompt:
+      'A single game character sprite, full body, standing upright facing the viewer, turned very slightly to the right: ' +
+      'a brisk young woman in her twenties, a junior clearance officer, with warm tan skin, a sharp black bob with a blunt fringe and round wire glasses, ' +
+      'wearing a pale-blue boiler suit a size too big with the cuffs rolled up and a bright yellow armband, spotless white trainers, ' +
+      'a clipboard held against her chest in one arm, a feather duster hanging from her belt, and a bundle of flat-packed cardboard boxes strapped on her back. ' +
+      'Chin up, one eyebrow raised, a confident competitive smile: sure she is right, not unkind. ' +
+      `Big head, chunky proportions. An original character, not based on any existing game, film or cartoon character. ${SPRITE_STYLE}`,
+  },
 ];

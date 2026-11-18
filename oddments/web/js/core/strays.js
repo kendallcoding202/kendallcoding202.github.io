@@ -164,12 +164,21 @@ export function strayNear(state, pos) {
  * Returns { home }.
  */
 export function afterStrays(state, index, won, left) {
+  if (won) state.strays[index].done = true;
+  return afterOpen(state, won, left);
+}
+
+/**
+ * The same for any fight out in the open (strays, or a bout with somebody who was waiting by the
+ * road): a win and everyone takes a breather where they stand; a loss and you are carried home.
+ * Returns { home }.
+ */
+export function afterOpen(state, won, left) {
   if (!won) {
     state.visit = null;
     state.worn = null;
     return { home: true };
   }
-  state.strays[index].done = true;
   // On a visit, the visit keeps how everyone is. Out on the lane with none on, the save does.
   const health = state.visit ? state.visit.hp : (state.worn = state.worn || {});
   for (const friend of teamOf(state)) {
