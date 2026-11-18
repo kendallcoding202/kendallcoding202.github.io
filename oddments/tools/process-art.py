@@ -41,6 +41,11 @@ def kind_of(name):
     return "mob"
 
 
+# The keys: one for each place, in the order the sheet has them. Longest side on the web.
+KEYS = ["garden", "alley", "pantry", "wash", "stacks", "rooftops", "attic", "dark"]
+KEY_SIZE = 200
+
+
 def trimmed(im):
     """Crops to the painted area, ignoring the faint alpha haze the model leaves."""
     im = im.convert("RGBA")
@@ -312,6 +317,20 @@ def process_world(name, im, world):
             dest = os.path.join(world, "r_" + sprite + ".webp")
             fit(piece, longest).save(dest, "WEBP", quality=90, method=6)
             written.append(dest)
+    elif name == "world_keys":
+        # The eight keys, in the order of the places. (The rooftop key on the sheet is not used: it has a
+        # painting of its own, below.)
+        keys = os.path.join(os.path.dirname(world), "keys")
+        for place, piece in zip(KEYS, cut_cells(im, 2, 4)):
+            if place == "rooftops":
+                continue
+            dest = os.path.join(keys, place + ".webp")
+            fit(piece, KEY_SIZE).save(dest, "WEBP", quality=90, method=6)
+            written.append(dest)
+    elif name == "world_key_rooftops":
+        dest = os.path.join(os.path.dirname(world), "keys", "rooftops.webp")
+        fit(trimmed(im), KEY_SIZE).save(dest, "WEBP", quality=90, method=6)
+        written.append(dest)
     elif name == "alley_cobbles":
         dest = os.path.join(world, "cobbles.webp")
         seamless(im.convert("RGB").resize((512, 512), Image.LANCZOS), 64).save(dest, "WEBP", quality=84, method=6)
@@ -356,7 +375,7 @@ def room_part(name):
 
 
 def main():
-    for sub in ("sprites", "world", "rooms"):
+    for sub in ("sprites", "world", "rooms", "keys"):
         os.makedirs(os.path.join(OUT, sub), exist_ok=True)
     count = 0
     total = 0
