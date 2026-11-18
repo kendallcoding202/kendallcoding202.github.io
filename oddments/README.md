@@ -4,12 +4,12 @@
 
 A creature-collecting RPG for iPhone set in the world of Pawst Lives. The monsters are things from a house that came alive (an odd sock, burnt toast, the dust under the bed). You are a person, house-sitting, who befriends them and battles alongside them, three against three.
 
-This is the **framework and all eight places in a first form**, not the finished game: the whole neighbourhood to walk around, your own home to go indoors in, and all eight places to calm, from the garden to the Roaring Dark. Six of them are buildings you walk into. Forty kinds of Clutterkin can be made friends of.
+This is the **first complete version**: everything planned for it is built and passes its tests, and most of it has not yet been played by a person on a phone (see *Not verified*, at the end). One open world to walk, your own home to go indoors in, eight places to calm from the garden to the Roaring Dark, forty kinds of Clutterkin to make friends of, and a story that runs from great-aunt Maribel's telephone call to a quiet lane.
 
 - The design on one page: [docs/DESIGN.md](docs/DESIGN.md)
 - The art that exists and the art still needed, with counts: [docs/ART.md](docs/ART.md)
 - Getting it onto TestFlight, and what only you can do: [docs/TESTFLIGHT.md](docs/TESTFLIGHT.md)
-- Play the slice: <https://kendallcoding202.github.io/oddments/web/> (this repository is a public website, so that address is public)
+- Play it in a browser: <https://kendallcoding202.github.io/oddments/web/> (this repository is a public website, so that address is public)
 
 No ads, no analytics, no accounts, no purchases, no network calls. The save lives on the device and nowhere else.
 
@@ -60,14 +60,15 @@ web/                    the game: what ships
     rooms.js            who is restless in a place, what ground they hold, which groups are calm for good, and a visit: from stepping in to resting at home; and a stroll through a place that is calm
     indoors.js          the floors of the buildings you can walk into: where feet can go, what there is to do
     strays.js           lost Clutterkin out on the lane itself: who turns up, how strong, and how worn they leave the team
-    story.js            the people of the lane, what each says and when, and the goal
+    story.js            the people of the lane, what each says and when, the goal, and the stories of the three you set out with
+    names.js            what a friend is called: its kind's name, or one of your own
     world.js            the open world: what stands where, where feet can go, finding the way
     game.js             the Game object: every action a player can take
     state.js            the save format and repair of old or damaged saves
     trial.js            a save is rehearsed on a copy before the game trusts it
     auto.js             a plain stand-in player, for the simulator and the rehearsal
     util.js             the seeded random generator
-  js/ui/                the screens: the world you walk in, the inside of a building, the fight (and how one works), friends, scrapbook
+  js/ui/                the screens: the world you walk in and its map, the inside of a building, the fight (and how one works), friends, scrapbook
   js/platform/          storage, sound, and the one file that knows about the iOS app's native side
   assets/               sprites, the paintings fights are seen against, the painted world, the painted rooms, font (about 5 MB)
 tests/unit/             a test per rule (node:test)
@@ -83,12 +84,32 @@ docs/                   the design and the art list
 - The page's content security policy allows its own files and nothing else: no inline script or style, and no network at all. `tests/unit/sealed.test.mjs` holds that, and fails if any other game's words turn up in what a player can read.
 - Nothing newer than iOS 15.0 is used (`tests/unit/compat.test.mjs`).
 
+## What is in it
+
+- **The world.** One open map, three phone screens across and about seven down, in five stretches whose names show in the heading: The Lane (home, the garden, Tin Can Alley, the Midnight Pantry), Bramble Way, Lampwick Row (the Wash, the Dusty Stacks), Long Meadow, and Chimney Hill (Moonlit Rooftops, the Tick-Tock Attic, and at the very end the Roaring Dark). You find your way by a map (opened from the goal at the top of the screen), by signposts, and by a gold arrow toward your goal. There are two benches to rest on and five mailboxes to send Ines Tock your news from, so nothing means walking the whole way back.
+- **Eight places to calm**, in the order you reach them walking, each ending in a ringleader. Whoever you calm stays calm, through a rest and through being carried home. Six are buildings you walk into; those and your home are painted rooms.
+- **Forty kinds of friend**, three moves each, six elements in a ring, fights of three against three. You make friends by reaching out in a fight, never by throwing anything. The three you set out with are introduced one by one at the start, and each has a story that comes round when a certain place is calmed. Any friend can be given a name of your own.
+- **Things to do once a place is calm**: a few are always wandering about in it, strays turn up along the roads between places, and every kind has rare Heirloom colours to find. The scrapbook keeps count.
+- **People**: great-aunt Maribel on the telephone, and three neighbours to talk to.
+- **Sound**: effects, a lullaby in the lane and three fight tunes, all made in code, each with a switch in Settings.
+- **A save** on the device and nowhere else, rebuilt field by field and rehearsed each time it is read.
+
 ## Not done
 
-All eight places can be played, and the story runs from great-aunt Maribel's call to a quiet lane. The six places you walk into, and your home, are painted: each has a back wall, a floor and a dozen things standing on it (21 generated images, on 16 November 2026). They have been looked at on a 393 x 852 screen only, by me, in screenshots. The last five places were made in one go: their kinds, moves and levels were set with the simulator and no person has played them. Three neighbours stand in the world and talk, but they stand still, and there is nothing to pick up. You see it all from above or from the front in 2D. The house-sitter turns to face the way they walk; Clutterkin and neighbours have one view each and only turn left or right. There is sound (effects, a lullaby in the lane, three fight tunes, all made in code, with a switch for each in Settings), but it was written and tested by something that cannot hear. No purchases. Clutterkin do not grow up into new forms: the table names one for each kind, but there is no rule and no art, and the game does not mention it. That was left out of this version on purpose (`docs/DESIGN.md`, *Growing up is not in this version*). A friend can be given a name of your own, from its card. The map is one open world, three phone screens across and about seven down: the lane, then two roads through open country to two more rows of houses, with the last place at the far end. You find your way by the map (opened from the goal at the top of the screen), by signposts, by the name of each stretch in the heading and by the gold arrow toward your goal.
+- **Growing up.** Clutterkin do not grow into new forms, on purpose: `docs/DESIGN.md`, *Growing up is not in this version*, says why. The table of kinds still names a grown form for each; the game never mentions it.
+- **Nothing to carry, buy or pick up.** There are no items, no money and no shop, and no purchases of any kind.
+- **The neighbours stand still.** Clutterkin and neighbours have one view each and only turn left or right; only the house-sitter turns to face the way they walk.
+- **The house-sitter's four looks are still candidates**, taller and slimmer than the Pawst Lives cats. The art still wanted, with counts, is in `docs/ART.md`.
+- **Nothing for the App Store.** No description, screenshots, age rating answers or price have been written or chosen, and the version number is still 0.1.0. The price is the owner's decision.
+- **The newest build on TestFlight is far behind.** Three builds have gone up: 0.1.0 (9), (13) and (16). Everything since (16) is in this repository and on the web copy only, and needs another upload to reach a phone (`docs/TESTFLIGHT.md`): the new names, going indoors and the seven painted rooms, the six places after Tin Can Alley, the other 26 kinds of friend, calm staying calm, the companions' stories, strays, the bigger world with its map, benches and mailboxes, names of your own, two more fight tunes, and many smaller changes to how a fight reads.
 
-The buildings, trees, lamps, hedges, grass, and the alley's junk, fence and cobbles are painted (four generated images, see `docs/ART.md`); the streets, their stepping stones, the gateways and the name plates are drawn in code. The seven rooms you can walk into are painted too (twenty-one more images); only their light and shade is code. The four house-sitter looks are still candidates, taller and slimmer than the Pawst Lives cats. The app icon is painted, with one touch-up done in code (the pencil in her hair).
+## Not verified
 
-The balance has only been played by bots: every place after the garden had its levels set with the simulator. On 16 November 2026 the rule changed so that whoever you calm stays calm, and each fight now teaches 30% more so that the team keeps pace without anyone being fought twice; the figures above are from after that change, and no person has played with it yet. The browser test runs in Chromium at phone sizes. Three builds are on TestFlight. 0.1.0 (9), the first, has been run on a real iPhone. 0.1.0 (13) added Tin Can Alley, the new icon and the folding-phone layout; 0.1.0 (16) adds sound, the Heirloom hunt and the loading screen. Apple has processed all three. A screenshot sent from the app on an iPhone (which build was not said) showed the top of the map hiding under the heading: that is fixed in the game since. Everything since is on the web copy only and needs another upload to reach a phone (`docs/TESTFLIGHT.md`): the new names, going indoors, the Midnight Pantry and the five places after it, the other 26 kinds of friend, calm places staying calm, calmed groups staying calm through a rest (and fights teaching 30% more), the seven painted rooms, the dust as a fight begins, two more fight tunes, "Not yet!", the plainer tags over targets, and how a fight works. Nothing has been heard by a person.
-
-iPhone Duo (Apple's folding iPhone): the game is laid out for both of its screens and for being opened and closed mid-game, and has been built with Xcode 27.1 and run on Apple's iPhone Duo simulator closed. It has not been seen open in the simulator, or on a real one, and build 0.1.0 (13) on TestFlight is the first made for it. `docs/TESTFLIGHT.md` has the whole account.
+- **By a person, on a phone: almost none of it.** Build 0.1.0 (9), the first, has been run on a real iPhone. A screenshot sent later from the app on an iPhone (which build was not said) showed the top of the map hiding under the heading; that is fixed since. Nobody has reported running (13) or (16), and nothing after (16) has been on a phone at all.
+- **How hard it is.** Every place after the garden had its levels set with the simulator, and the stand-in player there never goes home early and never meets a wanderer or a stray. As far as is known, no person has played the six places after Tin Can Alley. The figures under *Test it* are the simulator's.
+- **How it sounds.** The sound was written and tested by something that cannot hear. Nobody has listened to it.
+- **How it looks.** I have looked at every screen in screenshots at 393 x 852, and the newer ones at 320 x 568 as well. The browser test plays the whole game in Chromium at six screen sizes; that is not Safari, and not a phone.
+- **How fast it runs.** A long walk down the bigger world ran at 60 frames a second in the test browser. On a real phone it is unknown.
+- **The iPhone app since build (16).** On 18 November 2026 the "Clutterkin iOS" check (run 20, nothing uploaded) compiled the app as of the commit that added names of your own, rehearsed the upload archive, launched the app in Apple's iPhone simulator and proved a save survives there. I looked at its two screenshots: the intro, and a resumed game being told about its three companions. That is a simulator with nobody touching it: it shows the app starts, not how it plays. Two small changes made after that run (a wide name staying inside its tile, and the keyboard's return key) have been tested in the browser only.
+- **The names.** The game's name and every kind's name were looked for by web search and in lists of other games' names; nothing was found. That is a search, not a trademark check. The names of grown forms were never checked, and nothing shows them.
+- **iPhone Duo** (Apple's folding iPhone): the game is laid out for both of its screens and for being opened and closed mid-game, and has been built with Xcode 27.1 and run on Apple's iPhone Duo simulator closed. It has not been seen open in the simulator, or on a real one. `docs/TESTFLIGHT.md` has the whole account.
