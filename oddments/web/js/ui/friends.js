@@ -160,7 +160,9 @@ export function settingsScreen(ctx) {
 export function nameDialog(ctx, friend, after) {
   const { game } = ctx;
   const kind = SPECIES[friend.species];
-  const input = h('input', { type: 'text', maxLength: NAME_LENGTH, value: friend.nick || '', placeholder: kind.name, autocomplete: 'off', spellcheck: false, 'aria-label': `What you call your ${kind.name}`, data: { field: 'nick' } });
+  // The keyboard's return key is Done.
+  const input = h('input', { type: 'text', maxLength: NAME_LENGTH, value: friend.nick || '', placeholder: kind.name, autocomplete: 'off', spellcheck: false, enterKeyHint: 'done', 'aria-label': `What you call your ${kind.name}`, data: { field: 'nick' },
+    onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); dialog.el.querySelector('[data-id="save"]').click(); } } });
   const set = (text) => {
     const was = nameOf(friend);
     const now = game.nameFriend(friend.id, text);
@@ -169,7 +171,7 @@ export function nameDialog(ctx, friend, after) {
     if (now !== was) toast(now === kind.name ? `${kind.name} again.` : `${now} it is.`, { kind: 'good' });
     after();
   };
-  return modal({
+  const dialog = modal({
     title: 'What do you call it?', cls: 'naming',
     body: [
       h('div', { class: 'namingtop' }, sprite(friend.species, friend.heirloom, 'flip'),
@@ -178,13 +180,16 @@ export function nameDialog(ctx, friend, after) {
     ],
     actions: [...(friend.nick ? [{ id: 'own', label: `Just ${kind.name}`, kind: 'plain', onClick: () => set('') }] : []), { id: 'save', label: 'Done', onClick: () => set(input.value) }],
   });
+  return dialog;
 }
 
 /** Name and look. `first` is the intro: no way out but Begin. */
 export function lookDialog(ctx, first) {
   const { game } = ctx;
   let look = game.state.player.look;
-  const input = h('input', { type: 'text', maxLength: NAME_LENGTH, value: first ? '' : game.state.player.name, placeholder: 'Your name', autocomplete: 'off', spellcheck: false, data: { field: 'name' } });
+  // (The keyboard's return key puts the keyboard away: there is still a look to choose.)
+  const input = h('input', { type: 'text', maxLength: NAME_LENGTH, value: first ? '' : game.state.player.name, placeholder: 'Your name', autocomplete: 'off', spellcheck: false, enterKeyHint: 'done', data: { field: 'name' },
+    onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } } });
   const looks = LOOKS.map((entry) => h('button', { class: `look${entry.id === look ? ' on' : ''}`, data: { look: entry.id }, 'aria-label': entry.name }, sprite(entry.id), h('small', null, entry.name)));
   looks.forEach((button, i) => button.addEventListener('click', () => {
     look = LOOKS[i].id;

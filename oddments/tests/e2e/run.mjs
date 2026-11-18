@@ -105,6 +105,8 @@ check((await page.$$('.modal [data-look]')).length === 4, 'the intro offers four
 check(!(await page.$('.modal.intro .x')), 'the intro cannot be dismissed without beginning');
 await snap(page, 'e2e-intro');
 await page.fill('[data-field="name"]', 'Marisol');
+await page.press('[data-field="name"]', 'Enter');
+check(await S(page, () => !!document.querySelector('.modal.intro') && document.activeElement !== document.querySelector('[data-field="name"]') && document.querySelector('[data-field="name"]').value === 'Marisol'), 'the keyboard\'s return key puts the keyboard away and begins nothing: there is still a look to choose');
 await page.click('.modal [data-look="sitter_c"]');
 check(await S(page, () => document.querySelector('[data-look="sitter_c"]').classList.contains('on')), 'picking a look marks it');
 await page.click('[data-id="begin"]');
@@ -452,7 +454,8 @@ check((await page.$$('.grid.team .friend')).length === 3, 'the team of three is 
   check(await S(page, (name) => { const m = document.querySelector('.modal.naming'); const input = m.querySelector('input'); const box = m.getBoundingClientRect(); return input.value === '' && input.placeholder === name && input.maxLength === 12 && !m.querySelector('[data-id="own"]') && box.top >= 0 && box.bottom <= innerHeight; }, kind), 'Give it a name asks what you call it, with room for twelve letters');
   await page.fill('.modal.naming input', '  Biscuit ');
   await snap(page, 'e2e-naming');
-  await page.click('.modal.naming [data-id="save"]');
+  // The keyboard's return key is Done.
+  await page.press('.modal.naming input', 'Enter');
   await page.waitForSelector('.modal', { state: 'detached' });
   check(await S(page, () => document.querySelector('.grid.team .friend[data-species="dustbunny"] b').textContent) === 'Biscuit', 'and it is Biscuit on the team from then on', await S(page, () => document.querySelector('.grid.team .friend[data-species="dustbunny"] b').textContent));
   check((await state(page)).friends.find((f) => f.species === 'dustbunny').nick === 'Biscuit' && (await S(page, () => JSON.parse(localStorage.getItem('oddments.save')).friends.find((f) => f.species === 'dustbunny').nick)) === 'Biscuit', 'in the game and in the save');
