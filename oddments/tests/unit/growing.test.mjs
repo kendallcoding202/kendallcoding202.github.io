@@ -70,7 +70,8 @@ test('every grown form is painted, in its own colours and its Heirloom colours, 
     assert.match(entry.prompt, /obviously different from the reference picture at a glance/);
     assert.match(entry.prompt, /not based on any existing game, film or cartoon character/);
   }
-  assert.equal(ART.filter((art) => art.kind === 'grown').length, KINDS.length);
+  // (Forty more are painted and waiting, for the kinds of chapter two: in the manifest before they are in the game.)
+  assert.ok(ART.filter((art) => art.kind === 'grown').length >= KINDS.length);
 });
 
 test('a friend grows up on gaining the level its kind grows at, once, and not before', () => {

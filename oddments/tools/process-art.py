@@ -26,7 +26,8 @@ OUT = os.path.join(ROOT, "web", "assets")
 
 # Longest side in pixels after trimming. Drawn at up to ~2x on retina phones.
 # (A grown-up form is the same creature, bigger: its picture is kept a tenth larger than a young one's.)
-SIZES = {"human": 300, "mob": 240, "grown": 264, "boss": 440, "icon": 128}
+# (A Keepsake, one of a kind, is kept a little larger than an ordinary kind too.)
+SIZES = {"human": 300, "mob": 240, "grown": 264, "keep": 280, "boss": 440, "icon": 128}
 
 
 def kind_of(name):
@@ -38,6 +39,8 @@ def kind_of(name):
         return "icon"
     if name.endswith("_grown"):
         return "grown"
+    if name.startswith("keep_"):
+        return "keep"
     return "mob"
 
 
