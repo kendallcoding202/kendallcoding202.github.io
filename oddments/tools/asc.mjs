@@ -15,6 +15,8 @@
 // Reads ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8, APPLE_TEAM_ID and BUNDLE_ID from
 // the environment. It never prints a secret, a person's name, an email address
 // or the bundle id: this repository is public, and so is everything a workflow prints.
+// That goes for Apple's own words too: what Apple says about an error is passed
+// through `scrub` before it is printed, because Apple may quote back what it was sent.
 import { createPrivateKey, sign } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -81,6 +83,20 @@ export function token(keyId, issuer, key, now = Date.now()) {
   return `${unsigned}.${sign('sha256', Buffer.from(unsigned), { key, dsaEncoding: 'ieee-p1363' }).toString('base64url')}`;
 }
 
+/**
+ * Somebody else's words about an error, made fit for a public log: none of our own identifiers
+ * (`hide`), no email address, nothing in quotes (a name, a bundle id), and not much of it.
+ */
+export function scrub(text, hide = []) {
+  let out = String(text || '');
+  for (const value of hide) if (typeof value === 'string' && value.length >= 4) out = out.split(value).join('(hidden)');
+  out = out.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '(an address)')
+    .replace(/"[^"]*"|'[^']*'|\u201c[^\u201d]*\u201d|\u2018[^\u2019]*\u2019/g, '"..."');
+  return out.length > 300 ? `${out.slice(0, 300)}...` : out;
+}
+/** Our own identifiers, as they are in the environment: never to appear in anything printed. */
+const ours = (env = process.env) => ['BUNDLE_ID', 'APPLE_TEAM_ID', 'ASC_KEY_ID', 'ASC_ISSUER_ID'].map((name) => tidy(env[name])).filter(Boolean);
+
 /** One request. `path` may be a full URL, as Apple's "next page" links are. */
 export async function call(method, path, jwt, body) {
   const res = await fetch(path.startsWith('https://') ? path : API + path, {
@@ -91,7 +107,7 @@ export async function call(method, path, jwt, body) {
   });
   let json = null;
   try { json = await res.json(); } catch { /* not JSON: the status says enough */ }
-  const detail = (json?.errors || []).map((e) => e.detail || e.title).filter(Boolean).join(' ');
+  const detail = scrub((json?.errors || []).map((e) => e.detail || e.title).filter(Boolean).join(' '), ours());
   return { status: res.status, data: json?.data ?? [], included: json?.included || [], next: json?.links?.next, detail };
 }
 const get = (path, jwt) => call('GET', path, jwt);
@@ -116,6 +132,8 @@ export function describeBuild({ version, number, processing, internal, expired }
 }
 
 const inActions = !!process.env.GITHUB_ACTIONS;
+/** What this tool calls the tester group it makes. */
+const GROUP = 'Team';
 export const say = (text) => console.log(text);
 export const warn = (text) => console.log(inActions ? `::warning::${text}` : `warning: ${text}`);
 export function fail(text) {
@@ -212,7 +230,8 @@ async function status(env, { invite }) {
   for (const group of groups.data) {
     const testers = await get(`/v1/betaGroups/${group.id}/betaTesters?fields[betaTesters]=inviteType&limit=200`, jwt);
     const { name, isInternalGroup, hasAccessToAllBuilds } = group.attributes;
-    say(`Tester group "${name}" (${isInternalGroup ? 'internal' : 'external'}${hasAccessToAllBuilds ? ', gets every build' : ''}): ${testers.data.length} tester(s).`);
+    // (A group's name is whatever somebody typed. Only the name this tool itself gives one is printed.)
+    say(`Tester group ${name === GROUP ? `"${GROUP}"` : '(named by its owner)'} (${isInternalGroup ? 'internal' : 'external'}${hasAccessToAllBuilds ? ', gets every build' : ''}): ${testers.data.length} tester(s).`);
     reachable += testers.data.length;
   }
   if (!groups.data.length) say('No tester groups: nobody can install a build through TestFlight yet.');
@@ -259,6 +278,9 @@ function writeKey(env, file) {
 
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   const [command, file] = process.argv.slice(2);
+  // In a workflow, tell the runner to hide our identifiers wherever they might be printed, tidied
+  // as this tool uses them (a pasted secret can carry a space the runner's own mask would keep).
+  if (inActions) for (const value of ours()) console.log(`::add-mask::${value}`);
   if (command === 'check') await check(process.env);
   else if (command === 'write-key' && file) writeKey(process.env, file);
   else if (command === 'status') await status(process.env, { invite: file === '--invite' });

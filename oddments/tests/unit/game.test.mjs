@@ -22,7 +22,7 @@ test('the intro sets the name and look and starts the game', () => {
   assert.equal(game.state.started, false);
   game.begin({ name: '  Marisol the Extremely Patient  ', look: LOOK_IDS[2] });
   assert.equal(game.state.started, true);
-  assert.equal(game.state.player.name, 'Marisol the Extremely Patient'.slice(0, NAME_LENGTH));
+  assert.equal(game.state.player.name, 'Marisol the Extremely Patient'.slice(0, NAME_LENGTH).trim(), 'cut to length, with no space left dangling');
   assert.equal(game.state.player.look, LOOK_IDS[2]);
 });
 

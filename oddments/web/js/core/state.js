@@ -10,7 +10,7 @@ import { settleWhere, spotNear, overTheWater } from './world.js';
 import { insideOf, settleIn } from './indoors.js';
 import { newStory, reviveStory } from './story.js';
 import { rollStrays, fairStrays, fairKeepsake, KEEPSAKES } from './strays.js';
-import { giveName } from './names.js';
+import { giveName, tidyName } from './names.js';
 import { WILDS } from './world.js';
 
 export function newState(now = Date.now(), seed = (now ^ 0x9e3779b9) | 0) {
@@ -68,7 +68,6 @@ function num(value, fallback, min = 0, max = 1e15) {
   return Math.min(max, Math.max(min, value));
 }
 const int = (value, fallback, min = 0, max = MAX_COUNT) => Math.floor(num(value, fallback, min, max));
-const text = (value, fallback, max) => (typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : fallback);
 
 /** Gives every record a whole, positive id of its own, and returns the next free one. */
 function numberUniquely(records) {
@@ -161,7 +160,7 @@ export function reviveState(saved, now = Date.now()) {
   state.started = saved.started === true;
 
   const player = isObj(saved.player) ? saved.player : {};
-  state.player = { name: text(player.name, DEFAULT_NAME, NAME_LENGTH), look: lookOf(player.look) };
+  state.player = { name: tidyName(player.name) || DEFAULT_NAME, look: lookOf(player.look) };
 
   // Friends: one of each kind, the first kept. A save with none starts with the usual three.
   const kinds = new Set();
@@ -250,6 +249,7 @@ export function reviveState(saved, now = Date.now()) {
   // A switch an older save has never heard of keeps its usual setting: sound is on unless turned off.
   for (const key of Object.keys(state.settings)) if (typeof settings[key] === 'boolean') state.settings[key] = settings[key];
   const seen = isObj(saved.seen) ? saved.seen : {};
-  state.seen = Object.fromEntries(Object.keys(seen).filter((key) => key.length <= 24 && seen[key] === true).slice(0, 64).map((key) => [key, true]));
+  // (Hints are named in plain lower-case letters. Nothing else is kept: not a name the language itself uses.)
+  state.seen = Object.fromEntries(Object.keys(seen).filter((key) => /^[a-z]{1,24}$/.test(key) && !['constructor', 'prototype'].includes(key) && seen[key] === true).slice(0, 64).map((key) => [key, true]));
   return state;
 }

@@ -10,7 +10,7 @@ import { STRAYS } from './balance.js';
 import { insideOf, stepIn, routeIn, spotIn, onMat, besidePost } from './indoors.js';
 import { WORLD, POST, BENCHES, SIT, MAILBOXES, POST_REACH, stepWalk, routeTo, straighten, roomy, standing, canStand, spotNear, spotOf, districtOf, districtAt, postNear, personNear, personAt, benchNear, mailNear, TALK } from './world.js';
 import { goalOf, aimOf, storySoFar, hasNews, talk, takeCall, callDue, asideOf, tonightOf } from './story.js';
-import { nameOf, giveName } from './names.js';
+import { nameOf, giveName, tidyName } from './names.js';
 
 export class Game {
   /**
@@ -372,7 +372,7 @@ export class Game {
 
   setLook({ name, look } = {}) {
     const player = this.state.player;
-    const clean = String(name === undefined || name === null ? '' : name).trim().slice(0, NAME_LENGTH);
+    const clean = tidyName(name === undefined || name === null ? '' : String(name)); // one line, no unseen characters, as for a friend's name
     if (clean) player.name = clean;
     if (look !== undefined) player.look = lookOf(look);
     return { name: player.name, look: player.look };

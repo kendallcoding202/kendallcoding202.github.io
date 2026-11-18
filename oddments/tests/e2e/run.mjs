@@ -1741,6 +1741,54 @@ section('Tonight\'s lively place');
   await night.close();
 }
 
+section('Locked down');
+{
+  // A game is saved in this browser, by a person called Kit.
+  const lock = await newPage();
+  await lock.goto(`${base}?debug&fast&reset&seed=7`);
+  await ready(lock);
+  await begin(lock);
+  await S(lock, () => { window.oddments.game.setLook({ name: 'Kit' }); window.oddments.ctx.save(); });
+  const saved = await S(lock, () => localStorage.getItem('oddments.save'));
+  check(!!saved && JSON.parse(saved).started === true && JSON.parse(saved).player.name === 'Kit', 'a game is saved here');
+
+  // 1. A numbered build, which is what the app is: every testing switch in the address does nothing.
+  await lock.route('**/js/platform/build.js', (route) => route.fulfill({ contentType: 'text/javascript', body: "export const BUILD = '31';\n" }));
+  await lock.goto(`${base}?debug&reset&fast&seed=9&day=20001`);
+  await ready(lock);
+  await lock.waitForSelector('#lane', { timeout: 20000 });
+  check(await S(lock, () => typeof window.oddments === 'undefined'), 'in a numbered build the game is not handed to a console, even with ?debug, even on localhost');
+  check((await S(lock, () => localStorage.getItem('oddments.save'))) !== null && JSON.parse(await S(lock, () => localStorage.getItem('oddments.save'))).player.name === 'Kit' && !(await lock.$('.modal.intro')), '?reset in the address erases nothing there: the same game carries on');
+  check((await S(lock, () => localStorage.getItem('oddments.save.erased'))) === null, 'and nothing was set aside, because nothing was erased');
+  await tab(lock, 'settings');
+  check(await S(lock, () => /build 31/.test(document.querySelector('#screen').textContent)), 'Settings says which build it is');
+  await lock.unroute('**/js/platform/build.js');
+
+  // 2. The copy on the web, and a person (not a test driving the browser) following a link that says ?reset.
+  await lock.addInitScript(() => { Object.defineProperty(Navigator.prototype, 'webdriver', { get: () => false, configurable: true }); });
+  let asked = '';
+  lock.once('dialog', (dialog) => { asked = dialog.message(); dialog.dismiss(); });
+  await lock.goto(`${base}?debug&fast&reset&seed=7`);
+  await ready(lock);
+  await lock.waitForSelector('#lane', { timeout: 20000 });
+  check(/erase the game saved on this device/.test(asked), 'a person with a game saved is asked before a link erases it', asked);
+  check(JSON.parse(await S(lock, () => localStorage.getItem('oddments.save'))).player.name === 'Kit' && !(await lock.$('.modal.intro')), 'saying no keeps the game');
+  lock.once('dialog', (dialog) => dialog.accept());
+  await lock.goto(`${base}?debug&fast&reset&seed=7`);
+  await ready(lock);
+  await lock.waitForSelector('.modal.intro', { timeout: 20000 });
+  check(JSON.parse(await S(lock, () => localStorage.getItem('oddments.save.erased'))).player.name === 'Kit', 'saying yes starts again, and the erased game is set aside, not destroyed');
+  // With nothing saved there is nothing to ask about.
+  let again = false;
+  lock.once('dialog', (dialog) => { again = true; dialog.dismiss(); });
+  await S(lock, () => localStorage.removeItem('oddments.save'));
+  await lock.goto(`${base}?debug&fast&reset&seed=7`);
+  await ready(lock);
+  await lock.waitForSelector('.modal.intro', { timeout: 20000 });
+  check(again === false, 'with no game saved, nobody is asked anything');
+  await lock.context().close();
+}
+
 section('Nothing leaves the device');
 const foreign = requests.filter((url) => !url.startsWith(base));
 check(foreign.length === 0, 'every request the game made was for one of its own files', foreign.slice(0, 3).join(' '));

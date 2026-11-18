@@ -39,7 +39,7 @@ jobs:
           npm run sim -- 80 --room=dark --visits=4
       - name: Install a browser for the end-to-end test
         run: |
-          npm install --no-save playwright
+          npm install --no-save playwright@1.63.0 # a named version: the newest of the day is not run unread
           npx playwright install --with-deps chromium
       - name: End-to-end test
         run: npm run e2e

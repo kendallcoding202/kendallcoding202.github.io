@@ -5,3 +5,11 @@ tests/e2e/out/
 dist/
 .DS_Store
 __pycache__/
+# Keys and local settings: never in the repository, whatever folder they are dropped in.
+*.p8
+AuthKey_*
+.env
+.env.*
+*.mobileprovision
+*.p12
+ExportOptions.plist

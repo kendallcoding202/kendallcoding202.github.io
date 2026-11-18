@@ -188,27 +188,35 @@ jobs:
 
   # Are the secrets the right things, does Apple accept them, and is there an
   # app record to upload to? Answered on Linux, in seconds.
+  # (The secrets are handed to the steps that use them, one by one, and to no others: a step that
+  # only fetches the code or installs a tool never has the Apple key in its environment.)
   preflight:
     if: ${{ inputs.testflight || inputs.check_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    env:
-      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
       - name: Check the Apple credentials and the app record
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID }}
         run: node tools/asc.mjs check
       # Asked for on its own, the check also reports what Apple has made of the builds sent so far
       # and who can test them. It changes nothing.
       - name: What Apple has done with the uploads so far
         if: ${{ inputs.check_only }}
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID }}
         run: node tools/asc.mjs status
 
   testflight:
@@ -216,12 +224,9 @@ jobs:
     if: ${{ inputs.testflight && !inputs.check_only }}
     runs-on: ${{ inputs.xcode27 && 'xcode-27' || 'macos-15' }}
     timeout-minutes: 45
-    env:
-      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID }}
+    # No secret is given to the job as a whole. Fetching the code, installing the tools, copying
+    # the game in and archiving it (which builds other people's packages) all run without the
+    # Apple key anywhere in reach: it is handed over, and written to disk, only for signing.
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -233,11 +238,12 @@ jobs:
       # The repository carries a stand-in bundle id. The real one is put in
       # here, on this throwaway machine only, and hidden wherever it is printed.
       - name: Use the real bundle id
+        env:
+          BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID }}
         run: |
           REAL=$(printf '%s' "$BUNDLE_ID" | tr -d '[:space:]')
           echo "::add-mask::$REAL"
           sed -i '' "s/app\.oddments\.game/$REAL/g" ios/App/App.xcodeproj/project.pbxproj capacitor.config.json
-          echo "BUNDLE_ID=$REAL" >> "$GITHUB_ENV"
       # The build number is stamped into the game so Settings can show it.
       - name: Copy the game into the Xcode project
         run: |
@@ -252,18 +258,6 @@ jobs:
             sudo xcode-select -s "$NEWEST"
           fi
           xcodebuild -version
-      # Pasted secrets can carry a stray space or line break, and Xcode needs
-      # the key as a letter-perfect PEM. Both are put right here.
-      - name: Write the API key where Xcode can read it
-        run: |
-          for name in ASC_KEY_ID ASC_ISSUER_ID APPLE_TEAM_ID; do
-            value=$(printf '%s' "${!name}" | tr -d '[:space:]')
-            echo "::add-mask::$value"
-            echo "TIDY_$name=$value" >> "$GITHUB_ENV"
-          done
-          KEY_ID=$(printf '%s' "$ASC_KEY_ID" | tr -d '[:space:]')
-          mkdir -p "$RUNNER_TEMP/keys"
-          node tools/asc.mjs write-key "$RUNNER_TEMP/keys/AuthKey_${KEY_ID}.p8"
       # Archived unsigned on purpose. Signing happens in the next step with
       # Apple's cloud-managed distribution certificate, so this throwaway
       # machine never needs (or creates) a certificate of its own.
@@ -275,9 +269,27 @@ jobs:
             -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Clutterkin.xcarchive" \
             CODE_SIGNING_ALLOWED=NO \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" | tail -n 40
+      # Pasted secrets can carry a stray space or line break, and Xcode needs
+      # the key as a letter-perfect PEM. Both are put right here: after the
+      # archive is made, so the key is on this machine only while it is used.
+      - name: Write the API key where Xcode can read it
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          for name in ASC_KEY_ID ASC_ISSUER_ID APPLE_TEAM_ID; do
+            value=$(printf '%s' "${!name}" | tr -d '[:space:]')
+            echo "::add-mask::$value"
+            echo "TIDY_$name=$value" >> "$GITHUB_ENV"
+          done
+          KEY_ID=$(printf '%s' "$ASC_KEY_ID" | tr -d '[:space:]')
+          mkdir -p "$RUNNER_TEMP/keys"
+          node tools/asc.mjs write-key "$RUNNER_TEMP/keys/AuthKey_${KEY_ID}.p8"
       # What Xcode prints while signing can name the certificate's owner. This
       # log is public, so only its errors and its outcome are shown, with
-      # anything in quotes taken out.
+      # anything in quotes (of either sort) and any address taken out.
       - name: Sign and upload to App Store Connect
         run: |
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
@@ -299,7 +311,7 @@ jobs:
             -allowProvisioningUpdates \
             -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${TIDY_ASC_KEY_ID}.p8" \
             -authenticationKeyID "$TIDY_ASC_KEY_ID" -authenticationKeyIssuerID "$TIDY_ASC_ISSUER_ID" > "$RUNNER_TEMP/export.log" 2>&1 || OUTCOME=$?
-          grep -iE 'error|\*\* EXPORT|upload|succeeded|failed' "$RUNNER_TEMP/export.log" | sed -E 's/"[^"]*"/"..."/g; s/\([A-Z0-9]{10}\)/(...)/g' | tail -n 40 || true
+          grep -iE 'error|\*\* EXPORT|upload|succeeded|failed' "$RUNNER_TEMP/export.log" | sed -E "s/\"[^\"]*\"/\"...\"/g; s/'[^']*'/'...'/g; s/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/(an address)/g; s/\([A-Z0-9]{10}\)/(...)/g; s/(Developer|Distribution): [^,;]*/\1: .../g" | tail -n 40 || true
           rm -f "$RUNNER_TEMP/export.log"
           exit "$OUTCOME"
       - name: Remove the key
@@ -308,4 +320,10 @@ jobs:
       # What Apple has made of the upload so far, and a tester group that gets
       # every build, with the account holder invited, if nobody can test yet.
       - name: Make sure someone can test it
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID }}
         run: node tools/asc.mjs status --invite

@@ -14,16 +14,15 @@ import { fightScreen } from './ui/fight.js';
 import { friendsScreen, bookScreen, settingsScreen, lookDialog } from './ui/friends.js';
 import { heirloomTag, bar, aOrAn } from './ui/parts.js';
 import { keyPicture } from './ui/keys.js';
-import { loadSave, writeSave, clearSave, keepUnreadable } from './platform/storage.js';
+import { loadSave, loadSaves, writeSave, clearSave, keepUnreadable, keepErased } from './platform/storage.js';
+import { switches } from './platform/switches.js';
 import { unlockSound, setSound, hushSound, play, setScene, sceneFor, soundState } from './platform/sound.js';
 
-const params = new URLSearchParams(location.search);
 // Switches for testing in a browser: ?reset starts from a clean save, ?fast
 // plays fights back quickly, ?seed=7 makes a new game the same every time,
-// ?debug exposes the game as window.oddments. Where a host strips query
-// strings they can come from an ODDMENTS_FLAGS object set before this loads.
-const flags = window.ODDMENTS_FLAGS || {};
-const flag = (name) => params.has(name) || !!flags[name];
+// ?day=20001 says what day it is, ?debug exposes the game as window.oddments.
+// In a numbered build (the app) there are none of them: see platform/switches.js.
+const flag = (name) => switches.has(name);
 
 const TABS = [
   { id: 'lane', label: 'Lane', build: laneScreen },
@@ -43,26 +42,40 @@ const BOOT_SHOWN = 1200;
 let frozen = false;
 
 async function boot() {
-  if (flag('reset')) await clearSave();
-  let state = null;
-  const stored = await loadSave();
-  try {
-    if (stored) state = reviveState(JSON.parse(stored), Date.now());
-    // Well-formed is not enough: it must survive a rehearsal on a copy.
-    if (state && !playable(state, Date.now())) state = null;
-  } catch (err) {
-    console.warn('could not read the save', err);
-    state = null;
+  if (flag('reset')) {
+    // A web address can carry ?reset, and an address can be sent to somebody. So a person who has a
+    // game saved is asked before it is erased (a test driving the browser is not), and the game that
+    // is erased is set aside, not destroyed.
+    const had = await loadSave();
+    // (A game nobody has begun is nothing to ask about. One that cannot be read might be anything: ask.)
+    let begun = false;
+    try { begun = !!had && JSON.parse(had).started !== false; } catch { begun = !!had; }
+    const sure = !begun || navigator.webdriver === true || window.confirm('This link asks to erase the game saved on this device and start a new one. Erase it?');
+    if (sure) { if (begun) keepErased(had); await clearSave(); }
   }
+  let state = null;
+  // Each stored copy is tried in turn, the newest first: a copy that cannot be used (damaged, or
+  // tampered with) must not stand in the way of a good one behind it.
+  const copies = await loadSaves();
+  for (const copy of copies) {
+    try {
+      const candidate = reviveState(JSON.parse(copy), Date.now());
+      // Well-formed is not enough: it must survive a rehearsal on a copy.
+      if (candidate && playable(candidate, Date.now())) { state = candidate; break; }
+    } catch (err) {
+      console.warn('could not read a stored save', err);
+    }
+  }
+  const stored = copies[0] || null;
   // A save that exists but cannot be used is about to be replaced by a new game. Keep a copy first.
   if (stored && !state) keepUnreadable(stored);
-  const seed = Number(params.get('seed') || flags.seed);
+  const seed = switches.number('seed');
   const game = new Game(state || (Number.isFinite(seed) && seed ? newState(Date.now(), seed) : newState(Date.now())), { now: Date.now() });
   // What day it is, by this device's own clock: which calm place is lively goes by it. A run for
   // testing (`?debug`: a test, a screenshot) has no day unless it is given one (`&day=`), so that it
   // plays the same whenever it is run.
   const today = () => { const at = new Date(); return Math.floor((at.getTime() - at.getTimezoneOffset() * 60000) / 86400000); };
-  const dayNow = () => (params.has('day') ? Number(params.get('day')) : flag('debug') ? 0 : today());
+  const dayNow = () => (flag('day') ? switches.number('day') : flag('debug') ? 0 : today());
   game.setDay(dayNow());
   document.addEventListener('visibilitychange', () => { if (!document.hidden) game.setDay(dayNow()); });
 
@@ -109,7 +122,7 @@ async function boot() {
     },
     showTab: (name) => ctx.show(name),
     afterFight: (summary, foes) => resultDialog(ctx, summary, foes),
-    resetGame() { frozen = true; clearSave().then(() => location.reload()); },
+    resetGame() { frozen = true; Promise.resolve(loadSave()).then((had) => { if (had) keepErased(had); return clearSave(); }).then(() => location.reload()); },
   };
 
   tabsRoot.replaceChildren(...TABS.map((tab) => h('button', { class: 'tab', data: { tab: tab.id }, onclick: () => ctx.show(tab.id) }, h('i', { class: `tabicon t-${tab.id}` }), h('span', null, tab.label))));
@@ -117,8 +130,10 @@ async function boot() {
   document.addEventListener('visibilitychange', () => { if (document.hidden) ctx.save(); });
   window.addEventListener('pagehide', () => ctx.save());
 
-  // A handle for tests and for poking at the game from a browser console.
-  if (flag('debug') || location.hostname === 'localhost' || location.hostname === '127.0.0.1') window.oddments = { game, ctx, sound: soundState };
+  // A handle for tests and for poking at the game from a browser console: with ?debug, or on your
+  // own machine. Never in a numbered build: the app's own address is "localhost" too, and there the
+  // game is not handed to whatever script might ask for it.
+  if (switches.testing && (flag('debug') || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) window.oddments = { game, ctx, sound: soundState };
 
   // Whichever copy of the save was the newer, both places now hold it.
   if (state) ctx.save();

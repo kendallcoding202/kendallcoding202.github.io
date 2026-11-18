@@ -22,14 +22,26 @@ export function newer(local, kept) {
   return local || kept || null;
 }
 
-/** The stored save as text, or null if there is none. */
-export async function loadSave() {
+/**
+ * Every stored copy of the save, as text, the one played most recently first: one in a browser, up
+ * to two in the app. Whoever reads them should try each in turn: a copy that turns out to be
+ * damaged must not hide a good one behind it.
+ */
+export async function loadSaves() {
   const local = readLocal();
   let kept = null;
   if (isNative()) {
     try { kept = (await native('Preferences', 'get', { key: KEY })).value; } catch { kept = null; }
   }
-  return newer(local, typeof kept === 'string' ? kept : null);
+  if (typeof kept !== 'string') kept = null;
+  const first = newer(local, kept);
+  const copies = [first, first === local ? kept : local].filter((copy) => typeof copy === 'string' && copy.length > 0);
+  return copies.length === 2 && copies[0] === copies[1] ? [copies[0]] : copies;
+}
+
+/** The stored save as text (the copy played most recently), or null if there is none. */
+export async function loadSave() {
+  return (await loadSaves())[0] || null;
 }
 
 /** Writes the save. True once this device has it; false if the browser would not take it (private mode, or full). */
@@ -44,6 +56,15 @@ export function writeSave(json) {
 export function keepUnreadable(json) {
   try { localStorage.setItem(`${KEY}.unreadable`, json); } catch { /* best effort */ }
   if (isNative()) native('Preferences', 'set', { key: `${KEY}.unreadable`, value: json }).catch(() => {});
+}
+
+/**
+ * Sets aside a save that is about to be erased on purpose, so that erasing can be undone by hand.
+ * (One copy is kept: the last game erased.)
+ */
+export function keepErased(json) {
+  try { localStorage.setItem(`${KEY}.erased`, json); } catch { /* best effort */ }
+  if (isNative()) native('Preferences', 'set', { key: `${KEY}.erased`, value: json }).catch(() => {});
 }
 
 /** Removes the save from wherever it is kept. Resolves once it is gone. */
