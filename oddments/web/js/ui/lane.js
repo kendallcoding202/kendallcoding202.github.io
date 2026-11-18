@@ -7,8 +7,8 @@
 // `bake`), then placed each frame, so a frame costs a handful of pictures
 // however detailed the painting was.
 import { ROOMS, SPECIES, ELEMENTS, STRAYS, roomOf, roomBuilt } from '../core/balance.js';
-import { WORLD, POST, SPOTS, TREES, LAMPS, HEDGES, ROAD_POINTS, GREEN, DISTRICTS, PEOPLE, PROPS, BENCHES, MAILBOXES, RIVER, BRIDGE, spotOf, personAt, districtAt, regionAt, whereabouts } from '../core/world.js';
-import { CAST } from '../core/story.js';
+import { WORLD, POST, SPOTS, TREES, LAMPS, HEDGES, ROAD_POINTS, GREEN, DISTRICTS, PEOPLE, PROPS, BENCHES, MAILBOXES, RIVER, BRIDGE, FLUFF_BESIDE, spotOf, personAt, districtAt, regionAt, whereabouts } from '../core/world.js';
+import { CAST, FLUFF } from '../core/story.js';
 import { nameOf, artOf } from '../core/names.js';
 import { h, sprite, spriteSrc } from './dom.js';
 import { howItGoes } from './text.js';
@@ -342,6 +342,7 @@ export function laneScreen(ctx) {
     const you = here();
     const near = Math.hypot(you.x - stray.x, you.y - stray.y) < 260;
     const size = pop(`stray|${stray.index}`, 'stray');
+    if (stray.keep) { keepsake(stray, near, you, size); return; }
     stray.foes.forEach((foe, i) => {
       const kind = SPECIES[foe.species];
       // Each ambles a little way about where it stands, in its own time.
@@ -354,6 +355,32 @@ export function laneScreen(ctx) {
       if (near && size >= 1) elementMark(pen, ELEMENTS[kind.element].name, ELEMENTS[kind.element].color, stray.x + (i - (stray.foes.length - 1) / 2) * 62, stray.y + 16, stray.foes.length > 2 ? 14 : 16);
     });
     if (near && size >= 1) label(pen, ['a stray', 'two strays', 'three strays'][stray.foes.length - 1] || 'strays', stray.x, stray.y - 92, '#cdeed6', 'rgba(205,238,214,.3)', 21);
+  }
+
+  /**
+   * A Keepsake at its haunt: it stays where it is, in a soft light of its own (gold, if it is out in its
+   * rare colours), with Fluff sitting beside it, looking from it to you. Its name is over it once you
+   * have met it; until then, only that somebody is there.
+   */
+  function keepsake(stray, near, you, size) {
+    const foe = stray.foes[0];
+    const kind = SPECIES[foe.species];
+    const { x, y } = stray;
+    glow(pen, x, y - 26, 96, foe.heirloom ? '255,200,61' : '190,225,255', 0.3 + 0.12 * Math.sin(clock * 1.7));
+    // A few notes of whatever it is playing, drifting up.
+    for (let i = 0; i < 3; i++) {
+      const t = (clock * 0.22 + i / 3) % 1;
+      pen.globalAlpha = Math.sin(t * Math.PI) * 0.7;
+      pen.fillStyle = foe.heirloom ? '#ffe9a8' : '#dff1ff'; pen.font = `700 ${17 * size}px ${FONT}`; pen.textAlign = 'center'; pen.textBaseline = 'middle';
+      pen.fillText(['♪', '♫', '✦'][i], x + 30 + Math.sin(clock * 1.3 + i * 2.1) * 14 + i * 9, y - 62 - t * 54);
+    }
+    pen.globalAlpha = 1;
+    stand(spriteSrc(FLUFF.art), x + FLUFF_BESIDE.x, y + FLUFF_BESIDE.y, 44 * size, near ? you.x > x + FLUFF_BESIDE.x : true, false, Math.max(0, Math.sin(clock * 2.6)) * 4 * size);
+    stand(spriteSrc(artOf(foe), foe.heirloom), x, y - (kind.fly ? 10 + Math.sin(clock * 1.6) * 4 : 0) * size, 80 * size, near ? you.x > x : false, false, 0);
+    if (!near || size < 1) return;
+    elementMark(pen, ELEMENTS[kind.element].name, ELEMENTS[kind.element].color, x, y + 16, 16);
+    label(pen, state.book[foe.species].met ? kind.name : 'somebody new', x, y - 124, foe.heirloom ? '#ffe9a8' : '#dff1ff', 'rgba(223,241,255,.3)', 21);
+    label(pen, FLUFF.name, x + FLUFF_BESIDE.x - 10, y - 46, '#e9e4f7', 'rgba(255,255,255,.2)', 17);
   }
 
   /** One of the people of the lane: turned toward you, their name over them when you are near, a mark if they have news. */
@@ -643,12 +670,15 @@ export function laneScreen(ctx) {
     const goal = game.goal();
     const aim = game.aim();
     const told = game.journal();
+    const aside = game.aside();
     modal({
       title: 'What to do', cls: 'journal',
       body: [
         h('div', { class: 'aim' }, h('b', null, aim.title), bar('xp', aim.count[0] / aim.count[1], `${aim.count[0]} of ${aim.count[1]} calm`)),
         keyRing(state),
         h('div', { class: 'now' }, h('small', null, 'Now'), h('b', null, goal.count ? `${goal.title} (${goal.count[0]} of ${goal.count[1]})` : goal.title), h('p', null, goal.detail)),
+        // Something else worth doing: a Keepsake is out, and Fluff knows where.
+        aside ? h('div', { class: 'now aside', data: { keep: String(aside.keep) } }, sprite(FLUFF.art), h('div', null, h('small', null, 'Also'), h('b', null, aside.title), h('p', null, aside.detail))) : null,
         told.length ? h('div', { class: 'sofar' }, h('small', null, 'So far'), h('ul', null, told.map((line) => h('li', null, line)))) : null,
       ],
       actions: [{ id: 'map', label: 'Map', kind: 'plain', onClick: () => { setTimeout(() => mapDialog(game), 0); } }, { id: 'ok', label: 'OK', kind: 'plain' }],

@@ -11,9 +11,10 @@ import {
 
 const ASSETS = fileURLToPath(new URL('../../web/assets/', import.meta.url));
 
-test('there are ninety-two Clutterkin: eighty who can be friends and twelve bosses, one to a place', () => {
-  assert.equal(SPECIES_IDS.length, 92);
-  assert.equal(SPECIES_IDS.filter((id) => !SPECIES[id].boss).length, 80);
+test('there are ninety-four Clutterkin: eighty kinds and two Keepsakes who can be friends, and twelve bosses, one to a place', () => {
+  assert.equal(SPECIES_IDS.length, 94);
+  assert.equal(SPECIES_IDS.filter((id) => !SPECIES[id].boss).length, 82);
+  assert.deepEqual(SPECIES_IDS.filter((id) => SPECIES[id].keepsake), ['keep_musicbox', 'keep_bottleship']);
   assert.deepEqual(SPECIES_IDS.filter((id) => SPECIES[id].boss), ['boss_hydra', 'boss_baron', 'boss_crumbwyrm', 'boss_spincycle', 'boss_tome', 'boss_warden', 'boss_clock', 'boss_vacuum', 'boss_marrow', 'boss_bathtub', 'boss_mower', 'boss_treadle']);
   assert.deepEqual(ROOMS.map((room) => room.path[room.path.length - 1].boss), SPECIES_IDS.filter((id) => SPECIES[id].boss), 'in the order their places come');
   // Every move in the tables is somebody's, and nobody has a move that is not in them.
@@ -100,13 +101,14 @@ test('who can be calmed has a Huff; a boss has none and acts twice', () => {
   for (const id of SPECIES_IDS) {
     const kind = SPECIES[id];
     if (kind.boss) assert.ok(kind.huff === 0 && kind.turns === 2 && !kind.grown, id);
+    else if (kind.keepsake) assert.ok(kind.huff === 8 && !kind.grown && !kind.turns, `${id}: a Keepsake takes a long while to reach, acts once a round, and does not grow up`);
     else assert.ok(Number.isInteger(kind.huff) && kind.huff >= 2 && kind.huff <= 6, `${id} huff`);
   }
 });
 
-test('every friend has a grown form, with a name of its own', () => {
+test('every friend but a Keepsake has a grown form, with a name of its own', () => {
   const names = new Set(SPECIES_IDS.map((id) => SPECIES[id].name));
-  for (const id of SPECIES_IDS.filter((k) => !SPECIES[k].boss)) {
+  for (const id of SPECIES_IDS.filter((k) => !SPECIES[k].boss && !SPECIES[k].keepsake)) {
     const { grown } = SPECIES[id];
     assert.ok(grown && grown.name && grown.at > 6 && grown.at <= MAX_LEVEL, id);
     assert.ok(!names.has(grown.name), `${grown.name} is a new name`);
@@ -158,7 +160,8 @@ test('there are twelve places, eight on the lane and four over the water; all ar
 
 test('every kind that can be a friend turns up somewhere in a place that is built, or is with you from the start', () => {
   const met = new Set([...START_TEAM.map(([id]) => id), ...ROOMS.filter(roomBuilt).flatMap((room) => room.path.flatMap((spot) => spot.pool.map(([id]) => id)))]);
-  for (const id of SPECIES_IDS.filter((k) => !SPECIES[k].boss)) assert.ok(met.has(id), id);
+  for (const id of SPECIES_IDS.filter((k) => !SPECIES[k].boss && !SPECIES[k].keepsake)) assert.ok(met.has(id), id);
+  for (const id of SPECIES_IDS.filter((k) => SPECIES[k].keepsake)) assert.ok(!met.has(id), `${id} is in no place: it has a spot of its own`);
   // And the second place has kinds of its own, not met in the first.
   const inGarden = new Set(ROOMS[0].path.flatMap((spot) => spot.pool.map(([id]) => id)));
   const onlyAlley = [...new Set(ROOMS[1].path.flatMap((spot) => spot.pool.map(([id]) => id)))].filter((id) => !inGarden.has(id));

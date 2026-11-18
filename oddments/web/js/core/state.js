@@ -9,7 +9,7 @@ import { own } from './util.js';
 import { settleWhere, spotNear, overTheWater } from './world.js';
 import { insideOf, settleIn } from './indoors.js';
 import { newStory, reviveStory } from './story.js';
-import { rollStrays, fairStrays } from './strays.js';
+import { rollStrays, fairStrays, fairKeepsake, KEEPSAKES } from './strays.js';
 import { giveName } from './names.js';
 import { WILDS } from './world.js';
 
@@ -204,11 +204,17 @@ export function reviveState(saved, now = Date.now()) {
   // of its own and only if it is fair as things stand; a save with none to keep is given a fresh lot.
   if (typeof saved.strayRng === 'number' && Number.isFinite(saved.strayRng)) state.strayRng = saved.strayRng | 0;
   const taken = new Set();
-  const kept = (Array.isArray(saved.strays) ? saved.strays.slice(0, 64) : []).filter((stray) => isObj(stray) && Number.isInteger(stray.at) && stray.at >= 0 && stray.at < WILDS.length
+  const keeps = new Set();
+  const groups = (bridgeOpen(state) ? STRAYS.farGroups : STRAYS.groups)[1];
+  const listed = Array.isArray(saved.strays) ? saved.strays.slice(0, 64).filter(isObj) : [];
+  // A Keepsake in the list is kept if it may fairly be out: the right one, once, with its chapter calm.
+  const keepsakes = listed.filter((stray) => Number.isInteger(stray.keep) && fairKeepsake(state, stray) && !keeps.has(stray.keep) && keeps.add(stray.keep)).slice(0, KEEPSAKES.length);
+  const kept = listed.filter((stray) => stray.keep === undefined && Number.isInteger(stray.at) && stray.at >= 0 && stray.at < WILDS.length
     && (bridgeOpen(state) || !overTheWater(WILDS[stray.at]))
-    && !taken.has(stray.at) && fairStrays(state, stray.foes) && taken.add(stray.at)).slice(0, (bridgeOpen(state) ? STRAYS.farGroups : STRAYS.groups)[1]);
+    && !taken.has(stray.at) && fairStrays(state, stray.foes) && taken.add(stray.at)).slice(0, groups);
   if (Array.isArray(saved.strays) && (kept.length || saved.strays.length === 0)) {
-    state.strays = kept.map((stray) => ({ at: stray.at, foes: stray.foes.map(keptFoe), done: stray.done === true }));
+    state.strays = [...kept.map((stray) => ({ at: stray.at, foes: stray.foes.map(keptFoe), done: stray.done === true })),
+      ...keepsakes.map((stray) => ({ at: -1, keep: stray.keep, foes: stray.foes.map(keptFoe), done: stray.done === true }))];
   } else rollStrays(state);
   const where = mapped && isObj(saved.where) ? saved.where : null;
   // (Wherever the save says you stand is checked against the ground held as it would be with you standing there.)

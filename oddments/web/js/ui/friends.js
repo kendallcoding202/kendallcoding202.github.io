@@ -84,6 +84,7 @@ export function bookScreen(ctx) {
       // you have only seen it.
       h('span', { class: 'stamps' }, friend ? h('i', { class: 'stamp pal', title: 'A friend' }, '♥') : null,
         book[id].grown ? h('i', { class: 'stamp grownup', title: 'Grown up' }, '▲') : null,
+        SPECIES[id].keepsake && book[id].met ? h('i', { class: 'stamp keep', title: 'A Keepsake: one of a kind' }, '★') : null,
         friend && friend.heirloom ? h('i', { class: 'stamp gold', title: 'Heirloom kept' }, '❖')
           : book[id].heirloom ? h('i', { class: 'stamp seen', title: 'Heirloom seen, not kept' }, '◇') : null));
   });

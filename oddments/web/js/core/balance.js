@@ -458,6 +458,15 @@ export const MOVES = {
   needledown: hit('Needle Down', 'fluff', 1.0, 0, 'Up, down, and through.'),
   runaseam: sweep('Run a Seam', 'fluff', 0.6, 2, 'One long line through all of them.'),
   sewnshut: hit('Sewn Shut', 'fluff', 1.3, 3, 'Neat, tight, and you cannot move: lowers Grit.', { sap: { stat: 'grit', by: 0.3, turns: 2 } }),
+  // ---- the Keepsakes ----
+  // Lullawren
+  chime: hit('Chime', 'clank', 1.0, 0, 'One clear note, right between the ears.'),
+  lullaby: sap('Lullaby', 'clank', 'pep', 0.3, 2, 'foes', 3, 'Everybody\'s eyes get heavy: lowers Pep.'),
+  woundrightup: hit('Wound Right Up', 'clank', 1.7, 2, 'The whole tune at once, fortissimo.'),
+  // Farewhale
+  bowwave: hit('Bow Wave', 'suds', 1.0, 0, 'A small sea, moving fast.'),
+  becalm: sap('Becalm', 'suds', 'oomph', 0.3, 2, 'foes', 3, 'Not a breath of wind for anyone: lowers Oomph.'),
+  fullsail: hit('Full Sail', 'suds', 1.7, 2, 'Every scrap of sail, and the tide behind it.'),
 };
 
 // Anyone can do this instead of a move: sit tight until its next turn.
@@ -1053,6 +1062,22 @@ export const SPECIES = {
     notYet: 'scurries back up its thread',
     grown: { at: 19, name: 'Lacewidow' },
   },
+  // ---- the Keepsakes: one of a kind, one to a chapter. Not restless, and in no place's pool: each is found at
+  // its own spot in the open once its chapter's places are all calm (core/strays.js). `keepsake` is its chapter and
+  // the level it is met at. A Keepsake does not grow up: it is what it is. It takes a long while to reach. ----
+  keep_musicbox: {
+    name: 'Lullawren', element: 'clank', hp: 74, oomph: 13, grit: 14, pep: 13, huff: 8, keepsake: { chapter: 1, level: 13 },
+    moves: [['chime', 1], ['lullaby', 1], ['woundrightup', 1]],
+    blurb: 'The lullaby you have been hearing all along the lane. This is who was playing it.',
+    notYet: 'closes its lid and plays on',
+  },
+  keep_bottleship: {
+    name: 'Farewhale', element: 'suds', hp: 82, oomph: 14, grit: 14, pep: 12, huff: 8, keepsake: { chapter: 2, level: 17 },
+    moves: [['bowwave', 1], ['becalm', 1], ['fullsail', 1]],
+    fly: true,
+    blurb: 'A ship in a bottle that never did get to sea. So it brought the sea.',
+    notYet: 'sinks into its little sea',
+  },
   boss_hydra: {
     name: 'Old Summerlong', element: 'suds', hp: 118, oomph: 11, grit: 12, pep: 9, huff: 0, boss: true, turns: 2,
     moves: [['nozzlejet', 1], ['fullsprinkle', 1], ['hosedown', 1]],
@@ -1136,6 +1161,11 @@ export const HEIRLOOM = {
   calmOdds: 1 / 20,
   huff: 1, // extra pips
 };
+
+// A Keepsake is out at its spot every time you set out, from when its chapter's places are all calm
+// until it is your friend. After that it comes out only now and then, and only in its rare colours:
+// `again` is how often. (Until it is your friend it is in them as often as anyone in a calm place.)
+export const KEEPSAKE = { again: 1 / 10 };
 
 // Once a place is calm, word gets round, and kinds like the three you set out with come calling
 // there too (never beside its ringleader). It is the only way one of theirs can turn up as an

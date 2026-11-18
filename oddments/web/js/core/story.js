@@ -367,6 +367,29 @@ export const keysOf = (state) => ROOMS.map((room) => ({ room: room.id, place: ro
 /** The key a place gives: { room, name, line }. */
 export const keyOf = (roomId) => (KEYS[roomId] ? { room: roomId, ...KEYS[roomId] } : null);
 
+// ---------------------------------------------------------------- the Keepsakes
+
+// One to a chapter: a creature there is only one of, found at a spot of its own once the chapter's
+// places are all calm. Fluff shows the way: a small dust bunny with a red bow, who got out of THE
+// VACUUM. (Fluff is the dust bunny who guides the cat in Pawst Lives; here it guides you.)
+export const FLUFF = { name: 'Fluff', art: 'npc_fluff' };
+const SEEK = {
+  1: 'A small dust bunny with a red bow has been following you: Fluff, who got out of THE VACUUM. It keeps hopping off toward the old orchard, north of home and right at the fork. Something up there is playing a lullaby.',
+  2: 'Fluff, the dust bunny with the red bow, is down on the far bank of the river, west of Kettle Bridge, looking at the water. Something is out on it.',
+};
+const SEEK_AGAIN = {
+  1: 'Fluff is up at the old orchard again, and the lullaby sounds different tonight: brighter. Somebody has come out in their best colours.',
+  2: 'Fluff is down on the far bank again, west of the bridge. The water is glinting gold.',
+};
+/**
+ * Something else worth doing just now, beside the goal: a Keepsake is out. `out` is the one that is
+ * (see strays.keepsakeOut), `met` whether you have met its kind before. Returns { title, detail, keep }, or null.
+ */
+export function asideOf(out, met) {
+  if (!out) return null;
+  return { title: met ? 'A Keepsake is out again' : 'Follow Fluff', detail: (met ? SEEK_AGAIN : SEEK)[out.keep] || '', keep: out.keep };
+}
+
 // ---------------------------------------------------------------- what you are trying to do
 
 // How the goal of calming each place is put. (A place not listed here gets a plain line.)

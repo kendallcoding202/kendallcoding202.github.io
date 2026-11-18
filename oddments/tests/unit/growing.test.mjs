@@ -21,7 +21,8 @@ import { ART } from '../../tools/art-manifest.mjs';
 
 const WEB = fileURLToPath(new URL('../../web/', import.meta.url));
 const NOW = 1_800_000_000_000;
-const KINDS = SPECIES_IDS.filter((id) => !SPECIES[id].boss);
+// Every kind that grows up: all who can be friends but the two Keepsakes, which are what they are.
+const KINDS = SPECIES_IDS.filter((id) => !SPECIES[id].boss && !SPECIES[id].keepsake);
 function fresh(seed = 3) {
   const state = newState(NOW, seed);
   state.started = true;
@@ -175,7 +176,7 @@ test('strays are grown as often as whoever is in the furthest place open to you'
     for (const room of ROOMS.slice(0, calm)) { game.state.rooms[room.id].clears = 1; game.state.rooms[room.id].calmed = 31; }
     let grown = 0;
     let all = 0;
-    for (let i = 0; i < 120; i++) for (const stray of rollStrays(game.state)) for (const foe of stray.foes) { all++; if (foe.grown) grown++; assert.equal(fairStrays(game.state, stray.foes), true); }
+    for (let i = 0; i < 120; i++) for (const stray of rollStrays(game.state).filter((one) => !one.keep)) for (const foe of stray.foes) { all++; if (foe.grown) grown++; assert.equal(fairStrays(game.state, stray.foes), true); }
     return { share: grown / all, game };
   };
   assert.equal(share(0).share, 0, 'with only the garden open, none');

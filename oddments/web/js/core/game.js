@@ -5,11 +5,11 @@ import { TEAM_SIZE, NAME_LENGTH, lookOf, roomOf, roomBuilt } from './balance.js'
 import { createBattle, choices, act, concede } from './battle.js';
 import { settleUp } from './progress.js';
 import { rollEncounter, fairEncounter, enterRoom, leaveRoom, afterFight, canMeet, nextGroup, heldBy, heldIn, roomOpen, bridgeOpen, placeCalm, staysCalm, calmedIn, teamOf, maxHpOf, rested, healthOf } from './rooms.js';
-import { rollStrays, fairStrays, straysAbout, strayNear, afterStrays } from './strays.js';
+import { rollStrays, fairStrays, fairGroup, keepsakeOut, straysAbout, strayNear, afterStrays } from './strays.js';
 import { STRAYS } from './balance.js';
 import { insideOf, stepIn, routeIn, spotIn, onMat, besidePost } from './indoors.js';
 import { WORLD, POST, BENCHES, SIT, MAILBOXES, POST_REACH, stepWalk, routeTo, straighten, roomy, standing, canStand, spotNear, spotOf, districtOf, districtAt, postNear, personNear, personAt, benchNear, mailNear, TALK } from './world.js';
-import { goalOf, aimOf, storySoFar, hasNews, talk, takeCall, callDue } from './story.js';
+import { goalOf, aimOf, storySoFar, hasNews, talk, takeCall, callDue, asideOf } from './story.js';
 import { nameOf, giveName } from './names.js';
 
 export class Game {
@@ -221,6 +221,12 @@ export class Game {
   /** The strays you have walked right up to and can meet (their number), or -1. Never from indoors, or in a fight. */
   strayNear() { return this.place() === 'fight' || this.state.indoors ? -1 : strayNear(this.state, this.state.where); }
 
+  /** Something worth doing beside the goal: a Keepsake is out, and where. { title, detail, keep }, or null. */
+  aside() { const out = keepsakeOut(this.state); return asideOf(out, !!out && this.state.book[out.species].met); }
+
+  /** The Keepsake that is out just now ({ index, keep, species, heirloom }), or null. */
+  keepsake() { return keepsakeOut(this.state); }
+
   /** Goes straight up to a group of strays. For the simulator and tests; a player walks. */
   approachStrays(index) {
     const stray = this.strays().find((one) => one.index === index);
@@ -235,7 +241,7 @@ export class Game {
     if (this.place() === 'fight' || this.strayNear() !== index || index < 0) return null;
     const { state } = this;
     const stray = state.strays[index];
-    if (!fairStrays(state, stray.foes)) { rollStrays(state); return null; }
+    if (!fairGroup(state, stray)) { rollStrays(state); return null; }
     for (const foe of stray.foes) {
       state.book[foe.species].met = true;
       if (foe.heirloom) state.book[foe.species].heirloom = true;
@@ -472,12 +478,13 @@ export class Game {
     for (const unit of battle.units) if (unit.side === 'ally') left[unit.friendId] = unit.hp;
     if (this.wild >= 0) {
       // Strays, out on the lane: calm, they are gone until you next rest; worn out, you are carried home.
+      const keepsake = state.strays[this.wild].keep ? state.strays[this.wild].foes[0].species : null;
       const moved = afterStrays(state, this.wild, summary.won, left);
       if (moved.home) { state.where = { ...spotOf('home').door }; state.indoors = null; rollStrays(state); }
       for (const friend of state.friends) if (friend.heirloom) state.book[friend.species].heirloom = true;
       this.battle = null;
       this.wild = -1;
-      return { ...summary, room: null, stop: -1, cleared: false, home: moved.home, strays: true };
+      return { ...summary, room: null, stop: -1, cleared: false, home: moved.home, strays: true, keepsake };
     }
     const room = state.visit.room;
     const stop = this.facing;

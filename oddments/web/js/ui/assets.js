@@ -1,6 +1,6 @@
 // Fetches every picture before the game shows, so nothing pops in mid-fight.
 import { SPECIES, SPECIES_IDS, ROOMS, LOOK_IDS } from '../core/balance.js';
-import { CAST, CAST_IDS } from '../core/story.js';
+import { CAST, CAST_IDS, FLUFF } from '../core/story.js';
 import { spriteSrc } from './dom.js';
 import { WORLD_ART, worldSrc } from './scenery.js';
 import { ROOM_ART } from './roomart.js';
@@ -26,6 +26,7 @@ export async function loadAssets(onProgress = () => {}) {
   // People: each look of the house-sitter from the side, the front and behind, and the cast.
   for (const look of LOOK_IDS) sources.push(spriteSrc(look), spriteSrc(`${look}_front`), spriteSrc(`${look}_back`));
   for (const id of CAST_IDS) sources.push(spriteSrc(CAST[id].art));
+  sources.push(spriteSrc(FLUFF.art)); // the dust bunny who shows the way to a Keepsake
   for (const room of ROOMS) sources.push(`assets/bg/${room.bg}.webp`);
   sources.push('assets/bg/bg_lane.webp'); // what a fight with strays, out on the lane, is seen against
   for (const name of WORLD_ART) sources.push(worldSrc(name));

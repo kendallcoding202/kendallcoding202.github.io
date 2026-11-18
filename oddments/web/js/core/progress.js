@@ -42,7 +42,7 @@ export function gainXp(friend, amount) {
 export function settleUp(state, battle) {
   const won = battle.phase === 'won';
   const foes = battle.units.filter((unit) => unit.side === 'foe');
-  const summary = { won, xp: 0, lone: foes.length === 1 && !SPECIES[foes[0].species].boss, gains: [], joined: [], visited: [], heirlooms: [] };
+  const summary = { won, xp: 0, lone: foes.length === 1 && !SPECIES[foes[0].species].boss && !SPECIES[foes[0].species].keepsake, gains: [], joined: [], visited: [], heirlooms: [] };
 
   for (const foe of foes) if (foe.hp <= 0 || (won && foe.settled)) summary.xp += xpFor(foe.species, foe.level, foe.grown);
   if (summary.lone) summary.xp = Math.round(summary.xp * LONE_SHARE);

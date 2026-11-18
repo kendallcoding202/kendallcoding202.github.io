@@ -47,7 +47,8 @@ test('in a place you have calmed they bring out their best colours: about one in
 });
 
 test('every kind that can be a friend can turn up as an Heirloom somewhere, once places are calm', () => {
-  const canJoin = SPECIES_IDS.filter((id) => !SPECIES[id].boss);
+  // (The two Keepsakes are met in no place: each has a spot of its own, and its rare colours are found there.)
+  const canJoin = SPECIES_IDS.filter((id) => !SPECIES[id].boss && !SPECIES[id].keepsake);
   const restless = new Set(ROOMS.filter(roomBuilt).flatMap((room) => room.path.flatMap((_, stop) => poolOf(room, stop, false).map(([id]) => id))));
   const calm = new Set(ROOMS.filter(roomBuilt).flatMap((room) => room.path.flatMap((_, stop) => poolOf(room, stop, true).map(([id]) => id))));
   const never = canJoin.filter((id) => !restless.has(id));

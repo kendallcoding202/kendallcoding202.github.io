@@ -201,6 +201,13 @@ export const ROAD_POINTS = ROADS.map((road) => along(road, 24, true));
 // The green: the open grass below home, kept clear, where friends who stayed home potter about.
 export const GREEN = { x: 930, y: 1570, w: 460, h: 200 };
 
+// Where each chapter's Keepsake is to be found, once that chapter's places are all calm: the old
+// orchard at the top of the lane, north of where its road ends; and the river's far bank, west of
+// the bridge. Open ground, off the streets, clear of everything, with room beside it for the dust
+// bunny who shows you the way (`FLUFF_BESIDE`).
+export const HAUNTS = { 1: { x: 1800, y: 520 }, 2: { x: 540, y: 5760 } };
+export const FLUFF_BESIDE = { x: -66, y: 12 };
+
 // The quiet spots where strays turn up (core/strays.js): beside a street but off it, well clear of
 // every door and gate, of the neighbours, the benches, the green and each other. Most are out in the
 // country between the rows of houses; a few are in the corners of the lane. Picked once, by a tool

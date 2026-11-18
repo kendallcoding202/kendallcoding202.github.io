@@ -1111,6 +1111,34 @@ for (const [room, name, boss, bg, goalAfter] of LATER) {
     await page.waitForTimeout(400);
     check((await S(page, () => document.querySelector('#lane h1').textContent)) === 'Far Bank', 'and beyond it, Far Bank');
     await snap(page, 'e2e-far-bank');
+    // The lane is calm, so its Keepsake is out: the one creature of its kind, in the old orchard, with Fluff beside it.
+    const keep = await S(page, () => window.oddments.game.keepsake());
+    check(!!keep && keep.keep === 1 && keep.species === 'keep_musicbox', 'the lane\'s Keepsake is out');
+    await page.click('.goalchip');
+    await page.waitForSelector('.modal.journal');
+    check(await S(page, () => { const el = document.querySelector('.modal.journal .now.aside'); return !!el && el.dataset.keep === '1' && el.textContent.includes('Follow Fluff') && el.textContent.includes('old orchard') && el.querySelector('img').src.endsWith('/npc_fluff.webp'); }), 'the journal says so, in Fluff\'s name: follow it to the old orchard');
+    await snap(page, 'e2e-follow-fluff');
+    await page.click('.modal.journal [data-id="ok"]');
+    const haunt = await S(page, (index) => window.oddments.game.strays().find((stray) => stray.index === index), keep.index);
+    await S(page, (at) => { window.oddments.game.state.where = { x: at.x - 150, y: at.y + 90 }; window.oddments.ctx.show('lane'); }, haunt);
+    await page.waitForTimeout(500);
+    await snap(page, 'e2e-keepsake');
+    check(await S(page, () => window.oddments.game.strayNear()) === -1, 'standing a little way off, you have not met it');
+    const there = await S(page, (index) => window.oddments.lane.screenOf(`stray:${index}`), keep.index);
+    await page.touchscreen.tap(there.x, there.y - 8);
+    await page.waitForSelector('#fight', { timeout: 15000 });
+    await idle(page);
+    check(await S(page, () => document.querySelector('.roundpill').textContent.includes('a Keepsake') && document.querySelectorAll('.unit.foe').length === 1 && !document.querySelector('.unit.boss')), 'tap it and you walk up to it: a meeting of its own, with it alone');
+    check((await battle(page)).units.filter((u) => u.side === 'foe').every((u) => u.species === 'keep_musicbox' && u.maxHuff >= 8), 'and it takes a long while to reach: eight pips');
+    await botFight(page, { befriend: true });
+    const keepTitle = await modalTitle(page);
+    const keepSaid = await S(page, () => document.querySelector('.modal.result .body').textContent);
+    check(keepTitle === 'Won' && keepSaid.includes('Lullawren is a Keepsake') && keepSaid.includes('come home with you'), 'reached, it comes home: there is only one, and it is yours', `${keepTitle}: ${keepSaid.slice(0, 120)}`);
+    await page.click('[data-id="next"]');
+    await page.waitForSelector('#lane');
+    s = await state(page);
+    check(s.friends.some((friend) => friend.species === 'keep_musicbox') && s.book.keep_musicbox.met && (await S(page, () => window.oddments.game.keepsake())) === null, 'it is among your friends and in the scrapbook, and is not out any more');
+    await S(page, () => { const g = window.oddments.game; g.goHome(); window.oddments.ctx.show('lane'); });
     continue;
   }
   check(heard === 3 && (await S(page, () => document.querySelector('.goalchip span').textContent)) === goalAfter, `${name}: Ines Tock hears of it, and the goal moves on: ${goalAfter}`);
@@ -1687,7 +1715,7 @@ const roomPaintings = readdirSync(new URL('../../web/assets/rooms/', import.meta
 check(roomPaintings.length === 154 && roomPaintings.every((file) => requests.some((url) => url.endsWith(`assets/rooms/${file}`))), `every painting of every room was fetched (${roomPaintings.length} of them)`);
 check(['garden', 'alley', 'pantry', 'wash', 'stacks', 'rooftops', 'attic', 'dark'].every((id) => requests.some((url) => url.endsWith(`assets/keys/${id}.webp`))), 'every key\'s picture was fetched');
 const grownKinds = Object.keys(SPECIES).filter((id) => SPECIES[id].grown);
-check(grownKinds.length === FRIENDLY && grownKinds.every((id) => requests.some((url) => url.endsWith(`assets/sprites/${id}_grown.webp`)) && requests.some((url) => url.endsWith(`assets/sprites/${id}_grown_heirloom.webp`))), 'every grown form\'s picture was fetched, and its Heirloom colours');
+check(grownKinds.length === FRIENDLY - 2 && grownKinds.every((id) => requests.some((url) => url.endsWith(`assets/sprites/${id}_grown.webp`)) && requests.some((url) => url.endsWith(`assets/sprites/${id}_grown_heirloom.webp`))), 'every grown form\'s picture was fetched, and its Heirloom colours');
 check(errors.length === 0, 'no errors, and nothing refused by the content security policy', errors.slice(0, 5).join(' | '));
 
 await browser.close();

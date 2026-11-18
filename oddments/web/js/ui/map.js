@@ -4,7 +4,7 @@
 // stands (calm, open, still shut), the benches, where you are, and where
 // your goal is. Opened from "What to do".
 import { roomOf } from '../core/balance.js';
-import { WORLD, REGIONS, ROAD_POINTS, SPOTS, DISTRICTS, BENCHES, GREEN, HEDGES, RIVER, BRIDGE, personAt } from '../core/world.js';
+import { WORLD, REGIONS, ROAD_POINTS, SPOTS, DISTRICTS, BENCHES, GREEN, HEDGES, RIVER, BRIDGE, HAUNTS, personAt } from '../core/world.js';
 import { h } from './dom.js';
 import { modal } from './modals.js';
 import { FONT } from './scenery.js';
@@ -27,7 +27,9 @@ export function mapMarks(game) {
     return { id: spot.id, name: room ? short(room.name) : 'Home', ...at, state: !room ? 'home' : state.rooms[spot.id].clears > 0 ? 'calm' : game.roomOpen(spot.id) ? 'open' : 'shut', goal: goal.room === spot.id };
   });
   const person = goal.who ? personAt(goal.who) : null;
-  return { w: WORLD.w, h: WORLD.h, places, benches: BENCHES.map(({ x, y }) => ({ x, y })), you: { x: state.where.x, y: state.where.y }, goal: person ? { x: person.x, y: person.y } : null, bridge: game.bridgeOpen() ? 'open' : 'shut' };
+  return { w: WORLD.w, h: WORLD.h, places, benches: BENCHES.map(({ x, y }) => ({ x, y })), you: { x: state.where.x, y: state.where.y }, goal: person ? { x: person.x, y: person.y } : null, bridge: game.bridgeOpen() ? 'open' : 'shut',
+    // A Keepsake that is out: a star where it is to be found.
+    keepsake: game.keepsake() ? { x: HAUNTS[game.keepsake().keep].x, y: HAUNTS[game.keepsake().keep].y } : null };
 }
 
 /**
@@ -89,6 +91,12 @@ export function paintMap(pen, marks, { k, left, wide }) {
     const tx = x + (right ? 10 : -10);
     pen.lineWidth = 3; pen.strokeStyle = 'rgba(13,10,28,.85)'; pen.strokeText(place.name, tx, y);
     pen.fillStyle = place.state === 'shut' ? '#b6b0d6' : place.state === 'calm' ? '#aef0c0' : '#fff7e8'; pen.fillText(place.name, tx, y);
+  }
+  // A Keepsake that is out: a gold star.
+  if (marks.keepsake) {
+    pen.font = `700 15px ${FONT}`; pen.textAlign = 'center'; pen.textBaseline = 'middle';
+    pen.lineWidth = 3; pen.strokeStyle = INK; pen.strokeText('★', X(marks.keepsake.x), Y(marks.keepsake.y));
+    pen.fillStyle = '#ffc83d'; pen.fillText('★', X(marks.keepsake.x), Y(marks.keepsake.y));
   }
   // Where the goal is, if it is a person; and you.
   if (marks.goal) { pen.beginPath(); pen.arc(X(marks.goal.x), Y(marks.goal.y), 4, 0, Math.PI * 2); pen.fillStyle = '#ffc83d'; pen.fill(); pen.lineWidth = 1.5; pen.strokeStyle = INK; pen.stroke(); }

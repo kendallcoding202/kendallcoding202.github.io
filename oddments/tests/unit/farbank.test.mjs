@@ -114,7 +114,8 @@ test('strays keep to this side of the river until the bridge is open; after that
   for (const room of LANE) game.state.rooms[room.id].clears = 1;
   let far = 0; let near = 0;
   for (let i = 0; i < 80; i++) {
-    const strays = rollStrays(game.state);
+    // (With the lane calm its Keepsake is out as well: that is tests/unit/keepsake.test.mjs. These are the strays.)
+    const strays = rollStrays(game.state).filter((stray) => !stray.keep);
     assert.ok(strays.length >= STRAYS.farGroups[0] && strays.length <= STRAYS.farGroups[1]);
     for (const stray of strays) { if (overTheWater(WILDS[stray.at])) far++; else near++; }
   }

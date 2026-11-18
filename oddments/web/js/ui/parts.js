@@ -72,6 +72,8 @@ export function oddmentCard({ species, level, heirloom = false, xp = null, huff 
       ? 'Too proud to reach. It will not come home, however kindly you ask.'
       : `In a Huff: ${huff} pip${huff === 1 ? '' : 's'}. Has a soft spot for ${ELEMENTS[softSpotOf(kind.element)].name}: a friend of that element at your side makes reaching out work better.`),
     h('div', { class: 'movelist' }, moves),
+    // A Keepsake: there is one of it, and it stays as it is.
+    kind.keepsake ? h('small', { class: 'note', data: { act: 'keepsake' } }, 'A Keepsake: there is only one, anywhere. It does not grow up. It is what it is.') : null,
     // Growing up: when it will, or that it has (and what it was called when it was small).
     xp === null || !kind.grown ? null : h('small', { class: 'note', data: { act: 'grows' } }, big
       ? `Grown up: bigger, and stronger in every way. It was ${aOrAn(kind.name)} ${kind.name} when it was small.`

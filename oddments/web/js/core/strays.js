@@ -15,13 +15,48 @@
 // Out on the lane with no visit on, how worn the team is has to be kept
 // somewhere: `state.worn` (friend id to Health), null when rested. Stepping
 // into a place carries it in; resting at home clears it. See rooms.js.
-import { SPECIES, ROOMS, HEIRLOOM, STRAYS, BREATHER, TEAM_SIZE, roomBuilt, grownOdds } from './balance.js';
+import { SPECIES, SPECIES_IDS, ROOMS, HEIRLOOM, STRAYS, KEEPSAKE, BREATHER, TEAM_SIZE, roomBuilt, grownOdds } from './balance.js';
 import { nextRandom, rollInt, rollPick, own } from './util.js';
-import { WILDS, overTheWater } from './world.js';
+import { WILDS, HAUNTS, overTheWater } from './world.js';
 import { roomOpen, bridgeOpen, maxHpOf, teamOf } from './rooms.js';
 
 /** Strays have dice of their own, so that who wanders the lane never changes how a fight in a place falls out. */
 const diceOf = (state) => ({ rng: state.strayRng | 0 });
+
+// ---------------------------------------------------------------- the Keepsakes
+//
+// One of a kind, one to a chapter. A Keepsake is not a stray, but it is met the way one is: out in
+// the open, at a spot you walk up to, in a fight of its own, and it is gone until you next rest. So
+// it is kept in the same list, marked with its chapter (`keep`), and stands at its own haunt.
+
+/** The Keepsakes: [{ species, chapter, level }]. */
+export const KEEPSAKES = SPECIES_IDS.filter((id) => SPECIES[id].keepsake).map((id) => ({ species: id, ...SPECIES[id].keepsake }));
+/** Whether every place of a chapter is calm. */
+export const chapterCalm = (state, chapter) => ROOMS.filter((room) => (room.chapter || 1) === chapter).every((room) => state.rooms[room.id].clears > 0);
+/**
+ * Whether a chapter's Keepsake may be standing at its haunt, in these colours: its chapter is calm, and
+ * it is not your friend yet; or it is, and this is it in the rare colours yours has not got.
+ */
+export function keepsakeMayBeOut(state, keep, heirloom) {
+  if (!chapterCalm(state, keep.chapter)) return false;
+  const mine = state.friends.find((friend) => friend.species === keep.species);
+  return !mine || (!mine.heirloom && heirloom === true);
+}
+/** Whether an entry of the list is a Keepsake as it may fairly be: the right one, alone, at its own level. */
+export function fairKeepsake(state, stray) {
+  const keep = KEEPSAKES.find((one) => one.chapter === stray.keep);
+  if (!keep || !Array.isArray(stray.foes) || stray.foes.length !== 1) return false;
+  const foe = stray.foes[0];
+  return !!foe && typeof foe === 'object' && foe.species === keep.species && foe.level === keep.level && typeof foe.heirloom === 'boolean'
+    && foe.grown === undefined && keepsakeMayBeOut(state, keep, foe.heirloom);
+}
+/** Whether an entry of the list, strays or a Keepsake, is fair as things stand. */
+export const fairGroup = (state, stray) => !!stray && (stray.keep ? fairKeepsake(state, stray) : fairStrays(state, stray.foes));
+/** The Keepsake that is out just now and not yet met this outing ({ index, keep, species, heirloom }), or null. */
+export function keepsakeOut(state) {
+  const index = state.strays.findIndex((stray) => stray.keep && !stray.done);
+  return index < 0 ? null : { index, keep: state.strays[index].keep, species: state.strays[index].foes[0].species, heirloom: state.strays[index].foes[0].heirloom };
+}
 
 /** The furthest place that is open: it sets how strong strays are. */
 export function frontier(state) {
@@ -75,6 +110,16 @@ export function rollStrays(state) {
     }
     strays.push({ at, foes, done: false });
   }
+  // And the Keepsake of any chapter that is calm. (No dice are thrown for one until then, so who strays
+  // on the way there is as it always was.)
+  for (const keep of KEEPSAKES) {
+    if (!chapterCalm(state, keep.chapter)) continue;
+    const mine = state.friends.find((friend) => friend.species === keep.species);
+    const roll = nextRandom(dice);
+    const heirloom = roll < (mine ? KEEPSAKE.again : HEIRLOOM.calmOdds);
+    if (mine && (mine.heirloom || !heirloom)) continue;
+    strays.push({ at: -1, keep: keep.chapter, foes: [{ species: keep.species, level: keep.level, heirloom }], done: false });
+  }
   state.strayRng = dice.rng;
   state.strays = strays;
   return strays;
@@ -97,7 +142,11 @@ export function fairStrays(state, foes) {
 /** Whoever is still out on the lane: [{ index, x, y, foes }], for the screen and for finding the way round them. */
 export function straysAbout(state) {
   const about = [];
-  state.strays.forEach((stray, index) => { if (!stray.done) about.push({ index, x: WILDS[stray.at].x, y: WILDS[stray.at].y, foes: stray.foes }); });
+  state.strays.forEach((stray, index) => {
+    if (stray.done) return;
+    const at = stray.keep ? HAUNTS[stray.keep] : WILDS[stray.at];
+    about.push(stray.keep ? { index, x: at.x, y: at.y, foes: stray.foes, keep: stray.keep } : { index, x: at.x, y: at.y, foes: stray.foes });
+  });
   return about;
 }
 

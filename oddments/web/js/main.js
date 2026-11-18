@@ -163,6 +163,13 @@ function resultDialog(ctx, summary, foes) {
     const right = putRight(game.state, room.id);
     if (right) lines.push(h('div', { class: 'putright', data: { kind: right.kind } }, sprite(artOf(game.state.friends.find((friend) => friend.species === right.kind)), !!game.state.friends.find((friend) => friend.species === right.kind).heirloom, 'flip'), h('p', null, right.text)));
   }
+  else if (summary.won && summary.keepsake) {
+    // A Keepsake: made a friend of, it comes home; otherwise it has gone quiet, and will be out again.
+    const yours = summary.joined.some((joined) => joined.species === summary.keepsake) || summary.heirlooms.includes(summary.keepsake);
+    lines.push(h('p', { class: yours ? 'big' : null, data: { act: 'keepsake' } }, yours
+      ? `${name(summary.keepsake)} is a Keepsake: there is only one, anywhere. And it has chosen to come home with you.`
+      : `${name(summary.keepsake)} has slipped away, quite unhurt. A Keepsake cannot be made to stay: Reach out to it, and keep Reaching out. It will be here again after a rest.`));
+  }
   else if (summary.won) lines.push(h('p', null, summary.strays ? `${foes.length > 1 ? 'They are' : 'It is'} calm now, and off home. Everyone catches their breath.` : 'They are calm now. Everyone catches their breath.'));
   else {
     lines.push(h('p', null, 'Your friends are worn out. You carry them home for a rest. Whoever you calmed stays calm, and you keep everything they learned.'));
