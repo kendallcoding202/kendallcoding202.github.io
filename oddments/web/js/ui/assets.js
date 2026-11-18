@@ -6,11 +6,19 @@ import { WORLD_ART, worldSrc } from './scenery.js';
 import { ROOM_ART } from './roomart.js';
 import { KEY_ART } from './keys.js';
 
-function load(src) {
+// A picture that does not arrive is asked for once more, a moment later: there are some hundreds of
+// them now, and a web server asked for that many at once will now and then refuse one. (In the app
+// they come from the app itself, and this never happens.)
+const AGAIN_AFTER = 700; // milliseconds
+function load(src, tries = 2) {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => resolve(true);
-    img.onerror = () => { console.warn('missing asset', src); resolve(false); };
+    img.onerror = () => {
+      if (tries > 1) { setTimeout(() => load(src, tries - 1).then(resolve), AGAIN_AFTER); return; }
+      console.warn('missing asset', src);
+      resolve(false);
+    };
     img.src = src;
   });
 }
