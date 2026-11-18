@@ -58,6 +58,13 @@ async function boot() {
   if (stored && !state) keepUnreadable(stored);
   const seed = Number(params.get('seed') || flags.seed);
   const game = new Game(state || (Number.isFinite(seed) && seed ? newState(Date.now(), seed) : newState(Date.now())), { now: Date.now() });
+  // What day it is, by this device's own clock: which calm place is lively goes by it. A run for
+  // testing (`?debug`: a test, a screenshot) has no day unless it is given one (`&day=`), so that it
+  // plays the same whenever it is run.
+  const today = () => { const at = new Date(); return Math.floor((at.getTime() - at.getTimezoneOffset() * 60000) / 86400000); };
+  const dayNow = () => (params.has('day') ? Number(params.get('day')) : flag('debug') ? 0 : today());
+  game.setDay(dayNow());
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) game.setDay(dayNow()); });
 
   // Sound: the two switches as the save has them. Nothing is heard until the first touch (a browser's
   // rule), every touch after that costs nothing, and away from the game there is silence.

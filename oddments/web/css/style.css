@@ -319,6 +319,9 @@ small { color: var(--muted); font-size: 12px; }
 .modal.journal .now.aside img { flex: none; width: 46px; height: 46px; object-fit: contain; }
 .modal.journal .now.aside div { display: flex; flex-direction: column; gap: 4px; }
 .stamp.keep { color: var(--gold); }
+/* What is different today: the calm place that is lively. */
+.modal.journal .now.tonight { border: 1px solid rgba(255,233,168,.4); } .modal.journal .now.tonight b { color: #ffe9a8; }
+.maptonight { display: block; text-align: center; color: #ffe9a8; font-weight: 600; margin-top: 4px; }
 .keyslot { padding: 2px 0; border-radius: 10px; border: 1.5px solid transparent; display: flex; justify-content: center; }
 .keyslot img { width: 100%; max-width: 44px; aspect-ratio: 1; object-fit: contain; filter: brightness(0) opacity(.34); }
 .keyslot.held img { filter: drop-shadow(0 2px 3px rgba(0,0,0,.5)); }

@@ -390,6 +390,21 @@ export function asideOf(out, met) {
   return { title: met ? 'A Keepsake is out again' : 'Follow Fluff', detail: (met ? SEEK_AGAIN : SEEK)[out.keep] || '', keep: out.keep };
 }
 
+// ---------------------------------------------------------------- tonight
+
+/**
+ * What is different today: the calm place that is lively. `room` is that place (see rooms.livelyPlace).
+ * Returns { title, detail, room }, or null if nowhere is.
+ */
+export function tonightOf(room) {
+  if (!room) return null;
+  return {
+    title: `${room.name} is lively tonight`,
+    detail: 'More of them are out wandering there than usual, and far more of them in their rare colours. Tomorrow it will be somewhere else.',
+    room: room.id,
+  };
+}
+
 // ---------------------------------------------------------------- what you are trying to do
 
 // How the goal of calming each place is put. (A place not listed here gets a plain line.)

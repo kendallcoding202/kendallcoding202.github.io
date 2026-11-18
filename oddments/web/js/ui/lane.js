@@ -671,12 +671,15 @@ export function laneScreen(ctx) {
     const aim = game.aim();
     const told = game.journal();
     const aside = game.aside();
+    const tonight = game.tonight();
     modal({
       title: 'What to do', cls: 'journal',
       body: [
         h('div', { class: 'aim' }, h('b', null, aim.title), bar('xp', aim.count[0] / aim.count[1], `${aim.count[0]} of ${aim.count[1]} calm`)),
         keyRing(state),
         h('div', { class: 'now' }, h('small', null, 'Now'), h('b', null, goal.count ? `${goal.title} (${goal.count[0]} of ${goal.count[1]})` : goal.title), h('p', null, goal.detail)),
+        // What is different today: the calm place that is lively.
+        tonight ? h('div', { class: 'now tonight', data: { room: tonight.room } }, h('small', null, 'Tonight'), h('b', null, tonight.title), h('p', null, tonight.detail)) : null,
         // Something else worth doing: a Keepsake is out, and Fluff knows where.
         aside ? h('div', { class: 'now aside', data: { keep: String(aside.keep) } }, sprite(FLUFF.art), h('div', null, h('small', null, 'Also'), h('b', null, aside.title), h('p', null, aside.detail))) : null,
         told.length ? h('div', { class: 'sofar' }, h('small', null, 'So far'), h('ul', null, told.map((line) => h('li', null, line)))) : null,

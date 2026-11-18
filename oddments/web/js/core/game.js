@@ -4,12 +4,12 @@
 import { TEAM_SIZE, NAME_LENGTH, lookOf, roomOf, roomBuilt } from './balance.js';
 import { createBattle, choices, act, concede } from './battle.js';
 import { settleUp } from './progress.js';
-import { rollEncounter, fairEncounter, enterRoom, leaveRoom, afterFight, canMeet, nextGroup, heldBy, heldIn, roomOpen, bridgeOpen, placeCalm, staysCalm, calmedIn, teamOf, maxHpOf, rested, healthOf } from './rooms.js';
+import { rollEncounter, fairEncounter, enterRoom, leaveRoom, afterFight, canMeet, nextGroup, heldBy, heldIn, roomOpen, bridgeOpen, livelyPlace, placeCalm, staysCalm, calmedIn, teamOf, maxHpOf, rested, healthOf } from './rooms.js';
 import { rollStrays, fairStrays, fairGroup, keepsakeOut, straysAbout, strayNear, afterStrays } from './strays.js';
 import { STRAYS } from './balance.js';
 import { insideOf, stepIn, routeIn, spotIn, onMat, besidePost } from './indoors.js';
 import { WORLD, POST, BENCHES, SIT, MAILBOXES, POST_REACH, stepWalk, routeTo, straighten, roomy, standing, canStand, spotNear, spotOf, districtOf, districtAt, postNear, personNear, personAt, benchNear, mailNear, TALK } from './world.js';
-import { goalOf, aimOf, storySoFar, hasNews, talk, takeCall, callDue, asideOf } from './story.js';
+import { goalOf, aimOf, storySoFar, hasNews, talk, takeCall, callDue, asideOf, tonightOf } from './story.js';
 import { nameOf, giveName } from './names.js';
 
 export class Game {
@@ -324,6 +324,23 @@ export class Game {
 
   /** Takes great-aunt Maribel's first call, once the game has begun. Its lines the first time; null after. */
   takeCall() { return this.state.started && this.place() !== 'fight' ? takeCall(this.state) : null; }
+
+  /**
+   * Says what day it is: a whole number that goes up by one each real day, by the player's own
+   * clock (the rules keep no clock). Which calm place is lively follows from it. Returns whether
+   * the day changed. Anything that is not a whole, positive number is ignored.
+   */
+  setDay(day) {
+    if (!Number.isInteger(day) || !(day > 0) || day >= 1e6 || day === this.state.day) return false;
+    this.state.day = day;
+    return true;
+  }
+
+  /** What is different today: { title, detail, room }, or null. */
+  tonight() { return tonightOf(livelyPlace(this.state)); }
+
+  /** The place that is lively today (its id), or null. */
+  lively() { const room = livelyPlace(this.state); return room ? room.id : null; }
 
   /** Whether the gate on Kettle Bridge stands open: the whole lane is calm. */
   bridgeOpen() { return bridgeOpen(this.state); }

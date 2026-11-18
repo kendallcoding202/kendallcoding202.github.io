@@ -5,7 +5,7 @@
 // calmed (`calmed`, a bit for each stop), through resting and through being
 // carried home, so you never calm the same group twice to get at its
 // ringleader. Calm the ringleader and the whole place is calm for good.
-import { SPECIES, ROOMS, HEIRLOOM, VISITORS, WANDERERS, BREATHER, TEAM_SIZE, roomOf, roomBuilt, statAt, grownOdds } from './balance.js';
+import { SPECIES, ROOMS, HEIRLOOM, VISITORS, WANDERERS, LIVELY, BREATHER, TEAM_SIZE, roomOf, roomBuilt, statAt, grownOdds } from './balance.js';
 import { nextRandom, rollInt, rollPick, own } from './util.js';
 import { BARRICADE, BRIDGE, districtOf, districtAt } from './world.js';
 
@@ -47,13 +47,14 @@ export function poolOf(room, stop, calm = false) {
 /**
  * Who is waiting at a stop: a list of { species, level, heirloom }, at most
  * three. A boss stands in the middle with its company either side. In a place
- * that is `calm` (calmed before), Heirlooms are likelier and visitors may come.
+ * that is `calm` (calmed before), Heirlooms are likelier and visitors may come;
+ * in the one that is `lively` today, likelier still.
  * (The same dice are thrown either way, so a seed's run of luck does not shift.)
  */
-export function rollEncounter(dice, room, stop, calm = false) {
+export function rollEncounter(dice, room, stop, calm = false, lively = false) {
   const spot = room.path[stop];
   const pool = poolOf(room, stop, calm);
-  const odds = calm ? HEIRLOOM.calmOdds : HEIRLOOM.odds;
+  const odds = calm && lively ? LIVELY.heirloom : calm ? HEIRLOOM.calmOdds : HEIRLOOM.odds;
   const company = [];
   const count = rollInt(dice, spot.size[0], spot.size[1]);
   for (let i = 0; i < count && company.length < TEAM_SIZE - (spot.boss ? 1 : 0); i++) {
@@ -159,6 +160,27 @@ export const stillAbout = (visit) => (visit ? visit.groups.filter((group) => !gr
 export const wandering = (visit, index) => !!visit && !!visit.groups[index] && !visit.groups[index].done && (visit.stroll === true || visit.groups[index].wander === true);
 
 /**
+ * The place that is lively today, or null: one of the places that are calm, a different one each
+ * day, going round them all before any comes again. Null while nowhere is calm, and while nobody
+ * has said what day it is (a test, the simulator): then nothing is lively and all is as it was.
+ */
+export function livelyPlace(state) {
+  const day = Number.isInteger(state.day) ? state.day : 0;
+  if (!(day > 0)) return null;
+  // The calm places, in an order of their own that has nothing to do with where they are (each
+  // sorted by a number worked out from its name), taken one a day, round and round.
+  const calm = ROOMS.filter((room) => roomBuilt(room) && placeCalm(state, room.id)).sort((a, b) => shuffled(a.id) - shuffled(b.id));
+  if (!calm.length) return null;
+  return calm[day % calm.length];
+}
+/** A number from a name, the same every time: for putting things in an order that is fixed but not the obvious one. */
+function shuffled(name) {
+  let mixed = 2166136261;
+  for (let i = 0; i < name.length; i++) mixed = Math.imul(mixed ^ name.charCodeAt(i), 16777619);
+  return mixed >>> 0;
+}
+
+/**
  * How many groups of wanderers there can be in a place at once. In a calm place, WANDERERS says.
  * In one not yet calm they come only to stops already calmed, always leaving one of those empty
  * (so none until two are calm), and never where there is no walking round them: nobody you have
@@ -166,7 +188,7 @@ export const wandering = (visit, index) => !!visit && !!visit.groups[index] && !
  */
 export function wanderersMost(state, roomId) {
   const room = roomOf(roomId);
-  if (placeCalm(state, roomId)) return Math.min(room.path.length - 1, WANDERERS.groups[1]);
+  if (placeCalm(state, roomId)) return Math.min(room.path.length - 1, (livelyPlace(state) === room ? LIVELY : WANDERERS).groups[1]);
   const area = districtOf(roomId);
   if (area && area.narrow) return 0;
   const calm = room.path.slice(0, -1).filter((_, stop) => staysCalm(state, roomId, stop)).length;
@@ -174,9 +196,10 @@ export function wanderersMost(state, roomId) {
 }
 
 /** Which of some stops have wanderers at them this time: a few, `most` at the most, by the dice. */
-function wanderedTo(dice, stops, most) {
+function wanderedTo(dice, stops, most, lively = false) {
   const from = [...stops];
-  const count = Math.min(most, rollInt(dice, WANDERERS.groups[0], WANDERERS.groups[1]));
+  const [fewest, many] = (lively ? LIVELY : WANDERERS).groups;
+  const count = Math.min(most, rollInt(dice, fewest, many));
   const chosen = new Set();
   while (chosen.size < count) chosen.add(from.splice(Math.floor(nextRandom(dice) * from.length), 1)[0]);
   return chosen;
@@ -200,7 +223,8 @@ export function enterRoom(state, roomId) {
   const last = room.path.length - 1;
   const calm = room.path.map((_, stop) => stop).filter((stop) => stop < last && staysCalm(state, roomId, stop));
   const most = wanderersMost(state, roomId);
-  const about = most > 0 ? wanderedTo(state, calm, most) : new Set();
+  const lively = stroll && livelyPlace(state) === room;
+  const about = most > 0 ? wanderedTo(state, calm, most, lively) : new Set();
   // Rested, everyone steps in fresh. If they have met strays on the way, they step in as worn as that left them.
   const worn = state.worn || {};
   state.worn = null;
@@ -208,7 +232,7 @@ export function enterRoom(state, roomId) {
     room: roomId, stop: stroll ? 0 : calm.length, stroll,
     hp: Object.fromEntries(teamOf(state).map((friend) => [friend.id, Number.isFinite(worn[friend.id]) ? Math.max(0, Math.min(maxHpOf(friend), worn[friend.id])) : maxHpOf(friend)])),
     groups: room.path.map((_, stop) => {
-      if (about.has(stop)) return stroll ? { foes: rollEncounter(state, room, stop, true), done: false } : { foes: rollEncounter(state, room, stop, false), done: false, wander: true };
+      if (about.has(stop)) return stroll ? { foes: rollEncounter(state, room, stop, true, lively), done: false } : { foes: rollEncounter(state, room, stop, false), done: false, wander: true };
       if (calm.includes(stop) || (stroll && stop === last)) return nobody();
       return { foes: rollEncounter(state, room, stop, false), done: false };
     }),

@@ -24,7 +24,7 @@ export function mapMarks(game) {
     const room = roomOf(spot.id);
     const area = DISTRICTS[spot.id];
     const at = area ? { x: area.x + area.w / 2, y: area.y + area.h / 2 } : { x: spot.x, y: spot.y - spot.tall * 0.35 };
-    return { id: spot.id, name: room ? short(room.name) : 'Home', ...at, state: !room ? 'home' : state.rooms[spot.id].clears > 0 ? 'calm' : game.roomOpen(spot.id) ? 'open' : 'shut', goal: goal.room === spot.id };
+    return { id: spot.id, name: room ? short(room.name) : 'Home', ...at, state: !room ? 'home' : state.rooms[spot.id].clears > 0 ? 'calm' : game.roomOpen(spot.id) ? 'open' : 'shut', goal: goal.room === spot.id, lively: game.lively() === spot.id };
   });
   const person = goal.who ? personAt(goal.who) : null;
   return { w: WORLD.w, h: WORLD.h, places, benches: BENCHES.map(({ x, y }) => ({ x, y })), you: { x: state.where.x, y: state.where.y }, goal: person ? { x: person.x, y: person.y } : null, bridge: game.bridgeOpen() ? 'open' : 'shut',
@@ -77,6 +77,8 @@ export function paintMap(pen, marks, { k, left, wide }) {
     const y = Y(place.y);
     const fill = { home: '#ffc83d', calm: '#58d77a', open: '#fff7e8', shut: '#6f6a8c' }[place.state];
     if (place.goal) { pen.beginPath(); pen.arc(x, y, 10.5, 0, Math.PI * 2); pen.strokeStyle = '#ffc83d'; pen.lineWidth = 2.2; pen.stroke(); }
+    // The place that is lively today: a ring of small sparks round its dot.
+    if (place.lively) { pen.fillStyle = '#ffe9a8'; for (let i = 0; i < 6; i++) { pen.beginPath(); pen.arc(x + Math.cos(i * Math.PI / 3) * 11, y + Math.sin(i * Math.PI / 3) * 11, 1.8, 0, Math.PI * 2); pen.fill(); } }
     pen.beginPath(); pen.arc(x, y, 6, 0, Math.PI * 2); pen.fillStyle = fill; pen.fill(); pen.lineWidth = 2; pen.strokeStyle = INK; pen.stroke();
     pen.fillStyle = INK; pen.textAlign = 'center'; pen.font = `700 9px ${FONT}`;
     if (place.state === 'calm') pen.fillText('✓', x, y + 0.5);
@@ -111,7 +113,8 @@ export function mapDialog(game) {
   const marks = mapMarks(game);
   // As tall as the screen has room for; the world is much taller than it is wide, so the picture
   // is given room either side of it for names.
-  const tall = Math.round(Math.max(240, Math.min(620, window.innerHeight - 382)));
+  // (A line under the map says which place is lively tonight, when one is: the map gives it the room.)
+  const tall = Math.round(Math.max(240, Math.min(620, window.innerHeight - (game.tonight() ? 410 : 382))));
   const k = tall / marks.h;
   const wide = Math.round(Math.max(marks.w * k, Math.min(270, window.innerWidth - 70)));
   const left = (wide - marks.w * k) / 2;
@@ -123,7 +126,8 @@ export function mapDialog(game) {
   const key = (cls, words) => h('span', { class: `mapkey ${cls}` }, h('i'), words);
   const dialog = modal({
     title: 'Map', cls: 'map',
-    body: [h('div', { class: 'mapframe' }, canvas), h('div', { class: 'mapkeys' }, key('you', 'You'), key('calm', 'Calm'), key('open', 'Open'), key('shut', 'Shut'), key('bench', 'Bench'))],
+    body: [h('div', { class: 'mapframe' }, canvas), h('div', { class: 'mapkeys' }, key('you', 'You'), key('calm', 'Calm'), key('open', 'Open'), key('shut', 'Shut'), key('bench', 'Bench')),
+      game.tonight() ? h('small', { class: 'maptonight', data: { room: game.tonight().room } }, `✦ ${game.tonight().title}.`) : null],
     actions: [{ id: 'ok', label: 'OK', kind: 'plain' }],
   });
   dialog.el.dataset.places = marks.places.map((place) => `${place.id}:${place.state}${place.goal ? ':goal' : ''}`).join(',');

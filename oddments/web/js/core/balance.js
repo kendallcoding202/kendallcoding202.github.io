@@ -1178,6 +1178,13 @@ export const VISITORS = { kinds: START_TEAM.map(([id]) => id), weight: 0.4 };
 // to be met; they are there for the friends still to be made, and for Heirlooms.
 export const WANDERERS = { groups: [1, 3] };
 
+// Each real day one calm place is lively: a different one each day, going round them all. More
+// wander there that night (this many groups, where a calm place has WANDERERS'), and they are in
+// their rare colours much more often (`heirloom`, each of them, where a calm place has
+// HEIRLOOM.calmOdds). Nothing else changes, nothing is lost by missing a day, and the game never
+// looks at a clock itself: whoever runs it says what day it is (see Game.setDay).
+export const LIVELY = { groups: [3, 4], heirloom: 3 / 20 };
+
 // Strays: lost Clutterkin out in the open, between places (core/strays.js). This many small
 // groups turn up each time you set out rested, each of this size, most of them in the country
 // between the rows of houses. `meet` is how near you must walk

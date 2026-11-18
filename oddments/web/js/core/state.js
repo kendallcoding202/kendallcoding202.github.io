@@ -20,6 +20,7 @@ export function newState(now = Date.now(), seed = (now ^ 0x9e3779b9) | 0) {
     rng: seed | 0,
     createdAt: now,
     lastSeen: now,
+    day: 0, // what day it is, as whoever runs the game last said (a whole number of days; 0: nobody has said)
     started: false, // has the player finished the intro
     player: { name: DEFAULT_NAME, look: LOOK_IDS[0] },
     friends, // everyone who has come home: { id, species, level, xp, heirloom }
@@ -156,6 +157,7 @@ export function reviveState(saved, now = Date.now()) {
   const state = newState(now, typeof saved.rng === 'number' && Number.isFinite(saved.rng) ? saved.rng | 0 : 1);
   state.createdAt = num(saved.createdAt, now, 0, now);
   state.lastSeen = num(saved.lastSeen, now, 0, now); // a clock set backwards must not put the save in the future
+  state.day = Number.isInteger(saved.day) && saved.day > 0 && saved.day < 1e6 ? saved.day : 0;
   state.started = saved.started === true;
 
   const player = isObj(saved.player) ? saved.player : {};

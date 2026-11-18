@@ -1707,6 +1707,40 @@ section('Growing up');
 }
 
 // =============================================================== the page keeps to itself
+section('Tonight\'s lively place');
+{
+  // A run for testing has no day (so everything above plays the same whenever it is run); this one is given one.
+  check(await S(page, () => window.oddments.game.state.day === 0 && window.oddments.game.lively() === null && window.oddments.game.tonight() === null), 'the game above was told no day, and nowhere in it was lively');
+  const night = await newPage();
+  await night.goto(`${base}?debug&fast&reset&seed=7&day=20001`);
+  await ready(night);
+  await begin(night);
+  const told = await S(night, () => {
+    const o = window.oddments; const s = o.game.state;
+    s.seen.strays = true; s.story.ines = 6;
+    for (const id of ['garden', 'alley', 'pantry', 'wash', 'stacks']) { s.rooms[id].clears = 1; s.rooms[id].calmed = 31; }
+    for (const friend of s.friends) friend.level = 14;
+    o.game.standAt('home'); o.ctx.show('lane');
+    return { day: s.day, lively: o.game.lively() };
+  });
+  check(told.day === 20001 && ['garden', 'alley', 'pantry', 'wash', 'stacks'].includes(told.lively), `told what day it is, one of the calm places is lively (${told.lively})`);
+  await night.click('.goalchip');
+  await night.waitForSelector('.modal.journal');
+  check(await S(night, (id) => { const el = document.querySelector('.modal.journal .now.tonight'); return !!el && el.dataset.room === id && el.textContent.includes('is lively tonight') && el.textContent.includes('rare colours'); }, told.lively), 'the journal says which, under "Tonight"');
+  await snap(night, 'e2e-tonight');
+  await night.click('.modal.journal [data-id="map"]');
+  await night.waitForSelector('.modal.map canvas');
+  check(await S(night, (id) => { const line = document.querySelector('.modal.map .maptonight'); const box = line && line.getBoundingClientRect(); const frame = document.querySelector('.modal.map').getBoundingClientRect(); return !!line && line.dataset.room === id && line.textContent.includes('is lively tonight') && box.bottom <= frame.bottom && box.top >= frame.top; }, told.lively), 'and so does the map, with a line under it that fits');
+  await snap(night, 'e2e-tonight-map');
+  await night.click('.modal.map [data-id="ok"]');
+  // A stroll there: three or four groups wandering, where another night has one to three.
+  const about = await S(night, (id) => { const o = window.oddments; o.game.travelTo(id); o.ctx.show('lane'); return o.game.state.visit.groups.filter((group) => group.foes.length > 0).length; }, told.lively);
+  check(about >= 3 && about <= 4 && await S(night, () => window.oddments.game.state.visit.stroll === true), `a stroll through it finds more of them out than usual (${about} groups)`);
+  // The next day it is somewhere else.
+  check(await S(night, (was) => { const o = window.oddments; o.game.setDay(20002); return o.game.lively() !== was && o.game.lively() !== null; }, told.lively), 'and tomorrow it is somewhere else');
+  await night.close();
+}
+
 section('Nothing leaves the device');
 const foreign = requests.filter((url) => !url.startsWith(base));
 check(foreign.length === 0, 'every request the game made was for one of its own files', foreign.slice(0, 3).join(' '));
