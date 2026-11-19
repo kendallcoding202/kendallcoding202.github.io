@@ -5,8 +5,8 @@ Everything App Store Connect asks for before an app can be submitted, with a pro
 ## What is still to do, in order
 
 1. **YOURS:** hear the sound come back on a phone (build 43), and have one person play the game through.
-2. **YOURS:** decide the five things under *Only the owner can decide*, below.
-3. Publish the privacy and support pages (drafted at the end of this file).
+2. **YOURS:** decide the three things still open under *Only the owner can decide*, below: the price, the free copy on the web, and the EU.
+3. Done on 19 November 2026: the privacy and support pages are published (see the end of this file).
 4. Set the version to 1.0.0 and upload that build.
 5. **YOURS:** in App Store Connect, fill the page from this file, attach the eight screenshots, pick the build, and press Submit.
 
@@ -16,9 +16,10 @@ Everything App Store Connect asks for before an app can be submitted, with a pro
 | --- | --- | --- |
 | Price | Free, or paid once | **Paid once, about $3.99. No ads, no purchases.** The game is whole and has nothing to sell inside it. A paid app needs the Paid Apps agreement, and bank and tax details, in App Store Connect under *Business* before it can go on sale. |
 | **The free copy on the web** | The whole game can be played free at `kendallcoding202.github.io/oddments/web/`, and its source is in a public repository. | **Decide before charging.** Selling an app that is free one link away is a choice, not an accident. Three ways: take the web copy down at launch; keep only the first place or two playable there, as a trial; or leave it, and treat the app as the convenient way to have it. I would keep a trial of the garden and Tin Can Alley. |
-| The name | "Clutterkin" was looked for by web search and in lists of game names, and nothing was found. That is not a trademark search. | Have the name searched properly (USPTO at least) before money changes hands on it. |
-| Who it is by | The seller name on the page is the name on the Apple developer account. The copyright line and the support page need a name too. | Use what the Pawst Lives pages use. |
-| The four house-sitter looks | They came out taller and slimmer than the Pawst Lives cats, and were left as candidates. | Keep them for 1.0: they are consistent with each other and with the five people of the cast. Repaint only if they bother you on the phone. |
+| The name | **Searched on 19 November 2026, at the owner's request.** Nobody has registered or applied for "Clutterkin" in the US, the EU or Australia, and no app or game has the name. Four neighbours are worth knowing about; none is a reason to change it. See *The name: what a search found*, below. | Keep the name. A lawyer's opinion, or an application of your own, only if you want more certainty: both cost money. |
+| Who it is by | **Decided 19 November 2026: the owner, Kendall Sorenson,** with the email address the Pawst Lives pages use. A telephone number was given too. It belongs only in App Store Connect's review contact, which is not public, and is not written in this repository or on the pages. | Done. |
+| The four house-sitter looks | **Decided 19 November 2026: they stay** ("The 4 looks are good"). There are four to choose from (Lantern, Torch, Headlamp, Candle), each painted from the front and from behind. The five other people painted since (great-aunt Maribel, Ines Tock, Dov, Mr. Spick and Tansy Brisk) are the cast, not looks to choose. | Done. More looks can be painted if wanted: two images each. |
+| **The EU** | To sell in the EU, Apple asks whether you are a "trader". An individual who says yes must give an address or P.O. box, a telephone number and an email address, and Apple shows them on the app's page in EU countries. Without an answer the app is not offered there. | **Decide before choosing where it is sold.** Either accept that those details are public in the EU (a P.O. box is allowed), or leave the EU out for now. This is Apple's account of it; whether a small seller counts as a trader is a legal question. |
 
 ## The page
 
@@ -73,11 +74,11 @@ Everything App Store Connect asks for before an app can be submitted, with a pro
 
 **What's New:** not asked for a first version.
 
-**Copyright:** `2026` followed by the owner's name. **YOURS.**
+**Copyright:** `2026 Kendall Sorenson`
 
-**Support URL:** `https://kendallcoding202.github.io/oddments/support/` (page drafted below; not published yet)
+**Support URL:** `https://kendallcoding202.github.io/clutterkin/support/` (published)
 
-**Privacy Policy URL:** `https://kendallcoding202.github.io/oddments/privacy/` (drafted below; not published yet)
+**Privacy Policy URL:** `https://kendallcoding202.github.io/clutterkin/privacy/` (published)
 
 **Marketing URL:** leave empty.
 
@@ -145,46 +146,41 @@ Expected result: 4+.
 
 > Clutterkin is a single-player game with no sign-in, no network use, no purchases and no ads. Everything is available from first launch: tap Begin, read the short introduction, then tap or drag to walk. Walk through the garden gate (up and to the left of the house) to meet the first group; in a fight, tap a move, or tap "Reach out" and then one of them to make a friend of it. The save is kept on the device.
 
-## Draft: the privacy page
+## The name: what a search found (19 November 2026)
 
-> **Clutterkin privacy policy**
->
-> **The short version.** Clutterkin collects nothing. It has no accounts, no ads and no analytics, and it never connects to the internet.
->
-> **What the game stores, and where.** Your progress (your friends, the places you have calmed, your settings and the name you chose for your house-sitter) is saved on your device, in the app's own storage. It is not sent to us or to anyone else. Your device's own backup, if you use one, includes it as it includes every app's data.
->
-> **What the game does not do.** It does not ask for your name, email, location, contacts, photos, camera or microphone. It does not track you across apps or websites. It contains no third-party code that does.
->
-> **Purchases.** There is nothing to buy inside the game.
->
-> **Children.** The game is suitable for children and collects nothing from anyone, of any age.
->
-> **These web pages.** This page is hosted by GitHub Pages, which, like any web host, receives the address of a visitor's device when a page is requested. The game itself never visits them.
->
-> **Deleting your data.** Delete the app and the save goes with it. Inside the game, Settings has "Start over".
->
-> **Changes.** If this ever changes, this page will say so, with the date.
->
-> **Contact.** [the owner's contact, as on the support page]
+The owner asked for a trademark search on "Clutterkin". This is what was searched, what was found, and how I read it. I am not a lawyer and this is not a legal opinion.
 
-## Draft: the support page
+**Searched**
 
-> **Clutterkin support**
->
-> Clutterkin is an iPhone game by [the owner's name].
->
-> **Getting started.** Tap or drag to walk. Walk up to a door or a gate to go in. Tap the gold "Goal" at the top for what to do next, the map, and your wishes.
->
-> **Fights.** Three against three, one turn at a time. Tap a move, then who it is for. Once a round you can make a Call: Reach out to make a friend, Cheer on to help a friend hit harder, or Patch up to mend one. Tap anyone in a fight to see what they are.
->
-> **Making friends.** Reach out to one of them until its Huff is gone, and win the fight: it comes home with you. Hitting one you are reaching out to puts its Huff back up. You keep one friend of each kind.
->
-> **Worn out?** Rest at home or on a bench. Whoever you have calmed stays calm.
->
-> **Ringleaders.** A ringleader cannot be reached. Once its place is calm it stands outside, with a wish: "What to do" lists them. Grant a wish and win its friendly bout, and it comes home. One ringleader walks with you at a time.
->
-> **No sound?** Check the switch on the side of the phone and the volume, then Settings in the game: "Gone quiet? Restart sound".
->
-> **Saves.** Progress saves on your device by itself. There is no account. Deleting the app deletes the save.
->
-> **Contact.** [the owner's contact]. It helps to say which iPhone and iOS version you have.
+- **The US register**, on the trademark office's own search site, live and dead records alike, 31 searches: the exact name; the plural; a K spelling; nine misspellings; every mark containing "clutterk", "lutterkin", "utterkin" or "tterkin"; every mark containing "clutter" in the classes for software, printed matter, toys and games, and entertainment (9, 16, 28, 41); "cl...kin" and "-erkin" marks in those classes; "-kin" marks for creature or monster games; and household words with "kin" on the end.
+- **EU trade marks** (the EU office's own search): nothing.
+- **Australia** (IP Australia): nothing.
+- **Where games are sold:** the App Store (US), Google Play and Steam have nothing called Clutterkin. A web search for the name, its plural and "Clutter Kin" found nothing.
+
+**Not searched:** the UK and Canadian registers (both sites refused an automated visitor), the international register at WIPO (it asks for a captcha), and the EU's combined search of seventy offices (it would not load). State registrations. Names in use but never registered, beyond what a web and app-store search turns up.
+
+**Found: nobody has registered or applied for Clutterkin, in any spelling.** The nearest things, closest first:
+
+| Mark | Standing | For | Whose | Why it matters |
+| --- | --- | --- | --- | --- |
+| CHATTERKIN | Applied for, 2 June 2026 (serials 99859113, 99860967). On the App Store now. | A phone app for tracking a child's speech milestones | Macy's App Development LLC | The closest in look and sound: two letters apart. But it is a parenting tool, not a game, and means something else. |
+| LARDERKIN | Applied for, 19 May 2026 (serial 99833391). No game by the name found on the web or the App Store. | Downloadable game software; online games | Sousy LLC, who also make a recipe app | The same goods and the same idea: a household word with "kin" on the end. A different first word, look and sound. Filed before Clutterkin was first shown to anyone. |
+| CLUTTER | Registered 22 December 2020 (serials 88944298, 88944526) | Collectable toy figures; a magazine about toys and art | Clutter Media Group | Nothing to do with a phone game. It would matter the day Clutterkin became toys, figures or plush: the whole of their mark is the front of this one. |
+| Clutter (never registered) | In use for years | A series of hidden-object games, on the App Store among other places | Puzzles by Joe | The same broad field, casual games. But "clutter" is an ordinary word that describes those games, and plenty of "Clutter..." names live beside it, one of them (CLUTTERED CODE) registered for game software. |
+
+Two things in the name's favour. Names are told apart mostly by how they begin, and nothing begins "Clutterk". And "-kin" is everywhere in toys and games (SLUMBERKINS, CLOUDKINS, EVERKIN, HENDERKIN, PLAYERKIN, and a famous card game), so sharing only that ending counts for little.
+
+Also seen: ODDKIN was registered for stuffed toys on 17 November 2026, which bears out dropping "Oddkins" as a name at the start.
+
+**How I read it.** The name is clear to use for the game, as far as a search can show. There is no identical mark and nothing a player would mistake it for. The risk is not nothing: either of the two pending "-kin" applications could object, or be raised by an examiner if the owner ever applies to register Clutterkin; and the toy registration stands in the way of merchandise. None of those is a reason to change the name.
+
+**If more certainty is wanted** (both cost money, so both are the owner's call): a trademark attorney's opinion on these four; or the owner's own US application for the name, for game software, which is the only thing that makes it the owner's on the register.
+
+## The privacy and support pages
+
+Published 19 November 2026, in the owner's name, with the email address the Pawst Lives pages already use and no telephone number:
+
+- Privacy: `https://kendallcoding202.github.io/clutterkin/privacy/` (the file is `clutterkin/privacy/index.html`, at the top of this repository)
+- Support: `https://kendallcoding202.github.io/clutterkin/support/` (`clutterkin/support/index.html`)
+
+They are built like the Pawst Lives pages. If the game ever changes what it stores or asks the internet anything, the privacy page has to change with it, and its date.
