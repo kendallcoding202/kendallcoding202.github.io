@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { SOUNDS, SOUND_NAMES, SCENES, TUNES, VOICE_NAMES, BACK_NAMES, FIGHT_SCENE, sceneFor, MASTER, MUSIC, createSound, kitFor, writeBar, play, setScene, unlockSound, setSound, hushSound, soundState } from '../../web/js/platform/sound.js';
+import { SOUNDS, SOUND_NAMES, SCENES, TUNES, VOICE_NAMES, BACK_NAMES, FIGHT_SCENE, sceneFor, MASTER, MUSIC, createSound, isFragile, kitFor, writeBar, play, setScene, unlockSound, setSound, hushSound, soundState } from '../../web/js/platform/sound.js';
 import { newState, reviveState } from '../../web/js/core/state.js';
 
 const WEB = fileURLToPath(new URL('../../web/js/', import.meta.url));
@@ -361,6 +361,133 @@ test('a clock that will not wake however often it is asked is thrown away, and a
   // While it is running, touches cost nothing and make nothing.
   for (let i = 0; i < 20; i++) sound.unlock();
   assert.equal(rig.made.clocks, 3);
+});
+
+test('on an iPhone, the first touch after the app has been away makes a new clock, even if the old one says it is running', async () => {
+  // Reported from the phone again on 19 November 2026, on the build that woke the old clock: "The sound doesn't come
+  // back on after opening the app again when minimizing it". A phone's clock can say "running" and be silent.
+  const rig = standIn();
+  const sound = createSound(rig.Clock, rig.timers, { fragile: true });
+  sound.unlock();
+  await Promise.resolve(); await Promise.resolve();
+  const first = rig.made.clock;
+  sound.scene('world');
+  assert.equal(sound.state().playing, true);
+  let closed = 0;
+  let suspended = 0;
+  first.close = () => { closed++; first.state = 'closed'; return Promise.resolve(); };
+  first.suspend = () => { suspended++; first.state = 'suspended'; return Promise.resolve(); };
+  // Away. The phone stops the clock itself: the game does not tell it to as well.
+  sound.hush(true);
+  assert.equal(suspended, 0, 'on a phone the clock is left alone when the app goes away');
+  assert.equal(sound.state().playing, false);
+  // Back. Nothing is asked of the old clock: the app is told it is back a moment before it really is, and a clock
+  // asked to run just then can start in name only.
+  let asked = 0;
+  const resume = first.resume.bind(first);
+  first.resume = () => { asked++; return resume(); };
+  first.state = 'interrupted';
+  sound.hush(false);
+  assert.equal(asked, 0, 'the old clock is not asked to run on the way back in');
+  // And then the phone says all is well. (It is not: nothing can be heard.)
+  first.state = 'running';
+  first.onstatechange();
+  assert.equal(rig.made.clocks, 1, 'nothing is made until a touch');
+  // The first touch: finger down makes a new clock; the rest of the same touch only wakes it.
+  sound.unlock(true);
+  assert.equal(rig.made.clocks, 2, 'a new clock, on the first touch');
+  assert.equal(closed, 1, 'and the old one is shut');
+  sound.unlock(false); sound.unlock(false); sound.unlock(false);
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(rig.made.clocks, 2, 'the finger coming up, and the click, make nothing more');
+  assert.equal(rig.made.clock.state, 'running');
+  assert.equal(sound.state().playing, true, 'with the music where the game is');
+  assert.equal(sound.play('tap'), true);
+  // After that, touches cost nothing until the app has been away again.
+  for (let i = 0; i < 12; i++) { sound.unlock(true); sound.unlock(false); }
+  assert.equal(rig.made.clocks, 2);
+  sound.hush(true); sound.hush(false);
+  sound.unlock(true);
+  assert.equal(rig.made.clocks, 3, 'away again, a new one again');
+  // A call that takes the sound without the app going anywhere counts as being away.
+  await Promise.resolve(); await Promise.resolve();
+  rig.made.clock.state = 'interrupted';
+  rig.made.clock.onstatechange();
+  rig.made.clock.state = 'running';
+  rig.made.clock.onstatechange();
+  sound.unlock(true);
+  assert.equal(rig.made.clocks, 4);
+});
+
+test('anywhere else, coming back wakes the same clock: nothing is thrown away that works', async () => {
+  const rig = standIn();
+  const sound = createSound(rig.Clock, rig.timers);
+  sound.unlock();
+  await Promise.resolve(); await Promise.resolve();
+  sound.scene('world');
+  sound.hush(true);
+  assert.equal(rig.made.clock.state, 'suspended', 'a browser tab put away is told to stop');
+  sound.hush(false);
+  await Promise.resolve(); await Promise.resolve();
+  sound.unlock(true); sound.unlock(false);
+  assert.equal(rig.made.clocks, 1);
+  assert.equal(sound.state().playing, true);
+});
+
+test('a clock that says it is running and does not move is making no sound: the next touch makes a new one', async () => {
+  const rig = standIn();
+  let now = 1000;
+  const sound = createSound(rig.Clock, { ...rig.timers, now: () => now });
+  sound.unlock();
+  await Promise.resolve(); await Promise.resolve();
+  const first = rig.made.clock;
+  // A clock that moves is left alone, however often it is touched.
+  for (let i = 0; i < 10; i++) { now += 400; first.currentTime += 0.4; sound.unlock(true); sound.unlock(false); }
+  assert.equal(rig.made.clocks, 1);
+  // The parts of one touch come too close together to tell anything by.
+  sound.unlock(true); now += 5; sound.unlock(false); now += 5; sound.unlock(true);
+  assert.equal(rig.made.clocks, 1);
+  // It stops moving, and still says it is running.
+  now += 400; sound.unlock(true);
+  assert.equal(rig.made.clocks, 2, 'looked at a moment ago and now, and it has not moved: a new one');
+  assert.notEqual(rig.made.clock, first);
+});
+
+test('Settings can start the sound afresh by hand, and is told how that went', async () => {
+  const rig = standIn();
+  const sound = createSound(rig.Clock, rig.timers);
+  assert.equal(sound.clock(), 'none');
+  assert.equal(sound.restart(), true, 'asked before any touch, a clock is made and asked to run');
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(rig.made.clocks, 1);
+  assert.equal(sound.clock(), 'running');
+  sound.scene('world');
+  const first = rig.made.clock;
+  let closed = 0;
+  first.close = () => { closed++; first.state = 'closed'; return Promise.resolve(); };
+  assert.equal(sound.restart(), true);
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(rig.made.clocks, 2, 'a new clock, whatever the old one said of itself');
+  assert.equal(closed, 1);
+  assert.equal(sound.clock(), 'running');
+  assert.equal(sound.state().playing, true, 'and the music picks up');
+  assert.equal(sound.play('goal'), true);
+  // A clock that will not start says what it is instead, so that somebody with the phone in their hand can report it.
+  rig.made.clock.state = 'interrupted';
+  assert.equal(sound.clock(), 'interrupted');
+  const none = createSound(null);
+  assert.equal(none.restart(), false, 'with no sound to use, it says so');
+  assert.equal(none.clock(), 'none');
+});
+
+test('an iPhone and an iPad are told apart from everything else by what they call themselves', () => {
+  assert.equal(isFragile({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148', platform: 'iPhone', maxTouchPoints: 5 }), true);
+  assert.equal(isFragile({ userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)', platform: 'iPad', maxTouchPoints: 5 }), true);
+  assert.equal(isFragile({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15', platform: 'MacIntel', maxTouchPoints: 5 }), true, 'an iPad asking for the desktop site');
+  assert.equal(isFragile({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15', platform: 'MacIntel', maxTouchPoints: 0 }), false, 'a Mac');
+  assert.equal(isFragile({ userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36', platform: 'Linux armv81', maxTouchPoints: 5 }), false);
+  assert.equal(isFragile(null), false);
+  assert.equal(isFragile({}), false);
 });
 
 test('a sound asked for many times at once is made once; an unknown one is not made at all', async () => {

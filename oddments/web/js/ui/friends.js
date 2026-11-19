@@ -5,7 +5,7 @@ import { nameOf, artOf, kindNameOf } from '../core/names.js';
 import { h, sprite } from './dom.js';
 import { modal, toast } from './modals.js';
 import { elementTag, heirloomTag, bar, oddmentCard } from './parts.js';
-import { setSound, unlockSound } from '../platform/sound.js';
+import { setSound, unlockSound, restartSound, soundClock, play } from '../platform/sound.js';
 import { keyRing } from './keys.js';
 
 /** Everyone who has come home, and the three who walk with you. */
@@ -161,6 +161,17 @@ export function settingsScreen(ctx) {
     h('div', { class: 'card' },
       h('div', { class: 'toggle' }, h('div', null, 'Sound effects', h('small', null, 'Footsteps, taps, and what happens in a fight.')), sound),
       h('div', { class: 'toggle' }, h('div', null, 'Music', h('small', null, 'A lullaby out in the lane, something livelier in a fight.')), music),
+      // If the sound has gone quiet (a phone can take it away and not give it back), this starts it afresh, and says how that went.
+      h('div', { class: 'toggle' }, h('div', null, 'Gone quiet?', h('small', null, 'Starts the sound afresh. You should hear a chime.')),
+        h('button', { class: 'btn plain small', data: { act: 'restartsound' }, onclick: () => {
+          if (!restartSound()) { toast('This device gives the game no sound to use.', { kind: 'bad' }); return; }
+          // A clock takes a moment to start: then the chime, and a word on how it went (and what the clock says, if it did not).
+          setTimeout(() => {
+            const now = soundClock();
+            play('goal');
+            toast(now === 'running' ? 'Sound started afresh.' : `The sound would not start. It says: ${now}.`, { kind: now === 'running' ? 'good' : 'bad' });
+          }, 350);
+        } }, 'Restart sound')),
       h('div', { class: 'toggle' }, h('div', null, 'Fast fights', h('small', null, 'Play the moves back quicker.')), fast)),
     h('div', { class: 'card you' },
       sprite(player.look),

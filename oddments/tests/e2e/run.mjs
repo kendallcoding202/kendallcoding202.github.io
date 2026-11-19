@@ -1505,6 +1505,30 @@ check(snd.running === true && snd.playing === false, 'so a touch wakes the audio
 await loud.click('[data-act="music"]');
 await loud.waitForTimeout(300);
 check((await sounding(loud)).playing === true, 'and music comes back the moment it is switched on');
+// If a phone has taken the sound and not given it back, Settings can start it afresh by hand, and says how that went.
+check(await S(loud, () => { const row = document.querySelector('[data-act="restartsound"]'); return !!row && row.textContent === 'Restart sound' && row.closest('.toggle').textContent.includes('Gone quiet?'); }), 'Settings has a way to start the sound afresh');
+const goals = (await sounding(loud)).heard.goal || 0;
+await loud.click('[data-act="restartsound"]');
+await loud.waitForTimeout(700);
+snd = await sounding(loud);
+check(snd.running === true && snd.playing === true && (snd.heard.goal || 0) === goals + 1 && await S(loud, () => [...document.querySelectorAll('.toast')].some((el) => el.textContent.includes('Sound started afresh'))), 'pressing it makes a new start: a chime, the music again, and a word that it worked', JSON.stringify({ running: snd.running, playing: snd.playing }));
+// Coming back to the page after it has been hidden: the sound is there again.
+await S(loud, () => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); document.dispatchEvent(new Event('visibilitychange')); });
+await loud.waitForTimeout(150);
+check((await sounding(loud)).playing === false, 'hidden, the music stops');
+await S(loud, () => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => false }); document.dispatchEvent(new Event('visibilitychange')); });
+await loud.touchscreen.tap(200, 30);
+await loud.waitForTimeout(400);
+snd = await sounding(loud);
+check(snd.running === true && snd.playing === true, 'shown again and touched, it plays');
+// And as the app tells it (the app says "pause" and "resume" for itself).
+await S(loud, () => document.dispatchEvent(new Event('pause')));
+await loud.waitForTimeout(150);
+check((await sounding(loud)).playing === false, 'the app going into the background stops it too');
+await S(loud, () => document.dispatchEvent(new Event('resume')));
+await loud.touchscreen.tap(200, 30);
+await loud.waitForTimeout(400);
+check((await sounding(loud)).playing === true, 'and its coming back, and a touch, brings it back');
 await loud.context().close();
 
 // =============================================================== a folding phone

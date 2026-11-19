@@ -85,9 +85,14 @@ async function boot() {
   // Sound: the two switches as the save has them. Nothing is heard until the first touch (a browser's
   // rule), every touch after that costs nothing, and away from the game there is silence.
   setSound({ effects: game.state.settings.sound, music: game.state.settings.music });
-  window.addEventListener('pointerdown', unlockSound, true);
-  window.addEventListener('keydown', unlockSound, true);
+  window.addEventListener('pointerdown', () => unlockSound(true), true);
+  window.addEventListener('keydown', () => unlockSound(true), true);
+  // The rest of the same touch: a phone's browser lets sound begin as the finger comes up, not as it goes down.
+  for (const rest of ['pointerup', 'touchend', 'click']) window.addEventListener(rest, () => unlockSound(false), true);
   document.addEventListener('visibilitychange', () => hushSound(document.hidden));
+  // The app says so itself as well, when it goes into the background and when it comes back.
+  document.addEventListener('pause', () => hushSound(true));
+  document.addEventListener('resume', () => hushSound(false));
   // An iPhone does not always say the page was hidden when the app goes into the background, and
   // not always that it is back. These say so as well: the page shown again, the window looked at again.
   window.addEventListener('pageshow', () => { if (!document.hidden) hushSound(false); });
