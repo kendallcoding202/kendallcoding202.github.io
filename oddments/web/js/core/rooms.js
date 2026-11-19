@@ -8,11 +8,12 @@
 import { SPECIES, ROOMS, HEIRLOOM, VISITORS, WANDERERS, LIVELY, BREATHER, TEAM_SIZE, roomOf, roomBuilt, statAt, grownOdds, friendHp } from './balance.js';
 import { nextRandom, rollInt, rollPick, own } from './util.js';
 import { BARRICADE, BRIDGE, districtOf, districtAt } from './world.js';
+import { inSample } from './sample.js';
 
-/** A room is open once it is built and the room before it has been cleared. */
+/** A room is open once it is built and the room before it has been cleared. (And never, in the free sample, if the sample does not hold it.) */
 export function roomOpen(state, roomId) {
   const index = ROOMS.findIndex((room) => room.id === roomId);
-  if (index < 0 || !roomBuilt(ROOMS[index])) return false;
+  if (index < 0 || !roomBuilt(ROOMS[index]) || !inSample(roomId)) return false;
   return index === 0 || state.rooms[ROOMS[index - 1].id].clears > 0;
 }
 

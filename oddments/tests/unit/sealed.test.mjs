@@ -116,7 +116,7 @@ test('nothing a player can read is taken from another game', () => {
     ...ROOMS.flatMap((room) => [room.name, room.blurb, ...(room.path || []).map((spot) => spot.name)]),
     ...LOOKS.map((look) => look.name),
     // Every piece of text the screens write, everything anyone in the story says, and the page itself.
-    ...text.filter(({ path }) => path.startsWith('js/ui/') || path === 'js/main.js' || path === 'js/core/story.js' || path === 'js/core/rival.js' || path === 'js/core/wishes.js' || path === 'index.html').flatMap(({ body }) => [...body.matchAll(/'((?:[^'\\\n]|\\.)*)'|`((?:[^`\\]|\\.)*)`|>([^<>{}]+)</g)].map((m) => m[1] || m[2] || m[3] || '')),
+    ...text.filter(({ path }) => path.startsWith('js/ui/') || path === 'js/main.js' || path === 'js/core/story.js' || path === 'js/core/rival.js' || path === 'js/core/wishes.js' || path === 'js/core/sample.js' || path === 'index.html').flatMap(({ body }) => [...body.matchAll(/'((?:[^'\\\n]|\\.)*)'|`((?:[^`\\]|\\.)*)`|>([^<>{}]+)</g)].map((m) => m[1] || m[2] || m[3] || '')),
   ].join('\n').toLowerCase();
   assert.ok(readable.length > 5000);
   assert.ok(readable.includes('ines tock') && readable.includes('clearance man'), 'the story is among what is read');

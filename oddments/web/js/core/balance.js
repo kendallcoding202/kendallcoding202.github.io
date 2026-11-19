@@ -1405,6 +1405,8 @@ export const ROOMS = [
   },
 ];
 export const ROOM_IDS = ROOMS.map((room) => room.id);
+// The free sample (the copy on the web) holds this many places, from the first, and no more: see sample.js.
+export const SAMPLE = { places: 2 };
 export const roomOf = (id) => ROOMS.find((room) => room.id === id) || null;
 /** A room can be walked into once it is built and the room before it has been cleared. */
 export const roomBuilt = (room) => Array.isArray(room.path) && room.path.length > 0;

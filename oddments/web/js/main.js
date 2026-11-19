@@ -19,6 +19,8 @@ import { heirloomTag, bar, aOrAn } from './ui/parts.js';
 import { keyPicture } from './ui/keys.js';
 import { loadSave, loadSaves, writeSave, clearSave, keepUnreadable, keepErased } from './platform/storage.js';
 import { switches } from './platform/switches.js';
+import { SAMPLE_HERE } from './platform/sample.js';
+import { setSample } from './core/sample.js';
 import { unlockSound, setSound, hushSound, play, setScene, sceneFor, soundState } from './platform/sound.js';
 
 // Switches for testing in a browser: ?reset starts from a clean save, ?fast
@@ -45,6 +47,9 @@ const BOOT_SHOWN = 1200;
 let frozen = false;
 
 async function boot() {
+  // The copy on the web is the free sample; the app is the whole game. Said before any save is read,
+  // so that a save is made sense of by the same rules it will be played by.
+  setSample(SAMPLE_HERE);
   if (flag('reset')) {
     // A web address can carry ?reset, and an address can be sent to somebody. So a person who has a
     // game saved is asked before it is erased (a test driving the browser is not), and the game that

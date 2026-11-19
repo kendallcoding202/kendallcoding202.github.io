@@ -2159,6 +2159,74 @@ section('News, told once');
   await news.close();
 }
 
+section('The free sample');
+{
+  // The game above is the whole game: a copy on your own machine is, unless it asks to be the sample.
+  check(await S(page, () => window.oddments.game.sample() === false && !document.querySelector('[data-act="sample"]')), 'the game above is the whole game, and says nothing of a sample');
+  const taste = await newPage();
+  await taste.goto(`${base}?debug&fast&reset&seed=7&news&sample`);
+  await ready(taste);
+  await taste.waitForSelector('.modal.intro');
+  const T = (fn, arg) => S(taste, fn, arg);
+  check(await T(() => { const line = document.querySelector('.modal.intro [data-act="sample"]'); return !!line && line.textContent === 'This is the free sample: The Garden Gate and Tin Can Alley, the first 2 places of 12. The whole game is coming to iPhone.'; }), 'asked to be the sample, the first screen says so before anything else');
+  check(await T(() => { const box = document.querySelector('.modal.intro .box, .modal.intro').getBoundingClientRect(); const go = document.querySelector('.modal.intro [data-id="begin"]').getBoundingClientRect(); return go.bottom <= window.innerHeight && box.top >= 0; }), 'and Begin is still on the screen');
+  await taste.waitForTimeout(1800);
+  await snap(taste, 'e2e-sample-intro');
+  await begin(taste);
+  await taste.waitForTimeout(300);
+  check(await T(() => window.oddments.game.sample() === true && window.oddments.game.roomOpen('garden') && !window.oddments.game.roomOpen('alley')), 'it begins as the whole game does: the garden open, the alley waiting on it');
+  // The garden calm and Ines Tock told: the alley opens, and is the goal.
+  await T(() => {
+    const o = window.oddments; const s = o.game.state;
+    s.seen.strays = true; s.seen.howto = true; s.seen.wishnews = true; s.seen.rivalnewsa = true; s.strays = [];
+    s.story.ines = 2; s.rooms.garden.clears = 1; s.rooms.garden.calmed = 31;
+    for (const friend of s.friends) friend.level = 9;
+    o.game.standAt('home'); o.ctx.show('lane');
+  });
+  await taste.waitForTimeout(400);
+  check(await T(() => window.oddments.game.roomOpen('alley') && document.querySelector('.goalchip').dataset.goal === 'calm' && !document.querySelector('.modal.sampleend')), 'with the garden calm the alley opens and is the goal, and nothing is said yet of an end');
+  // The alley calm: Ines Tock is told, and does not give directions to a place that is shut.
+  await T(() => { const o = window.oddments; const s = o.game.state; s.rooms.alley.clears = 1; s.rooms.alley.calmed = 31; o.game.standBy('ines'); o.ctx.show('lane'); });
+  check(await T(() => window.oddments.game.goal().id === 'report'), 'the alley calm, she is still to be told');
+  const said = await T(() => window.oddments.game.talkTo('ines').map((line) => (typeof line === 'string' ? line : line.text)).join(' '));
+  check(said.includes('The Midnight Pantry is next, and that is a longer story than tonight\'s.') && !said.includes('striped awning'), 'she says the pantry is a longer story, and gives no directions to it');
+  // Then the card, once.
+  await T(() => { const o = window.oddments; o.game.standAt('home'); o.ctx.show('lane'); });
+  await taste.waitForSelector('.modal.sampleend');
+  check(await T(() => { const m = document.querySelector('.modal.sampleend'); return m.querySelector('header').textContent === 'That is the free sample' && m.textContent.includes('The Garden Gate and Tin Can Alley are calm, and that was your doing. Thank you for playing.') && m.textContent.includes('12 places on both banks of the river') && m.textContent.includes('The whole game is coming to iPhone.') && m.textContent.includes('Nothing here goes away.') && m.querySelectorAll('.newspic img').length === window.oddments.game.team().length && !m.textContent.includes('null') && !m.textContent.includes('undefined'); }), 'a card says the sample is over: what you did, what the whole game holds, and that nothing here goes away');
+  check(await T(() => { const box = document.querySelector('.modal.sampleend .box, .modal.sampleend').getBoundingClientRect(); const ok = document.querySelector('.modal.sampleend [data-id="ok"]').getBoundingClientRect(); return box.top >= 0 && ok.bottom <= window.innerHeight; }), 'the card fits the screen');
+  await taste.waitForTimeout(900);
+  await snap(taste, 'e2e-sample-end');
+  await taste.waitForTimeout(600);
+  await taste.click('.modal.sampleend [data-id="ok"]');
+  await taste.waitForTimeout(600);
+  await T(() => { const o = window.oddments; o.game.standAt('home'); o.ctx.show('lane'); });
+  await taste.waitForTimeout(500);
+  check(!(await taste.$('.modal.sampleend')) && await T(() => window.oddments.game.state.seen.sampleend === true), 'it is said once');
+  check(await T(() => document.querySelector('.goalchip').dataset.goal === 'sample' && document.querySelector('.goalchip span').textContent === 'That is the free sample'), 'and the goal says the same from then on');
+  // The third place: its gate says why it is shut, and it cannot be gone into.
+  await T(() => { const o = window.oddments; o.game.standAt('pantry'); o.ctx.show('lane'); });
+  await taste.waitForSelector('.placecard[data-spot="pantry"]');
+  check(await T(() => { const note = document.querySelector('.placecard [data-act="sample"]'); return !!note && note.textContent === 'The free sample ends here. The Midnight Pantry is in the whole game, coming to iPhone.' && !document.querySelector('.placecard [data-act="inside"]') && !document.querySelector('.placecard [data-act="enter"]'); }), 'at the door of the third place its card says the sample ends here, and offers no way in');
+  await taste.waitForTimeout(900);
+  await snap(taste, 'e2e-sample-gate');
+  check(await T(() => window.oddments.game.mayEnter('pantry') === 'shut' && window.oddments.game.enter('pantry') === false && window.oddments.game.travelTo('pantry') === false && window.oddments.game.indoors() === null), 'and the game will not let you in by any road');
+  // The two places it holds are still there to walk, with their wanderers.
+  check(await T(() => { const o = window.oddments; return o.game.travelTo('garden') === true && o.game.place() === 'path'; }), 'the garden can still be walked into, calm as it is');
+  // A save keeps that the card was shown, and comes back as the sample.
+  await T(() => { const o = window.oddments; o.game.goHome(); o.ctx.save(); });
+  await taste.goto(`${base}?debug&fast&news&sample`);
+  await ready(taste);
+  await taste.waitForTimeout(700);
+  check(await T(() => window.oddments.game.sample() === true && window.oddments.game.goal().id === 'sample' && !document.querySelector('.modal.sampleend') && !document.querySelector('.modal.intro')), 'opened again, it is still the sample, at its end, and the card is not said twice');
+  // The same save opened as the whole game: the third place is open, and the goal is to calm it.
+  await taste.goto(`${base}?debug&fast`);
+  await ready(taste);
+  await taste.waitForTimeout(500);
+  check(await T(() => window.oddments.game.sample() === false && window.oddments.game.roomOpen('pantry') && window.oddments.game.goal().id === 'calm' && window.oddments.game.goal().room === 'pantry'), 'and the very same save in the whole game goes on to the pantry');
+  await taste.context().close();
+}
+
 section('Locked down');
 {
   // A game is saved in this browser, by a person called Kit.

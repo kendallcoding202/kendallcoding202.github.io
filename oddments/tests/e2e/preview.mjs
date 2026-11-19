@@ -82,8 +82,11 @@ for (const [name, url] of targets) {
     }
     const won = await page.evaluate(() => document.querySelector('.modal.result header span').textContent);
     const fits = await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
-    ok = won === 'Won' && fits && errors.length === 0 && foreign.length === 0;
-    console.log(ok ? `ok    ${name}: starts, walks, fights and wins (${url})` : `FAIL  ${name}: result "${won}", fits ${fits}, errors: ${errors.join(' | ') || 'none'}, other requests: ${foreign.slice(0, 3).join(' ') || 'none'}`);
+    // A copy on the web is the free sample; a copy on this machine is the whole game (see web/js/platform/sample.js).
+    const sample = await page.evaluate(() => (typeof window.oddments.game.sample === 'function' ? window.oddments.game.sample() : null));
+    const meant = !['localhost', '127.0.0.1', '[::1]'].includes(new URL(url).hostname);
+    ok = won === 'Won' && fits && sample === meant && errors.length === 0 && foreign.length === 0;
+    console.log(ok ? `ok    ${name}: starts, walks, fights and wins, as ${sample ? 'the free sample' : 'the whole game'} (${url})` : `FAIL  ${name}: result "${won}", fits ${fits}, the sample ${sample} (meant ${meant}), errors: ${errors.join(' | ') || 'none'}, other requests: ${foreign.slice(0, 3).join(' ') || 'none'}`);
   } catch (err) {
     console.log(`FAIL  ${name}: ${err.message.split('\n')[0]}; errors: ${errors.join(' | ') || 'none'}`);
   }

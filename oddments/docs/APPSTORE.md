@@ -5,21 +5,21 @@ Everything App Store Connect asks for before an app can be submitted, with a pro
 ## What is still to do, in order
 
 1. **YOURS:** hear the sound come back on a phone (build 43), and have one person play the game through.
-2. **YOURS:** decide the three things still open under *Only the owner can decide*, below: the price, the free copy on the web, and the EU.
+2. **YOURS**, in App Store Connect, under *Business*: sign the Paid Apps agreement and give the bank and tax details. Nothing can be sold until that is done. (The EU trader status is applied for: see below.)
 3. Done on 19 November 2026: the privacy and support pages are published (see the end of this file).
 4. Set the version to 1.0.0 and upload that build.
-5. **YOURS:** in App Store Connect, fill the page from this file, attach the eight screenshots, pick the build, and press Submit.
+5. **YOURS:** in App Store Connect, fill the page from this file, attach the eight screenshots, set the price to $3.99, pick the build, and press Submit.
 
 ## Only the owner can decide
 
 | | What | What I would do |
 | --- | --- | --- |
-| Price | Free, or paid once | **Paid once, about $3.99. No ads, no purchases.** The game is whole and has nothing to sell inside it. A paid app needs the Paid Apps agreement, and bank and tax details, in App Store Connect under *Business* before it can go on sale. |
-| **The free copy on the web** | The whole game can be played free at `kendallcoding202.github.io/oddments/web/`, and its source is in a public repository. | **Decide before charging.** Selling an app that is free one link away is a choice, not an accident. Three ways: take the web copy down at launch; keep only the first place or two playable there, as a trial; or leave it, and treat the app as the convenient way to have it. I would keep a trial of the garden and Tin Can Alley. |
+| Price | **Decided 19 November 2026: $3.99, paid once** ("3.99 to start is good"). No ads, no purchases inside it. | The price is set in App Store Connect, under *Pricing and Availability*, and can be changed there at any time. A paid app first needs the Paid Apps agreement, and bank and tax details, under *Business*: that is the owner's to do. |
+| The free copy on the web | **Decided 19 November 2026: it becomes a free sample** ("go with your suggestion"): the Garden Gate and Tin Can Alley, and no further. Built the same day. The copy at `kendallcoding202.github.io/oddments/web/` says on its first screen that it is the sample, the third place stays shut with a note saying why, and a card says so when the two places are calm. The app is always the whole game. | Done, with one thing to know: **it is a shop window, not a lock.** The repository is public, so the whole game's source and pictures can still be had by anybody who goes looking. Only making the repository private would change that, and a private repository cannot publish a website without a paid GitHub plan. When the app has a page on the App Store, the sample's "coming to iPhone" becomes a line saying it is there: one line in `web/js/core/sample.js`. |
 | The name | **Searched on 19 November 2026, at the owner's request.** Nobody has registered or applied for "Clutterkin" in the US, the EU or Australia, and no app or game has the name. Four neighbours are worth knowing about; none is a reason to change it. See *The name: what a search found*, below. | Keep the name. A lawyer's opinion, or an application of your own, only if you want more certainty: both cost money. |
 | Who it is by | **Decided 19 November 2026: the owner, Kendall Sorenson,** with the email address the Pawst Lives pages use. A telephone number was given too. It belongs only in App Store Connect's review contact, which is not public, and is not written in this repository or on the pages. | Done. |
 | The four house-sitter looks | **Decided 19 November 2026: they stay** ("The 4 looks are good"). There are four to choose from (Lantern, Torch, Headlamp, Candle), each painted from the front and from behind. The five other people painted since (great-aunt Maribel, Ines Tock, Dov, Mr. Spick and Tansy Brisk) are the cast, not looks to choose. | Done. More looks can be painted if wanted: two images each. |
-| **The EU** | To sell in the EU, Apple asks whether you are a "trader". An individual who says yes must give an address or P.O. box, a telephone number and an email address, and Apple shows them on the app's page in EU countries. Without an answer the app is not offered there. | **Decide before choosing where it is sold.** Either accept that those details are public in the EU (a P.O. box is allowed), or leave the EU out for now. This is Apple's account of it; whether a small seller counts as a trader is a legal question. |
+| The EU | To sell in the EU, Apple asks whether you are a "trader". An individual who says yes must give an address or P.O. box, a telephone number and an email address, and Apple shows them on the app's page in EU countries. Without an answer the app is not offered there. **The owner applied for trader status on 19 November 2026.** | Wait for Apple to verify it before counting on the EU: Apple says an app without a verified status is not offered there. Everywhere else is not held up by it. |
 
 ## The page
 

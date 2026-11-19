@@ -15,6 +15,7 @@ import { insideOf, stepIn, routeIn, spotIn, onMat, besidePost } from './indoors.
 import { WORLD, POST, BENCHES, SIT, MAILBOXES, POST_REACH, stepWalk, routeTo, straighten, roomy, standing, canStand, spotNear, spotOf, districtOf, districtAt, postNear, personNear, personAt, benchNear, mailNear, TALK } from './world.js';
 import { goalOf, aimOf, storySoFar, hasNews, talk, takeCall, callDue, asideOf, tonightOf, storyEnded } from './story.js';
 import { nameOf, giveName, tidyName } from './names.js';
+import { sampleOn, inSample, sampleDone, sampleWords } from './sample.js';
 
 export class Game {
   /**
@@ -516,6 +517,17 @@ export class Game {
   // ------------------------------------------------------------ rooms
 
   roomOpen(roomId) { return roomOpen(this.state, roomId); }
+
+  // ------------------------------------------------------------ the free sample (see sample.js)
+
+  /** Whether this is the free sample, and not the whole game. */
+  sample() { return sampleOn(); }
+  /** Whether a place is one the game at hand holds: always, in the whole game. */
+  inSample(roomId) { return inSample(roomId); }
+  /** Whether the sample has been played to its end. Never, in the whole game. */
+  sampleDone() { return sampleDone(this.state); }
+  /** What the sample says of itself. */
+  sampleWords() { return sampleWords(); }
 
   /** Whether one stop of a place has been calmed (and so stays calm), and how many of its stops have. */
   staysCalm(roomId, stop) { return staysCalm(this.state, roomId, stop); }

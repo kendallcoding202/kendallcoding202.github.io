@@ -1,4 +1,4 @@
-// The switches for testing: ?reset, ?fast, ?seed=7, ?day=20001, ?news and ?debug in the
+// The switches for testing: ?reset, ?fast, ?seed=7, ?day=20001, ?news, ?sample and ?debug in the
 // web address, or the same names in an ODDMENTS_FLAGS object a host page sets
 // before the game loads (for a host that strips query strings).
 //

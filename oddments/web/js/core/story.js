@@ -9,6 +9,7 @@ import { calmedIn } from './rooms.js';
 import { toldOf } from './names.js';
 import { rivalSoFar } from './rival.js';
 import { chiefsSoFar } from './wishes.js';
+import { inSample, sampleWords } from './sample.js';
 
 export const CAST = {
   maribel: { name: 'Great-aunt Maribel', role: 'on the phone', art: 'cast_maribel' },
@@ -243,6 +244,8 @@ function inesHears(state, place) {
   const far = calmOf(state, FAR);
   const count = place.chapter === 2 ? `${COUNT[far] || far} of the four over the water.`
     : `${COUNT[placesCalm(state)] || placesCalm(state)} place${placesCalm(state) === 1 ? '' : 's'} of eight.`;
+  // In the free sample, the place after its last is not one she can send you to.
+  if (!inSample(next.id)) return [first, `${count} ${next.name} is next, and that is a longer story than tonight's.`, INES.again];
   if (!roomBuilt(next) || !INES.toward[next.id]) return [first, `${count} ${next.name} is next, and that I cannot get you into yet: this is as far as the lane is built.`, INES.again];
   const [way, ...more] = INES.toward[next.id];
   return [first, `${count} ${way}`, ...more];
@@ -475,6 +478,8 @@ export function goalOf(state) {
   if (secondCallDue(state)) return goal('call', 'Answer the telephone', 'It is ringing in the house: you can hear it from the green. That will be great-aunt Maribel again.');
   // Both banks quiet and Ines Tock knows: it rings once more.
   if (thirdCallDue(state)) return goal('call', 'Answer the telephone', 'It is ringing in the house again. That will be great-aunt Maribel, to hear how it all came out.');
+  // The free sample ends where the last place it holds does (see sample.js).
+  if (next && !inSample(next.id)) { const words = sampleWords().goal; return goal('sample', words.title, words.detail); }
   if (next && roomBuilt(next)) {
     if (next === FIRST && state.stats.befriended === 0) {
       return goal('friend', 'Make a friend in the garden', 'Walk in through the garden gate. In a fight, Reach out to one you like instead of hitting it, and win.', { room: next.id });

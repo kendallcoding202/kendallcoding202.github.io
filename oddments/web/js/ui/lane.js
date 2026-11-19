@@ -17,7 +17,7 @@ import { modal, toast, modalOpen } from './modals.js';
 import { converse } from './talk.js';
 import { meetTheThree } from './three.js';
 import { mapDialog } from './map.js';
-import { wishNews, rivalNews, wishesDialog, theEnd } from './news.js';
+import { wishNews, rivalNews, wishesDialog, theEnd, sampleEnd } from './news.js';
 import { keyRing } from './keys.js';
 import { play } from '../platform/sound.js';
 import { dustShift, throughDoor } from './shift.js';
@@ -770,6 +770,9 @@ export function laneScreen(ctx) {
           ? h('p', { class: 'cardnote', data: { act: 'enter' } }, !visit ? 'The gate is open. Walk on in.'
             : visit.room === place.id ? 'Rest at home whenever you need to: it is not far.'
               : `You are still out calling on ${roomOf(visit.room).name}. Rest at home first: nobody here will come out to you until you have.`)
+          : built && !game.inSample(place.id)
+          // (The free sample: this place is not in it.)
+          ? h('p', { class: 'cardnote', data: { act: 'sample' } }, game.sampleWords().gate(place.name))
           : h('button', { class: 'btn gold', disabled: true, data: { act: 'enter' } }, built ? `Clear ${before.name} first` : 'Not built yet'));
       return;
     }
@@ -838,6 +841,14 @@ export function laneScreen(ctx) {
       ctx.save();
       play('calm');
       theEnd(game, () => { cardFor = undefined; });
+      return true;
+    }
+    // The end of the free sample, once: when the last place it holds is calm and Ines Tock has been told.
+    if (game.goal().id === 'sample' && game.sampleDone() && !state.seen.sampleend) {
+      state.seen.sampleend = true;
+      ctx.save();
+      play('calm');
+      sampleEnd(game, () => { cardFor = undefined; });
       return true;
     }
     const out = game.waiting();

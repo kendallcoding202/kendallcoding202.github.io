@@ -251,6 +251,8 @@ export function lookDialog(ctx, first) {
     body: [
       first ? h('p', null, 'You are house-sitting for your great-aunt. The cats sleep all day. At night you find out why: the house is awake. The odd socks, the burnt toast, the dust under the bed.') : null,
       first ? h('p', null, 'The cats fight it. You are going to try talking to it.') : null,
+      // (The copy on the web says what it is before anything else is asked.)
+      first && game.sample() ? h('p', { class: 'note', data: { act: 'sample' } }, game.sampleWords().intro) : null,
       h('label', null, h('small', null, 'Who is house-sitting?'), input),
       h('div', { class: 'looks' }, looks),
     ],

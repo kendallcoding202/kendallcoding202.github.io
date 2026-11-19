@@ -93,6 +93,24 @@ export function rivalNews(game, aside, again, onDone) {
   });
 }
 
+/**
+ * The end of the free sample, said once: what you did, what the whole game holds, and that nothing
+ * here goes away. (Only ever in the copy on the web: see core/sample.js.)
+ */
+export function sampleEnd(game, onDone) {
+  const words = game.sampleWords();
+  return modal({
+    title: words.goal.title, cls: 'news sampleend', fixed: true, onClose: onDone,
+    body: [
+      h('div', { class: 'newspic' }, game.team().map((friend) => sprite(artOf(friend), friend.heirloom, 'flip'))),
+      h('p', { class: 'big' }, words.end[0]),
+      h('p', null, words.end[1]),
+      h('p', { class: 'note' }, words.end[2]),
+    ],
+    actions: [{ id: 'ok', label: 'OK' }],
+  });
+}
+
 /** Who made what: said at the end, and from Settings at any time. */
 const CREDITS = [
   `${TITLE} ${VERSION}.`,
