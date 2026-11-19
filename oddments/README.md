@@ -108,7 +108,7 @@ docs/                   the design and the art list
 - **Nothing to carry, buy or pick up.** There are no items, no money and no shop, and no purchases of any kind.
 - **The neighbours stand still.** Clutterkin and neighbours have one view each and only turn left or right; only the house-sitter turns to face the way they walk.
 - **The house-sitter's four looks are still candidates**, taller and slimmer than the Pawst Lives cats. The art still wanted, with counts, is in `docs/ART.md`.
-- **Nothing for the App Store.** No description, screenshots, age rating answers or price have been written or chosen, and the version number is still 0.1.0. The price is the owner's decision.
+- **The App Store page is drafted, not entered.** `docs/APPSTORE.md` has a proposed name line, description, keywords, age-rating and privacy answers, notes for the reviewer, and the words for a privacy page and a support page; `store/screenshots/` has eight pictures at Apple's size (key art with the title, then seven of the real game in a matching frame). Nothing has been typed into App Store Connect or sent to Apple, the two pages are not published, and the version number is still 0.1.0. The price, what becomes of the free copy on the web, a proper trademark search for the name, and whose name goes on it are the owner's to decide, and are listed at the top of that file.
 
 ## Not verified
 

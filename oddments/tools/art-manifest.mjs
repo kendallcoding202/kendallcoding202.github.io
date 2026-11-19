@@ -537,4 +537,27 @@ export const ART = [
       'Chin up, one eyebrow raised, a confident competitive smile: sure she is right, not unkind. ' +
       `Big head, chunky proportions. An original character, not based on any existing game, film or cartoon character. ${SPRITE_STYLE}`,
   },
+  // ---- the App Store page: key art for the first picture people see ----
+  // The owner, 19 November 2026: "I really want to put emphasis on the first couple screenshots we use ... if you
+  // need to generate art for it do it. I want them to look good." It is painted from a sheet of the game's own
+  // pictures (art/raw/key_refs.png, put together by hand from the sprites), so that everyone in it is who they are in
+  // the game. It is not shown in the game: tools/store-shots.mjs lays the title over it.
+  {
+    id: 'store_keyart', kind: 'store', ref: 'key_refs', size: '1024x1536', quality: 'high', transparent: false,
+    prompt:
+      'Key art for a cosy mobile game: a tall portrait illustration that fills the whole image from edge to edge. Night, on a quiet lane. ' +
+      'In the upper middle, a little way off, stands the crooked stone cottage from the reference picture, with its orange tiled roof, round window and ivy, every window glowing warm yellow. ' +
+      'An old iron street lamp glows beside a cobbled path that winds down from its door toward us, with dark rounded trees and hedges either side and fireflies in the air. ' +
+      'In the foreground, a little left of centre, stands the house-sitter from the reference picture: a young woman with warm brown skin and curly dark hair in a messy bun held by a pencil, ' +
+      'in an oversized mustard-yellow knitted cardigan over teal pyjamas, with odd socks (one red striped, one blue spotted). She is turned toward us, smiling, holding up a glowing brass lantern. ' +
+      'Gathered close around her feet and beside her like friends are the small creatures from the reference picture, each drawn as it is shown there: ' +
+      'the fluffy grey dust bunny with long tattered ears, the blue and yellow striped sock eel with big teeth, the burnt slice of toast ghost with a pat of butter on its head, ' +
+      'the white dandelion puff creature, the garden gnome with a red hat and a fishing rod, the electric plug creature with sparks, the red and white striped sock-puppet goblin, ' +
+      'the egg knight in a blue egg cup holding a spoon, the snail with a spiked teal shell and a sailor hat, the iridescent bubble jellyfish floating at shoulder height, ' +
+      'the patched teddy bear with one button eye, and the small golden music-box bird with a few musical notes. A tiny grey dust bunny with a red bow sits on the garden wall. ' +
+      'They look curious, mischievous and happy, lit by the warm lantern against the cool blue night. ' +
+      'Composition: the top quarter of the picture is calm deep-blue night sky with a crescent moon and a few stars and nothing else, left empty. The bottom tenth is dark grass, left empty. ' +
+      'The same drawing style as the reference: clean 2D mobile game art, bold dark outline, flat cel shading with soft highlights, vibrant saturated colours, chibi proportions. ' +
+      'No text, no letters, no logo, no border, no frame.',
+  },
 ];

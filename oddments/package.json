@@ -13,6 +13,7 @@
     "art": "node tools/gen-art.mjs && python3 tools/process-art.py",
     "art:needs": "node tools/art-needs.mjs",
     "ios:art": "python3 tools/ios-art.py",
+    "store:shots": "node tools/store-shots.mjs",
     "ios:sync": "cap sync ios"
   },
   "dependencies": {
