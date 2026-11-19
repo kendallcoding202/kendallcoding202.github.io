@@ -172,6 +172,15 @@ export function chiefsOut(state) {
     .map(({ species, room }) => ({ species, room, ...WAITS[species], granted: wishOf(state, species).granted }));
 }
 
+/**
+ * Every ringleader's wish and how it stands, in the order of their places: [{ species, room, calm,
+ * home, wish, how, have, need, granted }]. `calm` is whether its place is (so whether it is out of
+ * doors to be asked), `home` whether it lives with you already.
+ */
+export function wishList(state) {
+  return CHIEFS.map(({ species, room }) => ({ species, room, calm: calm(state, room), home: has(state, species), ...wishOf(state, species) }));
+}
+
 /** What is seen of a ringleader as you walk up to it outside its place: one line. */
 export const chiefSeen = (state, species) => (wishOf(state, species).granted ? WISHES[species].ready : WISHES[species].waits);
 /** What is seen when it comes home with you; and when the friendly bout goes its way. */

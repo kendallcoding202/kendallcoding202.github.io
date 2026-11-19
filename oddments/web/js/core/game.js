@@ -9,7 +9,7 @@ import { rollStrays, fairStrays, fairGroup, keepsakeOut, straysAbout, strayNear,
 import { TANSY, rivalAbout, rivalTeam, rivalSays, rivalAfter, rivalAside } from './rival.js';
 import { RIVAL, SPECIES, ROSTER_MAX } from './balance.js';
 import { newFriend } from './progress.js';
-import { isChief, wishOf, chiefsOut, chiefLevel, chiefSeen, chiefJoins, chiefWon, chiefAsides, teamKeepsTo } from './wishes.js';
+import { isChief, wishOf, wishList, chiefsOut, chiefLevel, chiefSeen, chiefJoins, chiefWon, chiefAsides, teamKeepsTo } from './wishes.js';
 import { STRAYS } from './balance.js';
 import { insideOf, stepIn, routeIn, spotIn, onMat, besidePost } from './indoors.js';
 import { WORLD, POST, BENCHES, SIT, MAILBOXES, POST_REACH, stepWalk, routeTo, straighten, roomy, standing, canStand, spotNear, spotOf, districtOf, districtAt, postNear, personNear, personAt, benchNear, mailNear, TALK } from './world.js';
@@ -300,6 +300,9 @@ export class Game {
     const near = this.waiting().find((one) => !one.leaving && Math.hypot(one.x - x, one.y - y) <= TALK);
     return near ? near.id : null;
   }
+
+  /** Every ringleader's wish and how it stands, in the order of their places: see wishes.wishList. */
+  wishes() { return wishList(this.state); }
 
   /** What the one you are standing by has to say: lines of { who, text }. Hearing it changes nothing. Null from anywhere else. */
   hail(id = this.waitingNear()) { return id === TANSY && this.waitingNear() === id ? rivalSays(this.state) : null; }

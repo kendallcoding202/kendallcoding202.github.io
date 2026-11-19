@@ -25,7 +25,7 @@ test('in a numbered build, which is the app, there are no testing switches at al
   for (const build of ['31', '1', '0', '', '999']) {
     const app = switchesFor(build, everything, hostile);
     assert.equal(app.testing, false, `build "${build}"`);
-    for (const name of ['debug', 'reset', 'fast', 'seed', 'day']) {
+    for (const name of ['debug', 'reset', 'fast', 'seed', 'day', 'news']) {
       assert.equal(app.has(name), false, `build "${build}": ${name}`);
       assert.equal(app.get(name), null);
       assert.ok(Number.isNaN(app.number(name)));

@@ -17,6 +17,7 @@ import { modal, toast, modalOpen } from './modals.js';
 import { converse } from './talk.js';
 import { meetTheThree } from './three.js';
 import { mapDialog } from './map.js';
+import { wishNews, rivalNews, wishesDialog } from './news.js';
 import { keyRing } from './keys.js';
 import { play } from '../platform/sound.js';
 import { dustShift, throughDoor } from './shift.js';
@@ -434,27 +435,66 @@ export function laneScreen(ctx) {
     return null;
   }
 
-  /** A gold arrow at the edge of the view, toward the goal, whenever the goal is out of sight. */
-  function pointer() {
-    const to = goalPoint();
-    if (!to) return;
+  let pointed = []; // who the last frame drew a mark at the edge for
+  /**
+   * Where the way to a point leaves the view, and at what angle: { x, y, turn }. Null if the point
+   * is in sight. `inset` pulls the spot in from the edge (a smaller mark sits inside the goal's arrow).
+   */
+  function edgeToward(to, inset = 0) {
     const { top, bottom } = over();
-    const box = { x0: cam.x + 44, x1: cam.x + cam.w - 44, y0: cam.y + top + 70, y1: cam.y + cam.h - bottom - 60 };
-    if (to.x > box.x0 && to.x < box.x1 && to.y > box.y0 && to.y < box.y1) return;
-    // From the middle of the view toward the goal, stopped at the edge.
+    const box = { x0: cam.x + 44 + inset, x1: cam.x + cam.w - 44 - inset, y0: cam.y + top + 70 + inset, y1: cam.y + cam.h - bottom - 60 - inset };
+    if (to.x > box.x0 && to.x < box.x1 && to.y > box.y0 && to.y < box.y1) return null;
+    // From the middle of the view toward the point, stopped at the edge.
     const cx = (box.x0 + box.x1) / 2;
     const cy = (box.y0 + box.y1) / 2;
     const dx = to.x - cx;
     const dy = to.y - cy;
     const reach = Math.min(dx ? ((dx > 0 ? box.x1 : box.x0) - cx) / dx : Infinity, dy ? ((dy > 0 ? box.y1 : box.y0) - cy) / dy : Infinity);
+    return { x: cx + dx * reach, y: cy + dy * reach, turn: Math.atan2(dy, dx) };
+  }
+
+  /** A gold arrow at the edge of the view, toward the goal, whenever the goal is out of sight. */
+  function pointer() {
+    const to = goalPoint();
+    const at = to ? edgeToward(to) : null;
+    if (!at) return;
     const beat = 1 + Math.sin(clock * 5) * 0.08;
     pen.save();
-    pen.translate(cx + dx * reach, cy + dy * reach);
-    pen.rotate(Math.atan2(dy, dx));
+    pen.translate(at.x, at.y);
+    pen.rotate(at.turn);
     pen.scale(beat, beat);
     pen.beginPath(); pen.moveTo(20, 0); pen.lineTo(-12, -16); pen.lineTo(-5, 0); pen.lineTo(-12, 16); pen.closePath();
     paint(pen, '#ffc83d'); pen.lineWidth = 4; pen.lineJoin = 'round'; pen.strokeStyle = 'rgba(13,10,28,.9)'; pen.stroke();
     pen.restore();
+  }
+
+  /**
+   * And a smaller mark for whoever is waiting for a bout and out of sight (Tansy Brisk; a ringleader
+   * whose wish is granted): the gold ! that is over their head, with a tick toward them. The two
+   * nearest, so the edge of the view is never crowded.
+   */
+  function waitingPointers() {
+    const you = here();
+    const far = (one) => Math.hypot(one.x - you.x, one.y - you.y);
+    const due = game.waiting().filter((one) => one.due >= 0).sort((a, b) => far(a) - far(b)).slice(0, 2);
+    pointed = [];
+    for (const one of due) {
+      const at = edgeToward(one, 34);
+      if (!at) continue;
+      pointed.push(one.id);
+      pen.save();
+      pen.translate(at.x, at.y);
+      pen.save();
+      pen.rotate(at.turn);
+      pen.beginPath(); pen.moveTo(27, 0); pen.lineTo(13, -9); pen.lineTo(13, 9); pen.closePath();
+      paint(pen, '#ffc83d'); pen.lineWidth = 3; pen.lineJoin = 'round'; pen.strokeStyle = 'rgba(13,10,28,.9)'; pen.stroke();
+      pen.restore();
+      pen.beginPath(); pen.arc(0, 0, 14, 0, Math.PI * 2); paint(pen, '#ffc83d');
+      pen.lineWidth = 3; pen.strokeStyle = 'rgba(13,10,28,.9)'; pen.stroke();
+      pen.font = `700 20px ${FONT}`; pen.textAlign = 'center'; pen.textBaseline = 'middle'; pen.fillStyle = '#17132e';
+      pen.fillText('!', 0, 1);
+      pen.restore();
+    }
   }
 
   function draw() {
@@ -551,7 +591,7 @@ export function laneScreen(ctx) {
       pen.beginPath(); pen.arc(fx, fy, 6, 0, Math.PI * 2); paint(pen, `rgba(255,224,122,${bright * 0.22})`);
       pen.beginPath(); pen.arc(fx, fy, 2.4, 0, Math.PI * 2); paint(pen, `rgba(255,236,160,${bright})`);
     }
-    if (!everything) pointer();
+    if (!everything) { waitingPointers(); pointer(); }
   }
 
   // ------------------------------------------------------------ the card for wherever you are
@@ -767,6 +807,36 @@ export function laneScreen(ctx) {
     }
   }
 
+  /**
+   * Says, once each, on a card of its own, what has begun without your doing: the first time any
+   * ringleader is out of doors with a wish; and each time Tansy Brisk is waiting somewhere new (once
+   * Ines Tock has heard your news, so that the two do not talk over each other). A save from before
+   * either existed is told on its next visit to the lane. Returns whether a card went up.
+   */
+  function tellNews() {
+    if (!ctx.news) return false;
+    const out = game.waiting();
+    const chiefs = out.filter((one) => one.chief);
+    if (!state.seen.wishnews && chiefs.length) {
+      state.seen.wishnews = true;
+      ctx.save();
+      play('goal');
+      wishNews(game, chiefs, () => { cardFor = undefined; });
+      return true;
+    }
+    const tansy = out.find((one) => !one.chief && one.due >= 0);
+    const key = tansy ? `rivalnews${'abcde'[tansy.due] || ''}` : '';
+    const aside = tansy ? game.also().find((one) => one.id === 'rival') : null;
+    if (aside && !state.seen[key] && game.goal().id !== 'report') {
+      state.seen[key] = true;
+      ctx.save();
+      play('goal');
+      rivalNews(game, aside, tansy.due > 0, () => { cardFor = undefined; });
+      return true;
+    }
+    return false;
+  }
+
   /** The story so far, the aim of it all, and what to do next. */
   function journal() {
     const goal = game.goal();
@@ -775,6 +845,10 @@ export function laneScreen(ctx) {
     const aside = game.aside();
     const also = game.also();
     const tonight = game.tonight();
+    // Ringleaders out of doors, each with a wish: how many, how many granted, and a way to the list of them.
+    const wishes = game.wishes().filter((one) => one.calm);
+    const granted = wishes.filter((one) => one.granted && !one.home).length;
+    const home = wishes.filter((one) => one.home).length;
     modal({
       title: 'What to do', cls: 'journal',
       body: [
@@ -787,9 +861,15 @@ export function laneScreen(ctx) {
         aside ? h('div', { class: 'now aside', data: { keep: String(aside.keep) } }, sprite(FLUFF.art), h('div', null, h('small', null, 'Also'), h('b', null, aside.title), h('p', null, aside.detail))) : null,
         // And whoever is waiting by the road for you.
         also.map((one) => h('div', { class: 'now aside', data: { also: one.id } }, sprite(one.art), h('div', null, h('small', null, 'Also'), h('b', null, one.title), h('p', null, one.detail)))),
+        wishes.length ? h('div', { class: 'now wishesnow', data: { act: 'wishes' } }, h('small', null, 'Wishes'),
+          h('b', null, `${wishes.length === 1 ? 'A ringleader has a wish' : `${wishes.length} ringleaders have wishes`}${granted ? ` · ${granted} granted` : ''}${home ? ` · ${home} at home` : ''}`),
+          h('p', null, 'Grant a wish and that ringleader asks for one more bout, a friendly one. Win it, and it comes home with you.'),
+          h('button', { class: 'btn plain small', data: { act: 'seewishes' }, onclick: () => wishesDialog(game) }, 'See the wishes')) : null,
         told.length ? h('div', { class: 'sofar' }, h('small', null, 'So far'), h('ul', null, told.map((line) => h('li', null, line)))) : null,
       ],
-      actions: [{ id: 'map', label: 'Map', kind: 'plain', onClick: () => { setTimeout(() => mapDialog(game), 0); } }, { id: 'ok', label: 'OK', kind: 'plain' }],
+      // (The list of wishes is a button of its own down here too, beside the map, where it is always in sight.)
+      actions: [wishes.length ? { id: 'wishes', label: 'Wishes', kind: 'plain', onClick: () => { setTimeout(() => wishesDialog(game), 0); } } : null,
+        { id: 'map', label: 'Map', kind: 'plain', onClick: () => { setTimeout(() => mapDialog(game), 0); } }, { id: 'ok', label: 'OK', kind: 'plain' }].filter(Boolean),
     });
   }
 
@@ -881,6 +961,8 @@ export function laneScreen(ctx) {
       ctx.save();
       meetTheThree(fresh, () => { cardFor = undefined; });
     }
+    // Then, once each, what has begun without your doing: a ringleader out of doors, somebody waiting by the road.
+    else if (state.started && !met) tellNews();
     const moving = !met && way.length > 0 && game.walk(way[0], dt);
     const now = here();
     if (moving) {
@@ -955,16 +1037,6 @@ export function laneScreen(ctx) {
       state.seen.strays = true;
       toast('A stray, lost out on the lane. Walk up to it to meet it, or walk on by: it is up to you.');
     }
-    // And the first time somebody waiting by the road does.
-    if (!state.seen.waiting && !met && game.waiting().some((one) => !one.chief && one.due >= 0 && Math.hypot(one.x - now.x, one.y - now.y) < 330)) {
-      state.seen.waiting = true;
-      toast('Somebody is waiting by the road, with boxes on her back. Walk up if you want to hear what she has to say.');
-    }
-    // And the first time a ringleader is seen out of doors.
-    if (!state.seen.wishes && !met && !modalOpen() && game.waiting().some((one) => one.chief && Math.hypot(one.x - now.x, one.y - now.y) < 330)) {
-      state.seen.wishes = true;
-      toast('A ringleader, calm now, taking the air out of doors. Walk up: every ringleader has a wish.');
-    }
     if (group >= 0) {
       met = true;
       way = [];
@@ -1023,6 +1095,8 @@ export function laneScreen(ctx) {
     view: () => ({ x: cam.x, y: cam.y, w: cam.w, h: cam.h }),
     /** How many frames have been drawn, to measure how smoothly it runs. */
     frames: () => drawn,
+    /** Who the marks at the edge of the view point to just now: whoever is waiting for a bout and out of sight. */
+    pointed: () => [...pointed],
   };
 
   let watcher = null;

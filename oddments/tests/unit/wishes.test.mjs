@@ -13,7 +13,7 @@ import { playable } from '../../web/js/core/trial.js';
 import { makeFighter, choices } from '../../web/js/core/battle.js';
 import { SPECIES, SPECIES_IDS, ROOMS, ROOM_IDS, CHIEF, MAX_LEVEL, TEAM_SIZE, statAt, friendHp, xpNeeded } from '../../web/js/core/balance.js';
 import { WAITS, RIVAL_AT, WILDS, HAUNTS, PEOPLE, SPOTS, TALK, canStand, districtAt, overTheWater, spotOf } from '../../web/js/core/world.js';
-import { WISHES, CHIEFS, isChief, wishOf, chiefMayJoin, chiefLevel, chiefsOut, chiefSeen, chiefJoins, chiefAsides, chiefsSoFar, teamKeepsTo } from '../../web/js/core/wishes.js';
+import { WISHES, CHIEFS, isChief, wishOf, wishList, chiefMayJoin, chiefLevel, chiefsOut, chiefSeen, chiefJoins, chiefAsides, chiefsSoFar, teamKeepsTo } from '../../web/js/core/wishes.js';
 import { maxHpOf } from '../../web/js/core/rooms.js';
 import { newFriend, gainXp } from '../../web/js/core/progress.js';
 import { storySoFar } from '../../web/js/core/story.js';
@@ -353,6 +353,22 @@ test('the journal says when one has its wish and where it is waiting; the story 
   game.state.friends.push(newFriend(60, 'boss_spincycle', 9), newFriend(61, 'boss_hydra', 9), newFriend(62, 'boss_baron', 9));
   assert.deepEqual(chiefAsides(game.state), [], 'at home, it is not waiting anywhere');
   assert.match(chiefsSoFar(game.state)[0], /^Old Summerlong, Baron Pilfer and The Spin Cycle had a wish, and you granted it\. 3 ringleaders live with you now\.$/);
+});
+
+test('the list of wishes is every ringleader in the order of their places, and says which are out of doors, granted, or at home', () => {
+  const game = calmTo(fresh(), 'pantry');
+  let list = game.wishes();
+  assert.deepEqual(list, wishList(game.state));
+  assert.deepEqual(list.map((one) => one.species), CHIEFS.map((one) => one.species));
+  assert.deepEqual(list.map((one) => one.calm), [true, true, true, false, false, false, false, false, false, false, false, false]);
+  assert.ok(list.every((one) => one.home === false && one.wish && one.how && Number.isInteger(one.have) && Number.isInteger(one.need)));
+  assert.deepEqual(list.filter((one) => one.granted).map((one) => one.species), []);
+  befriend(game, 'toastghost', { grown: true });
+  game.state.friends.push(newFriend(game.state.nextFriendId++, 'boss_baron', 9));
+  list = game.wishes();
+  assert.deepEqual(list.filter((one) => one.granted).map((one) => one.species), ['boss_crumbwyrm']);
+  assert.deepEqual(list.filter((one) => one.home).map((one) => one.species), ['boss_baron']);
+  assert.deepEqual(wishList(fresh().state).filter((one) => one.calm), [], 'nobody is out of doors to begin with');
 });
 
 test('a rested team that has earned the bout wins it: the wish is the hard part', () => {

@@ -109,6 +109,10 @@ async function boot() {
   const ctx = {
     game,
     fast: flag('fast'),
+    // Whether news is told on cards of its own (see ui/news.js). Always, for a player. A run for testing
+    // (`?debug`) takes it as read unless it asks for it (`&news`), so that a test walking somewhere is
+    // not stopped by a card it was not there to look at.
+    news: !flag('debug') || flag('news'),
     current: 'lane',
     save: () => (frozen ? false : writeSave(game.serialize(Date.now()))),
     /** Shows a screen. A fight cannot be left by a tab; anything else is the world unless a tab is asked for. */

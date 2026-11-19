@@ -2022,6 +2022,88 @@ section('Ringleaders with wishes');
   await wishes.close();
 }
 
+section('News, told once');
+{
+  // (A run for testing takes news as read, so that a test walking somewhere is not stopped by a card. This one asks for it.)
+  check(await S(page, () => window.oddments.ctx.news === false), 'the game above was told to take news as read');
+  const news = await newPage();
+  await news.goto(`${base}?debug&fast&reset&seed=7&news`);
+  await ready(news);
+  await begin(news);
+  const N = (fn, arg) => S(news, fn, arg);
+  await news.waitForTimeout(400);
+  check(!(await news.$('.modal.news')), 'at the start there is no news');
+  // The garden goes calm, and Ines Tock has not been told.
+  await N(() => {
+    const o = window.oddments; const s = o.game.state;
+    s.seen.strays = true; s.seen.howto = true; s.story.ines = 1; s.strays = [];
+    s.rooms.garden.clears = 1; s.rooms.garden.calmed = 31;
+    for (const friend of s.friends) friend.level = 6;
+    o.game.standAt('home'); o.ctx.show('lane');
+  });
+  await news.waitForSelector('.modal.news');
+  check(await N(() => { const m = document.querySelector('.modal.news'); return m.querySelector('header').textContent === 'Ringleaders have wishes' && m.textContent.includes('Old Summerlong is calm now, and has come out of doors') && m.textContent.includes('beside The Garden Gate') && m.textContent.includes('too proud to reach') && m.textContent.includes('comes home with you') && m.textContent.includes('Only one ringleader walks with you at a time') && m.querySelector('.newspic img').src.includes('boss_hydra') && !m.querySelector('.x'); }), 'a card says that a ringleader is out of doors, where, and what a wish is; and it has to be answered');
+  await snap(news, 'e2e-news-wishes');
+  check(await N(() => { const box = document.querySelector('.modal.news').getBoundingClientRect(); return box.top >= 0 && box.bottom <= window.innerHeight; }), 'the card fits the screen');
+  await news.click('.modal.news [data-id="wishes"]');
+  await news.waitForSelector('.modal.wishes');
+  check(await N(() => { const rows = [...document.querySelectorAll('.modal.wishes .wishrow')]; return rows.length === 1 && rows[0].dataset.wish === 'boss_hydra' && rows[0].dataset.stands === 'open' && rows[0].textContent.includes('Company in the garden') && rows[0].textContent.includes('0 of 10') && document.querySelector('.modal.wishes .wishlater').textContent.includes('11 more ringleaders have wishes'); }), '"See the wishes" lists it, with how far along it is, and says eleven more are to come');
+  await news.click('.modal.wishes [data-id="ok"]');
+  await news.waitForTimeout(500);
+  check(!(await news.$('.modal.news')) && await N(() => window.oddments.game.goal().id === 'report' && window.oddments.game.state.seen.wishnews === true), 'it is said once; and nothing is said of Tansy Brisk while Ines Tock is still to be told about the garden');
+  // Tell her: then the second card.
+  await N(() => { const o = window.oddments; o.game.standBy('ines'); o.game.talkTo('ines'); o.game.standAt('home'); o.ctx.show('lane'); });
+  await news.waitForSelector('.modal.news');
+  check(await N(() => { const m = document.querySelector('.modal.news'); return m.querySelector('header').textContent === 'Somebody is waiting for you' && m.textContent.includes('by the street east of the green') && m.textContent.includes('Nobody has to stop') && m.textContent.includes('gold !') && m.querySelector('.newspic img').src.includes('cast_tansy'); }), 'once she has heard, a card says somebody is waiting, and where');
+  await snap(news, 'e2e-news-rival');
+  await news.click('.modal.news [data-id="map"]');
+  await news.waitForSelector('.modal.map canvas');
+  check(await N(() => document.querySelector('.modal.map').dataset.waiting.split(',').includes('tansy')), 'its Map button opens the map, with her marked');
+  await news.click('.modal.map [data-id="ok"]');
+  await news.waitForTimeout(500);
+  check(!(await news.$('.modal.news')), 'and that is said once too');
+  // Out of sight, a gold ! at the edge of the view points her way; in sight, it does not.
+  check(await N(() => window.oddments.lane.pointed().join() === 'tansy'), 'she is out of sight from home, and a mark at the edge of the view points her way');
+  await N(() => { const o = window.oddments; const at = o.game.waiting().find((one) => one.id === 'tansy'); o.game.state.where = { x: at.x - 120, y: at.y + 80 }; o.ctx.show('lane'); });
+  await news.waitForTimeout(500);
+  check(await N(() => window.oddments.lane.pointed().length === 0), 'standing where she can be seen, there is no mark at the edge');
+  // "What to do" has the wishes: a line of its own, and a button beside the map.
+  await news.click('.goalchip');
+  await news.waitForSelector('.modal.journal');
+  check(await N(() => { const block = document.querySelector('.modal.journal [data-act="wishes"]'); const foot = [...document.querySelectorAll('.modal.journal footer .btn')].map((b) => b.dataset.id); const w = document.querySelector('.modal.journal footer [data-id="wishes"]').getBoundingClientRect(); const m = document.querySelector('.modal.journal footer [data-id="map"]').getBoundingClientRect(); return !!block && block.textContent.includes('A ringleader has a wish') && foot.join() === 'wishes,map,ok' && Math.abs(w.top - m.top) < 2 && w.right <= m.left + 1; }), '"What to do" says a ringleader has a wish, and has a Wishes button beside the Map');
+  await news.click('.modal.journal footer [data-id="wishes"]');
+  await news.waitForSelector('.modal.wishes');
+  check((await news.$$('.modal.wishes .wishrow')).length === 1, 'which opens the list');
+  await news.click('.modal.wishes [data-id="ok"]');
+  // A reload does not say any of it again.
+  await N(() => window.oddments.ctx.save());
+  await news.goto(`${base}?debug&fast&seed=7&news`);
+  await ready(news);
+  await news.waitForSelector('#lane');
+  await news.waitForTimeout(600);
+  check(!(await news.$('.modal.news')), 'after a reload nothing is said again');
+  // Further on she is waiting somewhere new, and that is said; a granted wish and a ringleader at home show in the list.
+  await N(async () => {
+    const { ROOMS } = await import('./js/core/balance.js');
+    const { newFriend } = await import('./js/core/progress.js');
+    const o = window.oddments; const s = o.game.state;
+    for (const room of ROOMS.slice(0, 5)) { s.rooms[room.id].clears = 1; s.rooms[room.id].calmed = 31; }
+    s.story.ines = 6; s.story.rival = 2;
+    s.friends.push(newFriend(s.nextFriendId++, 'sockgoblin', 7), newFriend(s.nextFriendId++, 'boss_baron', 9));
+    o.game.standAt('home'); o.ctx.show('lane');
+  });
+  await news.waitForSelector('.modal.news');
+  check(await N(() => { const m = document.querySelector('.modal.news'); return m.querySelector('header').textContent === 'Tansy Brisk is waiting again' && m.textContent.includes('Long Meadow'); }), 'when she is waiting somewhere new, that is said, by name this time');
+  await news.click('.modal.news [data-id="ok"]');
+  await news.click('.goalchip');
+  await news.click('.modal.journal [data-act="seewishes"]');
+  await news.waitForSelector('.modal.wishes');
+  check(await N(() => { const stands = Object.fromEntries([...document.querySelectorAll('.modal.wishes .wishrow')].map((row) => [row.dataset.wish, row.dataset.stands])); return Object.keys(stands).length === 5 && stands.boss_baron === 'home' && stands.boss_spincycle === 'granted' && stands.boss_hydra === 'open' && document.querySelector('.wishrow[data-wish="boss_spincycle"]').textContent.includes('Waiting outside The Wash') && document.querySelector('.wishrow[data-wish="boss_baron"]').textContent.includes('Lives with you now'); }), 'the list says which wishes are open, which granted and waiting where, and who lives with you');
+  await snap(news, 'e2e-news-list');
+  check(await N(() => { const body = document.querySelector('.modal.wishes .body'); const box = document.querySelector('.modal.wishes').getBoundingClientRect(); return box.bottom <= window.innerHeight && box.top >= 0 && body.scrollHeight >= body.clientHeight; }), 'and a long list stays on the screen, and scrolls');
+  await news.close();
+}
+
 section('Locked down');
 {
   // A game is saved in this browser, by a person called Kit.
