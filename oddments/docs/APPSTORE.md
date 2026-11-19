@@ -7,7 +7,7 @@ Everything App Store Connect asks for before an app can be submitted, with a pro
 1. **YOURS:** hear the sound come back on a phone (build 43), and have one person play the game through.
 2. **YOURS**, in App Store Connect, under *Business*: sign the Paid Apps agreement and give the bank and tax details. Nothing can be sold until that is done. (The EU trader status is applied for: see below.)
 3. Done on 19 November 2026: the privacy and support pages are published (see the end of this file).
-4. Set the version to 1.0.0 and upload that build.
+4. The version is 1.0.0 since 19 November 2026. Upload a build of it when the owner says so: that build, once tried on a phone, is the one to submit.
 5. **YOURS:** in App Store Connect, fill the page from this file, attach the eight screenshots, set the price to $3.99, pick the build, and press Submit.
 
 ## Only the owner can decide

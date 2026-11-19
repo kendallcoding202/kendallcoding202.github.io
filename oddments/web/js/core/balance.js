@@ -1,7 +1,7 @@
 // Every number and name in the game lives here, so tuning is one file.
 // Nothing in this module touches the DOM, the clock or storage.
 
-export const VERSION = '0.1.0';
+export const VERSION = '1.0.0';
 export const SAVE_VERSION = 2;
 export const TITLE = 'Clutterkin'; // the game's name, and what its creatures are called (one Clutterkin, many Clutterkin): clutter to some, kin to you
 
