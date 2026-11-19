@@ -43,9 +43,10 @@ export function ringLine(element) {
  * `name` is what a friend is called, if you have given it a name of your own.
  * `grown` is true for a friend that has grown up: its grown form's picture, name and strength.
  * `owner` is whose it is, for one met in a bout that is somebody's own: it cannot be reached.
+ * `friendly` is true for a ringleader met in its friendly bout: it still cannot be reached, but winning brings it home.
  * `extra` is anything more to say about it, put before its moves.
  */
-export function oddmentCard({ species, level, heirloom = false, xp = null, huff = null, name = '', grown = false, owner = '', extra = [], actions = [] }) {
+export function oddmentCard({ species, level, heirloom = false, xp = null, huff = null, name = '', grown = false, owner = '', friendly = false, extra = [], actions = [] }) {
   const kind = SPECIES[species];
   const big = !!grown && !!kind.grown;
   const kindName = big ? kind.grown.name : kind.name;
@@ -72,8 +73,9 @@ export function oddmentCard({ species, level, heirloom = false, xp = null, huff 
     aboutOf(species) ? h('p', { class: 'about', data: { act: 'about' } }, aboutOf(species).about.split(kind.name).join(called)) : null,
     xp === null ? null : (level >= MAX_LEVEL ? h('small', null, 'As strong as it gets.') : bar('xp', xp / xpNeeded(level), `${xp} / ${xpNeeded(level)} to level ${level + 1}`)),
     h('div', { class: 'stats' }, stats),
-    huff === null ? null : h('p', { class: 'note', data: owner ? { act: 'owned' } : {} }, owner ? `${owner}'s own. It is not lost and in no Huff, so there is nobody here to Reach out to.` : kind.boss
-      ? 'Too proud to reach. It will not come home, however kindly you ask.'
+    huff === null ? null : h('p', { class: 'note', data: owner ? { act: 'owned' } : {} }, owner ? `${owner}'s own. It is not lost and in no Huff, so there is nobody here to Reach out to.` : friendly
+      ? 'Too proud to reach, even now. Win this bout, and it comes home with you.' : kind.boss
+      ? 'Too proud to reach. Calm its place, though, and it may have a wish for you.'
       : `In a Huff: ${huff} pip${huff === 1 ? '' : 's'}. Has a soft spot for ${ELEMENTS[softSpotOf(kind.element)].name}: a friend of that element at your side makes reaching out work better.`),
     // A ringleader that has come home: what that means.
     home ? h('p', { class: 'note', data: { act: 'chief' } }, 'A ringleader, come home: one turn a round now, like anyone, and sturdier than most. So only one ringleader walks with you at a time. Ringleaders do not grow up.') : null,

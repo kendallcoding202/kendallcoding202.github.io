@@ -25,7 +25,7 @@ export const NEIGHBOURS = ['ines', 'dov', 'spick'];
  * What the story remembers: whether each of the two calls was taken, how often each neighbour has been
  * heard out, and how many of her meetings Tansy Brisk has lost (see rival.js).
  */
-export const newStory = () => ({ call: false, call2: false, ines: 0, dov: 0, spick: 0, rival: 0 });
+export const newStory = () => ({ call: false, call2: false, ines: 0, dov: 0, spick: 0, rival: 0, heard: 0 });
 const MOST = 99;
 
 /** A story from a save, made safe: every part a whole number in range, whatever was stored. */
@@ -40,6 +40,8 @@ export function reviveStory(raw) {
   }
   // (How many she can have lost depends on which places are calm: whoever reads the rest of the save holds it to that.)
   if (Number.isInteger(raw.rival)) story.rival = Math.min(RIVAL.meetings.length, Math.max(0, raw.rival));
+  // How many of those she has had her say about: never more than she has lost. (A save from before this was kept owes nothing.)
+  story.heard = Number.isInteger(raw.heard) ? Math.min(story.rival, Math.max(0, raw.heard)) : story.rival;
   return story;
 }
 

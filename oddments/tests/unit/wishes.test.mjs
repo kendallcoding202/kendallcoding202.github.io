@@ -308,7 +308,7 @@ test('a save keeps a ringleader friend only if its place is calm, with no rare c
   let raw = saved();
   raw.team = [hydra.id, baron.id, a];
   back = reviveState(raw, NOW);
-  assert.deepEqual(back.team, [hydra.id, a, b], 'and the team is made up with somebody else');
+  assert.deepEqual(back.team, [hydra.id, a], 'and nobody is put in its place: a team of two is a team');
   // Rare colours and a grown form are not theirs to have.
   raw = saved();
   Object.assign(raw.friends.find((friend) => friend.species === 'boss_hydra'), { heirloom: true, grown: true });
@@ -324,7 +324,7 @@ test('a save keeps a ringleader friend only if its place is calm, with no rare c
   raw.rooms.garden.clears = 0;
   back = reviveState(raw, NOW);
   assert.equal(back.friends.some((friend) => isChief(friend.species)), false);
-  assert.equal(back.team.length, 3);
+  assert.deepEqual(back.team, [a, b]);
   assert.equal(chiefMayJoin(back, 'boss_hydra'), false);
   // A ringleader from a place that does not exist, or a made-up one, is nobody.
   raw = saved();
@@ -353,6 +353,34 @@ test('the journal says when one has its wish and where it is waiting; the story 
   game.state.friends.push(newFriend(60, 'boss_spincycle', 9), newFriend(61, 'boss_hydra', 9), newFriend(62, 'boss_baron', 9));
   assert.deepEqual(chiefAsides(game.state), [], 'at home, it is not waiting anywhere');
   assert.match(chiefsSoFar(game.state)[0], /^Old Summerlong, Baron Pilfer and The Spin Cycle had a wish, and you granted it\. 3 ringleaders live with you now\.$/);
+});
+
+test('a team chosen to be one or two stays so through a reload, in the middle of an outing too; only an empty one is filled', () => {
+  // (Found by review: every load used to top a short team up to three, so reopening the game after meeting strays
+  // put two fresh friends beside the worn one.)
+  const game = calmTo(fresh(), 'garden');
+  const [a, b, c] = game.state.team;
+  assert.equal(game.setTeam([b]), true);
+  game.state.worn = { [b]: 7 };
+  let back = reviveState(JSON.parse(game.serialize(NOW)), NOW);
+  assert.deepEqual(back.team, [b]);
+  assert.deepEqual(back.worn, { [b]: 7 }, 'as worn as it was, and alone as it was');
+  game.state.worn = null;
+  game.setTeam([c, a]);
+  back = reviveState(JSON.parse(game.serialize(NOW)), NOW);
+  assert.deepEqual(back.team, [c, a]);
+  // A save that names nobody who exists is given the first three, as before: nobody sets out with no one.
+  const raw = JSON.parse(game.serialize(NOW));
+  for (const team of [[], [9999], 'x', null, undefined]) { raw.team = team; assert.deepEqual(reviveState(JSON.parse(JSON.stringify(raw)), NOW).team, [a, b, c], JSON.stringify(team)); }
+});
+
+test('the Overdue Tome counts what the scrapbook counts: everybody met, ringleaders too', () => {
+  const game = calmTo(fresh(), 'stacks');
+  for (const kind of ORDINARY.slice(0, 36)) game.state.book[kind].met = true;
+  assert.deepEqual([wishOf(game.state, 'boss_tome').have, wishOf(game.state, 'boss_tome').granted], [36, false]);
+  for (const boss of ['boss_hydra', 'boss_baron', 'boss_crumbwyrm', 'boss_spincycle']) game.state.book[boss].met = true;
+  assert.equal(Object.keys(game.state.book).filter((kind) => game.state.book[kind].met).length, 40, 'the scrapbook says forty met');
+  assert.deepEqual([wishOf(game.state, 'boss_tome').have, wishOf(game.state, 'boss_tome').granted], [40, true], 'and so does the Tome');
 });
 
 test('the list of wishes is every ringleader in the order of their places, and says which are out of doors, granted, or at home', () => {

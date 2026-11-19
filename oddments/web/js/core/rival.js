@@ -11,9 +11,12 @@
 // of names, and they cannot be reached: a bout with her is won or it is not.
 // Over the five meetings that changes, which is the point of her.
 //
-// The save keeps one number for all of it: how many of her meetings you have
-// won (`story.rival`). Where she is, who is with her and what she says all
-// follow from that, and from which places are calm.
+// The save keeps two numbers for all of it: how many of her meetings you have
+// won (`story.rival`), and how many of those she has had her say about
+// (`story.heard`). Where she is, who is with her and what she says all follow
+// from those, and from which places are calm. Having lost, she stands where
+// she was until she has been heard out, however long that takes: close the
+// game on the news of a win and she is still there, with it still to say.
 // (The owner asked for her: "a villain to the game that's our counterpart ...
 // just to add more depth to the game".)
 import { SPECIES, RIVAL } from './balance.js';
@@ -112,8 +115,22 @@ const calm = (state, roomId) => state.rooms[roomId].clears > 0;
 /** Whether all five meetings are won. */
 export const rivalDone = (state) => state.story.rival >= RIVAL.meetings.length;
 
-/** The meeting that is due (0 is the first), or -1: the one after those you have won, once its place is calm. */
+/** The meeting she lost and has not yet had her say about (0 is the first), or -1. */
+export const rivalOwes = (state) => (state.story.heard < state.story.rival ? state.story.rival - 1 : -1);
+
+/** She has had her say. Returns whether there was anything owed. */
+export function rivalHeard(state) {
+  if (rivalOwes(state) < 0) return false;
+  state.story.heard = state.story.rival;
+  return true;
+}
+
+/**
+ * The meeting that is due (0 is the first), or -1: the one after those you have won, once its place
+ * is calm, and once she has had her say about the last.
+ */
 export function rivalDue(state) {
+  if (rivalOwes(state) >= 0) return -1;
   const meeting = RIVAL.meetings[state.story.rival];
   return meeting && calm(state, meeting.after) ? state.story.rival : -1;
 }
@@ -126,10 +143,13 @@ export function rivalMost(state) {
 }
 
 /**
- * Where she is standing just now: { x, y, due }, `due` the meeting she wants (or -1, when it is all
- * over and she only has a word for you). Null when she is not about.
+ * Where she is standing just now: { x, y, due }, `due` the meeting she wants (or -1, when she only
+ * has a word for you: it is all over, or she has just lost, and then `owes` says which meeting).
+ * Null when she is not about.
  */
 export function rivalAbout(state) {
+  const owes = rivalOwes(state);
+  if (owes >= 0) return { ...RIVAL_AT[owes], due: -1, owes };
   const due = rivalDue(state);
   if (due >= 0) return { ...RIVAL_AT[due], due };
   return rivalDone(state) ? { ...RIVAL_AT[RIVAL_AT.length - 1], due: -1 } : null;
@@ -147,6 +167,8 @@ export function rivalTeam(meeting) {
 
 /** What she says as you walk up: her piece before the meeting that is due, or a word when it is all over. Null if she is not about. */
 export function rivalSays(state) {
+  const owes = rivalOwes(state);
+  if (owes >= 0) return said(MEETINGS[owes].won);
   const due = rivalDue(state);
   if (due >= 0) return said(MEETINGS[due].before);
   // (Which word changes as the game goes on, with nothing kept to say which.)

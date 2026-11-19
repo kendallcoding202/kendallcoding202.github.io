@@ -65,7 +65,7 @@ export const WISHES = {
   },
   boss_spincycle: {
     wish: 'To give a sock back',
-    how: 'Bring it a pair: an Eelastic and a Frayling, both your friends.',
+    how: 'Bring it a pair of socks: an Eelastic and a Frayling, both your friends. Grown up will do.',
     count: (state) => [['sockeel', 'sockgoblin'].filter((kind) => has(state, kind)).length, 2],
     waits: 'The Spin Cycle has rolled out onto the pavement. Its drum turns over, slowly, with one sock in it. It is looking for the other.',
     ready: 'An Eelastic and a Frayling, side by side. The Spin Cycle stops dead. Then its door swings open, and it squares up: one last spin.',
@@ -73,8 +73,9 @@ export const WISHES = {
   },
   boss_tome: {
     wish: 'A scrapbook worth reading',
-    how: 'Meet forty kinds.',
-    count: (state) => upTo(Object.keys(state.book).filter((kind) => !isChief(kind) && state.book[kind].met).length, 40),
+    how: 'Meet forty kinds: your scrapbook keeps the count.',
+    // (Everybody the scrapbook counts as met, ringleaders too, so the two numbers are one number.)
+    count: (state) => upTo(Object.keys(state.book).filter((kind) => state.book[kind].met).length, 40),
     waits: 'The Overdue Tome is out of its case, reading the street. It turns a page of your scrapbook with its tongue, and finds it short.',
     ready: 'The Overdue Tome reads your scrapbook from cover to cover and shuts it, satisfied. Then it opens wide: it would like the last word.',
     joins: 'The Overdue Tome tucks itself under your arm. It is still overdue. It has decided that you are the library.',
@@ -129,7 +130,7 @@ export const WISHES = {
   },
   boss_treadle: {
     wish: 'Something to mend',
-    how: 'Bring her a Patchpaw, the bear with one eye from the Tick-Tock Attic: make a friend of one.',
+    how: 'Bring her a Patchpaw, the bear with one eye from the Tick-Tock Attic: make a friend of one. Grown up will do.',
     count: (state) => [has(state, 'teddybear') ? 1 : 0, 1],
     waits: 'Madam Treadle has brought her table out into the light. Her needle is threaded. She looks each of your friends over for a loose seam.',
     ready: 'Madam Treadle sees the bear with one eye, and her wheel stops. Very gently, she sews the other one back on. Then she squares up: she has not had a proper bout in years.',

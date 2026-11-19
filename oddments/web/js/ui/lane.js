@@ -436,6 +436,12 @@ export function laneScreen(ctx) {
   }
 
   let pointed = []; // who the last frame drew a mark at the edge for
+  let lastCard = -1; // when a card of any kind was last on the screen, by this screen's clock
+  /**
+   * Whether a card was on the screen a moment ago. A finger tapping through somebody's words lands once more where
+   * "OK" was, which is where this screen's own buttons are: that tap is not a wish to hear it all again.
+   */
+  const justShut = () => clock - lastCard < 0.45;
   /**
    * Where the way to a point leaves the view, and at what angle: { x, y, turn }. Null if the point
    * is in sight. `inset` pulls the spot in from the edge (a smaller mark sits inside the goal's arrow).
@@ -476,11 +482,10 @@ export function laneScreen(ctx) {
   function waitingPointers() {
     const you = here();
     const far = (one) => Math.hypot(one.x - you.x, one.y - you.y);
-    const due = game.waiting().filter((one) => one.due >= 0).sort((a, b) => far(a) - far(b)).slice(0, 2);
+    // (Those in sight need no mark, and do not use one up: the two nearest of those out of sight.)
+    const due = game.waiting().filter((one) => one.due >= 0).map((one) => ({ one, at: edgeToward(one, 34) })).filter(({ at }) => at).sort((a, b) => far(a.one) - far(b.one)).slice(0, 2);
     pointed = [];
-    for (const one of due) {
-      const at = edgeToward(one, 34);
-      if (!at) continue;
+    for (const { one, at } of due) {
       pointed.push(one.id);
       pen.save();
       pen.translate(at.x, at.y);
@@ -535,7 +540,7 @@ export function laneScreen(ctx) {
     for (const stray of game.strays()) if (seen(stray.x, stray.y)) things.push({ y: stray.y + 8, draw: () => strays(stray) });
     // Whoever is waiting by the road (Tansy Brisk, when she is about): drawn as a neighbour is, with the mark over her while she wants a bout.
     // And the ringleader of any place that is calm, taking the air outside it.
-    for (const one of game.waiting()) if (seen(one.x, one.y, 200)) things.push({ y: one.y, draw: () => (one.chief ? chiefOut(one) : neighbour(one, one.due >= 0)) });
+    for (const one of game.waiting()) if (seen(one.x, one.y, 200)) things.push({ y: one.y, draw: () => (one.chief ? chiefOut(one) : neighbour(one, one.due >= 0 || one.owes >= 0)) });
     // The gate on the bridge: shut, with its eight locks, until the whole lane is calm; then only its posts.
     if (seen(BRIDGE.gate.x, BRIDGE.gate.y, 260)) {
       const open = game.bridgeOpen();
@@ -627,7 +632,9 @@ export function laneScreen(ctx) {
     const mail = !who && !caller && !bench && game.mailNear() >= 0 && (!id || goal.id === 'report') && state.story.ines > 0;
     const region = regionAt(here());
     const wish = caller ? game.wish(caller) : null; // (a ringleader's: null for anybody else)
-    const key = `${who}:${who ? game.hasNews(who) : ''}|${caller}:${bout}:${wish ? wish.have : ''}|${id}|${visit ? `${visit.room}:${visit.stop}` : ''}|${inside}|${goal.id}:${goal.count || ''}|${game.rested()}|${bench}|${whereabouts(here())}|${mail}`;
+    // (Somebody who has just lost a bout has their say about it still to make.)
+    const owes = caller ? game.waiting().some((one) => one.id === caller && one.owes >= 0) : false;
+    const key = `${who}:${who ? game.hasNews(who) : ''}|${caller}:${bout}:${wish ? wish.have : ''}:${owes}|${id}|${visit ? `${visit.room}:${visit.stop}` : ''}|${inside}|${goal.id}:${goal.count || ''}|${game.rested()}|${bench}|${whereabouts(here())}|${mail}`;
     if (key === cardFor) return;
     cardFor = key;
     goalText.textContent = goal.count ? `${goal.title} (${goal.count[0]} of ${goal.count[1]})` : goal.title;
@@ -651,6 +658,7 @@ export function laneScreen(ctx) {
       card.replaceChildren(
         h('div', { class: 'personhead' }, sprite(cast.art), h('div', null, h('h2', null, cast.name), h('small', null, cast.role))),
         h('button', { class: `btn ${news ? 'gold' : 'plain'}`, data: { act: 'talk' }, onclick: () => {
+          if (justShut()) return;
           const lines = game.talkTo(who);
           if (!lines) return;
           ctx.save();
@@ -672,7 +680,7 @@ export function laneScreen(ctx) {
           h('b', null, wish.granted ? `Wish granted: ${wish.wish}` : `Wish: ${wish.wish}`),
           wish.granted ? null : h('small', null, wish.how),
           wish.granted ? null : bar('xp', wish.have / wish.need, `${wish.have} of ${wish.need}`)),
-        wish.granted ? h('button', { class: 'btn gold', data: { act: 'bout' }, onclick: () => askBout(caller) }, 'A friendly bout') : null,
+        wish.granted ? h('button', { class: 'btn gold', data: { act: 'bout' }, onclick: () => { if (!justShut()) askBout(caller); } }, 'A friendly bout') : null,
       ].filter(Boolean));
       return;
     }
@@ -684,10 +692,17 @@ export function laneScreen(ctx) {
       card.replaceChildren(...[
         h('div', { class: 'personhead' }, sprite(cast.art), h('div', null, h('h2', null, cast.name), h('small', null, cast.role))),
         bout ? h('small', { data: { act: 'boutnote' } }, 'She wants a bout: her three against yours. Nobody has to stop for her.') : null,
-        h('button', { class: `btn ${bout ? 'gold' : 'plain'}`, data: { act: 'talk' }, onclick: () => {
+        h('button', { class: `btn ${bout || owes ? 'gold' : 'plain'}`, data: { act: 'talk' }, onclick: () => {
+          if (justShut()) return;
           const lines = game.hail(caller);
           if (!lines) return;
-          converse(lines, () => { cardFor = undefined; if (game.boutDue(caller)) askBout(caller); });
+          converse(lines, () => {
+            cardFor = undefined;
+            // What she had to say about a bout she lost has been said, and is not said again.
+            if (game.heardOut(caller)) { ctx.save(); return; }
+            // (The question comes a moment after her last word, not under the finger that tapped it away.)
+            if (game.boutDue(caller)) setTimeout(() => { if (!modalOpen() && game.boutDue(caller)) askBout(caller); }, 320);
+          });
         } }, bout ? 'Hear her out' : 'Talk')].filter(Boolean));
       return;
     }
@@ -775,7 +790,8 @@ export function laneScreen(ctx) {
     const wish = game.wish(who);
     const name = wish ? SPECIES[who].name : CAST[who].name;
     modal({
-      title: wish ? `A friendly bout with ${name}?` : `A bout with ${name}?`, cls: 'askbout',
+      // (It has to be answered: a tap beside it is not an answer.)
+      title: wish ? `A friendly bout with ${name}?` : `A bout with ${name}?`, cls: 'askbout', fixed: true,
       body: [
         h('p', null, wish ? `${name} alone against your three, at level ${wish.level}, and every bit a ringleader still. Too proud to reach, even now: this one is won by standing up for yourselves.`
           : 'Her three against yours. They are hers, not lost: there is nobody to Reach out to, so this one is won by standing up for yourselves.'),
@@ -814,7 +830,8 @@ export function laneScreen(ctx) {
    * either existed is told on its next visit to the lane. Returns whether a card went up.
    */
   function tellNews() {
-    if (!ctx.news) return false;
+    // (Never on the heels of another card: a second tap on that one's button must not answer this one unread.)
+    if (!ctx.news || justShut()) return false;
     const out = game.waiting();
     const chiefs = out.filter((one) => one.chief);
     if (!state.seen.wishnews && chiefs.length) {
@@ -946,7 +963,7 @@ export function laneScreen(ctx) {
     }
     // Head for each point of the way in turn.
     while (way.length && Math.hypot(way[0].x - before.x, way[0].y - before.y) < WORLD.arrive) way.shift();
-    if (modalOpen()) { way = []; held.clear(); }
+    if (modalOpen()) { way = []; held.clear(); lastCard = clock; }
     // The call that starts the story rings as soon as the game has begun and nothing else is on the
     // screen (and once, for a save from before there was a story).
     else if (game.callDue()) {

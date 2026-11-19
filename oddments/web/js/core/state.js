@@ -190,7 +190,9 @@ export function reviveState(saved, now = Date.now()) {
   if (friends.length) state.friends = friends;
   state.nextFriendId = Math.max(int(saved.nextFriendId, 1, 1), numberUniquely(state.friends));
 
-  // The team: friends that exist, each once, topped up from the rest so nobody sets out short-handed.
+  // The team: friends that exist, each once, as the save has them. One or two is a team: a player may
+  // choose to walk with fewer, and a save that is reopened in the middle of an outing must not find
+  // fresh friends beside the worn ones. Only a save with nobody on the team at all is given the first three.
   const ids = state.friends.map((friend) => friend.id);
   const team = [];
   // (Only so many ringleaders walk with you at once: one more than that is left at home.)
@@ -198,7 +200,7 @@ export function reviveState(saved, now = Date.now()) {
   for (const id of Array.isArray(saved.team) ? saved.team.slice(0, 16) : []) {
     if (ids.includes(id) && !team.includes(id) && team.length < TEAM_SIZE && fits(id)) team.push(id);
   }
-  for (const id of ids) if (team.length < TEAM_SIZE && !team.includes(id) && fits(id)) team.push(id);
+  if (team.length === 0) for (const id of ids) if (team.length < TEAM_SIZE && !team.includes(id) && fits(id)) team.push(id);
   state.team = team;
 
   // The world was laid out afresh in version 2: a save from before it wakes up rested, at home.
@@ -257,6 +259,7 @@ export function reviveState(saved, now = Date.now()) {
   if (state.story.call2 && !bridgeOpen(state)) state.story.call2 = false;
   // Nor can Tansy Brisk have lost a meeting whose place is not calm yet.
   state.story.rival = Math.min(state.story.rival, rivalMost(state));
+  state.story.heard = Math.min(state.story.heard, state.story.rival);
   const settings = isObj(saved.settings) ? saved.settings : {};
   // A switch an older save has never heard of keeps its usual setting: sound is on unless turned off.
   for (const key of Object.keys(state.settings)) if (typeof settings[key] === 'boolean') state.settings[key] = settings[key];

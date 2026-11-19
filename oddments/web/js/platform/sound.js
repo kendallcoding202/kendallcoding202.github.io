@@ -383,14 +383,16 @@ export function createSound(AudioClock, timers = { every: (fn, ms) => setInterva
 
   /**
    * Whether the clock says it is running and yet has not moved since it was last looked at, a
-   * quarter of a second ago or more. Such a clock is making no sound, whatever it says.
+   * quarter of a second ago or more. Such a clock is making no sound, whatever it says. Only a
+   * clock that has been seen to move is judged: a new one may say "running" a moment before its
+   * time begins, and throwing that away would only make another just like it.
    */
   function frozen() {
     if (!timers.now || !running()) { seen = null; return false; }
     const now = timers.now();
     const was = seen;
     if (!was || now - was.at >= FROZEN_AFTER) seen = { time: audio.currentTime, at: now };
-    return !!was && now - was.at >= FROZEN_AFTER && audio.currentTime === was.time;
+    return !!was && was.time > 0 && now - was.at >= FROZEN_AFTER && audio.currentTime === was.time;
   }
 
   /**

@@ -62,7 +62,7 @@ export function wishNews(game, out, onDone) {
       h('div', { class: 'newspic' }, out.slice(0, 3).map((one) => sprite(one.id))),
       h('p', null, `${listed(names)} ${names.length === 1 ? 'is' : 'are'} calm now, and ${names.length === 1 ? 'has' : 'have'} come out of doors. Every ringleader does, once its place is calm: look on the grass beside ${names.length === 1 ? roomOf(first.room).name : 'each calm place'}.`),
       h('p', null, WISH_WORDS),
-      h('p', { class: 'note' }, 'Walk up to one to see what it wants. Every wish, and how far along it is, is listed under "What to do". Only one ringleader walks with you at a time.'),
+      h('p', { class: 'note' }, 'Walk up to one to see what it wants. Tap the gold "Goal" at the top of the screen for every wish and how far along it is. Only one ringleader walks with you at a time.'),
     ],
     actions: [
       { id: 'wishes', label: 'See the wishes', kind: 'plain', onClick: () => { setTimeout(() => wishesDialog(game), 0); } },

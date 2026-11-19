@@ -376,19 +376,23 @@ test('the story is saved, and comes back as it went in', () => {
   game.standBy('ines'); game.talkTo('ines');
   game.standBy('dov'); game.talkTo('dov'); game.talkTo('dov');
   const saved = JSON.parse(game.serialize(NOW));
-  assert.deepEqual(saved.story, { call: true, call2: false, ines: 1, dov: 2, spick: 0, rival: 0 });
+  assert.deepEqual(saved.story, { call: true, call2: false, ines: 1, dov: 2, spick: 0, rival: 0, heard: 0 });
   const back = reviveState(JSON.parse(JSON.stringify(saved)), NOW);
   assert.deepEqual(back.story, saved.story);
   assert.equal(goalOf(back).id, 'friend');
 });
 
-test('a save cannot break the story: whatever is stored, it is two yes-or-noes and four small whole numbers', () => {
-  assert.deepEqual(newStory(), { call: false, call2: false, ines: 0, dov: 0, spick: 0, rival: 0 });
+test('a save cannot break the story: whatever is stored, it is two yes-or-noes and five small whole numbers', () => {
+  assert.deepEqual(newStory(), { call: false, call2: false, ines: 0, dov: 0, spick: 0, rival: 0, heard: 0 });
   for (const wrong of [null, undefined, 7, 'told', [], [1, 2], {}, { call: 'yes', ines: '2', dov: null, spick: {} }, { ines: NaN, dov: Infinity, spick: -Infinity }]) {
     assert.deepEqual(reviveStory(wrong), newStory(), JSON.stringify(wrong));
   }
-  assert.deepEqual(reviveStory({ call: true, call2: 'yes', ines: 1e308, dov: -5, spick: 2.9, extra: 'x', constructor: 1 }), { call: true, call2: false, ines: 99, dov: 0, spick: 2, rival: 0 });
+  assert.deepEqual(reviveStory({ call: true, call2: 'yes', ines: 1e308, dov: -5, spick: 2.9, extra: 'x', constructor: 1 }), { call: true, call2: false, ines: 99, dov: 0, spick: 2, rival: 0, heard: 0 });
   assert.equal(reviveStory({ rival: 3 }).rival, 3);
+  // How many of those she has had her say about: never more than she has lost; and a save from before that was kept owes nothing.
+  assert.equal(reviveStory({ rival: 3 }).heard, 3);
+  assert.equal(reviveStory({ rival: 3, heard: 2 }).heard, 2);
+  for (const wrong of [9, -1, 2.5, '1', null, NaN]) assert.ok([0, 3].includes(reviveStory({ rival: 3, heard: wrong }).heard), String(wrong));
   for (const wrong of [1e308, -5, 2.9, '2', null, {}, NaN]) assert.ok([0, 5].includes(reviveStory({ rival: wrong }).rival), String(wrong));
   assert.equal(reviveStory({ call2: true }).call2, true);
   // A save that claims Ines has heard about a calm garden that is not calm: the goal still makes sense.

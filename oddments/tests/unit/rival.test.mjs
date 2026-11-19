@@ -12,7 +12,7 @@ import { createBattle, choices } from '../../web/js/core/battle.js';
 import { SPECIES, ROOMS, ROOM_IDS, RIVAL, ELEMENT_IDS } from '../../web/js/core/balance.js';
 import { RIVAL_AT, WILDS, HAUNTS, PEOPLE, SPOTS, TALK, canStand, districtAt, overTheWater } from '../../web/js/core/world.js';
 import { CAST, storySoFar } from '../../web/js/core/story.js';
-import { TANSY, rivalAbout, rivalDue, rivalDone, rivalMost, rivalTeam, rivalSays, rivalAfter, rivalAside, rivalSoFar } from '../../web/js/core/rival.js';
+import { TANSY, rivalAbout, rivalDue, rivalDone, rivalMost, rivalOwes, rivalTeam, rivalSays, rivalAfter, rivalAside, rivalSoFar } from '../../web/js/core/rival.js';
 import { bridgeOpen } from '../../web/js/core/rooms.js';
 
 const NOW = 1_800_000_000_000;
@@ -114,6 +114,7 @@ test('a bout is her three against yours, at the strength the meeting says, and n
   for (let meeting = 0; meeting < 5; meeting++) {
     const game = strong(calmTo(fresh(3 + meeting), RIVAL.meetings[meeting].after), AS_STRONG[meeting] + 3);
     game.state.story.rival = meeting;
+    game.state.story.heard = meeting;
     assert.equal(rivalDue(game.state), meeting);
     game.standByWaiting('tansy');
     const battle = game.startBout();
@@ -144,6 +145,8 @@ test('a bout is her three against yours, at the strength the meeting says, and n
     assert.equal(game.bout, null);
     assert.equal(game.place(), 'lane');
     assert.equal(game.state.story.rival, meeting + 1);
+    assert.equal(game.state.story.heard, meeting, 'and what she has to say about it is still to be said');
+    assert.equal(rivalOwes(game.state), meeting);
     assert.equal(game.rested(), false, 'and wears everyone out like any fight: a breather, not a rest');
   }
 });
@@ -154,13 +157,24 @@ test('win, and she is gone until the next place she has in mind is calm; then sh
   playOut(game.startBout(), {});
   const stood = game.waiting().find((one) => one.id === 'tansy');
   assert.equal(game.finishBattle().won, true);
+  // She stands where she was until she has had her say about it, with no bout to be had meanwhile. And that is kept:
+  // close the game on the news of the win, and she is there still, with it still to say. (Found by review: it used
+  // to be held in memory only, and was lost.)
+  assert.deepEqual(rivalAbout(game.state), { ...RIVAL_AT[0], due: -1, owes: 0 });
+  assert.deepEqual(game.waiting().filter((one) => !one.chief), [{ id: 'tansy', x: stood.x, y: stood.y, due: -1, owes: 0 }]);
+  assert.equal(game.boutDue('tansy'), false);
+  assert.deepEqual(game.also(), []);
+  const reopened = reviveState(JSON.parse(game.serialize(NOW)), NOW);
+  assert.deepEqual(rivalAbout(reopened), { ...RIVAL_AT[0], due: -1, owes: 0 }, 'a reload keeps it owed');
+  // Even with the place she is waiting on next already calm, she says her piece about this one first.
+  const ahead = reviveState(JSON.parse(calmTo(new Game(reviveState(JSON.parse(game.serialize(NOW)), NOW), { now: NOW, fx: false }), 'pantry').serialize(NOW)), NOW);
+  assert.deepEqual([rivalDue(ahead), rivalAbout(ahead).owes], [-1, 0]);
+  assert.equal(game.waitingNear(), 'tansy');
+  assert.match(game.hail()[0].text, /Unit Two, stop wagging/);
+  assert.equal(game.heardOut(), true);
+  assert.equal(game.heardOut(), false, 'said once');
+  assert.equal(game.state.story.heard, 1);
   assert.equal(rivalAbout(game.state), null, 'the alley is not what she is waiting for');
-  // She stands where she was until she has said so, with nothing more to hear and no bout to be had; and that is never saved.
-  assert.deepEqual(game.waiting().filter((one) => !one.chief), [{ id: 'tansy', x: stood.x, y: stood.y, due: -1, leaving: true }]);
-  assert.equal(game.waitingNear(), null);
-  assert.equal(game.hail('tansy'), null);
-  assert.equal(JSON.parse(game.serialize(NOW)).parting, undefined);
-  game.seenOff();
   assert.deepEqual(game.waiting().filter((one) => !one.chief), []);
   calmTo(game, 'alley');
   assert.equal(rivalAbout(game.state), null);
@@ -202,6 +216,7 @@ test('a team too worn out to stand does not get a bout', () => {
 test('five wins and it is over: she has handed in her boxes, and stays on Bobbin Row with a word for you', () => {
   const game = calmTo(fresh(), 'mending');
   game.state.story.rival = 5;
+  game.state.story.heard = 5;
   assert.equal(rivalDone(game.state), true);
   assert.equal(rivalDue(game.state), -1);
   assert.deepEqual(rivalAbout(game.state), { ...RIVAL_AT[4], due: -1 });
@@ -220,6 +235,7 @@ test('everything she says is plain words, and none of it is too long for the scr
   const game = calmTo(fresh(), 'mending');
   for (let meeting = 0; meeting < 5; meeting++) {
     game.state.story.rival = meeting;
+    game.state.story.heard = meeting;
     const texts = [...rivalSays(game.state), ...rivalAfter(meeting, true).lines].map((line) => line.text).concat(rivalAfter(meeting, false).text, rivalAside(game.state).detail, rivalAside(game.state).title);
     for (const text of texts) {
       assert.ok(typeof text === 'string' && text.length > 8 && text.length < 240, text);
@@ -247,6 +263,13 @@ test('a save cannot say she has lost a meeting whose place is not calm, nor more
   assert.equal(saved(99, 'mending').story.rival, 5);
   for (const wrong of [-1, 2.5, '3', null, {}, [], NaN, Infinity, true]) assert.equal(saved(wrong, 'mending').story.rival, wrong === -1 ? 0 : 0, JSON.stringify(wrong));
   assert.equal(rivalMost(fresh().state), 0);
+  // What she has had her say about is never more than she has lost; and a save from the builds before that was kept owes nothing.
+  assert.equal(saved(5, 'garden').story.heard, 0);
+  const early = JSON.parse(calmTo(fresh(), 'dark').serialize(NOW));
+  early.story.rival = 3; delete early.story.heard;
+  assert.deepEqual([reviveState(early, NOW).story.rival, reviveState(early, NOW).story.heard], [3, 3]);
+  early.story.heard = 9;
+  assert.equal(reviveState(early, NOW).story.heard, 3);
   // A save from before there was a rival has met nobody.
   const old = JSON.parse(calmTo(fresh(), 'stacks').serialize(NOW));
   delete old.story.rival;
@@ -258,6 +281,7 @@ test('a save cannot say she has lost a meeting whose place is not calm, nor more
 test('the last meeting is over the water, and the bridge is open by the time it is due', () => {
   const game = calmTo(fresh(), RIVAL.meetings[4].after);
   game.state.story.rival = 4;
+  game.state.story.heard = 4;
   assert.equal(bridgeOpen(game.state), true);
   assert.equal(game.standByWaiting('tansy'), true);
   assert.equal(overTheWater(game.state.where), true);

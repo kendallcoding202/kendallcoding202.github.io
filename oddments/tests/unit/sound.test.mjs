@@ -451,6 +451,16 @@ test('a clock that says it is running and does not move is making no sound: the 
   now += 400; sound.unlock(true);
   assert.equal(rig.made.clocks, 2, 'looked at a moment ago and now, and it has not moved: a new one');
   assert.notEqual(rig.made.clock, first);
+  // A new clock that says it is running before its time has begun to move is not judged: throwing it away would only
+  // make another just like it, for as long as the tapping went on. (Found by review.)
+  await Promise.resolve(); await Promise.resolve();
+  const slow = rig.made.clock;
+  assert.equal(slow.currentTime, 0);
+  for (let i = 0; i < 8; i++) { now += 400; sound.unlock(true); sound.unlock(false); }
+  assert.equal(rig.made.clocks, 2, 'eight taps on a clock that has not started yet make nothing new');
+  slow.currentTime = 0.5; now += 400; sound.unlock(true);
+  now += 400; sound.unlock(true);
+  assert.equal(rig.made.clocks, 3, 'once it has moved and then stops, it is judged like any other');
 });
 
 test('Settings can start the sound afresh by hand, and is told how that went', async () => {

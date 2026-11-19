@@ -373,7 +373,7 @@ export function fightScreen(ctx) {
       return;
     }
     const unit = unitOf(battle, key);
-    oddmentCard({ species: unit.species, level: unit.level, heirloom: unit.heirloom, grown: unit.grown, name: unit.side === 'ally' || unit.owned ? unit.name : '', huff: unit.side === 'foe' ? unit.huff : null, owner: unit.owned && bout && !bout.chief ? CAST[bout.who].name : '', xp: unit.chief ? (game.friend(unit.friendId) || { xp: 0 }).xp : null });
+    oddmentCard({ species: unit.species, level: unit.level, heirloom: unit.heirloom, grown: unit.grown, name: unit.side === 'ally' || unit.owned ? unit.name : '', huff: unit.side === 'foe' ? unit.huff : null, owner: unit.owned && bout && !bout.chief ? CAST[bout.who].name : '', friendly: !!(bout && bout.chief && unit.side === 'foe'), xp: unit.chief ? (game.friend(unit.friendId) || { xp: 0 }).xp : null });
   }
 
   function commit(action) {

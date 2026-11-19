@@ -1240,7 +1240,8 @@ s = await state(page);
 check(!(await page.$('#rescue')) && (await screen(page)) === 'lane', 'an edited save loads into a playable game');
 check((await where(page)).near === 'home', 'standing somewhere real: an impossible position becomes the door of home');
 check(s.friends.every((f) => SPECIES[f.species] && !SPECIES[f.species].boss && f.level >= 1 && f.level <= 40), 'with no boss for a friend and no impossible levels');
-check(new Set(s.friends.map((f) => f.species)).size === s.friends.length && s.team.length === 3, 'one friend of each kind and a full team');
+// (The team it names has one real friend in it, once: so that is the team. Nobody is added to a team somebody chose.)
+check(new Set(s.friends.map((f) => f.species)).size === s.friends.length && s.team.length === 1 && s.friends.some((f) => f.id === s.team[0]), 'one friend of each kind, and a team of the one real friend it named');
 check(s.visit === null, 'and no visit to a room that is not built');
 check((await S(page, () => window.pwned)) === undefined && (await S(page, () => document.querySelector('#lane .who b').textContent)).startsWith('<img src=x'), 'a name is only ever shown as text');
 check(s.player.look === 'sitter_a', 'a made-up look falls back to the first');
@@ -1807,13 +1808,19 @@ section('The rival');
   await rival.waitForSelector('.modal.talk');
   check(await R(() => document.querySelector('.modal.talk .talkname').textContent.includes('Tansy Brisk') && document.querySelector('.modal.talk .talkwords').textContent.includes('junior clearance officer')), 'she says her piece');
   check((await hearOut(rival)) === 3, 'three lines of it');
+  // A finger still tapping where "OK" was, and then a tap beside the question, must not answer or dismiss it. (Found by review.)
+  await rival.touchscreen.tap(195, 770);
   await rival.waitForSelector('.modal.askbout');
+  await rival.touchscreen.tap(20, 30);
+  await rival.waitForTimeout(250);
+  check(!!(await rival.$('.modal.askbout')) && !(await rival.$('.modal.askbout .x')) && (await screen(rival)) === 'lane', 'the question comes a moment after her last word, and has to be answered: a tap beside it does nothing');
   check(await R(() => { const m = document.querySelector('.modal.askbout'); return m.textContent.includes('A bout with Tansy Brisk?') && m.textContent.includes('nobody to Reach out to') && !!m.querySelector('[data-id="later"]') && !!m.querySelector('[data-id="bout"]'); }), 'and then it is yours to say: a bout, or not just now');
   await snap(rival, 'e2e-rival-ask');
   await rival.click('.modal.askbout [data-id="later"]');
   await rival.waitForTimeout(250);
   check((await screen(rival)) === 'lane' && JSON.stringify(await state(rival)) === before, 'not just now: nothing has happened, and nothing is changed');
-  // Yes.
+  // Yes. (A moment later: a tap that comes straight after a card has shut is taken for a leftover, not a new wish.)
+  await rival.waitForTimeout(600);
   await rival.click('.placecard [data-act="talk"]');
   await hearOut(rival);
   await rival.waitForSelector('.modal.askbout');
@@ -1846,7 +1853,7 @@ section('The rival');
   check((await modalTitle(rival)) === 'Won' && said.includes('Tansy Brisk calls her three back'), 'won', said.slice(0, 100));
   await rival.click('[data-id="next"]');
   await rival.waitForSelector('.modal.talk');
-  check(await R(() => document.querySelector('.modal.talk .talkwords').textContent.includes('Unit Two, stop wagging') && window.oddments.game.waiting().some((one) => one.id === 'tansy' && one.leaving)), 'back in the lane she has something to say about it, still standing where she was');
+  check(await R(() => document.querySelector('.modal.talk .talkwords').textContent.includes('Unit Two, stop wagging') && window.oddments.game.waiting().some((one) => one.id === 'tansy' && one.owes === 0)), 'back in the lane she has something to say about it, still standing where she was');
   check((await hearOut(rival)) === 2, 'two lines');
   let rs = await state(rival);
   check(rs.story.rival === 1 && rs.friends.length === friends && await R(() => !window.oddments.game.waiting().some((one) => one.id === 'tansy') && !window.oddments.game.also().some((one) => one.id === 'rival')), 'and then she is gone down the road: one to you, nobody of hers came home with you');
@@ -1862,7 +1869,7 @@ section('The rival');
   await R(() => {
     const o = window.oddments; const s = o.game.state;
     for (const id of ['alley', 'pantry']) { s.rooms[id].clears = 1; s.rooms[id].calmed = 31; }
-    s.story.ines = 4; s.strays = []; s.visit = null; s.worn = null;
+    s.story.ines = 4; s.story.heard = s.story.rival; s.strays = []; s.visit = null; s.worn = null;
     o.game.standByWaiting('tansy'); o.ctx.show('lane');
   });
   await rival.waitForSelector('.placecard[data-person="tansy"]:not([hidden])');
@@ -1884,7 +1891,7 @@ section('The rival');
   await R(() => {
     const o = window.oddments; const s = o.game.state;
     for (const id of Object.keys(s.rooms)) { s.rooms[id].clears = 1; s.rooms[id].calmed = 31; }
-    s.story.call2 = true; s.story.ines = 13; s.story.rival = 5; s.strays = [];
+    s.story.call2 = true; s.story.ines = 13; s.story.rival = 5; s.story.heard = 5; s.strays = [];
     o.game.standByWaiting('tansy'); o.ctx.show('lane');
   });
   await rival.waitForSelector('.placecard[data-person="tansy"]:not([hidden])');
@@ -1953,6 +1960,7 @@ section('Ringleaders with wishes');
   await wishes.waitForSelector('.modal.map canvas');
   check(await W(() => document.querySelector('.modal.map').dataset.waiting.split(',').includes('boss_hydra')), 'and the map marks it');
   await wishes.click('.modal.map [data-id="ok"]');
+  await wishes.waitForTimeout(600);
   await wishes.click('.placecard [data-act="bout"]');
   await wishes.waitForSelector('.modal.askbout');
   check(await W(() => { const m = document.querySelector('.modal.askbout'); return m.textContent.includes('A friendly bout with Old Summerlong?') && m.textContent.includes('Too proud to reach') && m.textContent.includes('Old Summerlong comes home with you') && m.querySelector('[data-id="bout"]').textContent === 'A friendly bout'; }), 'asked first: it alone against your three, and what winning means');
@@ -1962,6 +1970,11 @@ section('Ringleaders with wishes');
   await idle(wishes);
   check(await W(() => document.querySelector('.roundpill').textContent.includes('a friendly bout') && document.querySelectorAll('.unit.foe').length === 1 && !!document.querySelector('.unit.foe.boss') && !document.querySelector('.calls .caller.theirs')), 'the bout: Old Summerlong alone, as it ever was, and nobody standing behind it');
   check(await W(() => { const reach = document.querySelector('[data-call="reach"]'); return reach.disabled && reach.textContent.includes('Nobody to reach'); }), 'still too proud to reach');
+  await wishes.click('.unit.foe.boss');
+  await wishes.waitForSelector('.modal.oddment');
+  check(await W(() => { const m = document.querySelector('.modal.oddment'); return m.textContent.includes('Too proud to reach, even now') && m.textContent.includes('Win this bout, and it comes home with you') && !m.textContent.includes('however kindly you ask'); }), 'tap it: its card says it cannot be reached, and that winning brings it home');
+  await wishes.click('.modal.oddment .x');
+  await wishes.waitForTimeout(150);
   await snap(wishes, 'e2e-wish-bout');
   await botFight(wishes, {});
   const news = await W(() => document.querySelector('.modal.result .body').textContent);
@@ -2088,7 +2101,7 @@ section('News, told once');
     const { newFriend } = await import('./js/core/progress.js');
     const o = window.oddments; const s = o.game.state;
     for (const room of ROOMS.slice(0, 5)) { s.rooms[room.id].clears = 1; s.rooms[room.id].calmed = 31; }
-    s.story.ines = 6; s.story.rival = 2;
+    s.story.ines = 6; s.story.rival = 2; s.story.heard = 2;
     s.friends.push(newFriend(s.nextFriendId++, 'sockgoblin', 7), newFriend(s.nextFriendId++, 'boss_baron', 9));
     o.game.standAt('home'); o.ctx.show('lane');
   });

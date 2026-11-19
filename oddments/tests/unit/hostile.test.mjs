@@ -106,8 +106,9 @@ test('friends are rebuilt field by field, keeping nothing the game did not make'
   assert.equal(new Set(state.friends.map((f) => f.id)).size, 3, 'no two friends share an id');
   assert.ok(state.friends.every((f) => Number.isInteger(f.id) && f.id >= 1));
   assert.ok(state.nextFriendId > Math.max(...state.friends.map((f) => f.id)));
-  assert.equal(state.team.length, 3);
-  assert.equal(new Set(state.team).size, 3, 'nobody is on the team twice');
+  // (Two of the five named are real friends, each once. A team of two is a team: nobody is added to it. See wishes.test.mjs.)
+  assert.equal(state.team.length, 2);
+  assert.equal(new Set(state.team).size, 2, 'nobody is on the team twice');
   assert.ok(state.team.every((id) => state.friends.some((f) => f.id === id)));
 });
 

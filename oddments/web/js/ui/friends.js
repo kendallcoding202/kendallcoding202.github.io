@@ -20,12 +20,16 @@ export function friendsScreen(ctx) {
     // Only one ringleader walks with you at a time: a way onto the team that would make two is not offered, and the card says why.
     const fits = (ids) => game.mayTeam(ids) !== 'chiefs';
     let barred = false;
+    const walking = team.map((id) => game.friend(id)).find((other) => other && SPECIES[other.species].boss);
     if (on && team.length > 1) actions.push({ id: 'rest', label: 'Rest at home', kind: 'plain', onClick: () => change(team.filter((id) => id !== friend.id)) });
-    if (!on && team.length < TEAM_SIZE) {
+    if (!on && walking && SPECIES[friend.species].boss) {
+      // A second ringleader: the one way onto the team is to change places with the first, however many are walking.
+      barred = true;
+      actions.push({ id: `swap-${walking.id}`, label: `Swap with ${nameOf(walking)}`, kind: 'plain', onClick: () => change(team.map((x) => (x === walking.id ? friend.id : x))) });
+    } else if (!on && team.length < TEAM_SIZE) {
       if (fits([...team, friend.id])) actions.push({ id: 'join', label: 'Join the team', onClick: () => change([...team, friend.id]) });
       else barred = true;
-    }
-    if (!on && team.length >= TEAM_SIZE) {
+    } else if (!on) {
       for (const id of team) {
         const other = game.friend(id);
         const swapped = team.map((x) => (x === id ? friend.id : x));
@@ -33,8 +37,7 @@ export function friendsScreen(ctx) {
         actions.push({ id: `swap-${id}`, label: `Swap with ${nameOf(other)}`, kind: 'plain', onClick: () => change(swapped) });
       }
     }
-    const walking = team.map((id) => game.friend(id)).find((other) => other && SPECIES[other.species].boss);
-    const extra = barred && walking ? [h('p', { class: 'note gold', data: { act: 'onechief' } }, `${nameOf(walking)} is walking with you already, and only one ringleader does at a time. Swap the two of them, or send ${nameOf(walking)} home to rest first.`)] : [];
+    const extra = barred && walking ? [h('p', { class: 'note gold', data: { act: 'onechief' } }, `${nameOf(walking)} is walking with you already, and only one ringleader does at a time. The two of them can change places.`)] : [];
     // A name of your own for it. (The dialog opens once this one has closed.)
     actions.push({ id: 'name', label: friend.nick ? 'Change its name' : 'Give it a name', kind: 'plain', onClick: () => { setTimeout(() => nameDialog(ctx, friend, draw), 0); } });
     oddmentCard({ species: friend.species, level: friend.level, heirloom: friend.heirloom, xp: friend.xp, name: nameOf(friend), grown: !!friend.grown, extra, actions });
@@ -162,8 +165,10 @@ export function settingsScreen(ctx) {
       h('div', { class: 'toggle' }, h('div', null, 'Sound effects', h('small', null, 'Footsteps, taps, and what happens in a fight.')), sound),
       h('div', { class: 'toggle' }, h('div', null, 'Music', h('small', null, 'A lullaby out in the lane, something livelier in a fight.')), music),
       // If the sound has gone quiet (a phone can take it away and not give it back), this starts it afresh, and says how that went.
-      h('div', { class: 'toggle' }, h('div', null, 'Gone quiet?', h('small', null, 'Starts the sound afresh. You should hear a chime.')),
+      h('div', { class: 'toggle' }, h('div', null, 'Gone quiet?', h('small', null, 'Starts the sound afresh.')),
         h('button', { class: 'btn plain small', data: { act: 'restartsound' }, onclick: () => {
+          // (With both switches off there is nothing to hear, and that is the answer.)
+          if (!settings.sound && !settings.music) { toast('Sound effects and Music are both switched off, just above.', { kind: 'bad' }); return; }
           if (!restartSound()) { toast('This device gives the game no sound to use.', { kind: 'bad' }); return; }
           // A clock takes a moment to start: then the chime, and a word on how it went (and what the clock says, if it did not).
           setTimeout(() => {

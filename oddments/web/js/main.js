@@ -271,8 +271,7 @@ function resultDialog(ctx, summary, foes) {
     // (After a bout that was won, whoever lost it has something to say, once you are back in the lane.)
     actions: [{ id: 'next', label: summary.home ? 'Home' : 'Onward', onClick: () => {
       ctx.show('lane');
-      if (summary.rival && summary.rival.lines.length) setTimeout(() => converse(summary.rival.lines, () => { game.seenOff(); ctx.save(); }), 0);
-      else game.seenOff();
+      if (summary.rival && summary.rival.lines.length) setTimeout(() => converse(summary.rival.lines, () => { game.heardOut(); ctx.save(); }), 0);
     } }],
   });
   if (summary.joined.length) toast(`${summary.joined.length === 1 ? 'A new friend' : `${summary.joined.length} new friends`}!`, { kind: 'good' });
