@@ -8,7 +8,7 @@ import { roomOpen, bridgeOpen, maxHpOf, rollEncounter, fairEncounter, heldBy, he
 import { own } from './util.js';
 import { settleWhere, spotNear, overTheWater } from './world.js';
 import { insideOf, settleIn } from './indoors.js';
-import { newStory, reviveStory } from './story.js';
+import { newStory, reviveStory, bothQuiet } from './story.js';
 import { rollStrays, fairStrays, fairKeepsake, KEEPSAKES } from './strays.js';
 import { giveName, tidyName } from './names.js';
 import { rivalMost } from './rival.js';
@@ -257,6 +257,8 @@ export function reviveState(saved, now = Date.now()) {
   state.story = reviveStory(saved.story);
   // The second call cannot have been taken before the lane was quiet.
   if (state.story.call2 && !bridgeOpen(state)) state.story.call2 = false;
+  // Nor the third before both banks were, and the second was taken.
+  if (state.story.call3 && !(state.story.call2 && bothQuiet(state))) state.story.call3 = false;
   // Nor can Tansy Brisk have lost a meeting whose place is not calm yet.
   state.story.rival = Math.min(state.story.rival, rivalMost(state));
   state.story.heard = Math.min(state.story.heard, state.story.rival);

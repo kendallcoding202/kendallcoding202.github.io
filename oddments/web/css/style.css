@@ -353,6 +353,11 @@ small { color: var(--muted); font-size: 12px; }
 .modal.news .newspic.person img { height: 118px; width: auto; }
 .modal.news p { margin: 0; font-size: 15px; line-height: 1.36; }
 .modal.news p.note { color: var(--muted); font-size: 13.5px; }
+.modal.news p.big { font-size: 17px; font-weight: 600; color: #ffe9a8; }
+.modal.news .credits { display: flex; flex-direction: column; gap: 3px; padding-top: 8px; border-top: 1px solid var(--line); }
+.modal.news .credits small { color: var(--muted); font-size: 12px; line-height: 1.3; }
+.modal.theend .newspic img { height: 84px; }
+#settings [data-act="credits"] { margin-top: 8px; }
 /* The list of wishes. */
 .modal.wishes .body { display: flex; flex-direction: column; gap: 8px; }
 .modal.wishes p { margin: 0; font-size: 14px; line-height: 1.34; }

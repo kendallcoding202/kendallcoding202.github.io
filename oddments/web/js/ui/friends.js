@@ -7,6 +7,7 @@ import { modal, toast } from './modals.js';
 import { elementTag, heirloomTag, bar, oddmentCard } from './parts.js';
 import { setSound, unlockSound, restartSound, soundClock, play } from '../platform/sound.js';
 import { keyRing } from './keys.js';
+import { creditsDialog } from './news.js';
 
 /** Everyone who has come home, and the three who walk with you. */
 export function friendsScreen(ctx) {
@@ -186,7 +187,8 @@ export function settingsScreen(ctx) {
       h('small', null, `Fights ${stats.battles} · won ${stats.wins} · friends made ${stats.befriended} · Heirlooms ${stats.heirlooms}`)),
     h('div', { class: 'card' },
       h('p', null, 'No ads, no tracking, no accounts, no purchases. This game never uses the network: your save lives on this device only.'),
-      h('small', { data: { build: BUILD } }, `${TITLE} ${VERSION}${BUILD === 'dev' ? '' : `, build ${BUILD}`}. ${ROOMS.filter(roomBuilt).length} places to calm, ${SPECIES_IDS.filter((id) => !SPECIES[id].boss).length} friends to make.`)),
+      h('small', { data: { build: BUILD } }, `${TITLE} ${VERSION}${BUILD === 'dev' ? '' : `, build ${BUILD}`}. ${ROOMS.filter(roomBuilt).length} places to calm, ${SPECIES_IDS.filter((id) => !SPECIES[id].boss).length} friends to make.`),
+      h('button', { class: 'btn plain small', data: { act: 'credits' }, onclick: () => creditsDialog() }, 'Credits')),
     h('button', {
       class: 'btn danger', data: { act: 'reset' },
       onclick: () => modal({

@@ -13,7 +13,7 @@ import { isChief, wishOf, wishList, chiefsOut, chiefLevel, chiefSeen, chiefJoins
 import { STRAYS } from './balance.js';
 import { insideOf, stepIn, routeIn, spotIn, onMat, besidePost } from './indoors.js';
 import { WORLD, POST, BENCHES, SIT, MAILBOXES, POST_REACH, stepWalk, routeTo, straighten, roomy, standing, canStand, spotNear, spotOf, districtOf, districtAt, postNear, personNear, personAt, benchNear, mailNear, TALK } from './world.js';
-import { goalOf, aimOf, storySoFar, hasNews, talk, takeCall, callDue, asideOf, tonightOf } from './story.js';
+import { goalOf, aimOf, storySoFar, hasNews, talk, takeCall, callDue, asideOf, tonightOf, storyEnded } from './story.js';
 import { nameOf, giveName, tidyName } from './names.js';
 
 export class Game {
@@ -441,7 +441,10 @@ export class Game {
   /** Whether the gate on Kettle Bridge stands open: the whole lane is calm. */
   bridgeOpen() { return bridgeOpen(this.state); }
 
-  /** Whether the telephone is ringing: the first call, or the one that opens the far bank. */
+  /** Whether the story has been told to its end: both banks quiet, and great-aunt Maribel's last call taken. */
+  ended() { return storyEnded(this.state); }
+
+  /** Whether the telephone is ringing: the first call, the one that opens the far bank, or the last. */
   callDue() { return callDue(this.state); }
 
   /** Goes straight up to a neighbour. For the simulator and tests; a player walks. */

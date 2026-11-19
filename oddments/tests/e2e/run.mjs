@@ -1142,6 +1142,20 @@ for (const [room, name, boss, bg, goalAfter] of LATER) {
     await S(page, () => { const g = window.oddments.game; g.goHome(); window.oddments.ctx.show('lane'); });
     continue;
   }
+  if (room === 'mending') {
+    // Both banks quiet and she knows: the telephone rings a last time, by itself, and that is the end of the story.
+    // (Her call may be on the screen before Ines Tock's last word is tapped away: then it has been heard out already.)
+    check(heard === 3 || heard === 8, `${name}: Ines Tock hears of it`, `${heard} lines`);
+    if (heard === 3) {
+      await page.waitForSelector('.modal.talk', { timeout: 5000 });
+      check(await S(page, () => document.querySelector('.modal.talk .talkname b').textContent === 'Great-aunt Maribel' && document.querySelector('.modal.talk .talkwords').textContent.includes('on the boat')), 'the telephone rings: it is great-aunt Maribel, on her way home');
+      await snap(page, 'e2e-third-call');
+      heard += await hearOut(page);
+    }
+    check(heard === 8 && (await state(page)).story.call3 === true && await S(page, () => window.oddments.game.ended() && window.oddments.game.journal().some((line) => line.includes('rang a third time'))), 'her last call, five lines, and the story is told to its end', `${heard} lines`);
+    check((await S(page, () => document.querySelector('.goalchip span').textContent)) === goalAfter, `and the goal is what is left to do: ${goalAfter}`);
+    continue;
+  }
   check(heard === 3 && (await S(page, () => document.querySelector('.goalchip span').textContent)) === goalAfter, `${name}: Ines Tock hears of it, and the goal moves on: ${goalAfter}`);
 }
 s = await state(page);
@@ -1891,7 +1905,7 @@ section('The rival');
   await R(() => {
     const o = window.oddments; const s = o.game.state;
     for (const id of Object.keys(s.rooms)) { s.rooms[id].clears = 1; s.rooms[id].calmed = 31; }
-    s.story.call2 = true; s.story.ines = 13; s.story.rival = 5; s.story.heard = 5; s.strays = [];
+    s.story.call2 = true; s.story.call3 = true; s.story.ines = 13; s.story.rival = 5; s.story.heard = 5; s.strays = []; // (the story told to its end: nothing is ringing)
     o.game.standByWaiting('tansy'); o.ctx.show('lane');
   });
   await rival.waitForSelector('.placecard[data-person="tansy"]:not([hidden])');
@@ -2113,7 +2127,35 @@ section('News, told once');
   await news.waitForSelector('.modal.wishes');
   check(await N(() => { const stands = Object.fromEntries([...document.querySelectorAll('.modal.wishes .wishrow')].map((row) => [row.dataset.wish, row.dataset.stands])); return Object.keys(stands).length === 5 && stands.boss_baron === 'home' && stands.boss_spincycle === 'granted' && stands.boss_hydra === 'open' && document.querySelector('.wishrow[data-wish="boss_spincycle"]').textContent.includes('Waiting outside The Wash') && document.querySelector('.wishrow[data-wish="boss_baron"]').textContent.includes('Lives with you now'); }), 'the list says which wishes are open, which granted and waiting where, and who lives with you');
   await snap(news, 'e2e-news-list');
+  await news.waitForTimeout(50);
   check(await N(() => { const body = document.querySelector('.modal.wishes .body'); const box = document.querySelector('.modal.wishes').getBoundingClientRect(); return box.bottom <= window.innerHeight && box.top >= 0 && body.scrollHeight >= body.clientHeight; }), 'and a long list stays on the screen, and scrolls');
+  await news.click('.modal.wishes [data-id="ok"]');
+  await news.click('.modal.journal .x');
+  // The end: both banks quiet and Ines Tock told, the last call rings, and then a card says so, once.
+  await N(async () => {
+    const { ROOMS } = await import('./js/core/balance.js');
+    const o = window.oddments; const s = o.game.state;
+    for (const room of ROOMS) { s.rooms[room.id].clears = 1; s.rooms[room.id].calmed = 31; }
+    s.story.call2 = true; s.story.ines = 13; s.story.rival = 5; s.story.heard = 5;
+    for (const key of ['rivalnewsa', 'rivalnewsb', 'rivalnewsc', 'rivalnewsd', 'rivalnewse']) s.seen[key] = true;
+    o.game.standAt('home'); o.ctx.show('lane');
+  });
+  await news.waitForSelector('.modal.talk');
+  check(await N(() => document.querySelector('.modal.talk .talkname b').textContent === 'Great-aunt Maribel'), 'with both banks quiet and Ines Tock told, the telephone rings');
+  check((await hearOut(news)) === 5, 'her last call: five lines');
+  await news.waitForSelector('.modal.theend');
+  check(await N(() => { const m = document.querySelector('.modal.theend'); return m.querySelector('header').textContent === 'Both banks are quiet' && m.textContent.includes('Thank you for house-sitting') && m.textContent.includes('Not everybody is asleep') && m.textContent.includes('with a wish') && m.textContent.includes('SIL Open Font License') && m.querySelectorAll('.newspic img').length === 3 && !m.querySelector('.x') && m.querySelector('[data-id="ok"]').textContent === 'Goodnight'; }), 'then a card says it is the end, thanks you, says what is still awake, and gives the credits');
+  check(await N(() => { const box = document.querySelector('.modal.theend').getBoundingClientRect(); return box.top >= 0 && box.bottom <= window.innerHeight; }), 'and it fits the screen');
+  await snap(news, 'e2e-the-end');
+  await news.click('.modal.theend [data-id="ok"]');
+  await news.waitForTimeout(700);
+  check(!(await news.$('.modal')) && await N(() => window.oddments.game.state.seen.theend === true && window.oddments.game.goal().id === 'more'), 'said once; and the game goes on');
+  // The credits are in Settings at any time.
+  await tab(news, 'settings');
+  await news.click('[data-act="credits"]');
+  await news.waitForSelector('.modal.credits');
+  check(await N(() => { const m = document.querySelector('.modal.credits'); return m.textContent.includes('Pawst Lives') && m.textContent.includes('Fredoka') && m.textContent.includes('SIL Open Font License'); }), 'Settings has the credits');
+  await news.click('.modal.credits [data-id="ok"]');
   await news.close();
 }
 

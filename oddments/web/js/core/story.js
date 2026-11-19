@@ -25,7 +25,7 @@ export const NEIGHBOURS = ['ines', 'dov', 'spick'];
  * What the story remembers: whether each of the two calls was taken, how often each neighbour has been
  * heard out, and how many of her meetings Tansy Brisk has lost (see rival.js).
  */
-export const newStory = () => ({ call: false, call2: false, ines: 0, dov: 0, spick: 0, rival: 0, heard: 0 });
+export const newStory = () => ({ call: false, call2: false, call3: false, ines: 0, dov: 0, spick: 0, rival: 0, heard: 0 });
 const MOST = 99;
 
 /** A story from a save, made safe: every part a whole number in range, whatever was stored. */
@@ -34,6 +34,7 @@ export function reviveStory(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return story;
   story.call = raw.call === true;
   story.call2 = raw.call2 === true;
+  story.call3 = raw.call3 === true;
   for (const who of NEIGHBOURS) {
     const told = raw[who];
     if (typeof told === 'number' && Number.isFinite(told)) story[who] = Math.min(MOST, Math.max(0, Math.floor(told)));
@@ -79,6 +80,19 @@ export const CALL2 = [
   line('maribel', 'Now. I have had a postcard from the far bank, over Kettle Bridge. It is the same story there: the Glasshouse, the old bath house, the Tinker\'s Shed, the Mending Room. All wide awake.'),
   line('maribel', 'The gate on the bridge has eight locks. And you, dear, are holding eight keys. I did wonder what they were for.'),
   line('maribel', 'The bridge is south of Chimney Hill. Start with the Glasshouse. And take your friends: some of them will be big enough by now to surprise you. Must dash, the boat is leaving. It is always leaving.'),
+];
+
+/**
+ * The third call, and the end of the story as it stands: both banks are quiet, Ines Tock has been
+ * told, and great-aunt Maribel is on her way home. (Until this there was no ending: calming the last
+ * place finished on a line of text.)
+ */
+export const CALL3 = [
+  line('maribel', 'Hello, dear! It is me, and I am on the boat. Properly on it, this time. It has left. I checked twice.'),
+  line('maribel', 'Ines says both banks are quiet. Twelve places! I only asked you to water the plants. I did ask you to water the plants?'),
+  line('maribel', 'And Mr. Spick took his van back empty. He has put it in writing. He wants to know if he may keep a quiet one on his desk.'),
+  line('maribel', 'Keep the keys, dear. All twelve. Anybody trusted by a toaster, a bath and a book with teeth is a house-sitter for life.'),
+  line('maribel', 'Put the kettle on for when I get in. And tell them all I said goodnight. Even the vacuum.'),
 ];
 
 const INES = {
@@ -285,22 +299,32 @@ export function talk(state, who) {
 
 /**
  * Whether the telephone is ringing: the first call, as soon as the game begins; the second, once the
- * whole lane is quiet and Ines Tock has heard so.
+ * whole lane is quiet and Ines Tock has heard so; the third, once both banks are and she has heard that.
  */
 export function callDue(state) {
-  return !state.story.call || secondCallDue(state);
+  return !state.story.call || secondCallDue(state) || thirdCallDue(state);
 }
 /** Whether it is the second call that is due: the one about the far bank. */
 function secondCallDue(state) {
   return FAR.length > 0 && !state.story.call2 && laneQuiet(state) && reported(state) >= LANE.length;
 }
 
+/** Whether both banks are quiet: every place there is. */
+export const bothQuiet = (state) => placesCalm(state) === ROOMS.length;
+/** Whether it is the third call that is due: the one that ends the story. */
+function thirdCallDue(state) {
+  return state.story.call2 && !state.story.call3 && bothQuiet(state) && reported(state) >= ROOMS.length;
+}
+/** Whether the story has been told to its end: the third call is taken. */
+export const storyEnded = (state) => state.story.call3 === true;
+
 /** Takes the call that is due. Returns its lines, and null when no call is. */
 export function takeCall(state) {
   if (!callDue(state)) return null;
   if (!state.story.call) { state.story.call = true; return CALL; }
-  state.story.call2 = true;
-  return CALL2;
+  if (secondCallDue(state)) { state.story.call2 = true; return CALL2; }
+  state.story.call3 = true;
+  return CALL3;
 }
 
 // ---------------------------------------------------------------- the three you set out with
@@ -449,6 +473,8 @@ export function goalOf(state) {
   const next = nextPlace(state);
   // The lane is quiet and Ines Tock knows: the telephone rings, and that call is the way on.
   if (secondCallDue(state)) return goal('call', 'Answer the telephone', 'It is ringing in the house: you can hear it from the green. That will be great-aunt Maribel again.');
+  // Both banks quiet and Ines Tock knows: it rings once more.
+  if (thirdCallDue(state)) return goal('call', 'Answer the telephone', 'It is ringing in the house again. That will be great-aunt Maribel, to hear how it all came out.');
   if (next && roomBuilt(next)) {
     if (next === FIRST && state.stats.befriended === 0) {
       return goal('friend', 'Make a friend in the garden', 'Walk in through the garden gate. In a fight, Reach out to one you like instead of hitting it, and win.', { room: next.id });
@@ -481,6 +507,7 @@ export function storySoFar(state) {
   for (const room of LANE) if (calm(state, room.id)) told.push(`${room.name} is calm.`);
   if (story.call2) told.push('Great-aunt Maribel rang again: the far bank is awake too. Your eight keys opened the gate on Kettle Bridge.');
   for (const room of FAR) if (calm(state, room.id)) told.push(`${room.name} is calm.`);
+  if (story.call3) told.push('Great-aunt Maribel rang a third time, from the boat home. Both banks are quiet, and the keys are yours to keep.');
   told.push(...rivalSoFar(state));
   told.push(...chiefsSoFar(state));
   return told;

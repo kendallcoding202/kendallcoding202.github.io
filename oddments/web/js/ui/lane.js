@@ -17,7 +17,7 @@ import { modal, toast, modalOpen } from './modals.js';
 import { converse } from './talk.js';
 import { meetTheThree } from './three.js';
 import { mapDialog } from './map.js';
-import { wishNews, rivalNews, wishesDialog } from './news.js';
+import { wishNews, rivalNews, wishesDialog, theEnd } from './news.js';
 import { keyRing } from './keys.js';
 import { play } from '../platform/sound.js';
 import { dustShift, throughDoor } from './shift.js';
@@ -832,6 +832,14 @@ export function laneScreen(ctx) {
   function tellNews() {
     // (Never on the heels of another card: a second tap on that one's button must not answer this one unread.)
     if (!ctx.news || justShut()) return false;
+    // The end of the story, once: after great-aunt Maribel's last call.
+    if (game.ended() && !state.seen.theend) {
+      state.seen.theend = true;
+      ctx.save();
+      play('calm');
+      theEnd(game, () => { cardFor = undefined; });
+      return true;
+    }
     const out = game.waiting();
     const chiefs = out.filter((one) => one.chief);
     if (!state.seen.wishnews && chiefs.length) {

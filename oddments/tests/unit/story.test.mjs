@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { CAST, CAST_IDS, NEIGHBOURS, CALL, LANE, FAR, newStory, reviveStory, goalOf, aimOf, storySoFar, hasNews, talk, takeCall, placesCalm, nextPlace } from '../../web/js/core/story.js';
+import { CAST, CAST_IDS, NEIGHBOURS, CALL, CALL3, LANE, FAR, newStory, reviveStory, goalOf, aimOf, storySoFar, hasNews, talk, takeCall, callDue, bothQuiet, storyEnded, placesCalm, nextPlace } from '../../web/js/core/story.js';
 import { PEOPLE, TALK, WORLD, SPOTS, TREES, LAMPS, ROAD_POINTS, GREEN, canStand, standing, personNear, personAt, routeTo, straighten, roomy, stepWalk, spotNear, districtAt, DISTRICTS } from '../../web/js/core/world.js';
 import { Game } from '../../web/js/core/game.js';
 import { newState, reviveState } from '../../web/js/core/state.js';
@@ -350,7 +350,10 @@ test('every goal says what to do in a line, and points somewhere when there is s
     look();
     game.standBy('ines'); game.talkTo('ines'); look();
   });
-  assert.deepEqual(seen, ['meet', 'friend', 'calm', ...LANE.flatMap((_, i) => ['report', i < LANE.length - 1 ? 'calm' : 'call']), 'calm', ...FAR.flatMap((_, i) => ['report', i < FAR.length - 1 ? 'calm' : 'more'])]);
+  // And the last call, which ends the story: after it, what is left to do.
+  assert.equal(game.takeCall(), CALL3);
+  look();
+  assert.deepEqual(seen, ['meet', 'friend', 'calm', ...LANE.flatMap((_, i) => ['report', i < LANE.length - 1 ? 'calm' : 'call']), 'calm', ...FAR.flatMap((_, i) => ['report', i < FAR.length - 1 ? 'calm' : 'call']), 'more']);
 });
 
 test('the journal tells what has happened, in order, and grows as it happens', () => {
@@ -376,18 +379,20 @@ test('the story is saved, and comes back as it went in', () => {
   game.standBy('ines'); game.talkTo('ines');
   game.standBy('dov'); game.talkTo('dov'); game.talkTo('dov');
   const saved = JSON.parse(game.serialize(NOW));
-  assert.deepEqual(saved.story, { call: true, call2: false, ines: 1, dov: 2, spick: 0, rival: 0, heard: 0 });
+  assert.deepEqual(saved.story, { call: true, call2: false, call3: false, ines: 1, dov: 2, spick: 0, rival: 0, heard: 0 });
   const back = reviveState(JSON.parse(JSON.stringify(saved)), NOW);
   assert.deepEqual(back.story, saved.story);
   assert.equal(goalOf(back).id, 'friend');
 });
 
-test('a save cannot break the story: whatever is stored, it is two yes-or-noes and five small whole numbers', () => {
-  assert.deepEqual(newStory(), { call: false, call2: false, ines: 0, dov: 0, spick: 0, rival: 0, heard: 0 });
+test('a save cannot break the story: whatever is stored, it is three yes-or-noes and five small whole numbers', () => {
+  assert.deepEqual(newStory(), { call: false, call2: false, call3: false, ines: 0, dov: 0, spick: 0, rival: 0, heard: 0 });
   for (const wrong of [null, undefined, 7, 'told', [], [1, 2], {}, { call: 'yes', ines: '2', dov: null, spick: {} }, { ines: NaN, dov: Infinity, spick: -Infinity }]) {
     assert.deepEqual(reviveStory(wrong), newStory(), JSON.stringify(wrong));
   }
-  assert.deepEqual(reviveStory({ call: true, call2: 'yes', ines: 1e308, dov: -5, spick: 2.9, extra: 'x', constructor: 1 }), { call: true, call2: false, ines: 99, dov: 0, spick: 2, rival: 0, heard: 0 });
+  assert.deepEqual(reviveStory({ call: true, call2: 'yes', ines: 1e308, dov: -5, spick: 2.9, extra: 'x', constructor: 1 }), { call: true, call2: false, call3: false, ines: 99, dov: 0, spick: 2, rival: 0, heard: 0 });
+  assert.equal(reviveStory({ call3: true }).call3, true);
+  assert.equal(reviveStory({ call3: 'yes' }).call3, false);
   assert.equal(reviveStory({ rival: 3 }).rival, 3);
   // How many of those she has had her say about: never more than she has lost; and a save from before that was kept owes nothing.
   assert.equal(reviveStory({ rival: 3 }).heard, 3);
@@ -404,6 +409,49 @@ test('a save cannot break the story: whatever is stored, it is two yes-or-noes a
   const old = JSON.parse(JSON.stringify(newState(NOW, 3)));
   delete old.story;
   assert.deepEqual(reviveState({ ...old, started: true }, NOW).story, newStory());
+});
+
+test('the story has an end: both banks quiet and Ines Tock told, great-aunt Maribel rings a third time', () => {
+  const game = fresh();
+  game.takeCall();
+  const state = game.state;
+  const calmAll = (rooms) => { for (const room of rooms) { state.rooms[room.id].clears = 1; state.rooms[room.id].calmed = 0b11111; } };
+  state.story.ines = 1;
+  calmAll(LANE);
+  state.story.ines = 9;
+  assert.equal(takeCall(state).length, 4, 'the second call, about the far bank');
+  assert.equal(callDue(state), false);
+  // Three of the four over the water: nothing rings.
+  calmAll(FAR.slice(0, 3));
+  state.story.ines = 12;
+  assert.deepEqual([bothQuiet(state), callDue(state), storyEnded(state)], [false, false, false]);
+  // The last one calm, and she has not been told yet: the goal is to tell her, and nothing rings.
+  calmAll(FAR);
+  assert.deepEqual([bothQuiet(state), callDue(state), goalOf(state).id], [true, false, 'report']);
+  // Told: it rings.
+  state.story.ines = 13;
+  assert.equal(callDue(state), true);
+  const goal = goalOf(state);
+  assert.deepEqual([goal.id, goal.title], ['call', 'Answer the telephone']);
+  assert.match(goal.detail, /how it all came out/);
+  const lines = takeCall(state);
+  assert.equal(lines, CALL3);
+  assert.equal(lines.length, 5);
+  assert.ok(lines.every((line) => line.who === 'maribel' && line.text.length > 20 && line.text.length < 200));
+  assert.match(lines[3].text, /Keep the keys/);
+  assert.deepEqual([state.story.call3, storyEnded(state), game.ended(), callDue(state), takeCall(state)], [true, true, true, false, null]);
+  // After it the goal is what it was (there is plenty still awake), and the story so far says how it ended.
+  assert.deepEqual([goalOf(state).id, goalOf(state).title], ['more', 'Both banks are quiet']);
+  assert.ok(storySoFar(state).some((told) => /rang a third time/.test(told) && /keys are yours to keep/.test(told)));
+  // It is kept; and a save cannot claim it with a place still restless, or with the second call untaken.
+  let back = reviveState(JSON.parse(game.serialize(NOW)), NOW);
+  assert.equal(back.story.call3, true);
+  const raw = JSON.parse(game.serialize(NOW));
+  raw.rooms.mending.clears = 0;
+  back = reviveState(JSON.parse(JSON.stringify(raw)), NOW);
+  assert.equal(back.story.call3, false);
+  raw.rooms.mending.clears = 1; raw.story.call2 = false;
+  assert.equal(reviveState(JSON.parse(JSON.stringify(raw)), NOW).story.call3, false);
 });
 
 test('whatever the story says, in every state, it says it without breaking', () => {
@@ -424,6 +472,9 @@ test('whatever the story says, in every state, it says it without breaking', () 
     game.takeCall(); game.takeCall();
     for (const room of FAR) game.state.rooms[room.id].clears = 2;
     for (const who of NEIGHBOURS) { game.standBy(who); for (let i = 0; i < 3; i++) assert.ok(game.talkTo(who).every((line) => line.text.length > 8 && !/undefined|NaN|\[object/.test(line.text))); }
+    // (Ines Tock has heard: the telephone rings a last time, and then the goal is what is left.)
+    assert.equal(game.goal().title, 'Answer the telephone');
+    assert.ok(game.takeCall().every((line) => line.text.length > 8 && !/undefined|NaN|\[object/.test(line.text)));
     assert.equal(game.goal().title, 'Both banks are quiet');
     assert.deepEqual(game.aim(), { title: 'Calm the four places over the water', count: [4, 4] });
   }

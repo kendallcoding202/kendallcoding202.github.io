@@ -6,7 +6,8 @@
 // I'm not sure, where is she supposed to be?" and "What are wishes? I haven't
 // seen them yet". A mark in the world and a line in the journal were not
 // enough: nobody looks for what they have not been told exists.)
-import { SPECIES, roomOf } from '../core/balance.js';
+import { SPECIES, SPECIES_IDS, TITLE, VERSION, roomOf } from '../core/balance.js';
+import { artOf } from '../core/names.js';
 import { CAST } from '../core/story.js';
 import { h, sprite } from './dom.js';
 import { modal } from './modals.js';
@@ -89,5 +90,46 @@ export function rivalNews(game, aside, again, onDone) {
       { id: 'map', label: 'Map', kind: 'plain', onClick: () => { setTimeout(() => mapDialog(game), 0); } },
       { id: 'ok', label: 'OK' },
     ],
+  });
+}
+
+/** Who made what: said at the end, and from Settings at any time. */
+const CREDITS = [
+  `${TITLE} ${VERSION}.`,
+  'The Clutterkin and the rooms they are met in were first painted for Pawst Lives, and came to stay.',
+  'The lettering is Fredoka, used under the SIL Open Font License.',
+  'No ads, no tracking, no accounts, no purchases. Nothing leaves your phone.',
+];
+
+/** The credits on their own, from Settings. */
+export function creditsDialog() {
+  return modal({ title: 'Credits', cls: 'news credits', body: CREDITS.map((text, i) => h('p', { class: i ? 'note' : null }, text)), actions: [{ id: 'ok', label: 'OK', kind: 'plain' }] });
+}
+
+/**
+ * The end of the story as it stands, said once, after great-aunt Maribel's last call: both banks
+ * are quiet. Then what is still awake, so that the end is not the end of playing; and the credits.
+ */
+export function theEnd(game, onDone) {
+  const { state } = game;
+  const kinds = SPECIES_IDS.filter((id) => !SPECIES[id].boss);
+  const friends = state.friends.filter((friend) => !SPECIES[friend.species].boss).length;
+  const wishes = game.wishes();
+  const home = wishes.filter((one) => one.home).length;
+  const rare = state.friends.filter((friend) => friend.heirloom).length;
+  const left = [
+    friends < kinds.length ? `${kinds.length - friends} kinds still to make friends of` : 'a friend of every kind',
+    home < wishes.length ? `${wishes.length - home} ${wishes.length - home === 1 ? 'ringleader' : 'ringleaders'} with a wish` : 'every ringleader at home',
+    `${rare} ${rare === 1 ? 'Heirloom' : 'Heirlooms'} kept of ${kinds.length}`,
+  ];
+  return modal({
+    title: 'Both banks are quiet', cls: 'news theend', fixed: true, onClose: onDone,
+    body: [
+      h('div', { class: 'newspic' }, game.team().map((friend) => sprite(artOf(friend), friend.heirloom, 'flip'))),
+      h('p', { class: 'big' }, 'Twelve places calm, twelve keys on your ring, and Monday came and went. Thank you for house-sitting.'),
+      h('p', null, `Not everybody is asleep, mind. There are ${left[0]}, ${left[1]}, and ${left[2]}. And every night, one calm place is lively.`),
+      h('div', { class: 'credits' }, CREDITS.map((text) => h('small', null, text))),
+    ],
+    actions: [{ id: 'ok', label: 'Goodnight' }],
   });
 }

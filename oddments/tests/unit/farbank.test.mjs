@@ -209,6 +209,9 @@ test('Ines Tock hears about each of the four in turn, counts them, and sends you
       assert.match(game.talkTo('ines')[0].text, /^Both banks calm/);
     }
   });
+  // Both banks quiet and she knows: the telephone rings once more, and that is the end of the story (story.test.mjs has the call).
+  assert.deepEqual([game.goal().id, game.goal().title], ['call', 'Answer the telephone']);
+  assert.equal(game.takeCall().length, 5);
   const goal = game.goal();
   assert.deepEqual([goal.id, goal.room, goal.title, goal.count], ['more', null, 'Both banks are quiet', [12, 12]]);
   assert.match(goal.detail, /beyond Bobbin Row.*on its way/, 'it says there is more to come');
