@@ -4,7 +4,7 @@ Everything App Store Connect asks for before an app can be submitted, with a pro
 
 ## What is still to do, in order
 
-1. **YOURS:** hear the sound come back on a phone (build 41), and have one person play the game through.
+1. **YOURS:** hear the sound come back on a phone (build 43), and have one person play the game through.
 2. **YOURS:** decide the five things under *Only the owner can decide*, below.
 3. Publish the privacy and support pages (drafted at the end of this file).
 4. Set the version to 1.0.0 and upload that build.
