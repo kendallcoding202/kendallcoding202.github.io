@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://kendallcoding202.github.io/pawst-lives/</loc></url>
+  <url><loc>https://kendallcoding202.github.io/pawst-lives/es/</loc></url>
+  <url><loc>https://kendallcoding202.github.io/pawst-lives/pt-br/</loc></url>
+  <url><loc>https://kendallcoding202.github.io/pawst-lives/fr/</loc></url>
+  <url><loc>https://kendallcoding202.github.io/pawst-lives/de/</loc></url>
+  <url><loc>https://kendallcoding202.github.io/pawst-lives/ja/</loc></url>
   <url><loc>https://kendallcoding202.github.io/pawst-lives/support/</loc></url>
   <url><loc>https://kendallcoding202.github.io/pawst-lives/privacy/</loc></url>
 </urlset>
