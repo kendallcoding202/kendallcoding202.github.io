@@ -6,6 +6,13 @@
 <title>Pawst Lives: Idle Cat RPG for iPhone and iPad. Nine Lives, No Ads</title>
 <meta name="description" content="A free idle RPG for iPhone and iPad where your party is your own past lives: each cat you finish returns as a ghost that fights beside the next. No ads.">
 <link rel="canonical" href="https://kendallcoding202.github.io/pawst-lives/">
+<link rel="alternate" hreflang="en" href="https://kendallcoding202.github.io/pawst-lives/">
+<link rel="alternate" hreflang="es" href="https://kendallcoding202.github.io/pawst-lives/es/">
+<link rel="alternate" hreflang="pt-BR" href="https://kendallcoding202.github.io/pawst-lives/pt-br/">
+<link rel="alternate" hreflang="fr" href="https://kendallcoding202.github.io/pawst-lives/fr/">
+<link rel="alternate" hreflang="de" href="https://kendallcoding202.github.io/pawst-lives/de/">
+<link rel="alternate" hreflang="ja" href="https://kendallcoding202.github.io/pawst-lives/ja/">
+<link rel="alternate" hreflang="x-default" href="https://kendallcoding202.github.io/pawst-lives/">
 <meta name="apple-itunes-app" content="app-id=6834880118">
 <link rel="icon" href="img/icon.png">
 <link rel="apple-touch-icon" href="img/icon.png">
@@ -21,7 +28,10 @@
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
-  "@type": ["VideoGame", "MobileApplication"],
+  "@type": [
+    "VideoGame",
+    "MobileApplication"
+  ],
   "name": "Pawst Lives",
   "description": "An idle RPG for iPhone and iPad where your party is your own past lives. When a life has gone as far as it can, you begin the next, and the cat you were returns as an Echo: a ghost that fights at your side from then on.",
   "url": "https://kendallcoding202.github.io/pawst-lives/",
@@ -29,10 +39,27 @@
   "operatingSystem": "iOS, iPadOS",
   "gamePlatform": "iOS",
   "applicationCategory": "GameApplication",
-  "genre": ["Role-playing game", "Idle game"],
-  "inLanguage": ["en", "es", "pt-BR", "fr", "de", "ja"],
-  "author": { "@type": "Person", "name": "Kendall Sorenson" },
-  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "genre": [
+    "Role-playing game",
+    "Idle game"
+  ],
+  "inLanguage": [
+    "en",
+    "es",
+    "pt-BR",
+    "fr",
+    "de",
+    "ja"
+  ],
+  "author": {
+    "@type": "Person",
+    "name": "Kendall Sorenson"
+  },
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
   "installUrl": "https://apps.apple.com/app/id6834880118"
 }
 </script>
@@ -40,12 +67,48 @@
 {
   "@context": "https://schema.org",
   "@type": "FAQPage",
+  "inLanguage": "en",
   "mainEntity": [
-    { "@type": "Question", "name": "Is Pawst Lives free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. It is free to download and can be played to the end without paying. There are six optional in-app purchases: four packs of gems and two one-time upgrades that last forever. There are no subscriptions." } },
-    { "@type": "Question", "name": "Does Pawst Lives have ads?", "acceptedAnswer": { "@type": "Answer", "text": "No. There are no ads of any kind, and there never have been." } },
-    { "@type": "Question", "name": "Can I play Pawst Lives offline?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. The whole game plays with no connection. When you are online, daily rewards check the real date." } },
-    { "@type": "Question", "name": "What is an idle RPG?", "acceptedAnswer": { "@type": "Answer", "text": "A role-playing game that keeps going on its own. In Pawst Lives your cats fight by themselves; you decide what to train, what to wear, when to use a skill, and when a life has gone far enough to begin the next." } },
-    { "@type": "Question", "name": "Does Pawst Lives need an account or collect data?", "acceptedAnswer": { "@type": "Answer", "text": "No. There is no account and no sign-in, and the game collects nothing about you. Its App Privacy label on the App Store is Data Not Collected." } }
+    {
+      "@type": "Question",
+      "name": "Is Pawst Lives free?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. It is free to download and can be played to the end without paying. There are six optional in-app purchases: four packs of gems and two one-time upgrades that last forever. There are no subscriptions."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does Pawst Lives have ads?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. There are no ads of any kind, and there never have been."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I play Pawst Lives offline?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. The whole game plays with no connection. When you are online, daily rewards check the real date."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What is an idle RPG?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A role-playing game that keeps going on its own. In Pawst Lives your cats fight by themselves; you decide what to train, what to wear, when to use a skill, and when a life has gone far enough to begin the next."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does Pawst Lives need an account or collect data?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. There is no account and no sign-in, and the game collects nothing about you. Its App Privacy label on the App Store is Data Not Collected."
+      }
+    }
   ]
 }
 </script>
@@ -114,6 +177,16 @@ footer a{color:var(--muted);margin-right:18px}
   .brand{font-size:17px}
   .brand img{width:34px;height:34px}
 }
+@media (max-width:480px){nav a[href^="#"]{display:none}}
+@media (max-width:359px){header.top{flex-wrap:wrap}nav{margin-left:auto}}
+h2,h3,.hero .tag,.cta{text-wrap:balance}
+.cta{text-align:center}
+.langs a,.langs b{margin-right:16px;white-space:nowrap}
+.langs b{color:var(--text);font-weight:600}
+.ph{display:inline-block}
+html[lang=ja] body{line-height:1.75}
+html[lang=ja] .hero .tag{line-height:1.4}
+html[lang=de] .steps,html[lang=de] .grid,html[lang=de] .shots figcaption{-webkit-hyphens:auto;hyphens:auto}
 </style>
 </head>
 <body>
@@ -214,6 +287,7 @@ footer a{color:var(--muted);margin-right:18px}
 
 <footer>
   <p><a href="support/">Support</a><a href="privacy/">Privacy policy</a><a href="https://apps.apple.com/app/id6834880118">App Store</a></p>
+  <p class="langs"><b lang="en">English</b> <a href="es/" lang="es" hreflang="es">Español</a> <a href="pt-br/" lang="pt-BR" hreflang="pt-BR">Português (Brasil)</a> <a href="fr/" lang="fr" hreflang="fr">Français</a> <a href="de/" lang="de" hreflang="de">Deutsch</a> <a href="ja/" lang="ja" hreflang="ja">日本語</a></p>
   <p>&copy; 2026 Kendall Sorenson. All of the art was made for this game. Apple, iPhone, iPad, iCloud and App Store are trademarks of Apple Inc.</p>
 </footer>
 
